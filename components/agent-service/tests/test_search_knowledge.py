@@ -9,6 +9,7 @@ behave per the contract's limit semantics.
 """
 
 import asyncio
+import logging
 from pathlib import Path
 
 import pytest
@@ -90,7 +91,6 @@ class FakeDbFactory:
         self.rows = rows or []
 
     def __call__(self, graph_name):
-
         self.graphs.append(graph_name)
         return _FakeDb(self.rows)
 
@@ -115,6 +115,31 @@ class _FakeDb:
 
     def views(self):
         return [{"name": "GRAPH_BM25_VIEW"}]
+
+
+def _split_db(rows_file_id, rows_identity):
+    """A db whose AQL answers the file_id enrichment with ``rows_file_id``
+    and the CAP-1 identity join with ``rows_identity`` — the two batched
+    queries dispatch on the collection the query names."""
+
+    class SplitAql:
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            rows = rows_identity if "okf_concepts_meta" in query else rows_file_id
+
+            class C:
+                def __iter__(self):
+                    return iter(rows)
+
+            return C()
+
+    class SplitDb:
+        def __init__(self):
+            self.aql = SplitAql()
+
+        def views(self):
+            return [{"name": "GRAPH_BM25_VIEW"}]
+
+    return SplitDb()
 
 
 def make_capability(embedding=None, reranking=None, rows=None):
@@ -235,26 +260,8 @@ def test_cap1_resolved_candidate_carries_okf_provenance_and_unresolved_carries_l
         ScoredCandidate(text="beta", score=0.6, position=1),
     )
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
-
-    class SplitAql:
-        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
-            rows = rows_identity if "okf_concepts_meta" in query else rows_file_id
-
-            class C:
-                def __iter__(self):
-                    return iter(rows)
-
-            return C()
-
-    class SplitDb:
-        def __init__(self):
-            self.aql = SplitAql()
-
-        def views(self):
-            return [{"name": "GRAPH_BM25_VIEW"}]
-
     capability, _e, _r, _f = make_capability(reranking=reranking)
-    capability._db_factory = lambda graph: SplitDb()
+    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     assert isinstance(result.hits[0].provenance, OkfConceptProvenance)
     assert result.hits[0].provenance.concept_id == "f1"
@@ -264,14 +271,66 @@ def test_cap1_resolved_candidate_carries_okf_provenance_and_unresolved_carries_l
     assert result.hits[1].provenance.file_id == "f2"
 
 
-def test_candidate_without_file_id_serves_unattributed_with_empty_id():
+def test_candidate_without_file_id_is_skipped_and_its_resolvable_sibling_survives(caplog):
+    """A candidate whose enrichment left ``file_ids`` empty never becomes a
+    hit: the deployed path drops the unresolvable source at citation
+    assembly (chatqna warns and skips it), so the port skips at minting and
+    its resolvable sibling survives untouched."""
+    rows = [
+        {"key": "c1", "text": "alpha", "score": 0.9, "file_id": None},
+        {"key": "c2", "text": "beta", "score": 0.5, "file_id": "f2"},
+    ]
+    selection = (
+        ScoredCandidate(text="alpha", score=0.7, position=0),
+        ScoredCandidate(text="beta", score=0.6, position=1),
+    )
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
+    with caplog.at_level("WARNING"):
+        result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    assert result.outcome == OutcomeCode.SUCCESS
+    assert [(hit.text, hit.score) for hit in result.hits] == [("beta", 0.6)]
+    assert isinstance(result.hits[0].provenance, LegacyFileProvenance)
+    assert result.hits[0].provenance.file_id == "f2"
+    skipped = [record for record in caplog.records if "c1" in record.message and "file_id" in record.message]
+    assert skipped and skipped[0].levelno == logging.WARNING
+
+
+def test_okf_candidate_with_unresolvable_file_id_is_skipped_not_cited_with_an_empty_concept():
+    """The OKF branch is guarded too: a resolved ``repo_id`` with no
+    resolvable ``file_id`` never mints ``OkfConceptProvenance(concept_id="")``
+    — the empty identity would collapse the repository's hits in the
+    no-agent dedup (issue #2032)."""
+    rows_file_id = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": None}]
+    rows_identity = [{"key": "c1", "repo_id": "repo-1", "bundle_version": 7}]
+    selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking)
+    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    assert result.hits == ()
+
+
+def test_all_selected_candidates_unresolvable_is_insufficient_evidence_with_a_distinct_reason(caplog):
+    """When every reranker-selected candidate lacks a resolvable file_id,
+    the answer is an insufficiency with its OWN reason — never
+    ``result_budget_exhausted`` (the budget cut nothing) and never
+    ``no_documents_retrieved`` (retrieval was not empty)."""
     rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": None}]
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
-    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
-    assert isinstance(result.hits[0].provenance, LegacyFileProvenance)
-    assert result.hits[0].provenance.file_id == ""  # the recorded unattributed chunk
+    reasons = []
+    with caplog.at_level("WARNING"):
+        result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=reasons.append))
+    assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
+    assert result.hits == ()
+    assert result.truncated is False
+    assert any("no_resolvable_candidates" in record.message for record in caplog.records)
+    assert reasons == ["no_resolvable_candidates"]
+    # Distinct reasons: the recorded empty cases never merge into this one.
+    assert not any("result_budget_exhausted" in record.message for record in caplog.records)
+    assert not any("no_documents_retrieved" in record.message for record in caplog.records)
 
 
 def test_raw_text_goes_to_the_bm25_side_and_prefixed_to_the_embedder():
@@ -310,6 +369,11 @@ def test_multi_graph_search_addresses_every_authorized_graph_and_merges_candidat
                 assert bind_vars["graph_name"] == self._graph
             if "COSINE_SIMILARITY" in query:
                 rows = [{"key": f"{self._graph}-c1", "text": f"from-{self._graph}", "score": 0.9, "file_id": "f1"}]
+            elif "doc._key IN @chunk_ids" in query and "okf_concepts_meta" not in query:
+                # The file_id enrichment answers too: a chunk whose
+                # enrichment finds no row is skipped at minting (issue
+                # #2032), so the fake must resolve the file_id it carries.
+                rows = [{"key": f"{self._graph}-c1", "file_id": "f1"}]
             else:
                 rows = []
 
@@ -750,6 +814,12 @@ def _sink_outcome(reason: str):
         reranking = FakeReranking(
             outcome=RerankOutcome(selection=(ScoredCandidate(text="alpha", score=0.7, position=0),))
         )
+    elif reason == "no_resolvable_candidates":
+        # A selection whose only candidate carries no resolvable file_id.
+        rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": None}]
+        reranking = FakeReranking(
+            outcome=RerankOutcome(selection=(ScoredCandidate(text="alpha", score=0.7, position=0),))
+        )
     else:
         reranking = FakeReranking(outcome=RerankOutcome(selection=()))
     capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
@@ -765,11 +835,12 @@ def _sink_outcome(reason: str):
         # A budget tighter than one hit cuts the selected hit away: the
         # size breach is the reason, not a retrieval failure.
         ("result_budget_exhausted", OperationBudget(timeout_ms=5000, max_results=10, max_result_bytes=10)),
+        ("no_resolvable_candidates", BUDGET),
     ],
 )
 def test_sink_receives_the_exact_reason_at_each_insufficient_site(reason, budget):
     """The optional per-call kwarg hands the recorded reason to the caller —
-    the same string the log surface carries, at all four sites."""
+    the same string the log surface carries, at all five sites."""
     capability = _sink_outcome(reason)
     received = []
     result = asyncio.run(capability.search_knowledge(context(), prepared(), budget, abstention_sink=received.append))

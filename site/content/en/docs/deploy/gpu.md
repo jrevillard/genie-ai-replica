@@ -151,7 +151,14 @@ and the rationale below). The
 reranker and embedding consumers run on the GPU too: `env.strixhalo` sets
 `RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm`, switching the reranker
 wrapper and both embedding consumers (dataprep + retriever) from TEI to
-the two extra pooling instances. Values below were
+the two extra pooling instances. On a **split venue** — where the GPU
+node's proxy routes `/rerank` and `/v1/embeddings` to the node-side TEI
+instances — set `rocm_pooling: false` in `vars/rocm_gpu_nodes.yml` and
+unset the two backend pins in `env.strixhalo` the same way (see its
+header): the Ansible deploy then assembles its compose command without
+the `rocm-models` profile, the pooling services do not render, and their
+~4.6 GiB of GTT stays unclaimed (defaults to `true`, the single-server
+topology). Values below were
 measured on the reference machine: AMD Ryzen AI MAX+ 395 "Strix Halo",
 Radeon 8060S iGPU, `gfx1151`, 91 GB unified LPDDR5X.
 

@@ -2,7 +2,7 @@
 title: 'Story 2.6 — Citation verification pipeline and tri-state verdict'
 type: 'feature'
 created: '2026-11-21'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '83e00771fe61f843a1da97b507197dc2962c177b'

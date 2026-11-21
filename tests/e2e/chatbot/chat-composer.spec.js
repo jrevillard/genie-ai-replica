@@ -925,7 +925,7 @@ test.describe('welcome bar measure', () => {
       expect(
         m1440.fieldH,
         `${locale} @ 1440: the field is ${m1440.fieldH} px high (one-line cap = the field's own ` +
-          `${m1440.lineH} px line-height + ${m1440.padTB} px padding) — "${m1440.placeholder}" wraps to two lines. ` +
+          `one-glyph height ${m1440.oneLineH} px + 1 px) — "${m1440.placeholder}" wraps to two lines. ` +
           `Shorten chatbot.composerPlaceholder in ${locale}.js so it fits the field's content box.`
       ).toBeLessThanOrEqual(m1440.oneLineH + 1);
       expect(
@@ -956,7 +956,7 @@ test.describe('welcome bar measure', () => {
       expect(
         m1400.fieldH,
         `${locale} @ 1400: the field is ${m1400.fieldH} px high (two-line cap = 2 × the field's own ` +
-          `${m1400.lineH} px line-height + ${m1400.padTB} px padding + 4 px rounding) — ` +
+          `one-glyph height ${m1400.oneLineH} px + 4 px rounding) — ` +
           `"${m1400.placeholder}" wraps the field to three lines at 1400.`
       ).toBeLessThanOrEqual(2 * m1400.oneLineH + 4);
       expect(

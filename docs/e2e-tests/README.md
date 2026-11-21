@@ -37,6 +37,19 @@ only as bounded wait-for-condition. Full rules: [`tests/e2e/CLAUDE.md`](../../te
 phase docs used to carry were replaced with bounded readiness loops in #1386;
 do not introduce new ones.
 
+### Venue-state pairing: OKF-enabled venues scope chat retrieval
+
+The venue's OKF state decides which chat-retrieval specs can run. On an
+**OKF-enabled** venue chat sessions are **claim-scoped**: heads-supersede drops
+the legacy `GRAPH` leg from the retriever fan-out whenever the user holds OKF
+claims, so the context comes only from the claimed OKF graphs. The two
+legacy-corpus chat specs (`real-rag-citation`, the French streaming spec's
+product-knowledge question) therefore **name-skip** on an OKF venue — their
+fixtures live in the legacy corpus, unreachable by design (live-proven
+2026-11-20). They keep their teeth on **OKF-disabled** venues (the NVIDIA
+default), where the legacy competition includes the fixture. An OKF venue's
+claim-scoped citation path is covered by the OKF suite, not by these specs.
+
 ### Locating application elements
 
 An E2E test reaches an application element only through a test handle the

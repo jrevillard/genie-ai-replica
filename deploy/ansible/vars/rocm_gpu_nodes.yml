@@ -1,0 +1,110 @@
+---
+# ROCm GPU node (AMD Strix Halo / gfx1151 class) — non-secret variables.
+#
+# These load through `vars_files` in deploy-gpu.yml's ROCm plays (NOT
+# group_vars/: a directory there must match an inventory group name, and
+# a second GPU playbook is exactly the file-set drift the collapse
+# removed). Secrets live in vars/vault-rocm-gpu.yml (operator-created,
+# encrypted, never committed) — see deploy/ansible/README.md.
+#
+# Image pins from the ROCm spike (2026-11-11):
+# docs/superpowers/specs/2026-11-11-rocm-gpu-tier-spike-results.md
+
+gpu_deploy_dir: /opt/genieai-rocm-gpu
+gpu_data_dir: /opt/genieai-rocm-gpu/data
+gpu_generated_dir: configs/nginx-gpu
+gpu_public_domain: ""          # set per deployment
+gpu_https_port: "443"
+gpu_self_signed_certs: true
+
+# The template renders NVIDIA_VISIBLE_DEVICES from this var; `void`
+# neutralizes it on the ROCm path (containers ignore it, no GPU claimed
+# even on an NVIDIA host).
+nvidia_visible_devices: "void"
+
+# ROCm image pins (spike winners)
+vllm_llm_image: rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0
+vllm_translation_image: rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0
+tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
+tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
+docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
+nginx_image: nginx:1.28-alpine
+
+# Host-specific device group GIDs (distro-specific; verified in the
+# install tag against `getent group render video`)
+rocm_render_gid: 990
+rocm_video_gid: 44
+
+# The GPU vendor, as an explicit marker. It is what makes the app-side
+# topology check ROCm-ONLY: an NVIDIA deployment never sets it, so the
+# assert in deploy.yml (which gates on this value) leaves every NVIDIA
+# render untouched. Read it nowhere else — it selects the topology
+# check, not a behaviour.
+gpu_vendor: rocm
+
+# The ROCm GPU node's topology, as seen from the APP stack:
+#
+#   rocm_gpu_node_local: true   — the GPU node IS this host (single-server
+#     ROCm venue: the app stack shares the machine with the GPU-node
+#     stack). Renders SECTION 18B in the app .env: co-located endpoints
+#     (https://<ansible_host>:<port>/...), the forced OPEA_SSL_SKIP_VERIFY=1
+#     (the node cert is self-signed) and the Task-14 reranker trio. The
+#     app host must ALSO be in the swarm_managers group, so this file
+#     applies to it.
+#
+#   rocm_gpu_node_remote: true  — the GPU node is ANOTHER machine. Set it
+#     (with gpu_node_host) in the APP host's group_vars, and set
+#     rocm_gpu_node_local to false here. Renders SECTION 18's remote
+#     sub-block: the endpoint overrides plus the same reranker trio and
+#     the forced TLS skip (same self-signed node).
+#
+# The default below is the co-located topology — the one this group
+# describes (a dedicated ROCm host running both stacks). It was
+# COMMENTED OUT, so as shipped the Ansible ROCm path rendered neither
+# Section 18B nor the remote sub-block: the app stack kept its own
+# GPU-tier replicas (swarm ignores compose `devices:` — the reason the
+# ROCm path exists) and posted the TEI request shape to a /rerank/ route
+# that had been flipped to the vLLM reranker. The mismatch surfaced per
+# call, not at deploy time (MR !968 review).
+rocm_gpu_node_local: true
+
+# Task 14 — GPU reranker: the TEI ROCm image cannot run on gfx1151
+# (Instinct-only kernels; see the spike results), so the /rerank/ proxy
+# route flips to the third vLLM instance rendered by the
+# gpu_vendor == 'rocm' branch of templates/docker-compose.gpu.yaml.j2. The
+# app side selects the same backend with RERANKER_BACKEND=vllm (rendered
+# in env.j2 SECTION 18B).
+gpu_rerank_upstream: vllm-reranker:8000
+# Task 14 mirror — the EMBEDDING side. The node's TEI ROCm image cannot run
+# on gfx1151 either, so the node's embedder is a fourth vLLM instance (the
+# same j2 branch) and the proxy's /v1/embeddings route flips to it. The
+# TEI-shaped route (/embed/) stays on the CPU TEI: the OPEA embedding
+# microservice and the okf-server's frontmatter service speak that shape,
+# and vLLM serves no TEI /embed route.
+gpu_embedding_upstream: vllm-embedding:8000
+vllm_embedding_model_id: BAAI/bge-large-en-v1.5
+vllm_reranker_model_id: BAAI/bge-reranker-v2-m3
+# The window the rerank instance is started with (--max_model_len). The
+# app-side reranker wrapper enforces the input-length contract against
+# it: vLLM truncates an over-long (query, doc) pair instead of refusing
+# it, so without this the client cannot tell a truncated pair from a
+# scored one (MR !968 review). Keep it equal to the instance's
+# --max_model_len.
+vllm_reranker_max_model_len: 8192
+
+# CPU-TEI batch caps (code review finding 3, 2026-11-18): the GPU-node stack
+# runs CPU TEI on this class of hardware (the TEI ROCm image cannot run on
+# gfx1151), and CPU-TEI inflates candle buffers at the GPU-sized defaults —
+# measured 16.3 GiB RSS at 8192/32 on Strix Halo (commit 196bc549 capped the
+# compose venue at 2048/8/2048). Mirror the caps here; the template renders
+# them only when defined, so NVIDIA renders (which never load this file) stay
+# byte-identical.
+tei_embedding_max_batch_tokens: "2048"
+tei_reranking_max_batch_tokens: "2048"
+tei_reranking_max_concurrent_requests: "8"
+# The reranker TEI contract is strict-422 at truncate=false (round-3 review
+# S1): with the batch cap lowered to 2048, truncation must be ON — matches
+# env.strixhalo (TEI_RERANKING_AUTO_TRUNCATE=true). The embedder stays
+# truncate-false: its model window (512) sits below the 2048 cap, and a
+# silently-truncated embedding would corrupt the vector space.
+tei_reranking_auto_truncate: "true"

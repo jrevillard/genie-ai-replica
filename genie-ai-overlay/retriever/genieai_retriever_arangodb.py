@@ -27,6 +27,12 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from core.embedding_backend import (
+    build_vllm_embeddings,
+    embeddings_backend_active,
+    resolve_embedding_backend,
+    resolved_embed_model,
+)
 from core.label_contract import build_filter_labels
 from core.model_cache import ModelDiscoveryError, coerce_int, resolve_model_id
 from core.model_http_policy import (
@@ -66,6 +72,7 @@ from .config import (
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
     EMBEDDING_TIMEOUT,
+    EMBEDDING_VLLM_ENDPOINT,
     FANOUT_CANDIDATE_CAP_GLOBAL,
     FANOUT_CANDIDATE_CAP_PER_GRAPH,
     FANOUT_ENABLED,
@@ -1323,6 +1330,17 @@ class GenieaiArangoRetriever(OpeaComponent):
         span = tracer.start_span("retriever.hybrid_search")
         span.set_attribute("rag.search_mode", ARANGO_SEARCH_MODE)
         span.set_attribute("rag.top_k", input.k if hasattr(input, "k") else 0)
+        # embedding.backend (vocabulary-registered; code review 2026-11-18):
+        # the span names the ACTIVE backend — the backend that will actually
+        # serve this query, not the requested one. In the vllm-without-endpoint
+        # misconfiguration embeddings_backend_active() fails soft to TEI, and
+        # stamping the requested name here would make every trace lie about
+        # which embedder ran (verification round-2 N3; the reranker fix has
+        # the same ordering: fail-soft first, then stamp).
+        span.set_attribute(
+            A["embedding_backend"],
+            resolve_embedding_backend() if embeddings_backend_active() else "tei",
+        )
         _query_id = query_id_from_baggage()
         if _query_id:
             span.set_attribute(QUERY_ID_KEY, _query_id)
@@ -1649,7 +1667,40 @@ class GenieaiArangoRetriever(OpeaComponent):
                     logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
                     return []
 
-            if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
+            if embeddings_backend_active():
+                # GPU vLLM embeddings (Task-14 mirror; ROCm path) — FIRST in
+                # the ladder, ahead of the OpenAI-API and TEI branches. The
+                # vLLM pooling endpoint is OpenAI-compatible
+                # (POST /v1/embeddings {model, input} → data[].embedding;
+                # spike-verified on the ROCm venue), so the client shape is
+                # the same OpenAIEmbeddings the OpenAI-API branch below
+                # builds. check_embedding_ctx_length=False is REQUIRED:
+                # bge-large is not tiktoken-tokenizable and langchain's
+                # default tokenization path silently mangles the input.
+                #
+                # Query instruction (MR !968 review): the previous comment
+                # here claimed get_query_instruction() "returns None for
+                # bge" — it does NOT. The built-in table in
+                # core/embedding_query_prefix.py carries
+                # "BAAI/bge-large-en-v1.5" ->
+                # "Represent this sentence for searching relevant passages: ",
+                # so the query was encoded RAW here while the TEI branch
+                # below installed the prefix. bge is contrastive: the QUERY
+                # side must carry the instruction, the PASSAGE side must not
+                # (dataprep writes the passages raw). A raw query lands in
+                # the wrong half of the embedding space — silent retrieval
+                # quality loss on the ROCm venue, where this branch is the
+                # live one. Mirror the TEI branch: the wrapper prefixes
+                # embed_query and passes embed_documents through verbatim.
+                embeddings = build_vllm_embeddings("BAAI/bge-large-en-v1.5")
+                _query_instruction = get_query_instruction(resolved_embed_model("BAAI/bge-large-en-v1.5"))
+                if _query_instruction:
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
+                logger.info(
+                    f"[ embed-backend ] retriever embeddings → vLLM "
+                    f"({EMBEDDING_VLLM_ENDPOINT}, model {resolved_embed_model('BAAI/bge-large-en-v1.5')})"
+                )
+            elif OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
                 # OpenAI embeddings are not contrastive / instruction-tuned —
                 # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
                 # any OpenAI model id, so the wrapper is never installed here.

@@ -85,6 +85,15 @@ COPY genie-ai-overlay/core/span_attrs.py /app/core/span_attrs.py
 # box, but the budget is now named, knob-driven and shared with the rest of the
 # deck instead of being an accident of which session object is constructed.
 COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
+# The vLLM rerank branch discovers the served window through this module
+# (genieai_tei_reranker.py: get_max_model_len). WITHOUT it in the image the
+# import fails at runtime, the exception is swallowed, and the window
+# discovery degrades to "unknown" — which is exactly the silent case the
+# client cannot distinguish from a scored pair (vLLM truncates an over-long
+# input instead of refusing it). The import sits in a try/except, so nothing
+# failed loudly: the image built, the container started, and the contract
+# was simply not enforced.
+COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 
 # Step E: "Overlay" custom GENIE-AI files
 # 1. Place the custom reranker class into the integrations folder

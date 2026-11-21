@@ -18,7 +18,7 @@
 // Exclusivity (D-G): the worker is the ONLY writer of index_status
 // 'indexed'|'failed' on okf_concepts_meta (2.9.1 writes 'parsed' only).
 
-const { aql } = require('arangojs');
+const { aql, literal } = require('arangojs/aql');
 const { stringify } = require('../services/safe-frontmatter');
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
 const dbService = require('../shared-lib/db-connection-service');
@@ -159,12 +159,28 @@ function jobWindowMs(job) {
   return Math.max(windowFloorMs(), Math.min(windowMaxMs(), raw));
 }
 /** Claim-staleness cutoff for BOTH claim strategies: how old an in-flight
- * claim must be before the row is considered dead-lane-reclaimable. In
- * adaptive mode this must scale with the LARGEST window — otherwise the
- * FIFO/fair scans would reclaim (and WS5-retract) a legitimately running
- * big concept at the flat 30-min mark. */
-function claimStaleMs() {
-  return ADAPTIVE_WINDOWS() ? windowMaxMs() : JOB_TIMEOUT_MS();
+ * claim must be before the row is considered dead-lane-reclaimable. Judged
+ * PER ROW against that row's OWN window (issue #2005): the earlier blanket
+ * cutoff (`windowMaxMs()` in adaptive mode) let a lane that died mid-claim
+ * stall its small concept for 6 HOURS because some other row could
+ * theoretically run that long — staleness is a property of the row, not of
+ * the largest job in the fleet. A legitimately-running big concept is still
+ * never reclaimed early: its own window IS the 6-h max. Flat mode keeps
+ * JOB_TIMEOUT_MS for every row. Mirrors jobWindowMs() in AQL:
+ * clamp(FLOOR, MAX, estChunks × MS_PER_CHUNK × 1.5), estChunks =
+ * chunk_count > 0 ? chunk_count : ceil(LENGTH(body)/500) — LENGTH(null) is
+ * 0 in AQL, matching jobWindowMs's non-string body → 0. chunk_count is
+ * type-gated with IS_NUMBER (code review, 2026-11-18): AQL's type order
+ * puts ANY string above every number, so `"5" > 0` is true and the
+ * arithmetic below would error the whole scan on a string-typed row;
+ * IS_NUMBER falls such rows to the body estimate like JS's coercion does. */
+function rowStaleCutoffAql(row) {
+  if (!ADAPTIVE_WINDOWS()) return literal(`DATE_NOW() - ${JOB_TIMEOUT_MS()}`);
+  return literal(
+    `DATE_NOW() - MAX([${windowFloorMs()}, MIN([${windowMaxMs()}, ` +
+      `CEIL(((IS_NUMBER(${row}.chunk_count) AND ${row}.chunk_count > 0) ? ${row}.chunk_count : ` +
+      `CEIL(LENGTH(${row}.body) / ${CHUNK_SIZE_ESTIMATE_CHARS})) * ${windowMsPerChunk()} * 1.5)])])`
+  );
 }
 /** §5.9 liveness probe — is dataprep actively running this fileId's
  * ingestion task? False on ANY failure (dead/unknown/transport = safe to
@@ -269,13 +285,14 @@ async function claimNextJob(db) {
       // WORKFLOW GATE: only repos whose RAG drain is armed (ingest transition).
       LET repo = DOCUMENT('okf_repositories', m.repo_id)
       FILTER repo != null AND repo.deleted_at == null AND repo.rag_drain_active == true
-      // Lanes claim in parallel: a row claimed within the last JOB_TIMEOUT is
+      // Lanes claim in parallel: a row claimed within its OWN window is
       // in-flight on another lane — never double-claim it. A STALE claim
-      // (past the drain window) belongs to a dead lane and is reclaimable.
+      // (past that row's window, issue #2005) belongs to a dead lane and is
+      // reclaimable.
       // An EMPTY-STRING claim also falls through here: DATE_TIMESTAMP('')
       // returns null and AQL orders null before numbers, so the staleness
       // comparison is true — the same reason the reaper guards != ''.
-      FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${claimStaleMs()}
+      FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < ${rowStaleCutoffAql('m')}
       // Kick-backoff gate (spec #1020 §5.5): a row parked by a 5xx backoff is
       // not claimable until its next_attempt_after. Inert until the first
       // backoff write (all rows have the field null/absent).
@@ -539,7 +556,8 @@ async function claimNextJobFair(db) {
   const run = async () => {
     const rows = await (
       await db.query(aql`
-      LET timeout = DATE_NOW() - ${claimStaleMs()}
+      // Per-row staleness (issue #2005): each row is judged against its OWN
+      // window — see rowStaleCutoffAql. No shared timeout LET any more.
       // WORKFLOW GATE (same as fifo): only repos whose RAG drain is armed.
       LET armed = (
         FOR r IN okf_repositories
@@ -558,8 +576,8 @@ async function claimNextJobFair(db) {
           FILTER m.index_status == 'parsed' AND m.repo_id IN armed
           FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
           COLLECT r = m.repo_id AGGREGATE
-            inFlight = SUM((m.worker_claimed_at != null && DATE_TIMESTAMP(m.worker_claimed_at) >= timeout) ? 1 : 0),
-            claimable = SUM((m.worker_claimed_at == null || DATE_TIMESTAMP(m.worker_claimed_at) < timeout) ? 1 : 0),
+            inFlight = SUM((m.worker_claimed_at != null && DATE_TIMESTAMP(m.worker_claimed_at) >= ${rowStaleCutoffAql('m')}) ? 1 : 0),
+            claimable = SUM((m.worker_claimed_at == null || DATE_TIMESTAMP(m.worker_claimed_at) < ${rowStaleCutoffAql('m')}) ? 1 : 0),
             oldest = MIN(m.updated_at),
             depth = COUNT()
           FILTER claimable > 0
@@ -573,7 +591,7 @@ async function claimNextJobFair(db) {
       LET cand = FIRST(
         FOR m IN okf_concepts_meta
           FILTER m.repo_id == pick.repo AND m.index_status == 'parsed'
-          FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < timeout
+          FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < ${rowStaleCutoffAql('m')}
           FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
           SORT m.updated_at ASC
           LIMIT 1
@@ -673,7 +691,7 @@ async function _refreshRagIngestion(db, repoId) {
             FOR m IN okf_concepts_meta
               FILTER m.repo_id == ${repoId} AND m.index_status == 'parsed'
                 AND m.worker_claimed_at != null
-                AND DATE_TIMESTAMP(m.worker_claimed_at) >= DATE_NOW() - ${claimStaleMs()}
+                AND DATE_TIMESTAMP(m.worker_claimed_at) >= ${rowStaleCutoffAql('m')}
               RETURN 1
           )
           LET armed = COUNT(
@@ -1013,8 +1031,9 @@ async function _processOneJob() {
     const fileId = conceptId; // the concept_id is the dataprep fileId (content-keyed)
 
     // 0b. STALE-RECLAIM LIVENESS PROBE (review 2026-10-15): a row whose previous
-    //    claim timed out may still have a LIVE dataprep task — claimStaleMs (30
-    //    min flat) equals the measured per-concept duration on the contended
+    //    claim timed out may still have a LIVE dataprep task — a claim past its
+    //    row window (issue #2005: the row's OWN window, not a fleet-wide max)
+    //    equals the measured per-concept duration on the contended
     //    GPU, so claim age alone proves nothing. Racing a live task with the
     //    retract+re-POST below duplicates chunks/edges now, and the orphan's
     //    generic-failure path auto-retracts by fileId — deleting the NEW run's
@@ -1852,5 +1871,6 @@ module.exports = {
   claimNextJob,
   getBundleFileId,
   jobWindowMs,
-  reapGraceMs
+  reapGraceMs,
+  rowStaleCutoffAql
 };

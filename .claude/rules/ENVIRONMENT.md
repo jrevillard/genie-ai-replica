@@ -126,6 +126,55 @@ the knobs to lower.
   Dataprep does **not** read it — it discovers the served window at runtime
   from `VLLM_ENDPOINT` (issue #1182). `DATAPREP_MAX_MODEL_LEN` is the lever on
   a provider whose `/v1/models` carries no `max_model_len`.
+- GPU-profile env files: `env.t4` (T4, 2048 window), `env.rtx6000`
+  (RTX 6000 ADA, 65536) and `env.strixhalo` (AMD Strix Halo / gfx1151 —
+  the vendor axis lives in the BASE compose files as values
+  (`VLLM_IMAGE`, `TEI_EMBEDDING_IMAGE`, device paths, GIDs) gated by the
+  `rocm-models` profile; the Strix Halo file carries those pins; ships
+  **49152**
+  on a shared host under the operator's 27 GB ceiling with the 2B-class
+  models (granite-3.1-2b @ 0.28, gemma-3-1b-it @ 0.12); the 8B-class
+  models need a mostly-dedicated host at 0.55/49152, and 65536 does not
+  fit that 45.8 GiB GTT
+  aperture). Same budget derivation on all three. On the Strix Halo
+  profile the RERANKER runs as a third vLLM instance on the GPU
+  (`RERANKER_BACKEND=vllm` — the TEI ROCm image fails on gfx1151;
+  `env.strixhalo` flips the switch, `tei` stays the default everywhere
+  else) and EMBEDDINGS run as a FOURTH (`EMBEDDING_BACKEND=vllm`, the
+  `vllm-embedding` pooling instance): BOTH embedding consumers
+  (dataprep corpus + retriever queries) move together — a split would
+  mix vector spaces in one collection. Both switches are the
+  SINGLE-SERVER profile's pins: on a compose SPLIT venue unset them
+  (the gpu-node stack has no `vllm-embedding` and the gpu-proxy routes
+  `/rerank` to TEI), or use the ansible path (Sections 18/18B +
+  `gpu_rerank_upstream`).
+- **OKF on the ROCm venue (live-verified 2026-11-18)** — four venue-only
+  settings the deployment docs assume away: `OKF_ENABLED=1` in `.env`
+  (+ `--profile okf` + kong-config re-run + backend AND frontend
+  recreate — the parked backend (left at `OKF_ENABLED=0`) short-circuits
+  retrieval-config to zero serving graphs); the
+  split-URL Keycloak trio wired for **okf-server AND
+  document-repository** in the base compose (empty defaults — the
+  NVIDIA one-URL shape; doc-repo's block
+  is load-bearing: without it OKF publish fails
+  `EXPORT_FAILED … doc-repo status 503`); `VLLM_ENDPOINT=http://vllm:8000`
+  in `.env` (okf-server's LLM legs are opt-in — unset, LLM-Assisted
+  import stalls with "LLM not configured"; the other consumers of the
+  var already default to the same URL); and the nginx dev cert generator
+  now stamps a SAN (`IP:<domain>|DNS:<domain>,DNS:localhost,IP:127.0.0.1`)
+  — a SAN-less cert makes browsers reject every XHR (`ERR_CERT_AUTHORITY_INVALID`),
+  the frontend's `/runtime/config.js` fails, `APP_CONFIG` never loads and
+  APIs fall back to `localhost:3000` — which reads as a "lost session",
+  not a cert problem. Topic-link knobs for the 2B-class model:
+  `OKF_TOPIC_LINK_TIMEOUT_MS` (60s default — 7/19 batches exceeded it on
+  a 144-concept import), `OKF_TOPIC_LINK_BATCH`, `OKF_TOPIC_LINK_LANES`,
+  `OKF_TOPIC_LINK_MAX_PER_CONCEPT`; failures are fail-soft, re-runs
+  densify. Full runbook (role seeding, lifecycle by API, failure-class
+  table): `docs/rocm-venue-okf-runbook.md`.
+- Split / self-signed venues pin `KEYCLOAK_HOSTNAME` to the FULL public
+  frontend URL (`https://<domain>:<port>/auth`) — issuer consistency for
+  in-network mints (hostname-only lets them stamp internal issuers;
+  requires recreating the keycloak container after a change).
 - The ceiling is enforced on **every** write path: the import splits (or
   rejects), the Studio editor refuses the save (409, nothing written), and
   the publish gate refuses **before** minting a version. For an over-ceiling

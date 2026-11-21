@@ -5,7 +5,7 @@ description: "Every supported env-var with default, scope, and the container tha
 mode: reference
 persona: mixed
 owner: docs-stewards
-last_reviewed: 2026-09-29
+last_reviewed: 2026-11-11
 ---
 
 ## Purpose
@@ -148,19 +148,144 @@ to reproduce here — see `docker-compose.yaml` for the canonical values.
 
 ## GPU profile overlays
 
-`env.t4` and `env.rtx6000` overlay these on top of `env` to set GPU-memory
-utilization and model-length limits per profile. They are read via
-`docker compose --env-file .env --env-file env.<profile> up -d`.
+`env.t4` and `env.rtx6000` (NVIDIA) and `env.strixhalo` (AMD ROCm / Strix
+Halo) overlay these on top of `env` to set GPU-memory utilization and
+model-length limits per profile. The NVIDIA profiles are read via
+`docker compose --env-file .env --env-file env.<profile> up -d`;
+`env.strixhalo` is read together with the `rocm-models` compose profile
+(`--profile rocm-models` on `docker-compose.yaml`, or on
+`docker-compose.gpu.yaml` for a GPU node) — see
+[GPU Deployment → ROCm](/docs/deploy/gpu/).
 
-| Variable | env.t4 default | env.rtx6000 default | Notes |
+| Variable | env.t4 default | env.rtx6000 default | env.strixhalo default | Notes |
+|---|---|---|---|---|
+| `VLLM_GPU_UTILIZATION` | `0.4` | `0.55` | `0.28` | Fraction of GPU memory vLLM pre-allocates (on ROCm: of the 45.8 GiB GTT aperture) |
+| `VLLM_MAX_MODEL_LEN` | `2048` | `65536` | `49152` | Context length — the vLLM-side memory knob (`--max-model-len`). Dataprep does NOT read it: it discovers the served window at runtime from `VLLM_ENDPOINT` (see `DATAPREP_MAX_MODEL_LEN`). The shipped Strix Halo values target a shared host (27 GB ceiling, granite-3.1-2b main model); the 8B-class models on a mostly-dedicated host fit 0.55/49152, and 65536 does NOT fit at 0.55 (engine estimate 54064) |
+| `VLLM_MAX_NUM_SEQS` | `16` | `16` | `16` | Max concurrent sequences |
+| `VLLM_DTYPE` | `half` | _(unset, defaults in docker-compose)_ | `half` | Compute dtype |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | `0.4` | `0.12` | |
+| `VLLM_TRANSLATION_MAX_MODEL_LEN` | `2048` | `8192` | `8192` | |
+| `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | `32` | `16` | |
+| `VLLM_TRANSLATION_DTYPE` | `half` | _(unset)_ | `auto` | |
+
+### ROCm-only variables (env.strixhalo)
+
+`env.strixhalo` additionally carries the image pins, model IDs, device
+paths, device group GIDs and shared-host port plan. Values exactly as
+shipped:
+
+| Variable | env.strixhalo value | Notes |
+|---|---|---|
+| `VLLM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — the image behind all four vLLM instances of the ROCm profile (llm / translation / reranker / embedding). Compose default: `vllm/vllm-openai:v0.29.0` (the NVIDIA build) |
+| `TEI_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image — the ROCm TEI build fails on gfx1151. Compose default: the NVIDIA-capable `1.9.3` image |
+| `TEI_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) — kept for the TEI backend; the reranker wrapper defaults to the GPU vLLM instance on this profile |
+| `GPU_DEVICE_KFD` | `/dev/kfd` | The `devices:` row's host path (compose default `/dev/null` — a path that exists on every host, because a missing device path is a hard create-time error) |
+| `GPU_DEVICE_DRI` | `/dev/dri` | Same story (compose default `/dev/zero`) |
+| `TEI_RERANKING_MAX_BATCH_TOKENS` | `2048` | TEI CPU-footprint caps (the base compose's GPU-side values inflate candle's buffer pools on CPU; the reranker measured 16.3 GiB RSS at 8192/32) |
+| `TEI_RERANKING_MAX_CONCURRENT_REQUESTS` | `8` | paired with the batch-token cap above |
+| `TEI_EMBEDDING_MAX_BATCH_TOKENS` | `2048` | same story, embedding side — cuts the footprint ~3x with no quality effect |
+| `TEI_RERANKING_AUTO_TRUNCATE` | `true` | required with the 2048 batch cap (bge-reranker-v2-m3's max input is 8192; chunks are ~500 chars, so truncation is theoretical in the RAG path) |
+| `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-3.1-2b-instruct` | Spike-sized main LLM (fits the 27 GB shared-host ceiling) |
+| `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-1b-it` | Spike-sized translation LLM |
+| `DOCLING_DEVICE` | `cpu` | No docling ROCm support on the ROCm path |
+| `NGINX_HTTP_PORT` | `8180` | Shared-host port plan (reference machine) |
+| `NGINX_HTTPS_PORT` | `8443` | |
+| `ARANGO_PORT` | `18529` | |
+| `GPU_HTTP_PORT` | `8181` | GPU-node venue (split topology) |
+| `GPU_HTTPS_PORT` | `18443` | |
+| `RENDER_GID` | `990` | Distro-specific — `getent group render` |
+| `VIDEO_GID` | `44` | Distro-specific — `getent group video` |
+| `RERANKER_BACKEND` | `vllm` | Task-14 reranker backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo the TEI ROCm image cannot run on gfx1151, so the reranker is a THIRD vLLM instance on the GPU (`vllm-reranker` service, activated by the `rocm-models` profile) and the profile flips the switch. Unknown values fall back to `tei` |
+| `RERANKER_VLLM_ENDPOINT` | `http://vllm-reranker:8000` | Where the wrapper posts `{model, query, documents}` to `/v1/rerank` (Cohere shape). Split topology: the app-stack value is the nginx-gpu `/rerank` route (`https://<gpu-node>:<port>/rerank`), rendered by SECTION 18B |
+| `RERANKER_VLLM_MODEL` | `BAAI/bge-reranker-v2-m3` | The cross-encoder the vLLM instance serves with `--served-model-name` |
+| `VLLM_RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Same model, the `vllm-reranker` service's own knob |
+| `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB of GTT (spike measured 1.56 GiB touched) — sits inside the 27 GB ceiling beside granite (0.28) + gemma (0.12) |
+| `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | Rerank window; vLLM truncates silently at this length (TEI's strict 422 path is backend-specific and stays on `tei`) |
+| `RERANKER_VLLM_MAX_MODEL_LEN` | `8192` | The **client-side** pin of that window — the value the reranker wrapper believes the `vllm-reranker` instance serves. It must equal `VLLM_RERANKER_MAX_MODEL_LEN` (the value the instance is *started* with), because vLLM truncates an over-long `(query, doc)` pair at its window instead of refusing it: with the pin, the wrapper raises the same typed error TEI's HTTP 422 produces and chatqna abstains with a reason; without it the wrapper discovers the served window from `/v1/models`, and when that cannot be answered the contract cannot be enforced — warned once, the request is still served (a wrong ranking beats no ranking). The compose default chains to `VLLM_RERANKER_MAX_MODEL_LEN`; a non-integer value is rejected with a warning and falls through to discovery |
+| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo ALL THREE embedding consumers (dataprep corpus embeds, the retriever's query embeds, and chatqna's RAG-graph query encoder) move to the FOURTH vLLM instance (`vllm-embedding` service, activated by the `rocm-models` profile) — they move together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
+| `EMBEDDING_VLLM_ENDPOINT` | `http://vllm-embedding:8000` | The pooling endpoint answering the OpenAI shape (`POST /v1/embeddings {model, input}` → `data[].embedding`). The client appends `/v1` itself. **Read by three consumers**: the retriever's and dataprep's vLLM branch, and chatqna's RAG graph — its `embedding` node derives host/port/protocol/endpoint from this base URL, so the query is encoded by the same model that embedded the corpus (unset = the embedding microservice, i.e. TEI — the NVIDIA path) |
+| `VLLM_EMBEDDING_MODEL_ID` | *(docker-compose.yaml default)* `BAAI/bge-large-en-v1.5` | The pooling model the instance serves with `--served-model-name`; the embedding clients send the same id (override per consumer with `EMBEDDING_MODEL_ID`). Not set in `env.strixhalo` — the compose file ships the default |
+| `VLLM_EMBEDDING_GPU_UTILIZATION` | *(compose default)* `0.05` | bge-large bf16 weights are ~0.6 GiB — the smallest slice of the GTT, beside the reranker (0.05) + granite (0.28) + gemma (0.12) |
+| `VLLM_EMBEDDING_MAX_MODEL_LEN` | *(compose default)* `512` | Embed window; sized for the ~500-char chunk size — the endpoint bounds what langchain is told NOT to pre-chunk (`check_embedding_ctx_length=False`, bge is not tiktoken-tokenizable) |
+
+### OKF-stack variables (venue-level, not ROCm-exclusive)
+
+These apply on any deployment running the OKF stack; they surfaced as
+required on the live ROCm venue and are recorded here because they are
+**not** GPU-profile variables:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `OKF_ENABLED` | `0` | Master flag: starts okf-server + pii-service (profile `okf` / Swarm replicas), adds/strips the Kong `/api/okf` route (kong-config apply), and drives `window.APP_CONFIG.okfEnabled`. Changing it requires bringing up `kong-config okf-server pii-service` and recreating the frontend |
+| `VLLM_ENDPOINT` (okf-server) | *(empty)* | **Opt-in gate for the OKF LLM legs** (LLM-Assisted import curation, topic links, manifest summaries). Empty = the legs refuse ("LLM not configured") and the Studio LLM-Assisted flow stalls after the raw import. Set to the serving vLLM (`http://vllm:8000`) to opt in; the deployment's own model is discovered per the !631 policy. Other compose consumers of this variable already default to the same URL, so setting it moves only okf-server |
+| `OKF_TOPIC_LINK_TIMEOUT_MS` | `60000` | Per-batch budget for LLM topic-link proposals. On 2B-class models (granite-3.1-2b) batches of 8 sometimes exceed 60 s — measured 7 of 19 batches on a 144-concept import; failures are fail-soft (skipped), re-running densifies |
+| `OKF_TOPIC_LINK_BATCH` | `8` | Concepts per LLM call — lower it to shorten prompts before raising the timeout |
+| `OKF_TOPIC_LINK_LANES` | `4` | Parallel topic-link batches |
+| `OKF_TOPIC_LINK_MAX_PER_CONCEPT` | `6` | Cap on links accepted per concept (over-cap proposals dropped) |
+
+The split-URL Keycloak trio (`KEYCLOAK_DISCOVERY_URL` /
+`KEYCLOAK_JWKS_URL` / `KEYCLOAK_PUBLIC_URL`) applies per service; on the
+ROCm venue the overlay wires it for **backend, okf-server and
+document-repository** (the last one is required for OKF publishing —
+see [OKF Deployment & Lifecycle](/docs/knowledge-base/okf-deployment/)).
+
+### Keycloak issuer pin (`KEYCLOAK_HOSTNAME`)
+
+Optional, unset by default (the historical hostname-only behavior). Set
+to the FULL public frontend URL (`https://<domain>:<port>/auth`) to pin
+Keycloak's hostname-v2 `KC_HOSTNAME`: every token mint — browser AND
+in-network `client_credentials` — then carries the public issuer,
+regardless of which route reached Keycloak. Needed on deployments where
+containers cannot reach the host-published edge (the service-token mint
+silently fails over to the in-network URL and self-reports an internal
+issuer, which validators accepting only the public issuer reject —
+symptom: `chatqna HTTP 401` on every RAGAS serve leg). NVIDIA venues
+that leave it unset are unaffected.
+
+### Reranker backend (`RERANKER_BACKEND`)
+
+The reranker wrapper (`genie-ai-overlay/reranker/`) has two backends,
+selected per deployment by `RERANKER_BACKEND`:
+
+| Backend | Serves | Request shape | Notes |
 |---|---|---|---|
-| `VLLM_GPU_UTILIZATION` | `0.4` | `0.55` | Fraction of GPU memory vLLM pre-allocates |
-| `VLLM_MAX_MODEL_LEN` | `2048` | `65536` | Context length — the vLLM-side memory knob (`--max-model-len`). Dataprep does NOT read it: it discovers the served window at runtime from `VLLM_ENDPOINT` (see `DATAPREP_MAX_MODEL_LEN`) |
-| `VLLM_MAX_NUM_SEQS` | `16` | `16` | Max concurrent sequences |
-| `VLLM_DTYPE` | `half` | _(unset, defaults in docker-compose)_ | Compute dtype |
-| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | `0.4` | |
-| `VLLM_TRANSLATION_MAX_MODEL_LEN` | `2048` | `8192` | |
-| `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | `32` | |
+| `tei` (default) | TEI `/rerank` | `{query, texts, truncate: false}` | NVIDIA path unchanged. Strict mode: over-long (query, doc) pairs get TEI's HTTP 422, surfaced as `RerankerInputTooLongError` → chatqna abstains |
+| `vllm` | vLLM `/v1/rerank` (Cohere-compatible shape — not an OpenAI standard; OpenAI has no rerank endpoint) | `{model, query, documents}` | ROCm/gfx1151 path: the TEI ROCm image carries Instinct-only kernels, so the reranker runs as a third vLLM instance on the GPU. The wrapper normalizes `results[].relevance_score` to its internal `{index, score}` contract; all five reranking strategies are backend-agnostic |
+
+An unknown value falls back to `tei` with a warning, mirroring the
+strategy resolver. The `reranker.backend` span attribute records which
+backend answered each request.
+
+### Embedding backend (`EMBEDDING_BACKEND`)
+
+The same mechanism, mirrored for embeddings (Task-14 mirror). The three
+embedding consumers — dataprep (corpus), the retriever (queries) and
+chatqna's RAG graph (the query) — select their client per deployment:
+
+| Backend | Serves | Notes |
+|---|---|---|
+| `tei` (default) | TEI `/embed` via the hub clients | NVIDIA path unchanged, byte-identical |
+| `vllm` | vLLM `/v1/embeddings` (OpenAI-compatible pooling shape) | ROCm/gfx1151 path: the TEI ROCm image cannot run on the GPU, so embeddings run as the fourth vLLM instance. Dataprep swaps its comps-built client post-construction; the retriever puts the branch first in its embedding ladder. Both log one `[ embed-backend ]` line when the branch runs |
+
+The vllm branch activates only when `EMBEDDING_BACKEND=vllm` AND
+`EMBEDDING_VLLM_ENDPOINT` is set — a `vllm` value with an empty endpoint
+fails soft to `tei` with a warning naming the remedy. The consumers move
+together: dataprep writes the corpus vectors and the retriever answers
+queries in the same vector space, so the compose overlay flips both or
+neither.
+
+**chatqna's query encoder.** chatqna's RAG graph encodes the query
+through its `embedding` node. That node points at the OPEA `embedding`
+microservice — which fronts the CPU TEI container — so on a GPU venue
+the GPU embedder would serve ingestion only and every chat query would
+be encoded by the CPU image. chatqna therefore reads the same
+`EMBEDDING_VLLM_ENDPOINT` base URL and derives the node's host, port,
+protocol and endpoint from it, posting the same OpenAI-shaped body to
+`{base}/v1/embeddings`. The response shape is identical (the
+microservice's own route is OpenAI-shaped too), so the parse path is
+unchanged, and chatqna applies the bge query instruction itself before
+the text leaves the service. **Unset = the NVIDIA path, byte-identical:**
+the node keeps the microservice and sends no Authorization header.
 
 ## Validation
 

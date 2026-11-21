@@ -126,6 +126,21 @@ _ANY_WHITESPACE = re.compile(r"\s")
 ATTRIBUTE_NAMES = {
     # Correlation
     "query_id": QUERY_ID_KEY,
+    # Reranker backend (Task 14, ROCm path): which rerank backend answered a
+    # request — "tei" (default, NVIDIA path unchanged) or "vllm" (the GPU
+    # vLLM instance on gfx1151). Fixed enum, never request data.
+    "reranker_backend": "reranker.backend",
+    # Embedding backend (Task-14 mirror, ROCm path): which embedding client
+    # served a retrieval or ingest — "tei" (default, NVIDIA path unchanged)
+    # or "vllm" (the GPU vLLM pooling instance). Fixed enum, never request
+    # data. Same shape as reranker.backend above.
+    "embedding_backend": "embedding.backend",
+    # The length contract in force for a rerank request: "tei-exact" (TEI
+    # refuses an over-long pair with HTTP 422 — the server measures) or
+    # "client-estimate" (the vLLM backend has no server-side refusal, so
+    # the client measures the pair itself — MR !968 review). Fixed enum,
+    # never request data.
+    "reranker_length_contract": "reranker.length_contract",
     # OKF multi-repo fan-out routing (feat/okf-server line). Values are
     # counts/booleans except leg.graph_name, which carries the Arango graph
     # collection name (identifier-charset, no whitespace).

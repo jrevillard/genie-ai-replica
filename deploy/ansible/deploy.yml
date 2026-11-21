@@ -670,6 +670,38 @@
     - name: Initialize shared facts (registry URL, image tag)
       ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
 
+    - name: Validate the GPU topology declaration
+      ansible.builtin.assert:
+        that:
+          # `gpu_vendor` is the ROCm marker. An NVIDIA deployment never
+          # sets it, so every condition below short-circuits to true and
+          # the NVIDIA render is untouched (byte-identical guarantee).
+          - gpu_vendor | default('nvidia') in ['nvidia', 'rocm']
+          # A ROCm deployment must declare EXACTLY ONE topology. Neither
+          # flag leaves the app stack speaking the TEI request shape to a
+          # node whose /rerank/ route was flipped to the vLLM reranker —
+          # the two halves disagree, and the mismatch surfaces per call
+          # rather than at deploy time (MR !968 review). Both flags is the
+          # same disagreement from the other side.
+          - gpu_vendor | default('nvidia') != 'rocm' or (((rocm_gpu_node_local is defined and rocm_gpu_node_local) or (rocm_gpu_node_remote is defined and rocm_gpu_node_remote)) and not ((rocm_gpu_node_local is defined and rocm_gpu_node_local) and (rocm_gpu_node_remote is defined and rocm_gpu_node_remote)))
+          # The remote topology needs the node's address; the co-located
+          # one must NOT have it — the node IS this host, and Section 18B
+          # addresses ansible_host.
+          - gpu_vendor | default('nvidia') != 'rocm' or not (rocm_gpu_node_remote is defined and rocm_gpu_node_remote) or (gpu_node_host is defined and gpu_node_host | length > 0)
+          - gpu_vendor | default('nvidia') != 'rocm' or not (rocm_gpu_node_local is defined and rocm_gpu_node_local) or not (gpu_node_host is defined and gpu_node_host | length > 0)
+        fail_msg: >-
+          Invalid GPU topology declaration for a ROCm deployment
+          (gpu_vendor: rocm).
+          Declare EXACTLY ONE topology:
+            rocm_gpu_node_local: true  — the GPU node IS this host
+              (single-server ROCm venue; requires gpu_https_port, and
+              gpu_node_host must NOT be set), or
+            rocm_gpu_node_remote: true — the GPU node is another machine
+              (requires gpu_node_host to be set).
+          Neither flag set leaves the app stack talking TEI to the vLLM
+          reranker; both flags set renders conflicting endpoints.
+        quiet: true
+
     - name: Generate .env file from template
       ansible.builtin.template:
         src: env.j2

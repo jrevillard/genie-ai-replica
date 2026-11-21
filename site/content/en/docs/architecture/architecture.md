@@ -921,6 +921,8 @@ flowchart LR
 
 This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL in `KC_HOSTNAME`, making the deployment portable across environments without rebuilding the Keycloak image.
 
+**Split / self-signed venue qualifier:** where containers cannot reach the host-published edge (a split venue behind a self-signed cert), the hostname-only pin is not enough — set `KEYCLOAK_HOSTNAME` to the FULL public frontend URL (`https://<domain>:<port>/auth`; Keycloak hostname-v2 absolute URL). Hostname-only lets in-network `client_credentials` mints stamp an internal issuer, which validators accepting only the public issuer reject. Optional elsewhere — see the [`KEYCLOAK_HOSTNAME` reference](/docs/reference/env-vars/).
+
 ---
 
 ## 15. Key Decisions

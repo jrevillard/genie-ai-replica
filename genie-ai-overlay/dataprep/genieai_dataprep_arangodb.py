@@ -20,6 +20,13 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
+from core.embedding_backend import (
+    EMBEDDING_VLLM_ENDPOINT,
+    build_vllm_embeddings,
+    embeddings_backend_active,
+    resolve_embedding_backend,
+    resolved_embed_model,
+)
 from core.model_cache import MAX_SANE_MODEL_WINDOW_TOKENS, get_max_model_len, get_model_id, resolve_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
@@ -1886,6 +1893,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"{HUB_EMBED_TIMEOUT_SECONDS:.0f}s per call ({', '.join(hardened)}) "
                 f"— was unbounded (#1381)"
             )
+        # Task-14 mirror — config-gated GPU embedding backend. When active,
+        # the comps-built TEI client above is swapped post-construction: our
+        # subclass owns self.embeddings, so reassigning it needs no vendored
+        # patch (the parent's _initialize_embeddings result is simply
+        # replaced). tei default everywhere; an NVIDIA deployment never
+        # enters this branch. See core/embedding_backend.py.
+        if embeddings_backend_active():
+            self.embeddings = build_vllm_embeddings("BAAI/bge-large-en-v1.5")
+            logger.info(
+                f"[ embed-backend ] dataprep embeddings → vLLM "
+                f"({EMBEDDING_VLLM_ENDPOINT}, model {resolved_embed_model('BAAI/bge-large-en-v1.5')})"
+            )
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
         self._log_semaphore = asyncio.Semaphore(100)
@@ -3138,9 +3157,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    raw = parsed.get("contexts", parsed) if isinstance(parsed, dict) else {}
+                    # The batch contract is {index: context}, but models drift:
+                    # granite returned {"contexts": [{"index": N, "context": ...}]}
+                    # (a LIST) — the old code crashed on raw.items() with
+                    # AttributeError: 'list' object has no attribute 'items' and
+                    # every batch fell back to per-chunk calls (and some of THOSE
+                    # failed too → raw-text chunks). Normalize both shapes:
+                    # dict → (key, value) pairs; list → ("index", "context") pairs.
+                    if isinstance(parsed, dict):
+                        raw = parsed.get("contexts", parsed)
+                    elif isinstance(parsed, list):
+                        raw = parsed
+                    else:
+                        raw = None
+                    items: list[tuple[object, object]] = []
+                    if isinstance(raw, dict):
+                        items = list(raw.items())
+                    elif isinstance(raw, list):
+                        items = [(c.get("index"), c.get("context", c.get("text"))) for c in raw if isinstance(c, dict)]
                     out: dict[int, str] = {}
-                    for k, v in raw.items():
+                    for k, v in items:
                         try:
                             idx = int(k)
                         except (TypeError, ValueError):
@@ -4637,7 +4673,22 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         )
 
         try:
-            with background_span("dataprep.ingest.background"):
+            # embedding.backend stamped per ingest — the ACTIVE backend
+            # (same active-not-requested rule as the retriever stamp; the
+            # misconfiguration case fails soft to TEI and the trace must say
+            # so). (code review 2026-11-18 + verification round-2 N3.)
+            with background_span(
+                "dataprep.ingest.background",
+                attributes={
+                    # Through the vocabulary constant, like the retriever
+                    # (MR !968 review): a rename in core/span_attrs.py would
+                    # otherwise leave this call site on the old key and split
+                    # the dataprep and retriever spans of the same ingest.
+                    ATTRIBUTE_NAMES["embedding_backend"]: (
+                        resolve_embedding_backend() if embeddings_backend_active() else "tei"
+                    )
+                },
+            ):
                 # --- START PROTECTED EXECUTION (Spec 5.1) ---
                 await self._update_doc_status(input.file_id, "Ingesting", concept_id=getattr(input, "concept_id", None))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")

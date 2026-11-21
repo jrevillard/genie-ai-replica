@@ -622,7 +622,8 @@ ansible-playbook -i inventory/my-gpu.ini deploy-gpu.yml --vault-id my-gpu@prompt
 |------|---------|-------------|
 | `/llm/` | vLLM (LLM inference) | OpenAI-compatible chat completions |
 | `/translation/` | vLLM (Translation) | Translation model inference |
-| `/embed/` | TEI (Embedding) | Text embedding for vector search |
+| `/embed/` | TEI (Embedding) | Text embedding for vector search — the TEI request shape (`{inputs, truncate}`) |
+| `/v1/embeddings/` | TEI (Embedding) | The same embedder in the OpenAI request shape (`{model, input}`) — what the GPU pooling instance serves. The upstream is selectable per deployment: `tei-embedding:80` on NVIDIA, `vllm-embedding:8000` on ROCm (`gpu_embedding_upstream`) |
 | `/rerank/` | TEI (Reranking) | Result reranking |
 | `/docling/` | docling-serve | Document extraction |
 
@@ -690,6 +691,72 @@ Three Ansible variables control TLS verification for self-signed certificates in
 `—` = use default (verify certs). All three are opt-in via `group_vars/<env>/vars.yml`.
 
 For detailed explanations of each variable and the underlying mechanisms, see [Self-Signed Certificates](../docker-compose-setup.md#self-signed-certificates--decision-matrix).
+
+### ROCm GPU Node (AMD Strix Halo — gfx1151)
+
+The ROCm path is the SAME playbook as the NVIDIA one — one file set, the
+vendor axis is the host's inventory group:
+
+```bash
+# 1. Inventory (add the node to gpu.ini — both vendor groups may share it)
+cp inventory/gpu.ini.example inventory/gpu.ini     # add the node under [rocm_gpu_nodes]
+
+# 2. Non-secret config lives in vars/rocm_gpu_nodes.yml
+#    (image pins, GIDs, ports, gpu_rerank_upstream, TEI caps — edit per host)
+
+# 3. Encrypted secrets (ROCm GPU node vault)
+#    NOTE: this vault is NOT in the repository — the other environments'
+#    vaults are committed encrypted, but the ROCm node's secrets are
+#    per-GPU-node, so the file is created here and loaded via the plays'
+#    vars_files (NOT group_vars/: a directory there must match an inventory
+#    group name, which is how an earlier revision silently loaded nothing).
+ansible-vault create vars/vault-rocm-gpu.yml --vault-id rocm@prompt
+# Required: hugging_face_hub_token, gpu_api_keys (list of {name, key})
+
+# 4. Deploy (same tags as the NVIDIA path: install / prepare / deploy)
+ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --tags install,prepare,deploy --vault-id rocm@prompt
+```
+
+The playbook renders the GPU-node stack from ONE template —
+`docker-compose.gpu.yaml.j2`, whose `gpu_vendor == 'rocm'` branch renders
+the image pins, the device rows, the pooling services (`vllm-reranker`,
+`vllm-embedding`) — plus the gpu-proxy template, whose `/rerank/` route
+flips its upstream to the vLLM reranker via `gpu_rerank_upstream` (default
+`vllm-reranker:8000`; the TEI ROCm image cannot run on gfx1151) and whose
+`/v1/embeddings/` route flips its upstream to the vLLM pooling instance
+via `gpu_embedding_upstream` (default `vllm-embedding:8000` — the node's
+FOURTH vLLM instance; the TEI-shaped `/embed/` route stays on the CPU
+TEI, because the OPEA embedding microservice and the okf-server's
+frontmatter service speak that shape and vLLM serves no TEI `/embed`
+route). The deploy plays pass `--profile rocm-models` (there is no
+COMPOSE_PROFILES shortcut — it is a CLI-level variable). The TEI batch
+caps (`tei_embedding_max_batch_tokens`, `tei_reranking_max_batch_tokens`,
+`tei_reranking_max_concurrent_requests`) are mirrored in
+`vars/rocm_gpu_nodes.yml` — CPU TEI inflates candle buffers at the
+GPU-sized defaults (16.3 GiB RSS measured at 8192/32); if you lower the
+caps, also set `tei_reranking_auto_truncate: true` (the template defaults
+it to `false`).
+
+Two flags wire the APP stack to this node (both render app-side `.env`
+sections in `templates/env.j2`):
+
+| Flag | Where | Renders | Notes |
+|------|-------|---------|-------|
+| `rocm_gpu_node_local: true` (+ `gpu_https_port`) | the ROCm host's own `vars/rocm_gpu_nodes.yml` | **Section 18B** — co-located endpoints (`https://<ansible_host>:<port>/...`), `OPEA_SSL_SKIP_VERIFY=1` (unconditional — the node cert is self-signed), `GPU_MODEL_REPLICAS=0`, the Task-14 reranker trio (`RERANKER_BACKEND=vllm` + endpoint + model) and the embedding trio (`EMBEDDING_BACKEND=vllm` + `EMBEDDING_VLLM_ENDPOINT` + `RAGAS_EMBED_BASE_URL`). Also **suppresses Section 20** (`opea_ssl_skip_verify`) so dotenv last-wins cannot undo the forced skip | single-server: app stack shares the host with the GPU-node stack |
+| `rocm_gpu_node_remote: true` | the APP host's `group_vars` (plus `gpu_node_host`) | **Section 18** — remote endpoint overrides plus the same reranker and embedding trios (forced SSL skip — the node cert is self-signed) | GPU node is a separate machine |
+The embedding trio moves all THREE embedding consumers onto the node's
+GPU pool: dataprep (the corpus), the retriever (its fallback branch) and
+chatqna (the query encoder — chatqna's RAG-graph `embedding` node reads
+the same `EMBEDDING_VLLM_ENDPOINT` base URL and derives its
+host/port/protocol/endpoint from it, so the query is encoded by the model
+that embedded the corpus). Unset = the NVIDIA path, byte-identical: the
+node keeps the CPU TEI and chatqna keeps the embedding microservice.
+
+Section 19 (`node_tls_reject_unauthorized`) and Section 21
+(`keycloak_ssl_skip_verify`) behave as documented in the self-signed
+decision matrix above. Sizing (GTT claims, windows, the four-vLLM
+fleet): see the ROCm section of
+`site/content/en/docs/deploy/gpu.md`.
 
 ## Port Configuration
 

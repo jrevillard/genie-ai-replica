@@ -275,7 +275,7 @@ def test_wall_clock_budget_stops_the_loop():
     real_sleep = asyncio.sleep
 
     class SlowModel:
-        async def complete(self, messages, tool_definitions, *, max_output_tokens=None):
+        async def complete(self, messages, tool_definitions, *, max_output_tokens):
             await real_sleep(0.05)  # the wall clock runs out during the model call
             return _turn(tool_calls=(_tool_call("call-1", "search_knowledge", {"query": "q"}),))
 
@@ -300,7 +300,7 @@ def test_a_pre_cancelled_run_never_dispatches():
     token.cancel()
 
     class RecordingModel:
-        async def complete(self, messages, tool_definitions):
+        async def complete(self, messages, tool_definitions, *, max_output_tokens):
             recorder["called"] = True
             return _turn(content="unused")
 

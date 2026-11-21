@@ -312,8 +312,9 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
 
 def test_complete_carries_the_output_bound_when_the_window_has_room():
     # Passthrough: the run allowance (1234) is below what one call can
-    # serve against the window (8192 discovered − 128 safety − the tiny
-    # prompt estimate), so the bound rides verbatim.
+    # serve against the window (the 65536 fallback — discovery is skipped
+    # via the model-id override — minus 128 safety and the tiny prompt
+    # estimate), so the bound rides verbatim.
     transport = _transport((200, _chat_body(content="a")))
     client = ProbeModelClient(_probe_config(), transport=transport)
     asyncio.run(client.complete([], (), max_output_tokens=1234))

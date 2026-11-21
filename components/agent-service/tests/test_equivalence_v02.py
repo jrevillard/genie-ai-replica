@@ -144,10 +144,10 @@ def make_adapter(rows_per_query=None, env_overrides=None):
     created: list = []
 
     class FakeAql:
-        def execute(self, aql, bind_vars=None, **kwargs):
-            executed.append((aql, bind_vars))
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            executed.append((query, bind_vars))
             for marker, rows in row_map.items():
-                if marker in aql:
+                if marker in query:
                     if isinstance(rows, Exception):
                         raise rows
                     return FakeCursor(rows)
@@ -668,3 +668,12 @@ def test_the_recorded_absent_knobs_are_inert_in_the_port():
     env["RETRIEVER_ARANGO_FETCH_K"] = "30"  # mmr-only, never selected
     config = ArangoConfig.load(env)
     assert config.k == 20 and config.score_threshold == 0.2
+
+
+def test_the_modules_aql_doubles_track_the_real_driver_signature():
+    """Every ``execute`` double in this module carrying ``bind_vars`` must
+    take it in the real driver's position — a double that takes it second
+    would mask a positional bind-dict regression (see conftest helper)."""
+    from conftest import assert_module_aql_fakes_faithful
+
+    assert_module_aql_fakes_faithful(Path(__file__))

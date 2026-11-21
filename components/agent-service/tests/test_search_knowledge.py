@@ -10,6 +10,7 @@ behave per the contract's limit semantics.
 
 import asyncio
 import logging
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -98,7 +99,7 @@ class _RowsAql:
     def __init__(self, rows):
         self._rows = rows
 
-    def execute(self, aql, bind_vars=None, **kwargs):
+    def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
         rows = self._rows
 
         class C:
@@ -236,8 +237,8 @@ def test_cap1_resolved_candidate_carries_okf_provenance_and_unresolved_carries_l
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
 
     class SplitAql:
-        def execute(self, aql, bind_vars=None, **kwargs):
-            rows = rows_identity if "okf_concepts_meta" in aql else rows_file_id
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            rows = rows_identity if "okf_concepts_meta" in query else rows_file_id
 
             class C:
                 def __iter__(self):
@@ -299,8 +300,8 @@ def test_okf_candidate_with_unresolvable_file_id_is_skipped_not_cited_with_an_em
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
 
     class SplitAql:
-        def execute(self, aql, bind_vars=None, **kwargs):
-            rows = rows_identity if "okf_concepts_meta" in aql else rows_file_id
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            rows = rows_identity if "okf_concepts_meta" in query else rows_file_id
 
             class C:
                 def __iter__(self):
@@ -371,15 +372,15 @@ def test_multi_graph_search_addresses_every_authorized_graph_and_merges_candidat
 
         searched: set = set()
 
-        def execute(self, aql, bind_vars=None, **kwargs):
-            if "@collection" in aql:
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            if "@collection" in query:
                 collection = bind_vars["@collection"]
                 assert collection == f"{self._graph}_SOURCE", (collection, self._graph)
-            if "okf_concepts_meta" in aql:
+            if "okf_concepts_meta" in query:
                 assert bind_vars["graph_name"] == self._graph
-            if "COSINE_SIMILARITY" in aql:
+            if "COSINE_SIMILARITY" in query:
                 rows = [{"key": f"{self._graph}-c1", "text": f"from-{self._graph}", "score": 0.9, "file_id": "f1"}]
-            elif "doc._key IN @chunk_ids" in aql and "okf_concepts_meta" not in aql:
+            elif "doc._key IN @chunk_ids" in query and "okf_concepts_meta" not in query:
                 # The file_id enrichment answers too: a chunk whose
                 # enrichment finds no row is skipped at minting (issue
                 # #2032), so the fake must resolve the file_id it carries.
@@ -431,10 +432,10 @@ def test_second_authorized_graph_gets_its_own_view_and_join_names():
     def make_db(graph):
         db = RecordingDb(graph)
 
-        def execute(aql, bind_vars=None, **kwargs):
-            seen.append((aql, dict(bind_vars or {})))
+        def execute(query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            seen.append((query, dict(bind_vars or {})))
             rows = []
-            if "COSINE_SIMILARITY" in aql:
+            if "COSINE_SIMILARITY" in query:
                 rows = [{"key": "c1", "text": "t", "score": 0.9, "file_id": "f1"}]
 
             class C:
@@ -521,10 +522,10 @@ def test_reranker_transport_failure_is_transient_with_no_fallback():
 
 def test_file_id_enrichment_failure_is_transient():
     class ExplodingAql:
-        def execute(self, aql, bind_vars=None, **kwargs):
-            if "doc._key IN @chunk_ids" in aql and "okf_concepts_meta" not in aql:
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            if "doc._key IN @chunk_ids" in query and "okf_concepts_meta" not in query:
                 raise RuntimeError("db down")
-            rows = [{"key": "c1", "text": "alpha", "score": 0.9}] if "COSINE_SIMILARITY" in aql else []
+            rows = [{"key": "c1", "text": "alpha", "score": 0.9}] if "COSINE_SIMILARITY" in query else []
 
             class C:
                 def __iter__(self):
@@ -724,7 +725,7 @@ def test_bm25_view_cache_spans_requests():
 
         class aql:
             @classmethod
-            def execute(cls, aql, bind_vars=None, **kwargs):
+            def execute(cls, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
                 rows = [{"key": "c1", "text": "t", "score": 0.9, "file_id": "f1"}]
 
                 class C:
@@ -905,3 +906,12 @@ def test_score_calibrator_property_exposes_the_owned_adapter_calibrate():
     capability, _e, _r, _f = make_capability(reranking=reranking)
     assert capability.score_calibrator == reranking.calibrate
     assert not hasattr(capability, "reranking")
+
+
+def test_the_modules_aql_doubles_track_the_real_driver_signature():
+    """Every ``execute`` double in this module carrying ``bind_vars`` must
+    take it in the real driver's position — a double that takes it second
+    would mask a positional bind-dict regression (see conftest helper)."""
+    from conftest import assert_module_aql_fakes_faithful
+
+    assert_module_aql_fakes_faithful(Path(__file__))

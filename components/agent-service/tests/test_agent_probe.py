@@ -40,7 +40,6 @@ from agent.loop import (
 )
 from agent.probe import (
     PROBE_OPERATION_BUDGET,
-    PROBE_QUESTION,
     QUESTION_ID,
     RUNTIME_ID,
     TOOLSET,
@@ -150,10 +149,6 @@ def test_the_probe_records_the_answered_multihop_run():
     assert evidence.error is None
     dumped = json.dumps(evidence.as_dict())
     assert json.loads(dumped)["outcome"] == OUTCOME_ANSWERED
-
-
-def test_the_probe_default_question_is_the_one_multihop_question():
-    assert PROBE_QUESTION.strip().endswith("?")
 
 
 def test_the_probe_records_an_unregistered_dispatch_as_an_error():

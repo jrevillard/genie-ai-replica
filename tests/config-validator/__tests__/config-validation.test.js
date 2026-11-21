@@ -5016,7 +5016,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
 // Debian packages on every monthly rebuild — exactly what the CACHE_BUST
 // gate exists to prevent. The same lane also referenced $NOCACHE, defined
 // nowhere in the file: dead under the runner's sh, fatal under set -u.
-// These pins fail if the slim lane ever drops the force-refresh arm or the
+// These pins fail if either lane ever drops the force-refresh arm or the
 // dead token returns.
 describe('the slim build lane cache contract (#2031)', () => {
   const ciBlocks = () => {
@@ -5030,40 +5030,48 @@ describe('the slim build lane cache contract (#2031)', () => {
   // declare SLIM_REQUIREMENTS_FILE — naming them keeps the pin from
   // passing vacuously on a deleted or renamed slim lane.
   const slimAudience = ['build:dataprep-arango', 'build:retriever-arango', 'build:reranker'];
-  const slimSections = () =>
-    ciBlocks()
-      .filter((b) => b.text.includes('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]'))
-      .map((b) => ({
-        owner: b.owner,
-        slim: b.text.slice(b.text.indexOf('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]'))
-      }));
+  const slimBlocks = () => ciBlocks().filter((b) => b.text.includes('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]'));
+  // The variable REFERENCE, not any NOCACHE substring: a comment mentioning
+  // the token's history or a differently-named var must not trip the pin.
+  const UNDEFINED_NOCACHE_RE = /\$\{?NOCACHE\b/;
 
   test('the slim lane covers the three SLIM_REQUIREMENTS_FILE jobs', () => {
-    const owners = slimSections().map((s) => s.owner);
+    const owners = slimBlocks().map((b) => b.owner);
     for (const job of slimAudience) expect(owners).toContain(job);
   });
 
   test('no build block references the undefined $NOCACHE variable', () => {
     const offending = ciBlocks()
-      .filter((b) => b.text.includes('NOCACHE'))
+      .filter((b) => UNDEFINED_NOCACHE_RE.test(b.text))
       .map((b) => b.owner);
     expect(offending).toEqual([]);
   });
 
-  test('the slim lane busts its cache under FORCE_IMAGE_REBUILD like the fat lane', () => {
-    // The exact arm, positioned with the other set -- build-arg assembly
-    // BEFORE the slim buildx invocation — an arm appended after the build
-    // (or outside the slim section) refreshes nothing.
-    const expected = [
-      '  if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then',
-      '    set -- "$@" --build-arg "CACHE_BUST=$(date +%s)"',
-      '  fi'
-    ].join('\n');
-    for (const { slim } of slimSections()) {
-      const armIdx = slim.indexOf(expected);
-      expect(armIdx).toBeGreaterThanOrEqual(0);
-      const buildIdx = slim.indexOf('docker buildx build');
-      expect(armIdx).toBeLessThan(buildIdx);
+  test('both lanes bust their cache under FORCE_IMAGE_REBUILD, each before its buildx call', () => {
+    // The contract is the RELATION, not either lane's spelling: both
+    // buildx invocations in the shared template must sit AFTER a
+    // FORCE_IMAGE_REBUILD conditional that passes a CACHE_BUST build-arg —
+    // pinning only one lane's literal let the other lane refreeze its
+    // packages while the test stayed green (the drift class #2031 is).
+    // Matching the conditional line + the build-arg (not a full literal)
+    // survives reformatting while still failing when an arm is dropped,
+    // moved after the build, or de-conditionalized. The value may be
+    // spelled quoted (the slim lane's positional style) or not (the fat
+    // lane's BUILD_ARGS style) — either spelling passes the arg.
+    const CACHE_BUST_ARG_RE = /--build-arg "?CACHE_BUST=/;
+    for (const b of slimBlocks()) {
+      const fatBuildIdx = b.text.indexOf('docker buildx build');
+      expect(fatBuildIdx).toBeGreaterThan(0);
+      const fatArm = b.text.slice(0, fatBuildIdx);
+      expect(fatArm.includes('if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then')).toBe(true);
+      expect(CACHE_BUST_ARG_RE.test(fatArm)).toBe(true);
+      const slimIdx = b.text.indexOf('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]');
+      const slim = b.text.slice(slimIdx);
+      const slimBuildIdx = slim.indexOf('docker buildx build');
+      expect(slimBuildIdx).toBeGreaterThan(0);
+      const slimArm = slim.slice(0, slimBuildIdx);
+      expect(slimArm.includes('if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then')).toBe(true);
+      expect(CACHE_BUST_ARG_RE.test(slimArm)).toBe(true);
     }
   });
 });

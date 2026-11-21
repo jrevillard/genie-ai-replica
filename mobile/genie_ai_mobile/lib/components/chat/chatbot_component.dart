@@ -30,7 +30,7 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 import 'package:genie_ai_mobile/okf/okf_citation.dart';
-import 'package:genie_ai_mobile/okf/concept_browser_screen.dart';
+import 'package:genie_ai_mobile/okf/okf_citation_open.dart';
 
 import 'quick_help_scope.dart';
 
@@ -2326,23 +2326,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // ===========================================================================
 
   /// Routes a tapped citation row (the web's `openSourceDocument`):
-  /// browsable OKF concept -> the concept browser at that repo (deep-opened
-  /// at the concept when the row carries one); external http(s) URL ->
-  /// the platform launcher; anything else -> an honest unavailable notice,
-  /// never a dead link.
+  /// the OKF action lives in the ONE shared opener (`openOkfCitation` —
+  /// browse push + unavailable notice, the /simplify review's unified
+  /// ladder; an OKF row that cannot be browsed gets the notice, never a
+  /// silent external launch). What remains here is this surface's own
+  /// external-URL rung and the final honest notice.
   void _openCitation(Map<String, dynamic> doc) {
-    if (canBrowseSource(doc)) {
-      final repoId = citationRepoId(doc)!;
-      final conceptId = citationConceptId(doc);
-      debugPrint('chat.citation browse repo=$repoId concept=$conceptId');
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) =>
-              ConceptBrowserScreen(repoId: repoId, initialConceptId: conceptId),
-        ),
-      );
-      return;
-    }
+    if (openOkfCitation(context, doc, logTag: 'chat.citation')) return;
     final url = (doc['url'] ?? doc['sourceUrl'] ?? '').toString();
     final uri = Uri.tryParse(url);
     if (uri != null &&

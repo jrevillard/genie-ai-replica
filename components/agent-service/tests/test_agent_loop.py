@@ -39,6 +39,7 @@ from agent.loop import (
     ToolCallRequest,
 )
 from agent.probe import PROBE_OPERATION_BUDGET, document_toolset
+from agent.verification import VerificationPipeline
 from capabilities.contract import (
     AuthorizationError,
     CallerContext,
@@ -85,7 +86,34 @@ def _port(**kwargs) -> AgentFakePort:
     return AgentFakePort(search_result=_search_result(), read_result=_read_result(), **kwargs)
 
 
-def _loop(model, port=None, budget=None, token=None, registry=None):
+def _verifying_loop(model, judge_turns=(), budget=None, token=None):
+    """A loop WITH the governed verification pipeline wired (the answer
+    path's shape): the verifier shares the loop's monitor (the judge is one
+    aux call on the same fleet budget) and its judge replies are a separate
+    ScriptedLoopModel script."""
+    collector: list[AgentEvent] = []
+    token = token if token is not None else CancellationToken()
+    monitor = RunBudgetMonitor(budget or DEFAULT_BUDGET)
+    verifier = VerificationPipeline(
+        policy="verdict-marked",
+        judge_timeout_ms=5000,
+        judge_model_client=ScriptedLoopModel(judge_turns),
+        monitor=monitor,
+        authorized_repos=PROBE_CONTEXT.authorized_repos,
+    )
+    loop = AgentLoop(
+        model=model,
+        registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
+        monitor=monitor,
+        token=token,
+        emitter=EventEmitter(run_id="run-1", sink=collector.append),
+        system_prompt="probe system prompt",
+        verifier=verifier,
+    )
+    return loop, collector, monitor
+
+
+def _loop(model, port=None, budget=None, token=None, registry=None, verifier=None):
     collector: list[AgentEvent] = []
     token = token if token is not None else CancellationToken()
     if registry is None:
@@ -98,6 +126,7 @@ def _loop(model, port=None, budget=None, token=None, registry=None):
         token=token,
         emitter=EventEmitter(run_id="run-1", sink=collector.append),
         system_prompt="probe system prompt",
+        verifier=verifier,
     )
     return loop, collector, monitor
 
@@ -149,6 +178,54 @@ def test_multihop_event_sequence_rides_the_seam_vocabulary():
     assert collector[1].call_id == "call-1" and collector[2].call_id == "call-1"
     assert collector[3].call_id == "call-2" and collector[4].call_id == "call-2"
     assert collector[6].payload == {"text": "The grievance process is X; it is defined in document f-1."}
+
+
+# ---------------------------------------------------------------------
+# The citation verdict: pinned position, aux-only, honest degradation
+# ---------------------------------------------------------------------
+
+
+def test_the_verdict_lands_after_the_last_text_event_and_before_the_terminal():
+    loop, collector, monitor = _verifying_loop(
+        ScriptedLoopModel(MULTI_HOP_TURNS), judge_turns=(_turn(content='{"verdict": "grounded"}'),)
+    )
+    result = asyncio.run(loop.run("How are complaints handled?"))
+
+    assert result.outcome == OUTCOME_ANSWERED
+    kinds = [event.kind.value for event in collector]
+    assert kinds[kinds.index("verdict") - 1] == "text_message_finished"
+    assert kinds[kinds.index("verdict") + 1] == "run_finished"
+    payload = collector[kinds.index("verdict")].payload
+    assert payload["grounding_status"] == "grounded"
+    assert payload["is_grounded"] is True
+    assert payload["translation_mode"] == "none"
+    assert payload["policy"] == "verdict-marked"
+    assert payload["judge"]["outcome"] == "completed"
+    # The delivered set dedups by stable identity: the search hit and the
+    # read source resolve to the same file_id — one citation.
+    assert len(payload["citations"]) == 1
+    assert payload["marking"] == {"required": False, "reason": None}
+    # The judge is an AUX call: the shared model-call budget counts it,
+    # the tool-call count does not move.
+    assert monitor.aux_model_calls == 1 and monitor.tool_calls == 2
+
+
+def test_a_failed_run_emits_no_verdict():
+    loop, collector, _ = _verifying_loop(ScriptedLoopModel(MULTI_HOP_TURNS), budget=run_budget(max_model_calls=1))
+    result = asyncio.run(loop.run("How are complaints handled?"))
+
+    assert result.outcome == OUTCOME_BUDGET_EXHAUSTED
+    assert "verdict" not in [event.kind.value for event in collector]
+
+
+def test_a_cancelled_run_never_reaches_a_verdict():
+    loop, collector, _ = _verifying_loop(ScriptedLoopModel(MULTI_HOP_TURNS))
+    loop.token.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(loop.run("How are complaints handled?"))
+
+    assert "verdict" not in [event.kind.value for event in collector]
 
 
 def test_the_loop_feeds_tool_results_back_as_role_tool_messages():

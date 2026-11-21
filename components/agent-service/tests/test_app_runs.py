@@ -111,6 +111,25 @@ def test_an_unassembled_port_answers_503_naming_the_knob(monkeypatch):
     assert "AGENT_DOCREPO_URL" in body["message"]
 
 
+def test_an_unimplemented_verdict_policy_answers_503_naming_the_knob(monkeypatch):
+    """The release policy is deployment-level and iteration-1 ships
+    verdict-marked only: a deployment asking for another value is refused
+    at the config load — the same honest 503, the knob and the value named,
+    never a silently-degraded policy."""
+    for knob in REQUIRED_KNOBS:
+        monkeypatch.setenv(knob, "1")
+    monkeypatch.setenv("AGENT_VERDICT_POLICY", "verdict-silent")
+    monkeypatch.setattr(app_module, "_RUNTIME", None)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"] == "run_surface_unconfigured"
+    assert "AGENT_VERDICT_POLICY" in body["message"]
+    assert "verdict-silent" in body["message"]
+
+
 @pytest.mark.parametrize(
     "broken_body",
     [
@@ -134,7 +153,8 @@ def test_a_malformed_request_answers_422(monkeypatch, broken_body):
 
 
 def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, monkeypatch):
-    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path))
+    grounded_script = multihop_turns(judge_reply='{"verdict": "grounded"}')
+    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(grounded_script), tmp_path))
     with TestClient(app_module.app) as client:
         response = client.post("/v1/runs", json=BODY)
     assert response.headers["content-type"].startswith("text/event-stream")
@@ -149,12 +169,25 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
         "text_message_started",
         "text_message_content",
         "text_message_finished",
+        "verdict",  # after the last chunk-projecting event, before the terminal
         "run_finished",
     ]
     for frame in frames[:-1]:
         assert set(frame) == {"run_id", "call_id", "seq", "kind", "payload"}
         assert frame["kind"] not in BFF_FRAME_NAMES  # the seam never speaks the client dialect
-    assert [frame["seq"] for frame in frames[:-1]] == list(range(9))
+    assert [frame["seq"] for frame in frames[:-1]] == list(range(10))
+
+    # The verdict frame is the tri-state projection the BFF maps onto the
+    # client frames: the pinned metadata fields plus the citation set.
+    # (frames[-1] is the usage record; frames[-2] the terminal event.)
+    verdict = frames[-3]["payload"]
+    assert verdict["grounding_status"] == "grounded"
+    assert verdict["is_grounded"] is True
+    assert verdict["translation_mode"] == "none"
+    assert verdict["policy"] == "verdict-marked"
+    assert verdict["judge"]["outcome"] == "completed"
+    assert verdict["citations"]  # the delivered set rides the payload
+    assert verdict["marking"] == {"required": False, "reason": None}
 
     usage = frames[-1]["usage_record"]
     assert set(frames[-1]) == {"usage_record"}
@@ -173,6 +206,7 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
     }
     assert usage["outcome"] == "answered"
     assert usage["run_id"] == frames[0]["run_id"]
+    assert usage["aux_model_calls"] == 1  # the grounding judge, tallied separately
 
 
 def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, monkeypatch):
@@ -227,6 +261,12 @@ def test_a_disconnected_client_cancels_the_run_and_releases_the_slot(tmp_path, m
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+        # The disconnect closed the generator mid-stream: the cancellations
+        # settle, then NOTHING stays pending on the loop — the re-armed
+        # queue getter must not outlive the stream as a leaked waiter.
+        await asyncio.sleep(0.05)
+        leaked = [t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()]
+        assert leaked == []
         # The released slot admits the successor immediately.
         async with orchestrator.admit():
             pass

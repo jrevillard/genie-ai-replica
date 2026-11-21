@@ -153,7 +153,8 @@ describe('ROCm ansible contract', () => {
       // then the assembled profile argument, then -f). The playbook has
       // seven `docker compose` occurrences — the assertion keys on THIS
       // shape, not on a global count.
-      const assembledShape = 'docker compose --env-file {{ gpu_deploy_dir }}/env.strixhalo --env-file {{ gpu_deploy_dir }}/rocm-host.env {{ rocm_pooling_profile_args }}';
+      const assembledShape =
+        'docker compose --env-file {{ gpu_deploy_dir }}/env.strixhalo --env-file {{ gpu_deploy_dir }}/rocm-host.env {{ rocm_pooling_profile_args }}';
       const normalized = code.replace(/\s+/g, ' ');
       const shaped = [...normalized.matchAll(new RegExp(assembledShape.replace(/[{}]/g, '\\$&'), 'g'))].length;
       expect({ assembledCommands: shaped }).toEqual({ assembledCommands: 2 });

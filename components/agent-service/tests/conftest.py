@@ -18,8 +18,10 @@ from pathlib import Path
 import pytest
 from langdetect import DetectorFactory
 
+from agent.budget import RunBudget
+from agent.orchestrator import OrchestratorConfig
 from capabilities.adapters.http import TransportError
-from capabilities.contract import ReadSourceResult, SearchKnowledgeResult
+from capabilities.contract import OperationBudget, ReadSourceResult, SearchKnowledgeResult
 
 
 class FakeTransport:
@@ -215,18 +217,22 @@ class AgentFakePort:
 class ScriptedLoopModel:
     """The ``LoopModelClient`` double: canned turns in order, recorded requests.
 
-    Each request is recorded with a copy of the message list, so a suite
-    can assert what the loop fed the model without the live list mutating
-    under it.
+    Each request is recorded with a copy of the message list and the
+    ``max_output_tokens`` bound the loop handed it, so a suite can assert
+    what the loop fed the model without the live list mutating under it.
     """
 
     def __init__(self, turns):
         self._turns = list(turns)
         self.requests: list[dict] = []
 
-    async def complete(self, messages, tool_definitions):
+    async def complete(self, messages, tool_definitions, *, max_output_tokens):
         self.requests.append(
-            {"messages": [dict(message) for message in messages], "tool_definitions": tool_definitions}
+            {
+                "messages": [dict(message) for message in messages],
+                "tool_definitions": tool_definitions,
+                "max_output_tokens": max_output_tokens,
+            }
         )
         if not self._turns:
             raise AssertionError("the scripted model ran out of turns")
@@ -261,7 +267,7 @@ class HangingLoopModel:
     def __init__(self, recorder: dict):
         self._recorder = recorder
 
-    async def complete(self, messages, tool_definitions):
+    async def complete(self, messages, tool_definitions, *, max_output_tokens):
         await hang_until_cancelled(self._recorder)  # never returns
 
 
@@ -331,3 +337,57 @@ def multihop_turns(answer="the answer"):
         ),
         ModelTurn(content=answer),
     )
+
+
+# -----------------------------------------------------------------------
+# The run-budget builders: one home for the default smoke numbers the
+# loop / orchestrator / run-surface suites share — a suite overrides
+# exactly the dimension its test pins.
+# -----------------------------------------------------------------------
+
+REQUIRED_KNOBS = (
+    "AGENT_RUN_MAX_STEPS",
+    "AGENT_RUN_MAX_MODEL_CALLS",
+    "AGENT_RUN_MAX_TOOL_CALLS",
+    "AGENT_RUN_MAX_TOTAL_TOKENS",
+    "AGENT_RUN_MAX_EVIDENCE_BYTES",
+    "AGENT_RUN_MAX_WALL_CLOCK_SECONDS",
+    "AGENT_TOOL_TIMEOUT_MS",
+    "AGENT_TOOL_MAX_RESULTS",
+    "AGENT_TOOL_MAX_RESULT_BYTES",
+)
+"""The REQUIRED run-budget knobs the orchestrator reads fail-closed — one
+home for the suites that pin the fail-closed surface."""
+
+
+def run_budget(**overrides) -> RunBudget:
+    """The default run budget of the loop/orchestrator suites."""
+    values = {
+        "max_steps": 6,
+        "max_model_calls": 6,
+        "max_tool_calls": 6,
+        "max_total_tokens": 10000,
+        "max_evidence_bytes": 1000000,
+        "wall_clock_seconds": 30.0,
+    }
+    return RunBudget(**{**values, **overrides})
+
+
+def orchestrator_config(**overrides) -> OrchestratorConfig:
+    """The default orchestrator config of the orchestrator/run-surface suites."""
+    values = dict(
+        max_steps=6,
+        max_model_calls=6,
+        max_tool_calls=6,
+        max_total_tokens=10000,
+        max_evidence_bytes=1000000,
+        wall_clock_ceiling_seconds=30.0,
+        operation_budget=OperationBudget(timeout_ms=1000, max_results=8, max_result_bytes=65536),
+        system_prompt="the system prompt",
+    )
+    return OrchestratorConfig(**{**values, **overrides})
+
+
+def fake_port() -> AgentFakePort:
+    """The canned port: one successful search and one successful read."""
+    return AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())

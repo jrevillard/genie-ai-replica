@@ -24,6 +24,7 @@ and the answer-translation gate reads ``AGENT_ANSWER_TRANSLATION_ENABLED``
 exists for the evaluation mode to turn on deliberately).
 """
 
+import math
 import os
 from dataclasses import dataclass
 
@@ -35,6 +36,55 @@ def _env_bool(source, name: str, default: str) -> bool:
     lower-case compare; set-to-empty falls back to the default)."""
     raw = source.get(name)
     return str(raw if raw not in (None, "") else default).lower() == "true"
+
+
+# Two knob-reading disciplines live in this module, side by side:
+#
+# * the TOLERANT readers above (``_env_int`` / ``_env_float`` / ``_env_bool``)
+#   fall back to a default — a deployed semantic knob that is unset or
+#   empty must not crash-loop a long-running service at wiring time;
+# * the REQUIRED readers below fall back to NOTHING — a budget number the
+#   enforcement path needs is fail-closed: unset, empty, non-numeric,
+#   non-finite or out-of-bound means the caller refuses, naming the knob.
+# The next consumer imports instead of copying.
+
+
+def required_positive_int(source, name: str, failed: list[str]) -> int | None:
+    """Read one REQUIRED integer knob; name it in ``failed`` when unset,
+    empty, non-numeric or below 1 — a knob that fails its bound is as
+    unusable as a knob that is absent."""
+    raw = source.get(name)
+    if raw is None or str(raw).strip() == "":
+        failed.append(name)
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        failed.append(name)
+        return None
+    if value < 1:
+        failed.append(name)
+        return None
+    return value
+
+
+def required_positive_float(source, name: str, failed: list[str]) -> float | None:
+    """The float twin of :func:`required_positive_int` (strictly > 0 and
+    finite — a nan would silently disable the dimension it bounds, since
+    every comparison against it is False)."""
+    raw = source.get(name)
+    if raw is None or str(raw).strip() == "":
+        failed.append(name)
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        failed.append(name)
+        return None
+    if not math.isfinite(value) or value <= 0:
+        failed.append(name)
+        return None
+    return value
 
 
 # The answer-token reserve when the request configures none (deployed

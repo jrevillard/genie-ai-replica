@@ -18,8 +18,9 @@ What the loop owns, and the invariants it keeps:
   types. Nothing unregistered is dispatched (the registry refuses before
   any resolution), so nothing unreachable through the registry is called.
 * **Budget checks precede every dispatch** — the step before the iteration,
-  the model call before the model, the tool call (and the wall clock)
-  before each tool. An exhausted budget ends the run honestly:
+  the model call (and the served-usage token check) before the model, the
+  tool call (and the wall clock and the evidence volume) before each tool.
+  An exhausted budget ends the run honestly:
   ``run_error`` terminal event, ``budget_exhausted`` outcome, no fabricated
   answer text.
 * **Cancellation stops dispatching and reaches the in-flight call.** The
@@ -63,7 +64,7 @@ OUTCOME_ERROR = "error"
 OUTCOME_BUDGET_EXHAUSTED = "budget_exhausted"
 OUTCOME_CANCELLED = "cancelled"
 
-_MESSAGE_TRUNCATION = 200
+MESSAGE_TRUNCATION = 200
 
 
 @dataclass(frozen=True)
@@ -97,19 +98,30 @@ class LoopModelClient(Protocol):
     """The model-call seam the loop drives — one non-streaming completion.
 
     The concrete OpenAI-compatible client is the runtime's business (the
-    probe carries a probe-local one); the loop depends on this shape only,
-    which is what keeps the loop runtime-swappable.
+    probe carries one, shared with the run surface); the loop depends on
+    this shape only, which is what keeps the loop runtime-swappable.
+    ``max_output_tokens`` is the remaining token allowance the monitor
+    hands the call — the token bound riding the request (``None`` when the
+    allowance is unknowable and the field must be omitted, the deployed
+    only-when-configured rule). The IMPLEMENTER caps the bound to what one
+    call can serve — ``min(bound, window room)``, omitting the field when
+    there is no room — because a cumulative RUN allowance may exceed the
+    endpoint's window, and an unanchored ``max_tokens`` is rejected
+    outright.
     """
 
-    async def complete(self, messages: list[dict], tool_definitions: tuple[dict, ...]) -> ModelTurn: ...
+    async def complete(
+        self, messages: list[dict], tool_definitions: tuple[dict, ...], *, max_output_tokens: int | None
+    ) -> ModelTurn: ...
 
 
 @dataclass(frozen=True)
 class RunResult:
     """The terminal record of a completed run (never produced for a cancellation).
 
-    The counters come from the run's budget monitor; the token usage from
-    the model turns that carried it. ``final_text`` is the model's final
+    Every counter comes from the run's budget monitor — the loop owns no
+    usage state of its own, so the record and the cancellation's partial
+    evidence read the same source. ``final_text`` is the model's final
     turn only — an exhausted or failed run carries ``None``, never a
     fabricated answer.
     """
@@ -118,7 +130,9 @@ class RunResult:
     final_text: str | None
     steps: int
     model_calls: int
+    aux_model_calls: int
     tool_calls: int
+    evidence_bytes: int
     wall_clock_seconds: float
     prompt_tokens: int | None
     completion_tokens: int | None
@@ -130,10 +144,11 @@ class AgentLoop:
     """The minimal governed loop: model call → registry dispatch → seam events.
 
     Constructed per run with the run's monitor, token and emitter (the
-    probe harness builds them, so a cancelled run still leaves readable
-    counters behind); the registry is the run's authorization surface. One
-    instance drives ONE run — the message list and the usage counters are
-    per-run state created in :meth:`run`.
+    request orchestrator / probe harness builds them, so a cancelled run
+    still leaves readable counters behind); the registry is the run's
+    authorization surface. One instance drives ONE run — the message list
+    is per-run state created in :meth:`run`, the usage counters live on
+    the monitor.
     """
 
     model: LoopModelClient
@@ -149,29 +164,40 @@ class AgentLoop:
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": question},
         ]
-        self._prompt_tokens = None
-        self._completion_tokens = None
         tool_definitions = self.registry.definitions()
         self.emitter.emit(EventKind.RUN_STARTED, {"question": question})
         try:
             while True:
                 self.monitor.begin_step()
                 self.token.raise_if_cancelled()
+                self.monitor.check_tokens()
                 self.monitor.take_model_call()
-                turn = await run_cancellable(self.token, self.model.complete(list(self._messages), tool_definitions))
-                if turn.prompt_tokens is not None:
-                    self._prompt_tokens = (self._prompt_tokens or 0) + turn.prompt_tokens
-                if turn.completion_tokens is not None:
-                    self._completion_tokens = (self._completion_tokens or 0) + turn.completion_tokens
+                # The token bound rides the request: the call may spend at
+                # most the remaining allowance (None — field omitted — when
+                # the served usage is a lower bound and no honest bound
+                # exists).
+                turn = await run_cancellable(
+                    self.token,
+                    self.model.complete(
+                        list(self._messages),
+                        tool_definitions,
+                        max_output_tokens=self.monitor.remaining_output_tokens(),
+                    ),
+                )
+                self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
                 if turn.tool_calls:
                     self._messages.append(self._assistant_tool_call_message(turn))
                     for request in turn.tool_calls:
                         result_payload = await self._dispatch_tool(request)
+                        # One serialization home: the evidence size and the
+                        # tool message report the same bytes.
+                        result_json = json.dumps(result_payload)
+                        self.monitor.record_evidence(len(result_json.encode("utf-8")))
                         self._messages.append(
                             {
                                 "role": "tool",
                                 "tool_call_id": request.call_id,
-                                "content": json.dumps(result_payload),
+                                "content": result_json,
                             }
                         )
                     continue
@@ -183,8 +209,8 @@ class AgentLoop:
         except BudgetExhausted as exhausted:
             return self._fail(OUTCOME_BUDGET_EXHAUSTED, str(exhausted))
         except Exception as failed:  # noqa: BLE001 — a failed run still gets its terminal event
-            logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:_MESSAGE_TRUNCATION])
-            return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:_MESSAGE_TRUNCATION]}")
+            logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:MESSAGE_TRUNCATION])
+            return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}")
 
     # -- the model turn ------------------------------------------------------
 
@@ -232,6 +258,7 @@ class AgentLoop:
         """
         self.monitor.check_wall_clock()
         self.token.raise_if_cancelled()
+        self.monitor.check_evidence_volume()
         self.monitor.take_tool_call()
         self.emitter.emit(
             EventKind.TOOL_CALL_STARTED,
@@ -255,7 +282,7 @@ class AgentLoop:
                 code, operation = failed.code.value, failed.operation.value if failed.operation else None
             else:
                 code, operation = "invalid_arguments", None
-            detail = {"code": code, "operation": operation, "message": str(failed)[:_MESSAGE_TRUNCATION]}
+            detail = {"code": code, "operation": operation, "message": str(failed)[:MESSAGE_TRUNCATION]}
             logger.info(
                 "tool %s reported %s: %s",
                 request.name,
@@ -275,14 +302,16 @@ class AgentLoop:
             final_text=final_text,
             steps=self.monitor.steps,
             model_calls=self.monitor.model_calls,
+            aux_model_calls=self.monitor.aux_model_calls,
             tool_calls=self.monitor.tool_calls,
+            evidence_bytes=self.monitor.evidence_bytes,
             wall_clock_seconds=self.monitor.elapsed_seconds,
-            prompt_tokens=self._prompt_tokens,
-            completion_tokens=self._completion_tokens,
+            prompt_tokens=self.monitor.prompt_tokens,
+            completion_tokens=self.monitor.completion_tokens,
             error=error,
         )
 
     def _fail(self, outcome: str, message: str) -> RunResult:
         """End the run honestly: the terminal ``run_error``, no answer text."""
-        self.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:_MESSAGE_TRUNCATION]})
-        return self._terminal(outcome, error=message[:_MESSAGE_TRUNCATION])
+        self.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:MESSAGE_TRUNCATION]})
+        return self._terminal(outcome, error=message[:MESSAGE_TRUNCATION])

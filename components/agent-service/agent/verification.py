@@ -22,12 +22,14 @@ Two checks, one pipeline, in a fixed order:
   required timeout knob. Absence, timeout, budget exhaustion and malformed
   output all yield ``unverified`` — never ``grounded``.
 
-The mechanical outcome decides before the judge: no retrieval at all means
-the answer is an insufficiency statement that claims nothing — ``unverified``
-(the honest neutral, never the ungrounded warning); retrieval happened but
-the delivered set is empty or carried invalid entries means claims without
-support — ``ungrounded`` (FR-10: an unsupported assertion with valid
-references still fails grounding). Otherwise the judge decides.
+The mechanical outcome decides before the judge: when NO citable evidence
+reached the model — an insufficiency outcome, an error envelope, a malformed
+result, an empty ledger — the answer claims nothing supported, so it is
+``unverified`` (the honest neutral, never the ungrounded warning); when
+citable evidence existed but none of it survived the validity check (or
+entries were dropped as unauthorized) the answer is claims without support
+— ``ungrounded`` (FR-10: an unsupported assertion with valid references
+still fails grounding). Otherwise the judge decides.
 
 The verdict is tri-state ``grounded | ungrounded | unverified`` and its
 payload is the projection contract the BFF maps onto the client frames: the
@@ -372,9 +374,10 @@ class VerificationPipeline:
     async def finalize(self, answer_text: str) -> Verdict:
         """Verify the drafted answer; return the tri-state verdict.
 
-        The mechanical check decides first (no retrieval → ``unverified``,
-        nothing validly citable → ``ungrounded``, judge skipped); otherwise
-        the judge runs and its verdict — or its failure, which is
+        The mechanical check decides first: no citable evidence served →
+        ``unverified`` (the judge skipped); citable evidence that did not
+        survive the validity check → ``ungrounded`` (the judge skipped);
+        otherwise the judge runs and its verdict — or its failure, which is
         ``unverified`` — decides. A defensive catch converts an unexpected
         pipeline defect into ``unverified`` too: verification can fail, it
         can never fabricate ``grounded``.

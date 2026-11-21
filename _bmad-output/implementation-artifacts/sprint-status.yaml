@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-17-2026 15:20
-last_updated: 11-20-2026 23:10
+last_updated: 11-21-2026 10:48
 project: genie-ai
 project_key: NOKEY
 tracking_system: file-system
@@ -46,7 +46,7 @@ development_status:
   1-8-implement-the-input-preparation-module: done
   1-9-behavioral-equivalence-suite-e01-runway-and-v05-inventory: done
   1-10-attest-the-chart-identity-of-the-deployed-baseline: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: review
 
   epic-2: backlog
   2-1-runtime-seam-and-bounded-decision-probe: backlog
@@ -77,3 +77,33 @@ development_status:
   4-5-e02-the-agent-s-case-b-vs-c: backlog
   4-6-release-readiness-evidence-v09-v07b: backlog
   epic-4-retrospective: optional
+action_items:
+  - id: "epic-1-retro-item-1-disposition-v05-section-9-items-2-5-fix"
+    epic: 1
+    action: "Disposition V05 section-9 items 2-5 (fix or accept-with-owner) before
+      the S3 exit is signed"
+    owner: "S3 exit owner (Epic 2 planning)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/retrospectives/epic-1-retro-2026-11-21.md"
+  - id: "epic-1-retro-item-2-convention-every-aql-test-double-mirrors"
+    epic: 1
+    action: "Convention: every AQL test double mirrors the real python-arango surface
+      (conftest.assert_module_aql_fakes_faithful + tests/test_aql_call_shapes.py are
+      the guards)"
+    owner: "next agent-service story"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/retrospectives/epic-1-retro-2026-11-21.md"
+  - id: "epic-1-retro-item-3-flip-the-10-story-files-frontmatter-stat"
+    epic: 1
+    action: "Flip the 10 story files frontmatter status to done, or declare sprint-status.yaml
+      the only status record"
+    owner: "operator (BMAD flow decision)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/retrospectives/epic-1-retro-2026-11-21.md"
+  - id: "epic-1-retro-item-4-refresh-the-umbrella-branch-at-each-stor"
+    epic: 1
+    action: "Refresh the umbrella branch at each story boundary so a vehicle never
+      carries a whole-cycle merge"
+    owner: "BMAD orchestration flow"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/retrospectives/epic-1-retro-2026-11-21.md"

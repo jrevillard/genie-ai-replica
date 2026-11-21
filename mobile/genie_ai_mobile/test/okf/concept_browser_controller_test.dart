@@ -208,6 +208,34 @@ void main() {
     });
 
     test(
+      'the visit history is capped — oldest entries drop, index follows',
+      () async {
+        seedTwoConcepts();
+        final c = controller();
+        await c.open('repo-a');
+        // Twelve visits: the cap (10) drops the two oldest, keeping back and
+        // forward working inside the window (the /simplify review's
+        // retention finding — 50 × 250k bodies do not stay alive).
+        for (var i = 1; i <= 12; i++) {
+          final id = i <= 2 ? 'c$i' : 'extra$i';
+          fake.cardsByRepo['repo-a']![id] = _card('repo-a', id);
+          await c.select(id);
+        }
+        final s = container.read(conceptBrowserControllerProvider);
+        expect(s.history.length, 10);
+        expect(s.history.first.conceptId, 'extra3');
+        expect(s.selected?.conceptId, 'extra12');
+        expect(s.historyIndex, 9);
+        // Back walks the capped window.
+        c.goBack();
+        expect(
+          container.read(conceptBrowserControllerProvider).selected?.conceptId,
+          'extra11',
+        );
+      },
+    );
+
+    test(
       'backToList clears the selection but keeps history and the position',
       () async {
         seedTwoConcepts();

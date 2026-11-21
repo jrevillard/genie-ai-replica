@@ -27,8 +27,8 @@ AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
 enum _FailedOperation { none, authorize, refreshToken, validateTokens }
 
 class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
-  static const Duration refreshTokenTimeout =
-      TokenRefresher.refreshTokenTimeout;
+  // The refresh timeouts moved with the mechanism into TokenRefresher
+  // (#2019); only authorize()'s own discovery call still needs one here.
   static const Duration discoveryTimeout = TokenRefresher.discoveryTimeout;
 
   late final TokenStorage _tokenStorage;

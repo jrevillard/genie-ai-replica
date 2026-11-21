@@ -3,8 +3,8 @@
 The V06 evidence record: the runtime verification the D03 decision (ADR
 `docs/adr/agentic-002-first-agent-runtime-d03.md`) cites, run against the
 DEPLOYED combination. The harness is
-`components/agent-service/agent/verification.py` (`python -m
-agent.verification`) — a re-runnable producer, so the matrix re-runs in one
+`components/agent-service/agent/v06_harness.py` (`python -m
+agent.v06_harness`) — a re-runnable producer, so the matrix re-runs in one
 command after any remediation below lands.
 
 - **Captured:** 2026-11-21 (final live run 15:30 UTC / 16:30 CET, after the
@@ -13,7 +13,8 @@ command after any remediation below lands.
   (`:444/llm`), reached from the forge k3s dev cluster host; namespace
   `genieai`, chart `genieai-umbrella` 0.2.182 (V03 record attests identity)
 - **V03 baseline:** `docs/baselines/v03-deployed-baseline-2026-11-19.md`
-- **Producer:** `agent.verification` + `agent.probe`, on the shipped pins
+- **Producer:** `agent.v06_harness` + `agent.probe`, on the shipped pins
+> Renamed from `agent.verification` to `agent.v06_harness` in the story-2.6 merge resolution (!1006); the captured evidence below predates the rename and keeps the old producer string verbatim — a re-run now emits `agent.v06_harness`.
   (httpx 0.28.1, pydantic 2.14.4, stdlib only — no new dependency)
 - **Volume:** 12 matrix completions + 2 cancellation-demonstration calls +
   1 plain (no-tools) control call + 1 probe run, all serial, read-only; no
@@ -86,7 +87,7 @@ story's boundaries — no venue mutation), tracked as issue
 [#2052](https://opensource.unicc.org/un/itu/genie-ai/-/issues/2052)
 (`status::backlog`): relaunch the vLLM server with
 `--enable-auto-tool-choice --tool-call-parser granite4`, then re-run
-`python -m agent.verification` at the venue. The harness is the acceptance
+`python -m agent.v06_harness` at the venue. The harness is the acceptance
 check for that pin (its exit code reads 0 only on the full acceptance
 semantics: every cell valid, cancellation demos proven).
 
@@ -512,7 +513,7 @@ cell identity — for length; every distinct message appears in full at least on
 ```bash
 # the matrix + cancellation demos (venue env: VLLM_LLM_ENDPOINT, VLLM_API_KEY,
 # OPEA_SSL_SKIP_VERIFY=1, optional AGENT_VERIFICATION_VENUE label)
-cd components/agent-service && python -m agent.verification
+cd components/agent-service && python -m agent.v06_harness
 
 # the probe (adds corpus knobs: TEI_EMBEDDING_ENDPOINT, TEI_RERANKING_ENDPOINT,
 # ARANGO_URL/ARANGO_PASSWORD/ARANGO_DB/ARANGO_GRAPH_NAME, AGENT_DOCREPO_URL,

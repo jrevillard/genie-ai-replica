@@ -171,6 +171,6 @@ re-validated against the then-current pydantic-ai before it is relied on.
 - PRD addendum §D (the authoritative D03 candidate state); PRD §10 D03 row.
 - The seam: `components/agent-service/agent/` (loop, cancellation, events,
   registry, budget); the probe: `components/agent-service/agent/probe.py`;
-  the harness: `components/agent-service/agent/verification.py`.
+  the harness: `components/agent-service/agent/v06_harness.py`.
 - ADR agentic-001 (format precedent); spine AD-5 (the seam this decision
   keeps).

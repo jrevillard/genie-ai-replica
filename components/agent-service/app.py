@@ -3,21 +3,50 @@
 """GENIE.AI agent service - internal-only HTTP surface.
 
 Story 1.3 (Epic 1): the service exists, is deployable, is switchable and is
-observable. It owns no capability yet - the capability tools land in the
-following stories. What it exposes today is infrastructure only: liveness,
-readiness and the OpenTelemetry wiring.
+observable. Story 2.3 adds the run surface: ``POST /v1/runs`` serves the
+SEAM stream (the envelope ``{run_id, call_id, seq, kind, payload}`` over
+SSE, plus its own terminal usage record) — never a client frame name; the
+BFF parses this stream and writes every client frame.
 
-The service is INTERNAL: no host port, no gateway route, no caller. The
-deployment flag (`AGENT_ENABLED`) gates it - with the flag off the stack
-schedules zero replicas, so nothing here is reachable.
+The defined admission behavior: the run is admitted through the flock slot
+pool BEFORE any stream byte exists — a saturated lane answers ``429`` (JSON
+naming the saturation, ``Retry-After`` set), unconfigured budget knobs
+answer ``503`` naming every missing knob (fail-closed: no run starts
+unbounded), and a malformed request answers ``422``. Cancellation is the
+loop's existing contract: a client disconnect cancels the run's task, the
+cancellation reaches the in-flight model call, no terminal event is
+emitted, and the lane slot releases on every exit path.
+
+The assembly is lazy and per-process: the stateless adapters, the model
+client and the lane are built once on the first run request (the budget
+knobs are REQUIRED and fail closed there); the authorization executor is
+built per request from the request's trusted caller context.
 """
 
+import asyncio
+import json
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import fastapi
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent.events import AgentEvent, EventKind
+from agent.orchestrator import (
+    AdmissionRefused,
+    AgentRunRequest,
+    MissingKnobsError,
+    OrchestratorConfig,
+    RequestOrchestrator,
+)
+from agent.probe import ProbeConfig, ProbeModelClient, build_stateless_adapters
+from capabilities.contract import CallerContext
+from capabilities.executor import AuthorizedExecutor
+from noagent.config import NoAgentConfig
+from noagent.lane import AdmissionLane
 from tracing import setup_tracing
 
 SERVICE_NAME = "agent-service"
@@ -32,15 +61,100 @@ logger = logging.getLogger(__name__)
 # (the same single gate the OPEA tier uses).
 setup_tracing(SERVICE_NAME)
 
+# The saturation hint the 429 carries: a refused caller may retry after one
+# second — the slots turn over with the runs they bound, and the honest
+# signal is "busy now", not a queue.
+RETRY_AFTER_SECONDS = "1"
+
+_TERMINAL_EVENT_KINDS = frozenset({EventKind.RUN_FINISHED, EventKind.RUN_ERROR})
+
+
+class RunRequestBody(BaseModel):
+    """One run request's body: the question, the agent-phase deadline
+    (a REMAINING duration in milliseconds — the orchestrator caps it with
+    the deployment ceiling) and the trusted caller context the BFF
+    assembled. No budget value rides the request: budgets are server
+    configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1)
+    deadline_ms: int = Field(gt=0)
+    context: CallerContext
+    bearer: str | None = None
+
+    @field_validator("question")
+    @classmethod
+    def _question_is_answerable_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("the question must carry text")
+        return value
+
+
+class RunsRuntime:
+    """The per-process run assembly: the expensive, stateless parts built
+    once (adapters, model client, lane, orchestrator wiring), the
+    authorization executor built per request by the port factory."""
+
+    def __init__(self, orchestrator: RequestOrchestrator):
+        self.orchestrator = orchestrator
+
+    @classmethod
+    def from_env(cls, env=None) -> "RunsRuntime":
+        """Assemble from the environment; :class:`MissingKnobsError` names
+        every required budget knob that is missing or unusable."""
+        # The budget knobs first: they are the fail-closed surface, read
+        # before anything else is wired.
+        orchestrator_config = OrchestratorConfig.load(env)
+        noagent = NoAgentConfig.load(env)
+        probe_config = ProbeConfig.load(env)
+        adapters = build_stateless_adapters(probe_config, env)
+        model_client = ProbeModelClient(probe_config)
+        lane = AdmissionLane.from_config(noagent)
+
+        def port_factory(context: CallerContext, bearer: str | None) -> AuthorizedExecutor:
+            # Per request: one executor binds ONE trusted context to the
+            # shared stateless adapters — the executor is the enforcement
+            # point, and its context is the request's.
+            return AuthorizedExecutor(
+                context,
+                bearer=bearer,
+                legacy_graph_name=adapters.legacy_graph_name,
+                docrepo=adapters.docrepo,
+                okf=adapters.okf,
+                chunks=adapters.chunks,
+                search_port=adapters.search_port,
+            )
+
+        return cls(
+            RequestOrchestrator(
+                config=orchestrator_config,
+                lane=lane,
+                model_client=model_client,
+                port_factory=port_factory,
+            )
+        )
+
+
+_RUNTIME: RunsRuntime | None = None
+
+
+def _runtime() -> RunsRuntime:
+    """The lazy per-process runtime: built on the first run request, so the
+    infra-only surface (/health, /ready) never needs the budget knobs."""
+    global _RUNTIME
+    if _RUNTIME is None:
+        _RUNTIME = RunsRuntime.from_env()
+    return _RUNTIME
+
 
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
     # The flag is logged, not enforced here: the deployment gate is the
     # Compose `deploy.replicas` value (one flag for the whole stack, as the
-    # epic defines it). The service carries no capability surface yet, so
-    # there is nothing to refuse while the flag is off.
+    # epic defines it). The run surface carries its own fail-closed reads.
     logger.info(
-        "agent service started (AGENT_ENABLED=%s - no capability surface is served)",
+        "agent service started (AGENT_ENABLED=%s)",
         os.getenv("AGENT_ENABLED", "0"),
     )
     yield
@@ -67,3 +181,97 @@ async def health() -> dict:
 async def ready() -> dict:
     """Readiness - the service can serve. No dependency to be ready for yet."""
     return {"status": "ready", "agent_enabled": os.getenv("AGENT_ENABLED", "0") == "1"}
+
+
+def _sse_frame(event: AgentEvent) -> str:
+    """One seam event as an SSE data frame — the envelope verbatim."""
+    return f"data: {event.model_dump_json()}\n\n"
+
+
+def _usage_frame(record) -> str:
+    """The terminal usage record as the stream's own last data frame."""
+    return f"data: {json.dumps({'usage_record': record.as_dict()})}\n\n"
+
+
+async def _run_stream(orchestrator: RequestOrchestrator, request: AgentRunRequest, admit_ctx) -> AsyncIterator[str]:
+    """The SEAM stream: every envelope event as it is emitted, then the
+    terminal usage record.
+
+    The run executes in its own task so the events can stream while the
+    loop works. On every exit path the admission claim releases (the
+    ``finally``); a cancellation of THIS generator — the client disconnect —
+    cancels the run task, the cancellation reaches the in-flight model
+    call through the loop's cancellation hooks, no terminal event is
+    emitted, and the ``CancelledError`` propagates untouched.
+    """
+    events: asyncio.Queue[AgentEvent] = asyncio.Queue()
+    run_task = asyncio.ensure_future(orchestrator.run(request, sink=events.put_nowait))
+    getter = asyncio.ensure_future(events.get())
+    try:
+        while True:
+            done, _ = await asyncio.wait({run_task, getter}, return_when=asyncio.FIRST_COMPLETED)
+            if getter in done:
+                event = getter.result()
+                yield _sse_frame(event)
+                if event.kind in _TERMINAL_EVENT_KINDS:
+                    break
+                getter = asyncio.ensure_future(events.get())
+            else:
+                # The run ended without streaming its terminal event: drain
+                # whatever it emitted, then let the run's own ending answer
+                # (a cancelled run answers CancelledError — no terminal
+                # event, no usage record; a defective run answers its
+                # exception).
+                getter.cancel()
+                while not events.empty():
+                    yield _sse_frame(events.get_nowait())
+                break
+        record = await run_task
+        yield _usage_frame(record)
+    finally:
+        if not run_task.done():
+            run_task.cancel()
+        await admit_ctx.__aexit__(None, None, None)
+
+
+@app.post("/v1/runs")
+async def runs(body: RunRequestBody):
+    """One governed agent run: the SEAM stream over SSE + the terminal
+    usage record.
+
+    Admission precedes every stream byte: the claim is taken HERE, so a
+    saturated lane answers ``429`` before any stage runs, and unconfigured
+    budget knobs answer ``503`` naming the knobs — no run starts unbounded.
+    """
+    try:
+        runtime = _runtime()
+    except MissingKnobsError as missing:
+        logger.warning("run refused: %s", missing)
+        return JSONResponse(
+            {
+                "error": "budget_configuration_missing",
+                "message": str(missing),
+                "missing_knobs": list(missing.knobs),
+            },
+            status_code=503,
+        )
+    admit_ctx = runtime.orchestrator.admit()
+    try:
+        await admit_ctx.__aenter__()
+    except AdmissionRefused as refused:
+        logger.info("run refused at the admission lane: %s", refused)
+        return JSONResponse(
+            {"error": "admission_refused", "message": str(refused)},
+            status_code=429,
+            headers={"Retry-After": RETRY_AFTER_SECONDS},
+        )
+    request = AgentRunRequest(
+        question=body.question,
+        deadline_ms=body.deadline_ms,
+        context=body.context,
+        bearer=body.bearer,
+    )
+    return StreamingResponse(
+        _run_stream(runtime.orchestrator, request, admit_ctx),
+        media_type="text/event-stream",
+    )

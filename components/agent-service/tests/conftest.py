@@ -215,18 +215,22 @@ class AgentFakePort:
 class ScriptedLoopModel:
     """The ``LoopModelClient`` double: canned turns in order, recorded requests.
 
-    Each request is recorded with a copy of the message list, so a suite
-    can assert what the loop fed the model without the live list mutating
-    under it.
+    Each request is recorded with a copy of the message list and the
+    ``max_output_tokens`` bound the loop handed it, so a suite can assert
+    what the loop fed the model without the live list mutating under it.
     """
 
     def __init__(self, turns):
         self._turns = list(turns)
         self.requests: list[dict] = []
 
-    async def complete(self, messages, tool_definitions):
+    async def complete(self, messages, tool_definitions, *, max_output_tokens=None):
         self.requests.append(
-            {"messages": [dict(message) for message in messages], "tool_definitions": tool_definitions}
+            {
+                "messages": [dict(message) for message in messages],
+                "tool_definitions": tool_definitions,
+                "max_output_tokens": max_output_tokens,
+            }
         )
         if not self._turns:
             raise AssertionError("the scripted model ran out of turns")
@@ -261,7 +265,7 @@ class HangingLoopModel:
     def __init__(self, recorder: dict):
         self._recorder = recorder
 
-    async def complete(self, messages, tool_definitions):
+    async def complete(self, messages, tool_definitions, *, max_output_tokens=None):
         await hang_until_cancelled(self._recorder)  # never returns
 
 

@@ -51,7 +51,7 @@ development_status:
   epic-2: in-progress
   2-1-runtime-seam-and-bounded-decision-probe: done
   2-2-v06-runtime-verification-and-d03-closure: backlog
-  2-3-request-orchestrator-budgets-admission-cancellation: backlog
+  2-3-request-orchestrator-budgets-admission-cancellation: in-progress
   2-4-bff-frame-writer-and-disconnect-detection: backlog
   2-4b-non-streaming-integration-json-path: backlog
   2-5-the-governed-answer-path-integration-slice: backlog

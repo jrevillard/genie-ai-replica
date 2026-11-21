@@ -1449,6 +1449,24 @@ services:
       # reports the value it sees in its readiness answer.
       - AGENT_ENABLED=${AGENT_ENABLED:-0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Run-budget knobs (story 2.3) — REQUIRED for the run surface, read
+      # fail-closed: a run request against a deployment that has not set
+      # one is answered 503 naming every missing knob (no numeric default
+      # exists in the enforcement path). Empty default here = unset there.
+      # Pair derivation (V08): AGENT_UPSTREAM_TIMEOUT_MS on the BFF leg
+      # must be >= AGENT_RUN_MAX_WALL_CLOCK_SECONDS + the translation and
+      # finalization reserves — docs/agent-budget-deadline-pairs.md.
+      - AGENT_RUN_MAX_STEPS=${AGENT_RUN_MAX_STEPS:-}
+      - AGENT_RUN_MAX_MODEL_CALLS=${AGENT_RUN_MAX_MODEL_CALLS:-}
+      - AGENT_RUN_MAX_TOOL_CALLS=${AGENT_RUN_MAX_TOOL_CALLS:-}
+      - AGENT_RUN_MAX_TOTAL_TOKENS=${AGENT_RUN_MAX_TOTAL_TOKENS:-}
+      - AGENT_RUN_MAX_EVIDENCE_BYTES=${AGENT_RUN_MAX_EVIDENCE_BYTES:-}
+      - AGENT_RUN_MAX_WALL_CLOCK_SECONDS=${AGENT_RUN_MAX_WALL_CLOCK_SECONDS:-}
+      - AGENT_TOOL_TIMEOUT_MS=${AGENT_TOOL_TIMEOUT_MS:-}
+      - AGENT_TOOL_MAX_RESULTS=${AGENT_TOOL_MAX_RESULTS:-}
+      - AGENT_TOOL_MAX_RESULT_BYTES=${AGENT_TOOL_MAX_RESULT_BYTES:-}
+      # Optional two-tier prompt override (empty = the governed default).
+      - AGENT_RUN_SYSTEM_PROMPT=${AGENT_RUN_SYSTEM_PROMPT:-}
     build:
       context: components/agent-service/
       dockerfile: Dockerfile

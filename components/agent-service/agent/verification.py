@@ -1025,8 +1025,12 @@ async def _consume_stream_events(
                 # A timed sleep, not a wait on a phantom partner: the demo
                 # is expected to cancel within this window (the park exists
                 # to hand it the cancellation point), so there is nothing
-                # to wait FOR — only a bounded pause on an open read.
+                # to wait FOR — only a bounded pause on an open read. The
+                # sleep RETURNING means the window elapsed without the
+                # cancel: the diagnostic is recorded and the consumer
+                # drains on, exactly the old wait_for-timeout semantics.
                 await asyncio.sleep(park_timeout_seconds)
+                state.error = "the demo did not cancel within the park window; the consumer drained on"
     except asyncio.CancelledError:
         state.aborted = True
         raise
@@ -1224,6 +1228,8 @@ def _demo_monitor() -> RunBudgetMonitor:
             max_steps=4,
             max_model_calls=4,
             max_tool_calls=4,
+            max_total_tokens=262144,
+            max_evidence_bytes=262144,
             wall_clock_seconds=300.0,
         )
     )

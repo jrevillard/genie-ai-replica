@@ -134,6 +134,8 @@ context:
 | G1 | conftest doubles define `max_output_tokens=None` default against the protocol's deliberate no-default | low | verified real; fix: drop the defaults in the doubles |
 | G1 | docs usage-record example omits the `error` field RunUsageRecord carries | low | verified real; fix: add `"error": null` to the example |
 | G1 | test helper `_orchestrator(lane_dir=None)` builds `AdmissionLane(slots, "None")` in CWD | low | verified real: any future admit() test without lane_dir writes stray lock files; fix: make lane_dir required |
+| FIX-1 | inline loop-test doubles carry the `max_output_tokens=None` default the protocol forbids (SlowModel) / omit the param (RecordingModel) | low | fixed: both doubles carry the no-default keyword-only signature; verified by the FIX-2 reviewer against every caller |
+| FIX-1 | window-room passthrough comment claimed a discovered 8192 window; the model-id override skips discovery so the 65536 fallback answers | low | fixed: comment names the tier that actually answers; verified against _window_tokens/probe.py:441 |
 
 ## Design Notes
 

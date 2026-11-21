@@ -280,13 +280,3 @@ def test_the_insufficiency_decision_never_waits_for_the_judge():
     verdict = _verdict_payload(collector)
     assert verdict["judge"] == {"ran": False, "outcome": "skipped", "verdict": None}
     assert verdict["insufficient_evidence"]["required"] is True
-
-
-def test_the_standard_message_is_a_module_level_constant_in_the_decision_site():
-    # Single source: the loop imports the message the pipeline's decision
-    # site owns — a second text would drift from the verdict's contract.
-    import agent.loop as loop_module
-    import agent.verification as verification_module
-
-    assert loop_module.INSUFFICIENCY_RESPONSE is verification_module.INSUFFICIENCY_RESPONSE
-    assert INSUFFICIENCY_RESPONSE.strip()

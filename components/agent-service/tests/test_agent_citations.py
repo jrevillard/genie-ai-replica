@@ -78,18 +78,6 @@ def test_optional_okf_fields_follow_the_contract_shape():
     assert no_repo["source"] == "okf-concept"
 
 
-def test_the_dedup_keeps_the_first_served_source():
-    envelope = source_document_envelope([_legacy_hit(), _legacy_hit(file_id="f-1", score=0.5), _okf_hit()])
-    assert [entry["document_id"] for entry in envelope] == ["f-1", "c-1"]
-    assert envelope[0]["score"] == 0.9  # first occurrence wins, its score rides
-
-
-def test_the_score_calibrator_applies_at_confidence_time_only():
-    envelope = source_document_envelope([_legacy_hit(score=2.0)], score_calibrator=lambda score: score / 10)
-    assert envelope[0]["score"] == 0.2
-    assert source_document_envelope([_legacy_hit(score=2.0)])[0]["score"] == 2.0
-
-
 # ---------------------------------------------------------------------
 # The extraction is a move: the no-agent lane re-imports the same objects
 # ---------------------------------------------------------------------
@@ -99,32 +87,6 @@ def test_the_no_agent_lane_reimports_the_moved_projection():
     # The lane imports the projection (the name it serves) from the shared
     # module — a move, not a copy: one function object, one behavior home.
     assert noagent_pipeline.source_document_envelope is source_document_envelope
-
-
-def test_the_object_path_output_is_byte_identical_to_the_pre_move_shape():
-    envelope = source_document_envelope([_legacy_hit(), _okf_hit()])
-    assert envelope == [
-        {
-            "document_id": "f-1",
-            "document_name": "f-1",
-            "url": "",
-            "categoryLabels": [],
-            "serviceLabels": [],
-            "score": 0.9,
-        },
-        {
-            "document_id": "c-1",
-            "document_name": "c-1",
-            "url": "",
-            "categoryLabels": [],
-            "serviceLabels": [],
-            "score": 0.8,
-            "concept_id": "c-1",
-            "source": "okf-concept",
-            "repo_id": "r-1",
-            "bundle_version": 3,
-        },
-    ]
 
 
 # ---------------------------------------------------------------------

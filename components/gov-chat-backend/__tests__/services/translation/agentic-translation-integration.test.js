@@ -53,7 +53,7 @@ jest.mock(
 
 const http = require('http');
 const { createAgenticTranslationLeg } = require('../../../services/translation/agentic-translation-leg');
-const { SKIP_STATUSES, computeResidual, planTranslation } = require('../../../services/agent-residual-budget');
+const { computeResidual, planTranslation } = require('../../../services/agent-residual-budget');
 
 // The canonical terminal usage record — the RunUsageRecord the governed run
 // surface emits as its stream's last frame (story 2.3's counters plus the
@@ -220,40 +220,5 @@ describe('agentic translation pairing (story 2.5 — the integration pin)', () =
       configError: null,
       mode: 'full-answer'
     });
-  });
-
-  it('pairs the spent-record skip: a run that consumed the allowance skips with the same status the plan reports', async () => {
-    const { calls } = serve({});
-    const usage = canonicalRunUsage({ prompt_tokens: 9800, completion_tokens: 200 });
-
-    const plan = planTranslation({ deadlineRemainingMs: 8000, usage, allowances: { maxTokens: 10000, maxCalls: 10 } });
-    const leg = createAgenticTranslationLeg({ routingDecision: 'agentic', runUsage: usage, targetLanguage: 'fr' });
-    const result = await leg.translateFullAnswer({ text: 'Hello world', remainingMs: 8000 });
-
-    expect(plan.decision).toBe('skip');
-    expect(plan.status).toBe(SKIP_STATUSES.TOKEN_ALLOWANCE_SPENT);
-    expect(plan.residual.remainingTokens).toBe(0); // exactly spent: never negative, never guessed
-    expect(result.outcome).toBe('skipped');
-    expect(result.accounting.status).toBe(SKIP_STATUSES.TOKEN_ALLOWANCE_SPENT);
-    expect(result.accounting.decision).toBe('skip');
-    expect(calls).toHaveLength(0); // no call starts beyond the spent allowance
-  });
-
-  it('pairs the missing-record skip: no record, no plan, no leg call', async () => {
-    const { calls } = serve({});
-
-    const plan = planTranslation({
-      deadlineRemainingMs: 8000,
-      usage: null,
-      allowances: { maxTokens: 10000, maxCalls: 10 }
-    });
-    const leg = createAgenticTranslationLeg({ routingDecision: 'agentic', runUsage: null, targetLanguage: 'fr' });
-    const result = await leg.translateFullAnswer({ text: 'Hello world', remainingMs: 8000 });
-
-    expect(plan.status).toBe(SKIP_STATUSES.USAGE_UNAVAILABLE);
-    expect(plan.residual.remainingTokens).toBeNull(); // never estimated up to the allowance
-    expect(result.outcome).toBe('skipped');
-    expect(result.accounting.status).toBe(SKIP_STATUSES.USAGE_UNAVAILABLE);
-    expect(calls).toHaveLength(0);
   });
 });

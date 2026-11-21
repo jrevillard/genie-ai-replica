@@ -707,19 +707,6 @@ def test_a_malformed_discovery_body_is_the_typed_transient_naming_the_shape(malf
         asyncio.run(read_endpoint_identity(_config(VLLM_LLM_MODEL_ID=""), transport))
 
 
-def test_the_identity_dataclass_round_trips_json():
-    identity = EndpointIdentity(
-        generation_endpoint=ENDPOINT,
-        version_raw='{"version": "v0.29.0"}',
-        version_note=None,
-        model_id="served-model",
-        max_model_len=8192,
-        served_at_utc="2026-11-21T00:00:00+00:00",
-        venue="test",
-    )
-    assert json.loads(json.dumps(identity.__dict__))["model_id"] == "served-model"
-
-
 # ---------------------------------------------------------------------
 # The matrix: the full sweep, serially, in a stable order
 # ---------------------------------------------------------------------

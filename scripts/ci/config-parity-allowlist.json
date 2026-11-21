@@ -66,7 +66,10 @@
           "via": "envFrom"
         }
       },
-      "composeOnly": {}
+      "composeOnly": {
+        "AGENT_TRANSLATION_MAX_TOKENS": "the agentic-path translation-leg allowances: read fail-closed by the BFF's agentic translation leg (story 2.10, AD-14), and no deployed surface serves that leg yet — the chart does not install the agentic request path (the agent service itself is unpaired for the same reason). Wiring the knobs into the chart backend is the deployment story's surface (the deferral is filed in _bmad-output deferred-work), and a knob wired before its consumer would be configuration theatre on the chart surface.",
+        "AGENT_TRANSLATION_MAX_CALLS": "the agentic-path translation-leg allowances: read fail-closed by the BFF's agentic translation leg (story 2.10, AD-14), and no deployed surface serves that leg yet — the chart does not install the agentic request path (the agent service itself is unpaired for the same reason). Wiring the knobs into the chart backend is the deployment story's surface (the deferral is filed in _bmad-output deferred-work), and a knob wired before its consumer would be configuration theatre on the chart surface."
+      }
     },
     "documentRepository": {
       "compose": "document-repository",

@@ -91,6 +91,21 @@ describe('agentic translation leg (story 2.10)', () => {
         const res = new EventEmitter();
         res.setEncoding = () => {};
         if (path.endsWith('/health')) {
+          if (health.onRequest) health.onRequest();
+          if (health.hang) {
+            // The endpoint accepted the connection and never answers: the
+            // request dangles until its own socket timeout.
+            return;
+          }
+          if (health.emitErrorAfterMs) {
+            // Answers with an error on a later tick — past the budget timer
+            // a won race would have settled on.
+            setTimeout(
+              () => req.emit('error', new Error('connect ETIMEDOUT after the budget')),
+              health.emitErrorAfterMs
+            );
+            return;
+          }
           if (health.emitError) {
             req.emit('error', new Error(health.emitError));
             return;
@@ -621,6 +636,52 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(r.outcome).toBe('cancelled');
       expect(r.accounting.decision).toBe('translate');
       expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+    });
+
+    it('cuts a hung init at the remaining budget: skipped deadline_spent, no chat call', async () => {
+      // The health probe accepts the connection and never answers; its own
+      // budget is 30s, the caller's is 60ms. The race must cut at 60ms —
+      // this test would run the full 30s if the race were missing.
+      const { calls } = serve({ health: { hang: true }, chat: { json: chatBody('X') } });
+      const leg = makeLeg({ runUsage: zeroRun });
+      const r = await leg.translateFullAnswer({ text: 'Hello world', remainingMs: 60 });
+
+      expect(r.outcome).toBe('skipped');
+      expect(r.accounting.status).toBe(SKIP_STATUSES.DEADLINE_SPENT);
+      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+    });
+
+    it('cuts a hung init at the abort: cancelled without a chat call, inside the probe budget', async () => {
+      // The abort fires the moment the health request exists; if the race
+      // ignored the signal, the outcome would wait out the probe's 30s.
+      const controller = new AbortController();
+      const { calls } = serve({
+        health: {
+          hang: true,
+          onRequest: () => controller.abort()
+        },
+        chat: { json: chatBody('X') }
+      });
+      const leg = makeLeg();
+      const r = await leg.translateFullAnswer({ text: 'Hello world', remainingMs: 30000, signal: controller.signal });
+
+      expect(r.outcome).toBe('cancelled');
+      expect(r.accounting.decision).toBe('translate');
+      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+    });
+
+    it('keeps the dangling init handled when its failure lands after a lost budget', async () => {
+      // The budget timer wins at 50ms; the hung probe's socket error fires
+      // at 200ms — a rejection with no handler attached anymore (the race
+      // stopped caring when it settled). Without the no-op catch on the
+      // init promise, that is an unhandled rejection and this run fails on
+      // it — the suite completing cleanly is the assertion that pins it.
+      serve({ health: { emitErrorAfterMs: 200 }, chat: { json: chatBody('X') } });
+      const leg = makeLeg({ runUsage: zeroRun });
+      const r = await leg.translateFullAnswer({ text: 'Hello world', remainingMs: 50 });
+
+      expect(r.outcome).toBe('skipped');
+      expect(r.accounting.status).toBe(SKIP_STATUSES.DEADLINE_SPENT);
     });
 
     it('skips deadline_spent when init consumes the whole remaining deadline', async () => {

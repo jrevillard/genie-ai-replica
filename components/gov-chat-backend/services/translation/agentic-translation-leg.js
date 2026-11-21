@@ -244,6 +244,70 @@ function resolveLanguagePair(backend, targetLanguage) {
   return { pair: { sourceLangCode: sourceCode, targetLangCode: targetCode }, unknown: false };
 }
 
+// The init race's loss sentinels. Distinct messages, because the accounting
+// maps them to different outcomes than a probe failure: a lost budget is a
+// `deadline_spent` skip, an abort is `cancelled`, a probe error is the
+// `gpu_init_failed` skip.
+const INIT_BUDGET_SPENT = 'translation init budget spent before the probes finished';
+const INIT_ABORTED = 'translation init aborted by the caller';
+
+/**
+ * Race the backend's init probes against this request's two bounds — the
+ * caller's remaining budget (a timer) and its abort signal. The probes run
+ * on their own fixed budgets (health ~30s, models ~5s) and know nothing of
+ * either: a GPU endpoint that accepts connections but never answers would
+ * otherwise stall every agentic translation up to ~35s past the deadline,
+ * and a disconnected client could not shorten the wait.
+ *
+ * The dangling probe on a race loss is harmless: the backend instance is
+ * request-local and its own socket timeouts still bound it — only this
+ * caller stops waiting. `healthCheck`/`fetchModelInfo` are untouched.
+ *
+ * @param {GpuTranslateBackend} backend
+ * @param {Object} params - `{budgetMs, signal}`
+ * @returns {Promise<undefined>} Resolves when init finished in time.
+ * @throws {Error} The `INIT_BUDGET_SPENT` or `INIT_ABORTED` sentinel, or the
+ *   probe's own failure.
+ */
+async function raceInit(backend, { budgetMs, signal }) {
+  let timer = null;
+  let onAbort = null;
+  const budgetLoss = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(INIT_BUDGET_SPENT)), budgetMs);
+  });
+  const abortLoss = new Promise((_, reject) => {
+    if (signal && signal.aborted) {
+      reject(new Error(INIT_ABORTED));
+      return;
+    }
+    if (signal) {
+      onAbort = () => reject(new Error(INIT_ABORTED));
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
+  try {
+    // The no-op catch is the dangling-loss case: Promise.race stops caring
+    // about the init promise once the budget timer or the abort has won,
+    // and a probe failing LATER (a socket timeout becoming an init()
+    // rejection ~30s in — exactly the hung-endpoint scenario) would then be
+    // an unhandled rejection crashing the process. The catch stays on the
+    // same promise object, so the race still receives the rejection while
+    // it is pending; it only marks the post-loss lifetime handled.
+    // The no-op catch below is belt-and-braces for the dangling-loss case:
+    // Promise.race itself permanently attaches handlers to every input, so a
+    // probe failing long after a lost race is already delivered to them and
+    // handled (verified against Node directly). The explicit catch keeps
+    // that guarantee true even if a future refactor stops racing the init
+    // promise directly.
+    const settled = backend.init();
+    settled.catch(() => {});
+    return await Promise.race([settled, budgetLoss, abortLoss]);
+  } finally {
+    clearTimeout(timer);
+    if (onAbort && signal) signal.removeEventListener('abort', onAbort);
+  }
+}
+
 /**
  * Create the answer-translation leg for one agentic request.
  *
@@ -255,9 +319,12 @@ function resolveLanguagePair(backend, targetLanguage) {
  * request whose plan and language resolution both proved a translation —
  * English and unknown-language requests never reach init — a GPU that
  * fails there is a skip with the recorded reason, never a crash and never
- * a fallback, and the probes' wall time is part of the translation budget:
- * it is subtracted from the remaining deadline before any call's timeout is
- * computed, and an abort during the probes is a `cancelled` outcome.
+ * a fallback; the probes are raced against the request's remaining budget
+ * and abort signal, so a hung endpoint cannot stall the pass past the
+ * deadline, and the probes' wall time (on a won race) is part of the
+ * translation budget: it is subtracted from the remaining deadline before
+ * any call's timeout is computed, and an abort during the probes is a
+ * `cancelled` outcome.
  *
  * @param {Object} params
  * @param {'agentic'} params.routingDecision - The routing decision, the
@@ -434,16 +501,35 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
         return { outcome: 'skipped', translated: null, accounting: skipAccounting(mode) };
       }
 
-      // 6. The health check, after the plan has proven room — a GPU that
-      //    fails at request time is a skip with the recorded reason. The
-      //    probes' wall time is part of the translation budget: subtracted
-      //    below, so no call's timeout can exceed the caller's remaining
-      //    deadline; an abort during the probes is noticed the moment they
-      //    return.
+      // 6. The health and models probes, raced against this request's two
+      //    bounds — the caller's remaining budget and its abort signal —
+      //    because the probes run on their own fixed budgets and would
+      //    otherwise stall the pass past the deadline or outlive a
+      //    disconnected client. A probe FAILURE is still a skip with the
+      //    recorded reason.
       const initStartedAt = Date.now();
       try {
-        await b.init();
+        await raceInit(b, { budgetMs: remainingMs, signal });
       } catch (error) {
+        if (aborted()) {
+          return {
+            outcome: 'cancelled',
+            translated: null,
+            accounting: accountingBlock({
+              decision: 'translate',
+              outcome: 'cancelled',
+              queryTranslationStatus: V05_STATUS.FALLBACK_ERROR,
+              mode
+            })
+          };
+        }
+        if (error.message === INIT_BUDGET_SPENT) {
+          return {
+            outcome: 'skipped',
+            translated: null,
+            accounting: skipAccounting(mode, { status: SKIP_STATUSES.DEADLINE_SPENT })
+          };
+        }
         logger.warn(`[AGENTIC-TRANSLATION] GPU backend failed at request time: ${error.message}`);
         return {
           outcome: 'skipped',
@@ -451,6 +537,9 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
           accounting: skipAccounting(mode, { configError: GPU_INIT_FAILED })
         };
       }
+      // Won race: init finished — its wall time is part of the translation
+      // budget, subtracted below so no call's timeout can exceed the
+      // caller's remaining deadline.
       const remainingAfterInit = remainingMs - (Date.now() - initStartedAt);
       if (aborted()) {
         return {

@@ -94,6 +94,21 @@ def chat_choice_content(choice: dict):
     return (choice.get("message") or {}).get("content")
 
 
+def resolve_window_tokens(config, detected: int | None) -> int:
+    """The usable context window in tokens, in the deployed three tiers: an
+    explicit consumer-side cap (``AGENT_WINDOW_OVERRIDE_TOKENS``), then the
+    probed ``max_model_len``, then the configured fallback
+    (``MAX_MODEL_LEN_TEXTGEN``). Pure — the caller supplies the probed
+    value (the ``ModelEndpointCache`` here, the probe client's own single
+    discovery in ``agent.probe``) so both consumers share one tier home.
+    """
+    if config.window_override_tokens > 0:
+        return config.window_override_tokens
+    if detected:
+        return detected
+    return config.fallback_window_tokens
+
+
 class GenerationClient:
     """The one generation call config B makes per turn.
 
@@ -133,15 +148,14 @@ class GenerationClient:
         return await self._cache.model_id(self._config)
 
     async def window_tokens(self) -> int:
-        """The usable context window in tokens, in the deployed three tiers:
-        an explicit consumer-side cap, then the probed ``max_model_len``,
-        then the code default."""
+        """The usable context window in tokens — the three tiers of
+        :func:`resolve_window_tokens` over this client's discovery cache.
+        The override tier answers WITHOUT probing (the probe is a network
+        call the cap does not need), so it is checked before the cache is
+        consulted."""
         if self._config.window_override_tokens > 0:
             return self._config.window_override_tokens
-        detected = await self._cache.max_model_len(self._config)
-        if detected:
-            return detected
-        return self._config.fallback_window_tokens
+        return resolve_window_tokens(self._config, await self._cache.max_model_len(self._config))
 
     async def generate(self, system_prompt: str, user_content: str) -> str:
         """One non-streaming generation; the finished text, or a typed failure.

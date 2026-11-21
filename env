@@ -1421,6 +1421,49 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # MUST be 0 or 1, not true/false. Ansible: agent_enabled in group_vars.
 # AGENT_ENABLED=1
 #
+# Agent run-budget knobs (story 2.3) — REQUIRED for the run surface. Read
+# fail-closed: a run request against a deployment that has not set one of
+# them is answered 503 naming every missing knob — there is no numeric
+# default anywhere in the enforcement path. The one-replica deployment
+# contract (AGENT_ENABLED 0/1) makes the admission lane's flock slot pool
+# the global bound; a saturated lane answers 429 with Retry-After. Pair
+# rule for the BFF's agent leg (story 2.4): AGENT_UPSTREAM_TIMEOUT_MS must
+# be >= AGENT_RUN_MAX_WALL_CLOCK_SECONDS + the translation and
+# finalization reserves — docs/agent-budget-deadline-pairs.md.
+# Loop iterations (one iteration = one model call plus its tool dispatches).
+# AGENT_RUN_MAX_STEPS=
+# Model dispatches — the fleet budget: loop calls AND auxiliary calls
+# (grounding judge, classification, preparation translation) spend it;
+# auxiliary calls are tallied separately in the usage record.
+# AGENT_RUN_MAX_MODEL_CALLS=
+# Tool dispatches, bounded independently of the step cap.
+# AGENT_RUN_MAX_TOOL_CALLS=
+# Served token usage per run (prompt + completion as the endpoint reports).
+# AGENT_RUN_MAX_TOTAL_TOKENS=
+# Executed tool-result bytes per run (each result is truncated to
+# AGENT_TOOL_MAX_RESULT_BYTES before it counts).
+# AGENT_RUN_MAX_EVIDENCE_BYTES=
+# The deployment ceiling on every run's wall clock (seconds); a request may
+# communicate a shorter deadline_ms, never a longer one.
+# AGENT_RUN_MAX_WALL_CLOCK_SECONDS=
+# Per-tool-operation bounds (the document capability contract's OperationBudget).
+# AGENT_TOOL_TIMEOUT_MS=
+# AGENT_TOOL_MAX_RESULTS=
+# AGENT_TOOL_MAX_RESULT_BYTES=
+# Optional system-prompt override for governed runs (empty = the governed default).
+# AGENT_RUN_SYSTEM_PROMPT=
+# Port-assembly knobs the run surface reads fail-closed: an unset base URL
+# is answered 503 with the code run_surface_unconfigured naming what is
+# missing. Deliberate scope: the corpus/model knob set the full assembly
+# needs — the remaining TEI/Arango/vLLM endpoints ride the governed
+# assembly wiring in the integration story, and until then the 503 names
+# exactly what is missing.
+# AGENT_DOCREPO_URL=
+# AGENT_OKF_URL=
+# AGENT_AUTHORIZED_GRAPHS=
+# AGENT_AUTHORIZED_REPOS=
+# AGENT_PROBE_BEARER=
+#
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
 # ENABLE_OBSERVABILITY=0
 # GRAFANA_ADMIN_USER=admin

@@ -17,13 +17,15 @@ request orchestrator.
 
 The model client mirrors the component's recorded conventions
 (``noagent.generation``: non-streaming, the fixed sampling params,
-``/v1/models`` discovery with the ``VLLM_LLM_MODEL_ID`` override) but stays
-probe-local — the production client belongs to whichever runtime the
-decision selects.
+``/v1/models`` discovery with the ``VLLM_LLM_MODEL_ID`` override) and is
+SHARED with the run surface: the request orchestrator reuses the same
+client class and the same port assembly (one model client, one port
+assembly), so a governed run and the probe measure the same endpoint and
+payload rules. The production client still belongs to whichever runtime
+the decision selects.
 
-The probe runs IN-PROCESS; there is no HTTP surface for the agent loop
-(the request orchestrator and the BFF stream contract own those surfaces).
-Live entry::
+The probe itself runs IN-PROCESS; the HTTP surface for governed runs is
+the run surface (``app.py``, story 2.3). Live entry::
 
     python -m agent.probe
 
@@ -37,6 +39,7 @@ question against ``VLLM_ENDPOINT``.
 import asyncio
 import json
 import logging
+import math
 import os
 import uuid
 from dataclasses import asdict, dataclass
@@ -61,7 +64,7 @@ from capabilities.contract import (
 from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
-from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
+from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content, resolve_window_tokens
 from preparation.translation import HttpxTransport
 
 from .budget import RunBudget, RunBudgetMonitor
@@ -78,6 +81,18 @@ from .loop import (
 from .registry import ToolDefinition, ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+# The one-call output-budget arithmetic — the deployed estimate the answer
+# translator runs over the same endpoint family (``noagent.pipeline``):
+# the prompt is estimated at 4 chars/token (+20 offset), the room is the
+# window minus that estimate minus 128 safety tokens, and a ``max_tokens``
+# larger than the room would make vLLM reject the call outright
+# ("prompt + max_tokens exceeds the context window"). Matched values, one
+# comment home each — the translation leg owns the translation-shaped
+# copies, this client the generation-shaped one.
+MODEL_CHARS_PER_TOKEN_ESTIMATE = 4
+MODEL_PROMPT_OFFSET_TOKENS = 20
+MODEL_INPUT_SAFETY_TOKENS = 128
 
 RUNTIME_ID = "custom-minimal-loop"
 """The provisional candidate's runtime id — the field the runtime decision compares on."""
@@ -97,10 +112,20 @@ PROBE_QUESTION = (
 )
 
 # The smoke bounds: enough steps for search → read → answer, enough wall
-# clock for several 180 s model calls — and nothing more. No retry exists:
-# a transient model failure ends the run, which stops honestly with its
-# evidence like any other bound.
-PROBE_RUN_BUDGET = RunBudget(max_steps=8, max_model_calls=8, max_tool_calls=8, wall_clock_seconds=600.0)
+# clock for several 180 s model calls — and nothing more. The token and
+# evidence bounds derive from the same arithmetic (8 model calls inside the
+# 65536-token window cannot legitimately spend more than 8 × 65536 tokens;
+# 8 tool results at the 64 KiB truncation bound cannot exceed 8 × 65536
+# bytes). No retry exists: a transient model failure ends the run, which
+# stops honestly with its evidence like any other bound.
+PROBE_RUN_BUDGET = RunBudget(
+    max_steps=8,
+    max_model_calls=8,
+    max_tool_calls=8,
+    max_total_tokens=524288,
+    max_evidence_bytes=524288,
+    wall_clock_seconds=600.0,
+)
 
 # The per-tool-call smoke bound (the port's OperationBudget: the executor
 # truncates results to these limits — result size is a declared limit with
@@ -301,7 +326,12 @@ def _make_read_executor(port: DocumentCapabilityPort, context: CallerContext, bu
 
 @dataclass(frozen=True)
 class ProbeConfig:
-    """The probe's env knobs — the model leg plus the live-port assembly."""
+    """The probe's env knobs — the model leg plus the live-port assembly.
+
+    The window tiers (``window_override_tokens`` / ``fallback_window_tokens``)
+    ride along because the model client caps the per-call output bound to
+    what one call can serve against the window the endpoint serves.
+    """
 
     generation_endpoint: str
     model_id_override: str
@@ -315,14 +345,17 @@ class ProbeConfig:
     authorized_graphs: str
     authorized_repos: str
     user_bearer: str | None
+    window_override_tokens: int
+    fallback_window_tokens: int
 
     @classmethod
     def load(cls, env=None) -> "ProbeConfig":
         # The model-leg knobs are the deployed generation config's, read
         # through ITS loader (NoAgentConfig): the endpoint resolution rule,
-        # the model-id override, the discovery bearer and TLS posture, and
-        # the tolerant timeout reads have one home, so the probe measures
-        # the same endpoint and payload rules the deployment serves.
+        # the model-id override, the discovery bearer and TLS posture, the
+        # tolerant timeout reads and the window tiers have one home, so the
+        # probe measures the same endpoint and payload rules the deployment
+        # serves.
         noagent = NoAgentConfig.load(env)
         source = os.environ if env is None else env
         return cls(
@@ -343,6 +376,8 @@ class ProbeConfig:
             authorized_graphs=str(source.get("AGENT_AUTHORIZED_GRAPHS", "")),
             authorized_repos=str(source.get("AGENT_AUTHORIZED_REPOS", "")),
             user_bearer=source.get("AGENT_PROBE_BEARER"),
+            window_override_tokens=noagent.window_override_tokens,
+            fallback_window_tokens=noagent.fallback_window_tokens,
         )
 
 
@@ -353,19 +388,22 @@ class ProbeTransientError(RuntimeError):
 
 
 class ProbeModelClient:
-    """The probe-local OpenAI-compatible model client (a ``LoopModelClient``).
+    """The OpenAI-compatible model client (a ``LoopModelClient``), shared by
+    the probe and the run surface.
 
     Mirrors the recorded generation conventions — non-streaming, the fixed
     sampling params, model discovery from ``/v1/models`` with the
     ``VLLM_LLM_MODEL_ID`` override — over the injected transport (the same
-    seam ``PreparationFakeTransport`` answers in tests). One process, one
-    run: the discovered model id is resolved once.
+    seam ``PreparationFakeTransport`` answers in tests). One client per
+    process; the discovered model id is resolved once.
     """
 
     def __init__(self, config: ProbeConfig, transport=None):
         self._config = config
         self._transport = transport if transport is not None else HttpxTransport(config.tls_verify)
         self._model_id: str | None = None
+        self._discovered_window: int | None = None
+        self._window: int | None = None
 
     async def _resolve_model_id(self) -> str:
         if self._config.model_id_override:
@@ -384,10 +422,37 @@ class ProbeModelClient:
             if not entry or not entry.get("id"):
                 raise ProbeTransientError("the model discovery carried no model id")
             self._model_id = str(entry["id"])
+            # The same probe serves the window the one-call cap is anchored
+            # on; a garbage or absent value falls to the configured tier.
+            discovered = entry.get("max_model_len")
+            if isinstance(discovered, int) and discovered > 0:
+                self._discovered_window = discovered
         return self._model_id
 
-    async def complete(self, messages: list[dict], tool_definitions: tuple[dict, ...]) -> ModelTurn:
-        """One non-streaming tool-calling completion, or a typed failure."""
+    async def _window_tokens(self) -> int:
+        """The window one call must fit — the deployed three tiers of
+        :func:`noagent.generation.resolve_window_tokens`, resolved once per
+        client like the model id; the probed tier is this client's own
+        single-discovery capture."""
+        if self._window is None:
+            await self._resolve_model_id()  # idempotent; runs the probe when no override
+            self._window = resolve_window_tokens(self._config, self._discovered_window)
+        return self._window
+
+    async def complete(
+        self, messages: list[dict], tool_definitions: tuple[dict, ...], *, max_output_tokens: int | None
+    ) -> ModelTurn:
+        """One non-streaming tool-calling completion, or a typed failure.
+
+        ``max_output_tokens`` rides the request as ``max_tokens`` when the
+        caller has a bound to state — omitted otherwise (the deployed
+        only-when-configured rule). The bound is capped to what ONE call
+        can serve: the run-level allowance may exceed the endpoint's
+        window, and a ``max_tokens`` beyond the window makes vLLM reject
+        the call outright — so the bound sent is the smaller of the
+        allowance and the window room. An oversized prompt (room <= 0)
+        omits the field and fails honestly on its own.
+        """
         model_id = await self._resolve_model_id()
         payload = {
             "model": model_id,
@@ -396,6 +461,14 @@ class ProbeModelClient:
             "tool_choice": "auto",
             **RECORDED_SAMPLING_PARAMS,
         }
+        if max_output_tokens is not None:
+            window = await self._window_tokens()
+            input_tokens = math.ceil(
+                (len(json.dumps(messages)) + MODEL_PROMPT_OFFSET_TOKENS) / MODEL_CHARS_PER_TOKEN_ESTIMATE
+            )
+            room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
+            if room > 0:
+                payload["max_tokens"] = min(max_output_tokens, room)
         url = f"{self._config.generation_endpoint}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
         try:
@@ -460,19 +533,79 @@ class ProbeModelClient:
         return None
 
 
-def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, CallerContext]:
-    """Assemble the real port and its caller context from the environment.
+@dataclass(frozen=True)
+class StatelessAdapters:
+    """The stateless half of the port assembly: the read adapters and the
+    inner search port, built ONCE per process and shared by every request
+    (the executor that binds a caller context to them is per request)."""
+
+    docrepo: DocRepoAdapter
+    okf: OkfAdapter
+    chunks: LegacyChunkAdapter
+    search_port: DocumentCapabilityPort
+    legacy_graph_name: str
+
+    def bind_executor(self, context: CallerContext, bearer: str | None) -> AuthorizedExecutor:
+        """The per-request executor: one trusted context bound to the five
+        shared fields — the ONE place the binding lives (the probe's live
+        entry and the run surface's port factory both call it)."""
+        return AuthorizedExecutor(
+            context,
+            bearer=bearer,
+            legacy_graph_name=self.legacy_graph_name,
+            docrepo=self.docrepo,
+            okf=self.okf,
+            chunks=self.chunks,
+            search_port=self.search_port,
+        )
+
+
+def build_stateless_adapters(config: ProbeConfig, env=None) -> StatelessAdapters:
+    """Assemble the stateless adapters from the environment.
 
     The search capability wires itself from the recorded knobs (a missing
     TEI endpoint is its own boot error); doc-repo and okf-server need their
-    base URLs; the authorized graph set is the probe caller's scope. The
-    executor enforces that set — this is the same authorization path a
-    request takes, with the probe as the caller.
+    base URLs. Shared by the probe and the run surface — one port
+    assembly, so a governed run reads the same corpus the probe measures.
     """
     if not config.docrepo_url:
-        raise ValueError("AGENT_DOCREPO_URL must be set for a live probe (doc-repo base URL)")
+        raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
     if not config.okf_url:
-        raise ValueError("AGENT_OKF_URL must be set for a live probe (okf-server base URL)")
+        raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
+    arango_config = ArangoConfig.load(env)
+    search = SearchKnowledgeCapability.create(env)
+
+    # The ArangoDB driver stays a call-time import: it is the one heavy
+    # dependency only a live assembly needs, and keeping it off the module
+    # import path keeps importing the seam (loop/budget/events consumers)
+    # free of it.
+    import arango
+
+    client = arango.ArangoClient(hosts=arango_config.url)
+
+    def db_factory():
+        return client.db(
+            arango_config.database,
+            username=arango_config.username,
+            password=arango_config.password,
+        )
+
+    return StatelessAdapters(
+        docrepo=DocRepoAdapter(config.docrepo_url),
+        okf=OkfAdapter(config.okf_url),
+        chunks=LegacyChunkAdapter(db_factory),
+        search_port=search,
+        legacy_graph_name=arango_config.graph_name,
+    )
+
+
+def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, CallerContext]:
+    """Assemble the real port and its caller context from the environment.
+
+    The authorized graph set is the probe caller's scope; the executor
+    enforces that set — this is the same authorization path a request
+    takes, with the probe as the caller.
+    """
     graphs = tuple(graph.strip() for graph in config.authorized_graphs.split(",") if graph.strip())
     if not graphs:
         raise ValueError(
@@ -494,34 +627,8 @@ def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, C
         authorized_graph_names=graphs,
         authorized_repos=tuple(AuthorizedRepo(repo_id=repo_id, graph_name=graph_name) for repo_id, graph_name in repos),
     )
-    arango_config = ArangoConfig.load(env)
-    search = SearchKnowledgeCapability.create(env)
-
-    # The ArangoDB driver stays a call-time import: it is the one heavy
-    # dependency only a live probe needs, and keeping it off the module
-    # import path keeps importing the seam (loop/budget/events consumers)
-    # free of it.
-    import arango
-
-    client = arango.ArangoClient(hosts=arango_config.url)
-
-    def db_factory():
-        return client.db(
-            arango_config.database,
-            username=arango_config.username,
-            password=arango_config.password,
-        )
-
-    executor = AuthorizedExecutor(
-        context,
-        bearer=config.user_bearer,
-        legacy_graph_name=arango_config.graph_name,
-        docrepo=DocRepoAdapter(config.docrepo_url),
-        okf=OkfAdapter(config.okf_url),
-        chunks=LegacyChunkAdapter(db_factory),
-        search_port=search,
-    )
-    return executor, context
+    adapters = build_stateless_adapters(config, env)
+    return adapters.bind_executor(context, config.user_bearer), context
 
 
 def _main() -> int:

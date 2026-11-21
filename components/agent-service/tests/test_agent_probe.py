@@ -14,6 +14,7 @@ model id, typed transient failures).
 
 import asyncio
 import json
+import math
 
 import pytest
 from conftest import (
@@ -26,9 +27,9 @@ from conftest import (
     canned_search_result,
     multihop_turns,
     preparation_model_entry,
+    run_budget,
 )
 
-from agent.budget import RunBudget
 from agent.cancellation import CancellationToken
 from agent.loop import (
     OUTCOME_ANSWERED,
@@ -164,7 +165,7 @@ def test_the_probe_records_budget_exhaustion_with_the_smoke_bounds_overridden():
             port=_port(),
             context=PROBE_CONTEXT,
             model_client=ScriptedLoopModel(_turns()),
-            run_budget=RunBudget(max_steps=6, max_model_calls=1, max_tool_calls=6, wall_clock_seconds=30.0),
+            run_budget=run_budget(max_model_calls=1),
         )
     )
     assert evidence.outcome == OUTCOME_BUDGET_EXHAUSTED
@@ -278,7 +279,9 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
         )
     )
     client = ProbeModelClient(_probe_config(), transport=transport)
-    turn = asyncio.run(client.complete([{"role": "user", "content": "q"}], ({"type": "function"},)))
+    turn = asyncio.run(
+        client.complete([{"role": "user", "content": "q"}], ({"type": "function"},), max_output_tokens=None)
+    )
 
     assert turn.content is None
     assert turn.tool_calls == (ToolCallRequest(call_id="tc-1", name="search_knowledge", arguments={"query": "q"}),)
@@ -292,18 +295,52 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
     assert payload["stream"] is False
     assert payload["tools"] == [{"type": "function"}]
     assert payload["tool_choice"] == "auto"
+    assert "max_tokens" not in payload  # the bound was None: the field is omitted
+
+
+def test_complete_carries_the_output_bound_when_the_window_has_room():
+    # Passthrough: the run allowance (1234) is below what one call can
+    # serve against the window (the 65536 fallback — discovery is skipped
+    # via the model-id override — minus 128 safety and the tiny prompt
+    # estimate), so the bound rides verbatim.
+    transport = _transport((200, _chat_body(content="a")))
+    client = ProbeModelClient(_probe_config(), transport=transport)
+    asyncio.run(client.complete([], (), max_output_tokens=1234))
+    assert transport.calls[-1]["payload"]["max_tokens"] == 1234
+
+
+def test_complete_caps_the_bound_to_the_window_room():
+    # The run-level allowance may exceed the endpoint's window (the smoke
+    # budget's 524288 tokens vs a 1000-token window here): sending it
+    # verbatim makes vLLM reject every call — the bound is capped to the
+    # room (window − prompt estimate − 128 safety).
+    transport = _transport((200, _chat_body(content="a")))
+    config = _probe_config(AGENT_WINDOW_OVERRIDE_TOKENS="1000")
+    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
+    payload = transport.calls[-1]["payload"]
+    expected_room = 1000 - math.ceil((len("[]") + 20) / 4) - 128
+    assert payload["max_tokens"] == expected_room
+
+
+def test_complete_omits_the_bound_when_the_prompt_leaves_no_room():
+    # An oversized prompt fails honestly on its own (vLLM names the
+    # overflow); no max_tokens is invented for a call that cannot run.
+    transport = _transport((200, _chat_body(content="a")))
+    config = _probe_config(AGENT_WINDOW_OVERRIDE_TOKENS="100")
+    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
+    assert "max_tokens" not in transport.calls[-1]["payload"]
 
 
 def test_complete_carries_the_bearer_when_configured():
     transport = _transport((200, _chat_body(content="a")))
     config = _probe_config(OPENAI_API_KEY="sk-data")
-    asyncio.run(ProbeModelClient(config, transport=transport).complete([], ()))
+    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=None))
     assert transport.calls[-1]["headers"] == {"Authorization": "Bearer sk-data"}
 
 
 def test_the_model_id_override_means_no_discovery_probe():
     transport = _transport((200, _chat_body(content="a")))
-    asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], ()))
+    asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], (), max_output_tokens=None))
     assert [call["url"] for call in transport.calls] == [f"{ENDPOINT}/v1/chat/completions"]
 
 
@@ -312,7 +349,7 @@ def test_the_model_id_is_discovered_when_no_override_is_set():
         (200, _chat_body(content="a")), model_entry=preparation_model_entry(model_id="discovered-model")
     )
     client = ProbeModelClient(_probe_config(VLLM_LLM_MODEL_ID=""), transport=transport)
-    asyncio.run(client.complete([], ()))
+    asyncio.run(client.complete([], (), max_output_tokens=None))
     assert [call["url"] for call in transport.calls] == [f"{ENDPOINT}/v1/models", f"{ENDPOINT}/v1/chat/completions"]
     assert transport.calls[-1]["payload"]["model"] == "discovered-model"
 
@@ -320,9 +357,15 @@ def test_the_model_id_is_discovered_when_no_override_is_set():
 def test_every_failure_shape_is_the_typed_transient():
     config = _probe_config()
     with pytest.raises(ProbeTransientError, match="answered 500"):
-        asyncio.run(ProbeModelClient(config, transport=_transport((500, "boom"))).complete([], ()))
+        asyncio.run(
+            ProbeModelClient(config, transport=_transport((500, "boom"))).complete([], (), max_output_tokens=None)
+        )
     with pytest.raises(ProbeTransientError, match="no choice"):
-        asyncio.run(ProbeModelClient(config, transport=_transport((200, {"choices": []}))).complete([], ()))
+        asyncio.run(
+            ProbeModelClient(config, transport=_transport((200, {"choices": []}))).complete(
+                [], (), max_output_tokens=None
+            )
+        )
     with pytest.raises(ProbeTransientError, match="not valid JSON"):
         asyncio.run(
             ProbeModelClient(
@@ -337,13 +380,13 @@ def test_every_failure_shape_is_the_typed_transient():
                         ),
                     )
                 ),
-            ).complete([], ())
+            ).complete([], (), max_output_tokens=None)
         )
     with pytest.raises(ProbeTransientError, match="discovery failed"):
         asyncio.run(
             ProbeModelClient(
                 _probe_config(VLLM_LLM_MODEL_ID=""), transport=PreparationFakeTransport(error=OSError("down"))
-            ).complete([], ())
+            ).complete([], (), max_output_tokens=None)
         )
 
 
@@ -357,7 +400,7 @@ def test_a_non_object_tool_arguments_payload_is_refused():
         )
     )
     with pytest.raises(ProbeTransientError, match="not a JSON object"):
-        asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], ()))
+        asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], (), max_output_tokens=None))
 
 
 def test_a_tool_call_without_an_id_is_a_response_shape_defect():
@@ -374,7 +417,7 @@ def test_a_tool_call_without_an_id_is_a_response_shape_defect():
         )
     )
     with pytest.raises(ProbeTransientError, match="carries no id"):
-        asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], ()))
+        asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], (), max_output_tokens=None))
 
 
 # ---------------------------------------------------------------------

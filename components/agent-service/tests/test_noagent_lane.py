@@ -206,3 +206,27 @@ def test_from_config_wires_the_env_values(lane_dir):
         "lane.lock.2",
         "lane.lock.3",
     ]
+
+
+def test_separate_instances_over_one_config_share_one_pool(lane_dir):
+    """The pool is the slot FILES, not the instance: the run surface's lane
+    and the no-agent pipeline's lane are separate shells over the same
+    config, and one holding every slot saturates the other (story 2.3 —
+    the same-lane contract is satisfied by the shared files, with the
+    pipeline's acquire untouched)."""
+    from noagent.config import NoAgentConfig
+
+    config = NoAgentConfig.load(env={"AGENT_LANE_SLOTS": "2", "AGENT_LANE_LOCK_PATH": lane_dir})
+    surface_lane = AdmissionLane.from_config(config)
+    pipeline_lane = AdmissionLane.from_config(config)
+
+    async def scenario():
+        async with surface_lane.acquire(), surface_lane.acquire():
+            # Every slot is held through the FIRST instance's claims;
+            # the SECOND instance is refused, not queued.
+            with pytest.raises(LaneBusyError):
+                async with pipeline_lane.acquire():
+                    pass
+
+    asyncio.run(scenario())
+    assert sorted(_slot_files(lane_dir)) == ["lane.lock", "lane.lock.1"]

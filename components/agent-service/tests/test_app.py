@@ -41,13 +41,11 @@ def test_ready_reflects_the_activation_flag(monkeypatch):
     assert parked["agent_enabled"] is False
 
 
-def test_the_service_exposes_no_capability_surface():
-    """Story 1.3 ships infrastructure only - the capability tools land later.
-
-    Pinning the route list keeps a later story's capability routes from
-    landing silently in this story.
-    """
+def test_the_route_surface_is_pinned():
+    """Story 1.3 shipped infrastructure only; story 2.3 adds the run
+    surface. Pinning the route list keeps any later route from landing
+    silently - a new route must arrive with its own pinned behavior."""
     with TestClient(app_module.app) as client:
         paths = client.get("/openapi.json").json()["paths"]
 
-    assert sorted(paths) == ["/health", "/ready"]
+    assert sorted(paths) == ["/health", "/ready", "/v1/runs"]

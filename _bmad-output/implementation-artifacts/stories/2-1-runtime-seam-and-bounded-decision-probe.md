@@ -2,7 +2,7 @@
 title: 'Story 2.1 — Runtime seam and bounded decision probe'
 type: 'feature'
 created: '2026-11-21'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '88a9e8add0cd64df59d22b8ea9fd484a285c9208'
@@ -131,6 +131,23 @@ context:
   the new package, the CI-shell gate over the edited `.gitlab-ci.yml`, and the
   dependency-evidence pin) → 667 passed. The live `python -m agent.probe` entry was NOT run:
   it needs a live vLLM endpoint + corpus services (V06 venue), which is story 2.2's run.
+- 2026-11-21 — review rounds recorded. Global review 1: 1 important (the live probe's
+  generation bearer 401s on the canonical venue — OPENAI_API_KEY-only read; fixed with the
+  VLLM_API_KEY fallback) + 6 nits (2 filed as issues #2045/#2046, 1 refuted — the compose
+  profile premise is inverted: modern compose honors deploy.replicas; the okf COMPOSE-ONLY
+  note exists because Swarm ignores profiles —, 1 recorded fidelity — the dense-leg swallow
+  is the V02 record, 3 fixed in-scope). Global review 2: 0 important, 6 nits — planning-artifact
+  references stripped from the new files' comments (external-consumption rule; the pre-2.1
+  modules' sweep filed as #2049), tool-dispatch checks moved before the tool_call_started
+  event (a refused dispatch never announces a call that will not run), the smoke-bound
+  comment no longer promises a retry, capability budget-semantics nits filed as #2047,
+  licence-audit CI enforcement filed as #2048. FIX review of the corrections: clean. Quality
+  round (simplify 4 angles + test audit): config/knob reads re-homed through
+  NoAgentConfig + the shared chat-shape readers and recorded sampling params; dead surface
+  removed (4 unconsumed accessors, 1 speculative parameter); cancellation + canned-result
+  doubles consolidated in the test conftest; 1 junk test deleted. Scoped FIX review of the
+  quality round: clean (payload bytes verified identical). Final: 609 tests passed, ruff
+  clean. MR: !1001 (draft until the review sequence ends).
 
 ## Spec Change Log
 
@@ -139,6 +156,24 @@ context:
 ## Review Triage Log
 
 <!-- Append-only. Populated by step-04 on every review pass. -->
+
+| Round | Finding | Verdict | Evidence / disposition |
+|---|---|---|---|
+| G1 | probe generation bearer OPENAI_API_KEY-only 401s the canonical venue | high (real) | fixed: VLLM_API_KEY fallback, both directions pinned |
+| G1 | agent-service parks solely via deploy.replicas (compose profile question) | nit / refuted | premise inverted — modern compose honors deploy.replicas; okf note is Swarm-profile asymmetry; verify-before-activation recorded as issue #2045 |
+| G1 | MODEL_*_TIMEOUT_SECONDS bare float() crashes on set-to-empty | nit (real) | fixed: routed through the tolerant recorded read |
+| G1 | missing tool-call id coerced to shared empty id | nit (real) | fixed: refused as a response-shape defect |
+| G1 | AuthorizedExecutor drops the insufficiency reason (no abstention_sink) | nit (real, pre-2.1) | issue #2046 (executor is story 1.7 code; matters from 2.3/2.5) |
+| G1 | AgentFakePort docstring contradicts code | nit (real) | fixed: docstring corrected |
+| G1 | dense-leg swallow without degradation flag | nit / already handled | the V02 record documents the swallow as recorded behavior — deliberate fidelity, no action |
+| G2 | planning-artifact references in shipped comments | nit (real, rule) | fixed for the new files; component-wide sweep filed as #2049 |
+| G2 | tool_call_started emitted before refusal checks | nit (real) | fixed: checks precede the started event; boundary pin updated |
+| G2 | dead truncate arm in executor search | nit (real, pre-2.1) | verified real; filed with the budget-semantics issue #2047 |
+| G2 | max_results doubles as the legacy chunk cap | nit (real, pre-2.1) | filed with #2047 |
+| G2 | smoke-bound comment promises a retry none exists | nit (real) | fixed: comment reworded |
+| G2 | licence/defaults audit has no CI enforcement | nit (real, pre-2.1) | issue #2048 |
+| Q (simplify) | 13 accepted findings (reuse/simplification/efficiency/altitude) | applied | behavior verified preserved by the scoped FIX review; 1 skip: EventSink Protocol kept (carries the docstring) |
+| Q (test audit) | probe-question endswith("?") test | junk pattern | deleted; nothing it covered was otherwise uncovered |
 
 ## Design Notes
 

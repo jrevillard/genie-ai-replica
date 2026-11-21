@@ -113,6 +113,8 @@ describe('planTranslation', () => {
     });
     expect(plan.decision).toBe('skip');
     expect(plan.status).toBe(SKIP_STATUSES.TOKEN_ALLOWANCE_SPENT);
+    // Exactly spent is a boundary of its own: never negative, never guessed.
+    expect(plan.residual.remainingTokens).toBe(0);
   });
 
   it('never returns a maxTokens above the remaining allowance', () => {

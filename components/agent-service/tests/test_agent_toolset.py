@@ -227,11 +227,8 @@ def test_the_run_record_carries_language_and_the_first_preparation_status(tmp_pa
     config = PreparationConfig.load(env=env)
     registry = LanguageRegistry(config.registry_path)
 
-    def factory(monitor, language=None):
-        # The REAL factory shape: the shipped QueryPreparer carries the
-        # request's locale as its default source language.
-        return QueryPreparer(config, registry, RecordingTranslator(config, registry), default_source_language=language)
-
+    # The REAL factory shape: the shipped QueryPreparer carries the
+    # request's locale as its default source language.
     translator = RecordingTranslator(config, registry)
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
     orchestrator = _orchestrator(

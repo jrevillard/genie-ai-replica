@@ -5005,3 +5005,65 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(pkg.scripts['lint:fix']).toBe('eslint . --fix');
   });
 });
+
+// --- Slim build lane cache contract (#2031) ---
+// The slim lane (jobs declaring SLIM_REQUIREMENTS_FILE: dataprep, retriever,
+// reranker) builds the SAME Dockerfiles as the fat lane — Dockerfiles the
+// build-time gate requires to declare ARG CACHE_BUST on their apt upgrade
+// layer. The fat lane passes a fresh CACHE_BUST under FORCE_IMAGE_REBUILD
+// (the monthly rebuild); the slim lane passed none, so its registry cache
+// kept the upgrade layer a permanent hit and slim images shipped frozen
+// Debian packages on every monthly rebuild — exactly what the CACHE_BUST
+// gate exists to prevent. The same lane also referenced $NOCACHE, defined
+// nowhere in the file: dead under the runner's sh, fatal under set -u.
+// These pins fail if the slim lane ever drops the force-refresh arm or the
+// dead token returns.
+describe('the slim build lane cache contract (#2031)', () => {
+  const ciBlocks = () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    return blocks;
+  };
+  // The slim lane lives in the shared build template, so every aliasing
+  // job's block carries it. The defect's audience is the three jobs that
+  // declare SLIM_REQUIREMENTS_FILE — naming them keeps the pin from
+  // passing vacuously on a deleted or renamed slim lane.
+  const slimAudience = ['build:dataprep-arango', 'build:retriever-arango', 'build:reranker'];
+  const slimSections = () =>
+    ciBlocks()
+      .filter((b) => b.text.includes('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]'))
+      .map((b) => ({
+        owner: b.owner,
+        slim: b.text.slice(b.text.indexOf('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]'))
+      }));
+
+  test('the slim lane covers the three SLIM_REQUIREMENTS_FILE jobs', () => {
+    const owners = slimSections().map((s) => s.owner);
+    for (const job of slimAudience) expect(owners).toContain(job);
+  });
+
+  test('no build block references the undefined $NOCACHE variable', () => {
+    const offending = ciBlocks()
+      .filter((b) => b.text.includes('NOCACHE'))
+      .map((b) => b.owner);
+    expect(offending).toEqual([]);
+  });
+
+  test('the slim lane busts its cache under FORCE_IMAGE_REBUILD like the fat lane', () => {
+    // The exact arm, positioned with the other set -- build-arg assembly
+    // BEFORE the slim buildx invocation — an arm appended after the build
+    // (or outside the slim section) refreshes nothing.
+    const expected = [
+      '  if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then',
+      '    set -- "$@" --build-arg "CACHE_BUST=$(date +%s)"',
+      '  fi'
+    ].join('\n');
+    for (const { slim } of slimSections()) {
+      const armIdx = slim.indexOf(expected);
+      expect(armIdx).toBeGreaterThanOrEqual(0);
+      const buildIdx = slim.indexOf('docker buildx build');
+      expect(armIdx).toBeLessThan(buildIdx);
+    }
+  });
+});

@@ -1449,10 +1449,17 @@ container_scanning:
         if [ -n "${SLIM_INSTALL_EASYOCR_MODELS:-}" ]; then
           set -- "$@" --build-arg "INSTALL_EASYOCR_MODELS=${SLIM_INSTALL_EASYOCR_MODELS}"
         fi
+        # Same monthly-rebuild contract as the fat lane above: a fresh
+        # CACHE_BUST re-runs the Dockerfiles' apt upgrade layer (its cache
+        # key includes the ARG value), so the slim images' Debian packages
+        # move with every forced rebuild instead of staying a registry
+        # cache hit forever (#2031).
+        if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
+          set -- "$@" --build-arg "CACHE_BUST=$(date +%s)"
+        fi
         docker buildx build \
           --pull \
           --push \
-          $NOCACHE \
           -t "$SLIM_REF" \
           -f "$DOCKERFILE" \
           "$@" \

@@ -13,7 +13,6 @@ import 'package:genie_ai_mobile/services/auth/auth_state.dart';
 import 'package:genie_ai_mobile/services/auth/connectivity_checker.dart';
 import 'package:genie_ai_mobile/services/auth/token_storage.dart';
 import 'package:genie_ai_mobile/services/keycloak/keycloak_service.dart';
-import 'package:openapi/api.dart';
 
 /// The REAL authenticated-API graph (#2019 half-two, 2026-11-20): unlike the
 /// auth_notifier suite, these tests do NOT override `authenticationApiProvider`

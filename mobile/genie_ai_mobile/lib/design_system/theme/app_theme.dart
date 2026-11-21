@@ -99,7 +99,14 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: tokens.accent,
           foregroundColor: tokens.accentFg,
-          minimumSize: const Size(double.infinity, 48),
+          // A finite minimum: `Size(double.infinity, 48)` here turned any
+          // themed button inside a Row into a TIGHT infinite-width child
+          // (Rows lay out non-flex children unbounded on the main axis) —
+          // "BoxConstraints forces an infinite width" on every frame, the
+          // 2026-11-20 emulator wedge. Full-width buttons come from the
+          // parent (Column.stretch / SizedBox width), where the infinity
+          // was redundant anyway.
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(DsRadii.md),
           ),
@@ -112,7 +119,8 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: tokens.accent,
-          minimumSize: const Size(double.infinity, 48),
+          // Finite minimum — see the elevatedButtonTheme note above.
+          minimumSize: const Size(64, 48),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(DsRadii.md),
           ),

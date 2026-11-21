@@ -9,11 +9,13 @@ behavior except a missing or blank query, now refused before the port (a
 valid query rides ``passthrough_english``); a wired preparer
 feeds the PREPARED query to the port (never the raw text) and reports its
 status; an unprepared preparation answers the contract's insufficiency
-shape with the port UNTOUCHED; a translation overflow raises its typed
-error into the honest run-error contract (never an untranslated fallback);
-the budgeted translator claims one AUXILIARY model call per translation
-dispatch BEFORE the request leaves, and a spent fleet budget refuses it
-before any call.
+shape with the port UNTOUCHED; a preparation bound that outlives the
+dispatch's operation budget answers the same fallback_timeout shape; a
+translation overflow is the contract's TransientError — structured tool
+feedback the run survives (never an untranslated fallback, never a killed
+run); the budgeted translator claims one AUXILIARY model call per
+translation dispatch BEFORE the request leaves, and a spent fleet budget
+refuses it before any call.
 """
 
 import asyncio
@@ -35,7 +37,7 @@ import agent.probe
 import agent.toolset
 from agent.budget import RunBudgetMonitor
 from agent.events import AgentEvent
-from agent.loop import ModelTurn
+from agent.loop import ModelTurn, ToolCallRequest
 from agent.orchestrator import (
     AgentRunRequest,
     BudgetedTranslationClient,
@@ -45,7 +47,8 @@ from agent.orchestrator import (
 from agent.probe import PROBE_SYSTEM_PROMPT
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.toolset import document_toolset
-from capabilities.contract import CallerContext, PreparedQuery, QueryPreparationStatus
+from agent.verification import INSUFFICIENCY_RESPONSE
+from capabilities.contract import CallerContext, OperationBudget, PreparedQuery, QueryPreparationStatus
 from noagent.lane import AdmissionLane
 from preparation.config import PreparationConfig
 from preparation.prepare import PreparationResult, QueryPreparer
@@ -155,13 +158,53 @@ def test_an_unprepared_preparation_answers_insufficiency_and_never_touches_the_p
     assert statuses == ["fallback_timeout"]
 
 
-def test_a_translation_overflow_raises_the_typed_error_through_the_tool():
+def test_an_over_budget_query_is_the_contract_transient_carrier():
+    """The over-budget input is structured tool feedback, not a run error:
+    the executor raises the contract's TransientError (the same carrier the
+    port's operation-budget refusals use — retryable with a shorter
+    query), which the loop maps to the error envelope."""
+    from capabilities.contract import TransientError
+
     preparer = FakePreparer(TranslationInputTooLongError("the query exceeds the translation budget"))
     port = AgentFakePort(search_result=canned_search_result())
     registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
 
-    with pytest.raises(TranslationInputTooLongError):
+    with pytest.raises(TransientError, match="translation budget"):
         asyncio.run(registry.dispatch("search_knowledge", {"query": "trop long"}))
+    assert port.search_calls == []
+
+
+def test_a_hanging_preparation_is_bounded_at_the_operation_budget():
+    """The preparation call is bounded at the dispatch's own operation
+    budget (its internals only know the translation service's generous
+    timeout, and the wall clock is checked only between dispatches): a
+    slow-but-alive endpoint answers the structured fallback_timeout
+    envelope — the port untouched, the status recorded, the run honest."""
+    import asyncio as aio
+
+    class HangingPreparer:
+        async def prepare(self, text, source_language=None):
+            await aio.Event().wait()  # forever — the wait_for must cut it
+
+    statuses: list[str] = []
+    port = AgentFakePort(search_result=canned_search_result())
+    registry = document_toolset(
+        port,
+        CONTEXT,
+        OperationBudget(timeout_ms=50, max_results=8, max_result_bytes=65536),
+        preparer=HangingPreparer(),
+        on_preparation_status=statuses.append,
+    )
+
+    result = aio.run(aio.wait_for(registry.dispatch("search_knowledge", {"query": "any query"}), timeout=5))
+
+    assert result == {
+        "outcome": "insufficient_evidence",
+        "hits": [],
+        "truncated": False,
+        "query_preparation_status": "fallback_timeout",
+    }
+    assert statuses == ["fallback_timeout"]
     assert port.search_calls == []
 
 
@@ -192,9 +235,9 @@ def test_a_missing_or_blank_query_is_the_same_structured_refusal_on_both_paths(p
 # ---------------------------------------------------------------------
 
 
-def _orchestrator(model, port, tmp_path, *, preparer_factory=None):
+def _orchestrator(model, port, tmp_path, *, preparer_factory=None, config=None):
     return RequestOrchestrator(
-        config=orchestrator_config(),
+        config=config if config is not None else orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=model,
         port_factory=lambda context, bearer: port,
@@ -211,11 +254,19 @@ class RecordingTranslator(TranslationClient):
     """A real TranslationClient whose dispatch is canned and recorded: the
     observable of the bound default hint — a query the hint routes to
     translation REACHES translate_prompt (with no hint, detection would
-    pass the English-looking query straight through)."""
+    pass the English-looking query straight through). The discovery reads
+    are answered in-place (no endpoint probe): the executor now bounds
+    prepare() at the operation budget, and a DNS-hung probe would race it."""
 
     def __init__(self, config, registry):
         super().__init__(config, registry)
         self.prompts: list[str] = []
+
+    async def translation_window(self):
+        return None
+
+    async def translation_model_id(self):
+        return self._config.model_id or "test-model"
 
     async def translate_prompt(self, prompt: str, translategemma: bool, model_id: str | None) -> str:
         self.prompts.append(prompt)
@@ -285,13 +336,20 @@ def test_a_run_without_a_preparer_factory_records_no_preparation_status(tmp_path
     assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.PASSTHROUGH_ENGLISH
 
 
-def test_an_overflow_run_ends_honestly_never_untranslated(tmp_path):
+def test_an_overflow_query_is_structured_feedback_the_run_survives(tmp_path):
+    """The over-budget query is the SAME mistake surface as any refused
+    argument: the executor raises the contract's TransientError, the loop
+    feeds it back as the structured tool envelope, the model can retry with
+    a shorter query — the run no longer dies on this input, and the port is
+    never reached with unprepared text."""
+
     def factory(monitor, language=None):
         return FakePreparer(TranslationInputTooLongError("the query exceeds the translation budget"))
 
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
+    model = ScriptedLoopModel((*multihop_turns(answer="answering from what was served."), _judge_turn()))
     orchestrator = _orchestrator(
-        ScriptedLoopModel((*multihop_turns(answer="a fabricated answer"), _judge_turn())),
+        model,
         port,
         tmp_path,
         preparer_factory=factory,
@@ -300,14 +358,15 @@ def test_an_overflow_run_ends_honestly_never_untranslated(tmp_path):
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
 
-    # The typed refusal is the honest run error — the drafted answer never
-    # ships, and the port is never reached with unprepared text. The refusal
-    # fires inside the loop's dispatch: the started event exists, no finish
-    # answers it (the run ended), and the terminal is the run_error.
-    assert record.outcome == "error"
-    assert "TranslationInputTooLongError" in record.error
-    assert [event.kind.value for event in events] == ["run_started", "tool_call_started", "run_error"]
-    assert port.search_calls == []
+    assert record.outcome == "answered"  # the run survived the refused argument
+    finished = next(event for event in events if event.kind.value == "tool_call_finished")
+    assert finished.payload["error"]["code"] == "transient_failure"
+    assert finished.payload["error"]["operation"] == "search_knowledge"
+    assert "translation budget" in finished.payload["error"]["message"]
+    assert port.search_calls == []  # never reached with unprepared text
+    # The envelope rode to the model as tool data.
+    served = [m for request in model.requests for m in request["messages"]]
+    assert any(m.get("role") == "tool" and "transient_failure" in m.get("content", "") for m in served)
 
 
 def test_a_spent_fleet_budget_at_preparation_ends_the_run_budget_exhausted(tmp_path):
@@ -337,6 +396,45 @@ def test_a_spent_fleet_budget_at_preparation_ends_the_run_budget_exhausted(tmp_p
     assert events[-1].payload["code"] == "budget_exhausted"
     assert port.search_calls == []
     assert "a fabricated answer" not in str(events)
+
+
+def test_a_hanging_preparation_run_delivers_the_standard_insufficiency(tmp_path):
+    """Run-level: the bounded preparation's fallback envelope cites nothing,
+    so the mechanical decision fires — the drafted confident text is
+    discarded and the standard insufficiency response is the delivered
+    answer (the port never reached, the judge skipped)."""
+    import asyncio as aio
+
+    class HangingPreparer:
+        async def prepare(self, text, source_language=None):
+            await aio.Event().wait()  # forever — the operation bound cuts it
+
+    search_turn = ModelTurn(
+        tool_calls=(ToolCallRequest(call_id="call-1", name="search_knowledge", arguments={"query": "q"}),)
+    )
+    port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
+    orchestrator = _orchestrator(
+        ScriptedLoopModel((search_turn, ModelTurn(content="a confidently fabricated answer"), _judge_turn())),
+        port,
+        tmp_path,
+        preparer_factory=lambda monitor, language=None: HangingPreparer(),
+        config=orchestrator_config(
+            operation_budget=OperationBudget(timeout_ms=50, max_results=8, max_result_bytes=65536)
+        ),
+    )
+    events: list[AgentEvent] = []
+
+    record = aio.run(aio.wait_for(orchestrator.run(_request(), sink=events.append), timeout=10))
+
+    assert record.outcome == "answered"
+    assert record.preparation_status == "fallback_timeout"
+    assert record.injection_findings == 0
+    assert port.search_calls == []
+    content = [event.payload["text"] for event in events if event.kind.value == "text_message_content"]
+    assert content == [INSUFFICIENCY_RESPONSE]
+    verdict = next(event.payload for event in events if event.kind.value == "verdict")
+    assert verdict["insufficient_evidence"] == {"required": True, "reasons": ["no_successful_retrieval"]}
+    assert "a confidently fabricated answer" not in [event.payload.get("text", "") for event in events]
 
 
 # ---------------------------------------------------------------------

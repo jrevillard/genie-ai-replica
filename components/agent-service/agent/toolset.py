@@ -22,14 +22,16 @@ language, a non-English query is translated to English through the
 budgeted aux call (the claim
 fires inside the budgeted translator wrapper the orchestrator wires), and
 the PREPARED query — never the raw text — reaches the port, which refuses
-everything unprepared. An unprepared preparation (a fallback status) is
+everything unprepared. An unprepared preparation (a fallback status), or a
+preparation bound that outlives the dispatch's operation budget, is
 reported to the model as the contract's own insufficiency answer shape:
 never a source-language query dressed as prepared. An input that does not
-fit the translation budget raises the typed
-:class:`preparation.translation.TranslationInputTooLongError`, which
-propagates into the loop's honest run-error contract.
+fit the translation budget is the SAME structured mistake surface as any
+refused argument: a contract ``TransientError`` the loop feeds back as
+tool data, retryable with a shorter query — never a run-killing escape.
 """
 
+import asyncio
 from typing import Annotated
 
 from pydantic import StringConstraints, TypeAdapter
@@ -38,6 +40,7 @@ from capabilities.contract import (
     CallerContext,
     DocumentCapabilityPort,
     OperationBudget,
+    OperationName,
     OutcomeCode,
     PreparedQuery,
     QueryPreparationStatus,
@@ -45,7 +48,9 @@ from capabilities.contract import (
     SearchKnowledgeInput,
     SearchKnowledgeResult,
     SourceRef,
+    TransientError,
 )
+from preparation.translation import TranslationInputTooLongError
 
 from .registry import ToolDefinition, ToolRegistry
 
@@ -125,6 +130,26 @@ def _make_search_executor(
     preparer=None,
     on_preparation_status=None,
 ):
+    def _unprepared_envelope(status: QueryPreparationStatus) -> dict:
+        """The contract's insufficiency answer for a query that could not be
+        prepared (a fallback status, or the preparation bound timing out) —
+        built through SearchKnowledgeResult, whose fields this mirrors field
+        for field, so a contract change cannot leave this shape behind.
+        model_construct (validation bypassed) is required for one field
+        only: the contract narrows ``query_preparation_status`` to the
+        PREPARED statuses (a SERVED result always had a prepared query),
+        and this result carries the fallback status that says WHY nothing
+        was served. The ledger classifies it as citing nothing, and the
+        model sees an insufficiency it can react to."""
+        if on_preparation_status is not None:
+            on_preparation_status(status.value)
+        return SearchKnowledgeResult.model_construct(
+            outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+            hits=(),
+            truncated=False,
+            query_preparation_status=status,
+        ).model_dump(mode="json")
+
     async def execute(arguments: dict) -> dict:
         # BOTH paths validate the argument the same way, BEFORE anything
         # runs: a missing, non-string or blank query raises the structured
@@ -138,29 +163,32 @@ def _make_search_executor(
         else:
             # The string IS the retrieval query (the preparation module's
             # single-message shape — the refined mid-loop query is prepared
-            # identically to the initial one).
-            preparation = await preparer.prepare(query_text)
+            # identically to the initial one). The call is BOUNDED at the
+            # dispatch's operation budget — its own pieces only know the
+            # translation service's generous timeout, and the run's wall
+            # clock is checked only BETWEEN dispatches, so an unbounded
+            # preparation would stall this dispatch (and the admission
+            # lane with it) for minutes on a slow-but-alive endpoint.
+            try:
+                preparation = await asyncio.wait_for(preparer.prepare(query_text), timeout=budget.timeout_ms / 1000)
+            except TimeoutError:
+                # Bounded, not dead: the honest tool answer is the fallback
+                # insufficiency — the model can react (retry, reword), and
+                # the run stays inside its budget.
+                return _unprepared_envelope(QueryPreparationStatus.FALLBACK_TIMEOUT)
+            except TranslationInputTooLongError as over_budget:
+                # Same mistake surface as any other refused argument: a
+                # structured CapabilityError the loop feeds back as tool
+                # data (transient — retryable with a shorter query), never
+                # a run-killing escape past the executor's catch.
+                raise TransientError(
+                    f"the query exceeds the translation budget ({over_budget})",
+                    operation=OperationName.SEARCH_KNOWLEDGE,
+                ) from over_budget
+            if not preparation.prepared:
+                return _unprepared_envelope(preparation.status)
             if on_preparation_status is not None:
                 on_preparation_status(preparation.status.value)
-            if not preparation.prepared:
-                # An unprepared preparation is a degradation, never dressed
-                # as a prepared query: report it in the contract's OWN
-                # insufficiency answer shape — built through
-                # SearchKnowledgeResult, whose fields this mirrors field for
-                # field, so a contract change cannot leave this shape behind.
-                # model_construct (validation bypassed) is required for one
-                # field only: the contract narrows
-                # ``query_preparation_status`` to the PREPARED statuses (a
-                # SERVED result always had a prepared query), and this
-                # result carries the fallback status that says WHY nothing
-                # was served. The ledger classifies it as citing nothing,
-                # and the model sees an insufficiency it can react to.
-                return SearchKnowledgeResult.model_construct(
-                    outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
-                    hits=(),
-                    truncated=False,
-                    query_preparation_status=preparation.status,
-                ).model_dump(mode="json")
             prepared = preparation.query
         result = await port.search_knowledge(context, SearchKnowledgeInput(query=prepared), budget)
         return result.model_dump(mode="json")

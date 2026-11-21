@@ -64,6 +64,11 @@ logged once, never guessed), and a run that hits a budget ends honestly
 (`run_error` with `budget_exhausted`, no fabricated answer) with its
 partial usage record intact.
 
+One lower-bound caveat: the preparation translation's served tokens are
+not reportable through the agent seam (the preparation module returns
+text only), so the usage record's token totals are a LOWER bound of true
+spend; the residual translation plan's bound accounts recorded spend only.
+
 ### BFF-side (specified here for story 2.4)
 
 | Knob (name reserved for 2.4) | Meaning |

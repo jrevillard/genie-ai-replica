@@ -49,6 +49,14 @@ SERVICE_IMAGES: dict[str, tuple[Path, ...]] = {
         OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
         OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
     ),
+    # core/embedding_backend.py imports core.model_http_policy and is the
+    # embedding-backend selector for the two services that embed (retriever
+    # ladder, dataprep __init__ swap). The reranker and chatqna do not import
+    # it — an image that never activates the backend does not ship it.
+    "core/embedding_backend.py": (
+        OVERLAY_ROOT / "retriever" / "Dockerfile-retriever_genie-ai",
+        OVERLAY_ROOT / "dataprep" / "Dockerfile-dataprep_genie-ai",
+    ),
 }
 
 _COPY_CORE = re.compile(r"^COPY\s+genie-ai-overlay/core/(?P<module>[\w.]+)\.py\s+\S+", re.MULTILINE)

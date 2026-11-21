@@ -434,7 +434,7 @@ reasoning-token leak into judge completions) are part of the feature's spec.
 | `RAGAS_JUDGE_BASE_URL` | = vLLM endpoint `/v1` | Judge + testset-generator endpoint (any OpenAI-compatible local server: vLLM, LiteLLM, …). |
 | `RAGAS_JUDGE_MODEL` | = `VLLM_LLM_MODEL_ID` | The judge/generator model — must meet the minimums above. |
 | `RAGAS_JUDGE_API_KEY` | = `VLLM_API_KEY` | Bearer token for the judge endpoint. |
-| `RAGAS_EMBED_BASE_URL` | TEI embedding service | Embedder endpoint (answer relevancy + testset generation). |
+| `RAGAS_EMBED_BASE_URL` | `http://tei:80` (the TEI embedding service's native `/embed` route). ROCm venue override, operator-set in `.env` (not shipped by the profile): `http://vllm-embedding:8000/v1` + `RAGAS_EMBED_API=openai` — required only when the embedder should ride the GPU vLLM pooling instance; the compose default works on the venue. | Embedder endpoint (answer relevancy + testset generation). |
 | `RAGAS_EMBED_MODEL` | = `EMBED_MODEL_ID` | Embedding model — must be consistent within a run. |
 | `OKF_RAGAS_TESTSET_SIZE_DEFAULT` | `20` | The generate form's initial suite size; the user sets the actual dimensions per generation. The suite ships exactly the requested question count. |
 | `OKF_RAGAS_MAX_ENTRIES` | `200` | Hard cap per suite (generation + import). |

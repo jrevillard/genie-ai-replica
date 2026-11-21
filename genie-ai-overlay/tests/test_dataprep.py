@@ -4597,6 +4597,57 @@ class TestContextualRetrieval:
         assert result == {0: "ctx0", 1: "recovered-1", 2: "ctx2"}
         assert 1 in recovered  # the missing chunk WAS recovered
 
+    def _make_batch_list_response(self, contexts_list: list):
+        """Build a mock chat completion response returning the LIST shape
+        ``{"contexts": [{"index": N, "context": "..."}]}`` — the shape models
+        drift to (live: granite on the ROCm venue 2026-11-18), which the old
+        parser crashed on with AttributeError: 'list' object has no attribute
+        'items', sending every batch to the per-chunk fallback."""
+        return llm_response(json.dumps({"contexts": contexts_list}))
+
+    @pytest.mark.asyncio
+    async def test_batch_accepts_list_shaped_contexts(self):
+        """Model returns the list shape → parsed directly, no AttributeError, no per-chunk fallback."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=self._make_batch_list_response(
+                [{"index": 0, "context": "ctx0"}, {"index": 1, "context": "ctx1"}]
+            )
+        )
+        batch = [(0, "chunk0"), (1, "chunk1")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_context_single_call", new_callable=AsyncMock) as single,
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "ctx0", 1: "ctx1"}
+        single.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_batch_list_shape_accepts_text_key_and_skips_garbage(self):
+        """List items carrying 'text' instead of 'context' still parse; non-dict entries are skipped."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=self._make_batch_list_response(
+                [
+                    {"index": 0, "text": "ctx0"},
+                    "garbage-string",
+                    {"index": "not-an-int", "context": "x"},
+                    {"index": 1, "context": "ctx1"},
+                ]
+            )
+        )
+        batch = [(0, "chunk0"), (1, "chunk1")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_context_single_call", new_callable=AsyncMock) as single,
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "ctx0", 1: "ctx1"}
+        single.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_batch_recovers_all_missing_chunks_on_near_empty_response(self):
         """Near-empty response (1/4 returned) → all 3 missing chunks recovered."""

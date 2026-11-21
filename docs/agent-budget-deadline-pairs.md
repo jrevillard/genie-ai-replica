@@ -69,6 +69,7 @@ partial usage record intact.
 | Knob (name reserved for 2.4) | Meaning |
 |---|---|
 | `AGENT_UPSTREAM_TIMEOUT_MS` | the BFF's upstream timeout on the agent leg. **Pair rule: `AGENT_UPSTREAM_TIMEOUT_MS >= deadline_ms + translation reserve + finalization reserve` (see the derivation).** |
+| `AGENT_VERDICT_JUDGE_TIMEOUT_MS` (story 2.6) | the grounding judge's hard bound — the one finalize-time call that can extend the agent phase past its wall clock, by at most its own timeout |
 | translation-leg allowances (names at 2.10) | `{ maxTokens, maxCalls }` the translation plans against after the run's usage record |
 
 ## The timeout/deadline pair — the V08 derivation
@@ -77,8 +78,13 @@ partial usage record intact.
 BFF end-to-end budget = deadline_ms            (agent phase)
                       + translation reserve    (the residual the translator plans within)
                       + finalization margin    (metadata persistence, frame write, SSE teardown)
+                      + judge overrun ceiling  (story 2.6: the grounding judge is wall-clock-checked
+                                                BEFORE it starts, but the call itself is bounded by
+                                                AGENT_VERDICT_JUDGE_TIMEOUT_MS — the agent phase can
+                                                overrun deadline_ms by at most that timeout)
 
 AGENT_UPSTREAM_TIMEOUT_MS >= deadline_ms + translation reserve + finalization margin
+                              + AGENT_VERDICT_JUDGE_TIMEOUT_MS
 ```
 
 Why the `>=` matters: the agent service enforces its own wall clock and

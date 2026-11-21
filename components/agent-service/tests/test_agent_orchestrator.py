@@ -36,6 +36,7 @@ from agent.orchestrator import (
     RequestOrchestrator,
 )
 from agent.probe import PROBE_SYSTEM_PROMPT
+from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
 from capabilities.contract import CallerContext, OperationBudget
 from noagent.lane import AdmissionLane
 
@@ -86,6 +87,7 @@ def _full_env(**overrides) -> dict:
         "AGENT_TOOL_TIMEOUT_MS": "30000",
         "AGENT_TOOL_MAX_RESULTS": "8",
         "AGENT_TOOL_MAX_RESULT_BYTES": "65536",
+        "AGENT_VERDICT_JUDGE_TIMEOUT_MS": "5000",
     }
     return {**values, **overrides}
 
@@ -97,6 +99,8 @@ def test_a_complete_environment_loads_every_number():
     assert config.max_evidence_bytes == 4194304
     assert config.wall_clock_ceiling_seconds == 120.5
     assert config.operation_budget == OperationBudget(timeout_ms=30000, max_results=8, max_result_bytes=65536)
+    assert config.verdict_policy == "verdict-marked"
+    assert config.judge_timeout_ms == 5000
 
 
 def test_an_empty_environment_names_every_missing_knob():
@@ -138,6 +142,35 @@ def test_the_system_prompt_is_the_two_tier_override_over_the_governed_default():
     assert OrchestratorConfig.load(env=_full_env()).system_prompt == PROBE_SYSTEM_PROMPT
     override = dict(_full_env(), AGENT_RUN_SYSTEM_PROMPT="deployment prompt")
     assert OrchestratorConfig.load(env=override).system_prompt == "deployment prompt"
+
+
+# ---------------------------------------------------------------------
+# The verdict policy: deployment-level, iteration-1 value only
+# ---------------------------------------------------------------------
+
+
+def test_an_unset_or_empty_policy_defaults_to_verdict_marked():
+    assert OrchestratorConfig.load(env=_full_env()).verdict_policy == "verdict-marked"
+    override = dict(_full_env(), AGENT_VERDICT_POLICY="   ")
+    assert OrchestratorConfig.load(env=override).verdict_policy == "verdict-marked"
+
+
+@pytest.mark.parametrize("policy", ["verdict-silent", "hold-until-verified", "off", "VERDICT-MARKED"])
+def test_an_unimplemented_policy_refuses_the_config_load_naming_the_knob(policy):
+    """Iteration 1 ships verdict-marked only: another value — an enum
+    member or garbage alike — is a config error naming the knob, never a
+    silent degradation (no policy value disables verification)."""
+    with pytest.raises(ValueError, match="AGENT_VERDICT_POLICY"):
+        OrchestratorConfig.load(env=_full_env(**{VERDICT_POLICY_KNOB: policy}))
+
+
+def test_the_knob_refusal_aggregates_before_the_policy_is_judged():
+    """A deployment with BOTH defects sees every missing knob named in one
+    503 — the policy error surfaces after the knobs are fixed, never
+    instead of them."""
+    with pytest.raises(MissingKnobsError) as missing:
+        OrchestratorConfig.load(env=_full_env(AGENT_RUN_MAX_STEPS="", **{VERDICT_POLICY_KNOB: "verdict-silent"}))
+    assert missing.value.knobs == ("AGENT_RUN_MAX_STEPS",)
 
 
 # ---------------------------------------------------------------------
@@ -228,7 +261,10 @@ def test_the_admission_claim_holds_for_the_whole_run_and_releases_after(tmp_path
 
 
 def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_path):
-    turns = tuple(replace(turn, prompt_tokens=10, completion_tokens=5) for turn in multihop_turns())
+    turns = tuple(
+        replace(turn, prompt_tokens=10, completion_tokens=5)
+        for turn in multihop_turns(judge_reply='{"verdict": "grounded"}')
+    )
     port = fake_port()
     orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(turns), port, tmp_path)
     events: list[AgentEvent] = []
@@ -237,9 +273,11 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
 
     assert record.run_id.startswith("run-")
     assert record.outcome == OUTCOME_ANSWERED
-    assert (record.steps, record.model_calls, record.aux_model_calls, record.tool_calls) == (3, 3, 0, 2)
+    # The grounding judge is the run's one aux call: the shared fleet
+    # model-call budget counts it, the aux tally carries it separately.
+    assert (record.steps, record.model_calls, record.aux_model_calls, record.tool_calls) == (3, 4, 1, 2)
     assert record.evidence_bytes > 0
-    assert (record.prompt_tokens, record.completion_tokens) == (30, 15)
+    assert (record.prompt_tokens, record.completion_tokens) == (40, 20)
     assert record.wall_clock_seconds >= 0
     assert record.error is None
     assert record.as_dict().keys() == {
@@ -256,6 +294,12 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
         "error",
     }
     assert [event.kind.value for event in events][-1] == "run_finished"
+    # The verdict lands before the terminal, and the governed run's verdict
+    # is the tri-state projection: the judge completed grounded.
+    verdict_event = events[-2]
+    assert verdict_event.kind.value == "verdict"
+    assert verdict_event.payload["grounding_status"] == "grounded"
+    assert verdict_event.payload["is_grounded"] is True
     for event in events:
         assert event.run_id == record.run_id
         assert event.kind.value not in BFF_FRAME_NAMES
@@ -263,7 +307,8 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
 
 def test_the_executor_is_built_per_request_with_the_request_context_and_bearer(tmp_path):
     port = fake_port()
-    orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(multihop_turns() * 2), port, tmp_path)
+    script = multihop_turns(judge_reply='{"verdict": "grounded"}') * 2
+    orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(script), port, tmp_path)
     asyncio.run(orchestrator.run(_request(bearer="bearer-1", context=CONTEXT)))
     asyncio.run(orchestrator.run(_request(bearer="bearer-2", context=CONTEXT)))
 
@@ -275,7 +320,9 @@ def test_the_executor_is_built_per_request_with_the_request_context_and_bearer(t
 def test_the_registry_is_bound_to_the_request_context_and_the_operation_budget(tmp_path):
     port = fake_port()
     config = orchestrator_config(operation_budget=OperationBudget(timeout_ms=777, max_results=3, max_result_bytes=999))
-    orchestrator, _, _ = _orchestrator(ScriptedLoopModel(multihop_turns()), port, tmp_path, config=config)
+    orchestrator, _, _ = _orchestrator(
+        ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "grounded"}')), port, tmp_path, config=config
+    )
     asyncio.run(orchestrator.run(_request()))
 
     assert port.search_calls[0]["budget"] == config.operation_budget
@@ -333,10 +380,31 @@ def test_an_exhausted_run_reports_budget_exhausted_with_no_answer_text(tmp_path)
     orchestrator, _, _ = _orchestrator(
         ScriptedLoopModel(turns), None, tmp_path, config=orchestrator_config(max_model_calls=1)
     )
-    record = asyncio.run(orchestrator.run(_request()))
+    events: list[AgentEvent] = []
+    record = asyncio.run(orchestrator.run(_request(), sink=events.append))
     assert record.outcome == "budget_exhausted"
     assert record.model_calls == 1
     assert record.error is not None
+    # No answer text — nothing to verify, so no verdict event exists.
+    assert "verdict" not in [event.kind.value for event in events]
+
+
+def test_an_answer_with_no_retrieval_verifies_unverified(tmp_path):
+    """An answer produced with no retrieval at all is an insufficiency
+    statement: nothing claimed, nothing to ground — ``unverified`` (the
+    honest neutral), the judge skipped, no marking."""
+    events: list[AgentEvent] = []
+    orchestrator, _, _ = _orchestrator(ScriptedLoopModel((ModelTurn(content="I cannot find that."),)), None, tmp_path)
+
+    record = asyncio.run(orchestrator.run(_request(), sink=events.append))
+
+    assert record.outcome == OUTCOME_ANSWERED
+    verdict_event = events[-2]
+    assert verdict_event.kind.value == "verdict"
+    assert verdict_event.payload["grounding_status"] == VERDICT_UNVERIFIED
+    assert verdict_event.payload["judge"] == {"ran": False, "outcome": "skipped", "verdict": None}
+    assert verdict_event.payload["marking"] == {"required": False, "reason": None}
+    assert verdict_event.payload["citations"] == []
 
 
 # ---------------------------------------------------------------------

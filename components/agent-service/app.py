@@ -217,6 +217,13 @@ async def _run_stream(orchestrator: RequestOrchestrator, request: AgentRunReques
     finally:
         if not run_task.done():
             run_task.cancel()
+        # The getter future: cancelled here too, or a client disconnect
+        # mid-stream (GeneratorExit at the yield while a re-armed getter
+        # still awaits the queue) leaves the pending task on the loop
+        # forever — one leaked waiter per disconnect, unbounded on the
+        # one-replica service. On a done getter (the normal terminal path)
+        # the cancel is a no-op.
+        getter.cancel()
         await admit_ctx.__aexit__(None, None, None)
 
 

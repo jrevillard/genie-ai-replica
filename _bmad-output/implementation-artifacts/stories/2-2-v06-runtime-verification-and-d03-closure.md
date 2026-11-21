@@ -75,6 +75,7 @@ context:
 
 **Execution:**
 - [x] `components/agent-service/agent/verification.py` -- NEW: the V06 evidence producer — compatibility matrix over the deployed endpoint (tool-choice mode × schema strictness × streaming, judged per cell, first-call latency per schema), streaming tool-delta client (harness-local httpx SSE read), runtime-level cancellation demos, `python -m agent.verification` entry printing one JSON evidence record -- the matrix and cancellation ACs as a re-runnable producer
+> Renamed to `agent/v06_harness.py` / `tests/test_v06_harness.py` in the story-2.6 merge resolution (!1006) — path-collision resolution; no content change beyond the path references.
 - [x] `components/agent-service/tests/test_agent_verification.py` -- NEW: cell judgment, streaming reassembly, and cancellation-demo paths on fakes (deterministic; no live endpoint in CI) -- the harness's own contract
 - [x] `docs/baselines/v06-runtime-verification-2026-11-21.md` -- NEW: the V06 record — deployed combination verbatim, matrix table with per-cell verdicts, latency observations, cancellation evidence, the live probe evidence record, telemetry posture summary, REC-6 prerequisites pinned -- the evidence the ADR cites
 - [x] `docs/adr/agentic-002-first-agent-runtime-d03.md` -- NEW: the D03 decision ADR citing V06 + V07a evidence, the 2026-12-01 freshness gate, and per-candidate replacement scope with estimated swap cost -- the decision record
@@ -256,7 +257,7 @@ context:
 - `cd components/agent-service && python -m pytest tests/ -q` -- expected: all suites green including the new verification suite
 - `cd components/agent-service && ruff check agent/ tests/test_agent_*.py && ruff format --check agent/` -- expected: clean
 - `python scripts/dependencies/verify-dependency-licenses.py --verify components/agent-service/requirements.txt components/agent-service/requirements-test.txt --evidence docs/dependencies/agent-service-dependency-evidence.json` -- expected: exit 0
-- `python -m agent.verification` (live, venue env) -- expected: one JSON evidence record with per-cell verdicts
+- `python -m agent.v06_harness` (the harness was renamed from `agent/verification.py` in the story-2.6 merge resolution, !1006) (live, venue env) -- expected: one JSON evidence record with per-cell verdicts
 - `python -m agent.probe` (live, venue env) -- expected: `outcome: answered` evidence record
   -- venue note (2026-11-21): on the CURRENT venue both live commands end at the model leg
   (`outcome: error` / the parser-flag 400s) until the ops-side tool-parser pin (issue #2052)

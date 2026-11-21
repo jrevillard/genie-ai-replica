@@ -48,7 +48,12 @@ class EventKind(StrEnum):
     ``text_message_finished``. Tool-call lifecycle: ``tool_call_started``,
     ``tool_call_finished`` (the arguments ride the started payload, the
     result the finished one — dispatch is server-side, so unlike the AG-UI
-    wire shape there is no separate args-delta event to model).
+    wire shape there is no separate args-delta event to model). The
+    citation verdict: ``verdict`` — the verification pipeline's tri-state
+    projection, emitted on the answered path after
+    ``text_message_finished`` and before ``run_finished``; the BFF projects
+    it onto the client ``agent_verdict`` frame (which is why the kind
+    itself must not carry that name).
     """
 
     RUN_STARTED = "run_started"
@@ -59,6 +64,7 @@ class EventKind(StrEnum):
     TEXT_MESSAGE_FINISHED = "text_message_finished"
     TOOL_CALL_STARTED = "tool_call_started"
     TOOL_CALL_FINISHED = "tool_call_finished"
+    VERDICT = "verdict"
 
 
 def _vocabulary_never_carries_a_bff_frame_name() -> None:

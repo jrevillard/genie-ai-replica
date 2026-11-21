@@ -337,11 +337,18 @@ def canned_read_result(content="the content"):
     )
 
 
-def multihop_turns(answer="the answer"):
-    """The probe's script: search → read_source → final answer."""
+def multihop_turns(answer="the answer", judge_reply=None):
+    """The probe's script: search → read_source → final answer.
+
+    ``judge_reply`` appends the grounding judge's turn — a strict JSON
+    verdict — for the suites that run through the orchestrator (the
+    governed wiring always builds the verification pipeline, and the judge
+    is one aux model call the script must cover). The direct-loop suites
+    (no pipeline) keep the three-turn script.
+    """
     from agent.loop import ModelTurn, ToolCallRequest
 
-    return (
+    turns = [
         ModelTurn(tool_calls=(ToolCallRequest(call_id="call-1", name="search_knowledge", arguments={"query": "q"}),)),
         ModelTurn(
             tool_calls=(
@@ -349,7 +356,10 @@ def multihop_turns(answer="the answer"):
             )
         ),
         ModelTurn(content=answer),
-    )
+    ]
+    if judge_reply is not None:
+        turns.append(ModelTurn(content=judge_reply))
+    return tuple(turns)
 
 
 # -----------------------------------------------------------------------
@@ -368,6 +378,7 @@ REQUIRED_KNOBS = (
     "AGENT_TOOL_TIMEOUT_MS",
     "AGENT_TOOL_MAX_RESULTS",
     "AGENT_TOOL_MAX_RESULT_BYTES",
+    "AGENT_VERDICT_JUDGE_TIMEOUT_MS",
 )
 """The REQUIRED run-budget knobs the orchestrator reads fail-closed — one
 home for the suites that pin the fail-closed surface."""
@@ -397,6 +408,8 @@ def orchestrator_config(**overrides) -> OrchestratorConfig:
         wall_clock_ceiling_seconds=30.0,
         operation_budget=OperationBudget(timeout_ms=1000, max_results=8, max_result_bytes=65536),
         system_prompt="the system prompt",
+        verdict_policy="verdict-marked",
+        judge_timeout_ms=5000,
     )
     return OrchestratorConfig(**{**values, **overrides})
 

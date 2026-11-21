@@ -292,6 +292,22 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
     assert "max_tokens" not in payload  # the bound was None: the field is omitted
 
 
+def test_complete_omits_the_tool_fields_when_no_tools_are_declared():
+    """The aux callers (the grounding judge) speak without a toolset: an
+    empty `tools: []` is not portable across OpenAI-compatible endpoints
+    (several validators reject it with 400) — the fields are omitted, not
+    sent empty, or every judged verdict on such an endpoint degrades to
+    unverified."""
+    transport = _transport((200, _chat_body(content='{"verdict": "grounded"}')))
+    client = ProbeModelClient(verifier_config(), transport=transport)
+    turn = asyncio.run(client.complete([{"role": "user", "content": "q"}], (), max_output_tokens=None))
+
+    assert turn.content == '{"verdict": "grounded"}'
+    payload = transport.calls[-1]["payload"]
+    assert "tools" not in payload
+    assert "tool_choice" not in payload
+
+
 def test_complete_carries_the_output_bound_when_the_window_has_room():
     # Passthrough: the run allowance (1234) is below what one call can
     # serve against the window (the 65536 fallback — discovery is skipped

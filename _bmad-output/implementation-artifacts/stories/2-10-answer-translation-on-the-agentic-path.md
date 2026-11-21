@@ -223,3 +223,28 @@ context:
 - `cd components/gov-chat-backend && npm test` -- expected: full backend suite green
 - `rtk proxy npx eslint <touched files> && rtk proxy npx prettier --check <touched files>` (from the backend component dir) -- expected: clean
 - `cd tests/config-validator && npm test` -- expected: green (config check file included)
+- **Quality round ledger (post-RESUME ruling, board note 132178):** simplify
+  pass — 4 fresh-context angle reviewers (reuse/simplification/efficiency/
+  altitude), 22 findings deduped to 15 applied (result helpers `skip`/
+  `cancelled`/`passUsageBlock` replacing 14 hand-rolled accounting literals;
+  knobs read once at construction; `isApiConfigured()` on the backend as the
+  one two-signal home; `loadMarkdownLibs` hoisted to module scope + exported;
+  init-probe failure memoized per request + race ceremony skipped once
+  initialized; `_estimateTokens` one estimator home; dead `?? maxTokens` and
+  the impossible estimated-state dropped; raceInit micro-redundancy; test
+  cleanups; `parseComposeServiceBlock` extracted to parse-compose.js) + 3
+  recorded skips (computeResidual predicate extension — frozen 2.3 contract,
+  noted as follow-up; raceInit→init options reshape — f-validated surface,
+  dangling probe documented harmless; translateWithUsage multi-text loop —
+  deliberate API generality, deleting would delete tested capability). Item
+  STOPPED: the node smoke cannot require the leg module (the `shared-lib`
+  barrel is a jest moduleNameMapper — no on-disk target), so it keeps its
+  shape-identical local loader; the exported `loadMarkdownLibs` awaits a
+  resolving wiring. Test audit: no junk-pattern deletions — the layers own
+  distinct boundaries (2.3 pure-contract suite / leg wiring suite / backend
+  V05 pins / static compose gates / node smoke); two borderline tests
+  retained with rationale (the accounting-keys shape pin IS the 2.4
+  persistence contract; the `/opea/i` source grep is the cheapest independent
+  guard for the static never-OPEA invariant, which behavior tests approximate
+  only). Verification after the round: backend jest 2503 passed, smoke 1/1,
+  config-validator 672 passed, eslint + prettier clean.

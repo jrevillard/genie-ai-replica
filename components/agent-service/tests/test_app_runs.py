@@ -137,6 +137,7 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
     monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path))
     with TestClient(app_module.app) as client:
         response = client.post("/v1/runs", json=BODY)
+    assert response.headers["content-type"].startswith("text/event-stream")
 
     frames = _frames(response)
     assert [frame.get("kind") for frame in frames[:-1]] == [

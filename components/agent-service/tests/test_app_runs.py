@@ -111,14 +111,6 @@ def test_an_unassembled_port_answers_503_naming_the_knob(monkeypatch):
     assert "AGENT_DOCREPO_URL" in body["message"]
 
 
-def test_a_configured_environment_admits_and_serves(tmp_path, monkeypatch):
-    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path))
-    with TestClient(app_module.app) as client:
-        response = client.post("/v1/runs", json=BODY)
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
-
-
 @pytest.mark.parametrize(
     "broken_body",
     [

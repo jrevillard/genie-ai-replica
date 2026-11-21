@@ -1450,6 +1450,17 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_TOOL_TIMEOUT_MS=
 # AGENT_TOOL_MAX_RESULTS=
 # AGENT_TOOL_MAX_RESULT_BYTES=
+# Citation verification (story 2.6): the grounding judge's hard bound —
+# REQUIRED, read fail-closed; a run against a deployment that has not set it
+# is answered 503 naming the knob. The judge is one auxiliary model call at
+# finalize; its absence/timeout yields the unverified verdict, never grounded.
+# AGENT_VERDICT_JUDGE_TIMEOUT_MS=
+# Release policy for the citation verdict (AD-7): iteration 1 ships
+# verdict-marked ONLY — an answer streams normally and a failed verdict
+# produces the correction event and persisted marking, never silence. Any
+# other value is refused at startup (verification runs on every governed
+# run; no policy value disables it).
+# AGENT_VERDICT_POLICY=
 # Optional system-prompt override for governed runs (empty = the governed default).
 # AGENT_RUN_SYSTEM_PROMPT=
 # Port-assembly knobs the run surface reads fail-closed: an unset base URL

@@ -49,6 +49,13 @@ from .cancellation import CancellationToken
 from .events import EventEmitter, EventKind, EventSink
 from .loop import MESSAGE_TRUNCATION, OUTCOME_CANCELLED, OUTCOME_ERROR, AgentLoop, LoopModelClient, RunResult
 from .probe import PROBE_SYSTEM_PROMPT, document_toolset
+from .verification import (
+    IMPLEMENTED_POLICIES,
+    JUDGE_TIMEOUT_KNOB,
+    POLICY_VERDICT_MARKED,
+    VERDICT_POLICY_KNOB,
+    VerificationPipeline,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +97,14 @@ class OrchestratorConfig:
     the port's contract carries (timeout, result count, result bytes — all
     required by the contract, sourced here). ``system_prompt`` is the
     deployed two-tier override (``AGENT_RUN_SYSTEM_PROMPT``), defaulting to
-    the probe's governed text.
+    the probe's governed text. ``verdict_policy`` is the citation
+    verification release policy (``AGENT_VERDICT_POLICY``, default
+    ``verdict-marked`` — iteration 1 implements only that value; an
+    unusable value refuses the config load naming the knob). There is no
+    policy value that disables verification — the pipeline runs on every
+    governed run. ``judge_timeout_ms`` (``AGENT_VERDICT_JUDGE_TIMEOUT_MS``)
+    is the grounding judge's REQUIRED hard bound: missing or unusable is a
+    missing knob like any other.
     """
 
     max_steps: int
@@ -101,12 +115,17 @@ class OrchestratorConfig:
     wall_clock_ceiling_seconds: float
     operation_budget: OperationBudget
     system_prompt: str
+    verdict_policy: str
+    judge_timeout_ms: int
 
     @classmethod
     def load(cls, env=None) -> "OrchestratorConfig":
         """Read every REQUIRED knob; :class:`MissingKnobsError` names all of
         them when any is missing or unusable (fail-closed — the reader
-        never falls into a number)."""
+        never falls into a number). The release policy is validated against
+        the implemented set before the run: an unimplemented value raises
+        ``ValueError`` naming the knob, the value and the not-implemented
+        reason — the run surface answers 503 (``run_surface_unconfigured``)."""
         source = os.environ if env is None else env
         failed: list[str] = []
         max_steps = required_positive_int(source, "AGENT_RUN_MAX_STEPS", failed)
@@ -118,6 +137,14 @@ class OrchestratorConfig:
         tool_timeout_ms = required_positive_int(source, "AGENT_TOOL_TIMEOUT_MS", failed)
         tool_max_results = required_positive_int(source, "AGENT_TOOL_MAX_RESULTS", failed)
         tool_max_result_bytes = required_positive_int(source, "AGENT_TOOL_MAX_RESULT_BYTES", failed)
+        judge_timeout_ms = required_positive_int(source, JUDGE_TIMEOUT_KNOB, failed)
+        verdict_policy = str(source.get(VERDICT_POLICY_KNOB, "")).strip() or POLICY_VERDICT_MARKED
+        if verdict_policy not in IMPLEMENTED_POLICIES:
+            raise ValueError(
+                f"{VERDICT_POLICY_KNOB}={verdict_policy!r} is not implemented in iteration 1 "
+                f"(implemented: {', '.join(sorted(IMPLEMENTED_POLICIES))}) — verification runs on every "
+                "governed run; no policy value disables it"
+            )
         if failed:
             raise MissingKnobsError(tuple(failed))
         return cls(
@@ -131,6 +158,8 @@ class OrchestratorConfig:
                 timeout_ms=tool_timeout_ms, max_results=tool_max_results, max_result_bytes=tool_max_result_bytes
             ),
             system_prompt=str(source.get("AGENT_RUN_SYSTEM_PROMPT", "")).strip() or PROBE_SYSTEM_PROMPT,
+            verdict_policy=verdict_policy,
+            judge_timeout_ms=judge_timeout_ms,
         )
 
     def budget_for(self, deadline_ms: int) -> RunBudget:
@@ -255,6 +284,13 @@ class RequestOrchestrator:
             registry = document_toolset(
                 self._port_factory(request.context, request.bearer), request.context, self._config.operation_budget
             )
+            verifier = VerificationPipeline(
+                policy=self._config.verdict_policy,
+                judge_timeout_ms=self._config.judge_timeout_ms,
+                judge_model_client=self._model_client,
+                monitor=monitor,
+                authorized_repos=request.context.authorized_repos,
+            )
             loop = AgentLoop(
                 model=self._model_client,
                 registry=registry,
@@ -262,6 +298,7 @@ class RequestOrchestrator:
                 token=token,
                 emitter=emitter,
                 system_prompt=self._config.system_prompt,
+                verifier=verifier,
             )
             result: RunResult = await loop.run(request.question)
         except asyncio.CancelledError:

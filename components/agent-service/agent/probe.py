@@ -175,7 +175,10 @@ async def run_probe(
     ``CancelledError`` is caught HERE, at the harness boundary, to record
     the cancellation — inside the loop it propagated untouched, and no
     terminal event was emitted for it. Every other terminal outcome arrives
-    as the loop's :class:`RunResult`.
+    as the loop's :class:`RunResult`. The probe carries NO verification
+    pipeline (the loop's ``verifier`` stays ``None``): the smoke harness
+    measures the loop, not the citation verdict — the governed run surface
+    is the one that always verifies.
     """
     monitor = RunBudgetMonitor(run_budget)
     token = token if token is not None else CancellationToken()

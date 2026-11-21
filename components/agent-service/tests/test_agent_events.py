@@ -30,6 +30,7 @@ EXPECTED_KINDS = {
     "text_message_finished",
     "tool_call_started",
     "tool_call_finished",
+    "verdict",
 }
 
 

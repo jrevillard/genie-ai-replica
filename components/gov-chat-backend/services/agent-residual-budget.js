@@ -19,22 +19,15 @@
 // start. The usage is never estimated up to the allowance: an estimate
 // would be a guess wearing the budget's clothes.
 
-// The deployed estimate constant (`_capMaxTokens` in the GPU translation
-// backend): a translation prompt runs about `chars / 4` tokens. It sizes
-// the CALLER's view of what a translation needs — the allowance bound
-// below is what it may never exceed.
-const CHARS_PER_TOKEN_ESTIMATE = 4;
-
-/**
- * Estimate the token footprint of a text at the deployed `chars / 4`
- * constant (rounded up).
- *
- * @param {string} text
- * @returns {number} the estimated token count
- */
-function estimateTextTokens(text) {
-  return Math.ceil(String(text ?? '').length / CHARS_PER_TOKEN_ESTIMATE);
-}
+// The skip-status vocabulary — the recorded statuses a caller sees on the
+// skip decision. Named and frozen: one home, so a wiring site (story 2.10)
+// compares against the constant and a typo surfaces at import.
+const SKIP_STATUSES = Object.freeze({
+  USAGE_UNAVAILABLE: 'usage_unavailable',
+  DEADLINE_SPENT: 'deadline_spent',
+  CALL_ALLOWANCE_SPENT: 'call_allowance_spent',
+  TOKEN_ALLOWANCE_SPENT: 'token_allowance_spent'
+});
 
 /**
  * Compute what remains of the translation allowance after one agent run.
@@ -107,16 +100,16 @@ function planTranslation({ deadlineRemainingMs, usage, allowances }) {
   });
 
   if (!residual.usageAvailable) {
-    return { decision: 'skip', status: 'usage_unavailable', residual };
+    return { decision: 'skip', status: SKIP_STATUSES.USAGE_UNAVAILABLE, residual };
   }
   if (residual.remainingMs <= 0) {
-    return { decision: 'skip', status: 'deadline_spent', residual };
+    return { decision: 'skip', status: SKIP_STATUSES.DEADLINE_SPENT, residual };
   }
   if (residual.remainingCalls <= 0) {
-    return { decision: 'skip', status: 'call_allowance_spent', residual };
+    return { decision: 'skip', status: SKIP_STATUSES.CALL_ALLOWANCE_SPENT, residual };
   }
   if (residual.remainingTokens <= 0) {
-    return { decision: 'skip', status: 'token_allowance_spent', residual };
+    return { decision: 'skip', status: SKIP_STATUSES.TOKEN_ALLOWANCE_SPENT, residual };
   }
   // The bound is the remaining allowance, however large the text: a call
   // that needs more stops at the budget (the backend surfaces a truncated
@@ -125,7 +118,7 @@ function planTranslation({ deadlineRemainingMs, usage, allowances }) {
 }
 
 module.exports = {
-  estimateTextTokens,
+  SKIP_STATUSES,
   computeResidual,
   planTranslation
 };

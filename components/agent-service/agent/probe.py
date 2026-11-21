@@ -64,7 +64,7 @@ from capabilities.contract import (
 from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
-from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
+from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content, resolve_window_tokens
 from preparation.translation import HttpxTransport
 
 from .budget import RunBudget, RunBudgetMonitor
@@ -430,15 +430,13 @@ class ProbeModelClient:
         return self._model_id
 
     async def _window_tokens(self) -> int:
-        """The window one call must fit — the deployed three tiers, resolved
-        once per client like the model id (the consumer-side cap, then the
-        probed ``max_model_len``, then the configured fallback)."""
+        """The window one call must fit — the deployed three tiers of
+        :func:`noagent.generation.resolve_window_tokens`, resolved once per
+        client like the model id; the probed tier is this client's own
+        single-discovery capture."""
         if self._window is None:
-            if self._config.window_override_tokens > 0:
-                self._window = self._config.window_override_tokens
-            else:
-                await self._resolve_model_id()  # idempotent; runs the probe when no override
-                self._window = self._discovered_window or self._config.fallback_window_tokens
+            await self._resolve_model_id()  # idempotent; runs the probe when no override
+            self._window = resolve_window_tokens(self._config, self._discovered_window)
         return self._window
 
     async def complete(
@@ -547,6 +545,20 @@ class StatelessAdapters:
     search_port: DocumentCapabilityPort
     legacy_graph_name: str
 
+    def bind_executor(self, context: CallerContext, bearer: str | None) -> AuthorizedExecutor:
+        """The per-request executor: one trusted context bound to the five
+        shared fields — the ONE place the binding lives (the probe's live
+        entry and the run surface's port factory both call it)."""
+        return AuthorizedExecutor(
+            context,
+            bearer=bearer,
+            legacy_graph_name=self.legacy_graph_name,
+            docrepo=self.docrepo,
+            okf=self.okf,
+            chunks=self.chunks,
+            search_port=self.search_port,
+        )
+
 
 def build_stateless_adapters(config: ProbeConfig, env=None) -> StatelessAdapters:
     """Assemble the stateless adapters from the environment.
@@ -616,16 +628,7 @@ def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, C
         authorized_repos=tuple(AuthorizedRepo(repo_id=repo_id, graph_name=graph_name) for repo_id, graph_name in repos),
     )
     adapters = build_stateless_adapters(config, env)
-    executor = AuthorizedExecutor(
-        context,
-        bearer=config.user_bearer,
-        legacy_graph_name=adapters.legacy_graph_name,
-        docrepo=adapters.docrepo,
-        okf=adapters.okf,
-        chunks=adapters.chunks,
-        search_port=adapters.search_port,
-    )
-    return executor, context
+    return adapters.bind_executor(context, config.user_bearer), context
 
 
 def _main() -> int:

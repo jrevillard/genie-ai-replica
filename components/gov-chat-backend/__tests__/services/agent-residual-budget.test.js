@@ -4,7 +4,7 @@ require('../setup-env');
 
 // The residual-budget contract (story 2.3): pure math, no mocks — the
 // module under test touches no network, clock or environment.
-const { estimateTextTokens, computeResidual, planTranslation } = require('../../services/agent-residual-budget');
+const { SKIP_STATUSES, computeResidual, planTranslation } = require('../../services/agent-residual-budget');
 
 // A run that served its usage: 120 tokens spent, 2 model calls (1 loop + 1 aux).
 const SERVED_USAGE = {
@@ -20,21 +20,6 @@ const SERVED_USAGE = {
 };
 
 const ALLOWANCES = { maxTokens: 500, maxCalls: 4 };
-
-describe('estimateTextTokens', () => {
-  it('estimates at chars / 4, rounded up (the deployed constant)', () => {
-    expect(estimateTextTokens('abcd')).toBe(1);
-    expect(estimateTextTokens('abc')).toBe(1);
-    expect(estimateTextTokens('abcde')).toBe(2);
-    expect(estimateTextTokens('a'.repeat(400))).toBe(100);
-  });
-
-  it('estimates empty and absent text as zero tokens', () => {
-    expect(estimateTextTokens('')).toBe(0);
-    expect(estimateTextTokens(undefined)).toBe(0);
-    expect(estimateTextTokens(null)).toBe(0);
-  });
-});
 
 describe('computeResidual', () => {
   it('subtracts the served usage from the allowances', () => {
@@ -100,14 +85,14 @@ describe('planTranslation', () => {
   it('skips with usage_unavailable and never estimates the usage up to the allowance', () => {
     const plan = planTranslation({ deadlineRemainingMs: 3000, usage: null, allowances: ALLOWANCES });
     expect(plan.decision).toBe('skip');
-    expect(plan.status).toBe('usage_unavailable');
+    expect(plan.status).toBe(SKIP_STATUSES.USAGE_UNAVAILABLE);
     expect(plan.maxTokens).toBeUndefined();
   });
 
   it('skips when the remaining deadline is spent', () => {
     const plan = planTranslation({ deadlineRemainingMs: 0, usage: SERVED_USAGE, allowances: ALLOWANCES });
     expect(plan.decision).toBe('skip');
-    expect(plan.status).toBe('deadline_spent');
+    expect(plan.status).toBe(SKIP_STATUSES.DEADLINE_SPENT);
   });
 
   it('skips when the call allowance is spent', () => {
@@ -117,7 +102,7 @@ describe('planTranslation', () => {
       allowances: ALLOWANCES
     });
     expect(plan.decision).toBe('skip');
-    expect(plan.status).toBe('call_allowance_spent');
+    expect(plan.status).toBe(SKIP_STATUSES.CALL_ALLOWANCE_SPENT);
   });
 
   it('skips when the token allowance is spent, even mid-text', () => {
@@ -127,7 +112,7 @@ describe('planTranslation', () => {
       allowances: ALLOWANCES
     });
     expect(plan.decision).toBe('skip');
-    expect(plan.status).toBe('token_allowance_spent');
+    expect(plan.status).toBe(SKIP_STATUSES.TOKEN_ALLOWANCE_SPENT);
   });
 
   it('never returns a maxTokens above the remaining allowance', () => {

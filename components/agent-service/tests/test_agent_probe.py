@@ -27,9 +27,9 @@ from conftest import (
     canned_search_result,
     multihop_turns,
     preparation_model_entry,
+    run_budget,
 )
 
-from agent.budget import RunBudget
 from agent.cancellation import CancellationToken
 from agent.loop import (
     OUTCOME_ANSWERED,
@@ -54,18 +54,6 @@ from agent.probe import (
 from capabilities.contract import CallerContext, QueryPreparationStatus
 
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
-
-
-def _run_budget(**overrides) -> RunBudget:
-    values = {
-        "max_steps": 6,
-        "max_model_calls": 6,
-        "max_tool_calls": 6,
-        "max_total_tokens": 10000,
-        "max_evidence_bytes": 1000000,
-        "wall_clock_seconds": 30.0,
-    }
-    return RunBudget(**{**values, **overrides})
 
 
 def _search_result(*, concept=False):
@@ -177,7 +165,7 @@ def test_the_probe_records_budget_exhaustion_with_the_smoke_bounds_overridden():
             port=_port(),
             context=PROBE_CONTEXT,
             model_client=ScriptedLoopModel(_turns()),
-            run_budget=_run_budget(max_model_calls=1),
+            run_budget=run_budget(max_model_calls=1),
         )
     )
     assert evidence.outcome == OUTCOME_BUDGET_EXHAUSTED

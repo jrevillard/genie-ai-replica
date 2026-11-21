@@ -24,9 +24,10 @@ from conftest import (
     canned_read_result,
     canned_search_result,
     hang_until_cancelled,
+    run_budget,
 )
 
-from agent.budget import RunBudget, RunBudgetMonitor
+from agent.budget import RunBudgetMonitor
 from agent.cancellation import CancellationToken
 from agent.events import BFF_FRAME_NAMES, AgentEvent, EventEmitter
 from agent.loop import (
@@ -48,19 +49,7 @@ from capabilities.contract import (
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 
 
-def _run_budget(**overrides) -> RunBudget:
-    values = {
-        "max_steps": 6,
-        "max_model_calls": 6,
-        "max_tool_calls": 6,
-        "max_total_tokens": 10000,
-        "max_evidence_bytes": 1000000,
-        "wall_clock_seconds": 30.0,
-    }
-    return RunBudget(**{**values, **overrides})
-
-
-DEFAULT_BUDGET = _run_budget()
+DEFAULT_BUDGET = run_budget()
 
 
 def _search_result(hits=None, outcome=OutcomeCode.SUCCESS):
@@ -223,7 +212,7 @@ def test_an_unregistered_tool_call_ends_the_run_honestly():
 
 def test_model_call_budget_exhaustion_ends_the_run_at_the_next_check():
     model = ScriptedLoopModel(MULTI_HOP_TURNS)  # needs a second model call the budget refuses
-    loop, collector, monitor = _loop(model, budget=_run_budget(max_model_calls=1))
+    loop, collector, monitor = _loop(model, budget=run_budget(max_model_calls=1))
     result = asyncio.run(loop.run("q"))
 
     assert result.outcome == OUTCOME_BUDGET_EXHAUSTED
@@ -243,7 +232,7 @@ def test_tool_call_budget_exhaustion_refuses_the_second_dispatch():
     )
     loop, collector, monitor = _loop(
         ScriptedLoopModel((two_calls, _turn(content="unused"))),
-        budget=_run_budget(max_tool_calls=1),
+        budget=run_budget(max_tool_calls=1),
     )
     result = asyncio.run(loop.run("q"))
 
@@ -263,7 +252,7 @@ def test_tool_call_budget_exhaustion_refuses_the_second_dispatch():
 def test_step_budget_exhaustion_stops_the_loop():
     loop, collector, monitor = _loop(
         ScriptedLoopModel(MULTI_HOP_TURNS),
-        budget=_run_budget(max_steps=1),
+        budget=run_budget(max_steps=1),
     )
     result = asyncio.run(loop.run("q"))
     assert result.outcome == OUTCOME_BUDGET_EXHAUSTED
@@ -281,7 +270,7 @@ def test_wall_clock_budget_stops_the_loop():
 
     loop, collector, monitor = _loop(
         SlowModel(),
-        budget=_run_budget(wall_clock_seconds=0.01),
+        budget=run_budget(wall_clock_seconds=0.01),
     )
     result = asyncio.run(loop.run("q"))
     assert result.outcome == OUTCOME_BUDGET_EXHAUSTED
@@ -471,7 +460,7 @@ def test_the_token_bound_rides_each_model_request_as_the_remaining_allowance():
         _turn(content="done"),
     )
     model = ScriptedLoopModel(turns)
-    loop, _, monitor = _loop(model, budget=_run_budget(max_total_tokens=100))
+    loop, _, monitor = _loop(model, budget=run_budget(max_total_tokens=100))
     asyncio.run(loop.run("q"))
 
     assert model.requests[0]["max_output_tokens"] == 100  # the full allowance before anything was served
@@ -490,7 +479,7 @@ def test_the_bound_is_omitted_once_the_served_usage_is_a_lower_bound():
         _turn(content="done"),
     )
     model = ScriptedLoopModel(turns)
-    loop, _, monitor = _loop(model, budget=_run_budget(max_total_tokens=100))
+    loop, _, monitor = _loop(model, budget=run_budget(max_total_tokens=100))
     asyncio.run(loop.run("q"))
 
     assert model.requests[0]["max_output_tokens"] == 100
@@ -509,7 +498,7 @@ def test_spent_tokens_refuse_the_next_model_call():
         ),
         _turn(content="never reached"),
     )
-    loop, collector, monitor = _loop(ScriptedLoopModel(turns), budget=_run_budget(max_total_tokens=100))
+    loop, collector, monitor = _loop(ScriptedLoopModel(turns), budget=run_budget(max_total_tokens=100))
     result = asyncio.run(loop.run("q"))
 
     assert result.outcome == OUTCOME_BUDGET_EXHAUSTED
@@ -536,7 +525,7 @@ def test_spent_evidence_refuses_the_next_tool_dispatch():
     )
     loop, collector, monitor = _loop(
         ScriptedLoopModel((two_calls, _turn(content="unused"))),
-        budget=_run_budget(max_evidence_bytes=1),
+        budget=run_budget(max_evidence_bytes=1),
     )
     result = asyncio.run(loop.run("q"))
 

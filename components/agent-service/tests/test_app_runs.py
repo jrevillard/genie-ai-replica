@@ -17,51 +17,31 @@ from dataclasses import replace
 
 import pytest
 from conftest import (
-    AgentFakePort,
+    REQUIRED_KNOBS,
     HangingLoopModel,
     ScriptedLoopModel,
-    canned_read_result,
-    canned_search_result,
+    fake_port,
     multihop_turns,
+    orchestrator_config,
 )
 from fastapi.testclient import TestClient
-from test_agent_orchestrator import REQUIRED_KNOBS
 
 import app as app_module
 from agent.events import BFF_FRAME_NAMES
-from agent.orchestrator import OrchestratorConfig, RequestOrchestrator
-from capabilities.contract import CallerContext, OperationBudget
+from agent.orchestrator import RequestOrchestrator
+from capabilities.contract import CallerContext
 from noagent.lane import AdmissionLane
 
 CONTEXT = {"user_id": "u-1", "authorized_graph_names": ["GRAPH"]}
 BODY = {"question": "How are complaints handled?", "deadline_ms": 5000, "context": CONTEXT}
 
 
-def _config() -> OrchestratorConfig:
-    return OrchestratorConfig(
-        max_steps=6,
-        max_model_calls=6,
-        max_tool_calls=6,
-        max_total_tokens=10000,
-        max_evidence_bytes=1000000,
-        wall_clock_ceiling_seconds=30.0,
-        operation_budget=OperationBudget(timeout_ms=1000, max_results=8, max_result_bytes=65536),
-        system_prompt="the system prompt",
-    )
-
-
-def _port() -> AgentFakePort:
-    return AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
-
-
-def _runtime(model, port=None, slots=1, tmp_path=None):
-    lane = AdmissionLane(slots, str(tmp_path / "lane.lock"))
-
-    def port_factory(context, bearer):
-        return port if port is not None else _port()
-
-    return app_module.RunsRuntime(
-        RequestOrchestrator(config=_config(), lane=lane, model_client=model, port_factory=port_factory)
+def _runtime(model, tmp_path):
+    """The app under test assembled over fakes: _RUNTIME carries the
+    orchestrator itself (the module-level lazy singleton)."""
+    lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
+    return RequestOrchestrator(
+        config=orchestrator_config(), lane=lane, model_client=model, port_factory=lambda context, bearer: fake_port()
     )
 
 
@@ -82,7 +62,7 @@ def _frames(response) -> list[dict]:
 
 def test_a_saturated_lane_answers_429_before_any_stream_byte(tmp_path, monkeypatch):
     lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
-    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path=tmp_path))
+    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path))
 
     async def scenario():
         # The slot is held OUTSIDE the app's process plumbing — the pool is
@@ -132,7 +112,7 @@ def test_an_unassembled_port_answers_503_naming_the_knob(monkeypatch):
 
 
 def test_a_configured_environment_admits_and_serves(tmp_path, monkeypatch):
-    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path=tmp_path))
+    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path))
     with TestClient(app_module.app) as client:
         response = client.post("/v1/runs", json=BODY)
     assert response.status_code == 200
@@ -162,7 +142,7 @@ def test_a_malformed_request_answers_422(monkeypatch, broken_body):
 
 
 def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, monkeypatch):
-    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path=tmp_path))
+    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path))
     with TestClient(app_module.app) as client:
         response = client.post("/v1/runs", json=BODY)
 
@@ -203,18 +183,16 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
 
 
 def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, monkeypatch):
-    exhausted = replace(_config(), max_model_calls=1)
+    exhausted = replace(orchestrator_config(), max_model_calls=1)
     lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
     monkeypatch.setattr(
         app_module,
         "_RUNTIME",
-        app_module.RunsRuntime(
-            RequestOrchestrator(
-                config=exhausted,
-                lane=lane,
-                model_client=ScriptedLoopModel(multihop_turns(answer="a fabricated answer")),
-                port_factory=lambda context, bearer: _port(),
-            )
+        RequestOrchestrator(
+            config=exhausted,
+            lane=lane,
+            model_client=ScriptedLoopModel(multihop_turns(answer="a fabricated answer")),
+            port_factory=lambda context, bearer: fake_port(),
         ),
     )
     with TestClient(app_module.app) as client:
@@ -236,8 +214,7 @@ def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, mon
 
 def test_a_disconnected_client_cancels_the_run_and_releases_the_slot(tmp_path, monkeypatch):
     recorder: dict = {}
-    runtime = _runtime(HangingLoopModel(recorder), tmp_path=tmp_path)
-    orchestrator = runtime.orchestrator
+    orchestrator = _runtime(HangingLoopModel(recorder), tmp_path)
     request = app_module.AgentRunRequest(
         question="q", deadline_ms=5000, context=CallerContext.model_validate(CONTEXT), bearer=None
     )
@@ -265,4 +242,3 @@ def test_a_disconnected_client_cancels_the_run_and_releases_the_slot(tmp_path, m
 
     assert recorder["cancelled_in_flight"] is True  # the cancellation reached the in-flight model call
     assert seen_frames == ["run_started"]  # no terminal event for a cancelled run
-    assert not any(kind in ("run_finished", "run_error") for kind in seen_frames)

@@ -214,8 +214,6 @@ def test_separate_instances_over_one_config_share_one_pool(lane_dir):
     config, and one holding every slot saturates the other (story 2.3 —
     the same-lane contract is satisfied by the shared files, with the
     pipeline's acquire untouched)."""
-    import asyncio
-
     from noagent.config import NoAgentConfig
 
     config = NoAgentConfig.load(env={"AGENT_LANE_SLOTS": "2", "AGENT_LANE_LOCK_PATH": lane_dir})

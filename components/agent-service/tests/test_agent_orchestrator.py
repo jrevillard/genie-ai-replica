@@ -17,12 +17,12 @@ from dataclasses import replace
 
 import pytest
 from conftest import (
-    AgentFakePort,
+    REQUIRED_KNOBS,
     HangingLoopModel,
     ScriptedLoopModel,
-    canned_read_result,
-    canned_search_result,
+    fake_port,
     multihop_turns,
+    orchestrator_config,
 )
 
 from agent.budget import RunBudget
@@ -42,29 +42,11 @@ from noagent.lane import AdmissionLane
 CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 
 
-def _config(**overrides) -> OrchestratorConfig:
-    values = dict(
-        max_steps=6,
-        max_model_calls=6,
-        max_tool_calls=6,
-        max_total_tokens=10000,
-        max_evidence_bytes=1000000,
-        wall_clock_ceiling_seconds=30.0,
-        operation_budget=OperationBudget(timeout_ms=1000, max_results=8, max_result_bytes=65536),
-        system_prompt="the system prompt",
-    )
-    return OrchestratorConfig(**{**values, **overrides})
-
-
-def _port() -> AgentFakePort:
-    return AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
-
-
 def _orchestrator(model, port, lane_dir, *, config=None, slots=1):
     """One orchestrator over fakes; ``port_calls`` records every per-request
     port build (context + bearer)."""
     port_calls: list[dict] = []
-    used_port = port if port is not None else _port()
+    used_port = port if port is not None else fake_port()
 
     def port_factory(context, bearer):
         port_calls.append({"context": context, "bearer": bearer})
@@ -73,7 +55,7 @@ def _orchestrator(model, port, lane_dir, *, config=None, slots=1):
     lane = AdmissionLane(slots, str(lane_dir))
     return (
         RequestOrchestrator(
-            config=config if config is not None else _config(),
+            config=config if config is not None else orchestrator_config(),
             lane=lane,
             model_client=model,
             port_factory=port_factory,
@@ -91,19 +73,6 @@ def _request(**overrides) -> AgentRunRequest:
 # ---------------------------------------------------------------------
 # The fail-closed knob reader
 # ---------------------------------------------------------------------
-
-
-REQUIRED_KNOBS = (
-    "AGENT_RUN_MAX_STEPS",
-    "AGENT_RUN_MAX_MODEL_CALLS",
-    "AGENT_RUN_MAX_TOOL_CALLS",
-    "AGENT_RUN_MAX_TOTAL_TOKENS",
-    "AGENT_RUN_MAX_EVIDENCE_BYTES",
-    "AGENT_RUN_MAX_WALL_CLOCK_SECONDS",
-    "AGENT_TOOL_TIMEOUT_MS",
-    "AGENT_TOOL_MAX_RESULTS",
-    "AGENT_TOOL_MAX_RESULT_BYTES",
-)
 
 
 def _full_env(**overrides) -> dict:
@@ -194,17 +163,19 @@ def test_a_request_refuses_an_empty_question(question):
 
 
 def test_the_effective_wall_clock_is_the_communicated_deadline_when_below_the_ceiling():
-    config = _config(wall_clock_ceiling_seconds=120.0)
+    config = orchestrator_config(wall_clock_ceiling_seconds=120.0)
     assert config.budget_for(5000).wall_clock_seconds == 5.0
 
 
 def test_the_effective_wall_clock_is_the_ceiling_when_the_deadline_exceeds_it():
-    config = _config(wall_clock_ceiling_seconds=30.0)
+    config = orchestrator_config(wall_clock_ceiling_seconds=30.0)
     assert config.budget_for(120000).wall_clock_seconds == 30.0
 
 
 def test_the_budget_carries_the_deployment_numbers_and_the_derived_clock():
-    config = _config(max_steps=3, max_model_calls=4, max_tool_calls=5, max_total_tokens=900, max_evidence_bytes=800)
+    config = orchestrator_config(
+        max_steps=3, max_model_calls=4, max_tool_calls=5, max_total_tokens=900, max_evidence_bytes=800
+    )
     budget = config.budget_for(2000)
     assert budget == RunBudget(
         max_steps=3,
@@ -258,7 +229,7 @@ def test_the_admission_claim_holds_for_the_whole_run_and_releases_after(tmp_path
 
 def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_path):
     turns = tuple(replace(turn, prompt_tokens=10, completion_tokens=5) for turn in multihop_turns())
-    port = _port()
+    port = fake_port()
     orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(turns), port, tmp_path)
     events: list[AgentEvent] = []
 
@@ -291,7 +262,7 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
 
 
 def test_the_executor_is_built_per_request_with_the_request_context_and_bearer(tmp_path):
-    port = _port()
+    port = fake_port()
     orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(multihop_turns() * 2), port, tmp_path)
     asyncio.run(orchestrator.run(_request(bearer="bearer-1", context=CONTEXT)))
     asyncio.run(orchestrator.run(_request(bearer="bearer-2", context=CONTEXT)))
@@ -302,8 +273,8 @@ def test_the_executor_is_built_per_request_with_the_request_context_and_bearer(t
 
 
 def test_the_registry_is_bound_to_the_request_context_and_the_operation_budget(tmp_path):
-    port = _port()
-    config = _config(operation_budget=OperationBudget(timeout_ms=777, max_results=3, max_result_bytes=999))
+    port = fake_port()
+    config = orchestrator_config(operation_budget=OperationBudget(timeout_ms=777, max_results=3, max_result_bytes=999))
     orchestrator, _, _ = _orchestrator(ScriptedLoopModel(multihop_turns()), port, tmp_path, config=config)
     asyncio.run(orchestrator.run(_request()))
 
@@ -313,7 +284,9 @@ def test_the_registry_is_bound_to_the_request_context_and_the_operation_budget(t
 
 def test_the_system_prompt_reaches_the_model_call(tmp_path):
     model = ScriptedLoopModel((ModelTurn(content="done"),))
-    orchestrator, _, _ = _orchestrator(model, None, tmp_path, config=_config(system_prompt="the deployed prompt"))
+    orchestrator, _, _ = _orchestrator(
+        model, None, tmp_path, config=orchestrator_config(system_prompt="the deployed prompt")
+    )
     asyncio.run(orchestrator.run(_request()))
     assert model.requests[0]["messages"][0] == {"role": "system", "content": "the deployed prompt"}
 
@@ -357,7 +330,9 @@ def test_a_cancellation_logs_the_partial_record_and_propagates_untouched(tmp_pat
 
 def test_an_exhausted_run_reports_budget_exhausted_with_no_answer_text(tmp_path):
     turns = multihop_turns(answer="the fabricated answer")
-    orchestrator, _, _ = _orchestrator(ScriptedLoopModel(turns), None, tmp_path, config=_config(max_model_calls=1))
+    orchestrator, _, _ = _orchestrator(
+        ScriptedLoopModel(turns), None, tmp_path, config=orchestrator_config(max_model_calls=1)
+    )
     record = asyncio.run(orchestrator.run(_request()))
     assert record.outcome == "budget_exhausted"
     assert record.model_calls == 1
@@ -380,7 +355,7 @@ def test_a_port_factory_failure_answers_the_honest_terminal(tmp_path):
         raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
 
     orchestrator = RequestOrchestrator(
-        config=_config(),
+        config=orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=broken_factory,
@@ -391,6 +366,8 @@ def test_a_port_factory_failure_answers_the_honest_terminal(tmp_path):
     assert record.outcome == OUTCOME_ERROR
     assert record.error is not None
     assert "AGENT_DOCREPO_URL" in record.error
-    assert [event.kind.value for event in events] == ["run_error"]
+    # The stream shape: every stream begins with run_started (the failure
+    # path announces it — the loop never entered), then the terminal.
+    assert [event.kind.value for event in events] == ["run_started", "run_error"]
     assert events[-1].payload["code"] == OUTCOME_ERROR
     assert record.as_dict()["steps"] == 0  # nothing ran; the record is the honest zero

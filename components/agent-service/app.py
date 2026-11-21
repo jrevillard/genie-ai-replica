@@ -44,7 +44,6 @@ from agent.orchestrator import (
 )
 from agent.probe import ProbeConfig, ProbeModelClient, build_stateless_adapters
 from capabilities.contract import CallerContext
-from capabilities.executor import AuthorizedExecutor
 from noagent.config import NoAgentConfig
 from noagent.lane import AdmissionLane
 from tracing import setup_tracing
@@ -91,60 +90,47 @@ class RunRequestBody(BaseModel):
         return value
 
 
-class RunsRuntime:
+def _build_orchestrator(env=None) -> RequestOrchestrator:
     """The per-process run assembly: the expensive, stateless parts built
     once (adapters, model client, lane, orchestrator wiring), the
-    authorization executor built per request by the port factory."""
+    authorization executor built per request by the port factory.
 
-    def __init__(self, orchestrator: RequestOrchestrator):
-        self.orchestrator = orchestrator
+    :class:`MissingKnobsError` names every required budget knob that is
+    missing or unusable; an assembly ``ValueError`` names the knob the
+    port-assembly read refused.
+    """
+    # The budget knobs first: they are the fail-closed surface, read
+    # before anything else is wired.
+    orchestrator_config = OrchestratorConfig.load(env)
+    noagent = NoAgentConfig.load(env)
+    probe_config = ProbeConfig.load(env)
+    adapters = build_stateless_adapters(probe_config, env)
+    model_client = ProbeModelClient(probe_config)
+    lane = AdmissionLane.from_config(noagent)
 
-    @classmethod
-    def from_env(cls, env=None) -> "RunsRuntime":
-        """Assemble from the environment; :class:`MissingKnobsError` names
-        every required budget knob that is missing or unusable."""
-        # The budget knobs first: they are the fail-closed surface, read
-        # before anything else is wired.
-        orchestrator_config = OrchestratorConfig.load(env)
-        noagent = NoAgentConfig.load(env)
-        probe_config = ProbeConfig.load(env)
-        adapters = build_stateless_adapters(probe_config, env)
-        model_client = ProbeModelClient(probe_config)
-        lane = AdmissionLane.from_config(noagent)
+    def port_factory(context: CallerContext, bearer: str | None):
+        # Per request: one executor binds ONE trusted context to the
+        # shared stateless adapters — the executor is the enforcement
+        # point, and its context is the request's.
+        return adapters.bind_executor(context, bearer)
 
-        def port_factory(context: CallerContext, bearer: str | None) -> AuthorizedExecutor:
-            # Per request: one executor binds ONE trusted context to the
-            # shared stateless adapters — the executor is the enforcement
-            # point, and its context is the request's.
-            return AuthorizedExecutor(
-                context,
-                bearer=bearer,
-                legacy_graph_name=adapters.legacy_graph_name,
-                docrepo=adapters.docrepo,
-                okf=adapters.okf,
-                chunks=adapters.chunks,
-                search_port=adapters.search_port,
-            )
-
-        return cls(
-            RequestOrchestrator(
-                config=orchestrator_config,
-                lane=lane,
-                model_client=model_client,
-                port_factory=port_factory,
-            )
-        )
+    return RequestOrchestrator(
+        config=orchestrator_config,
+        lane=lane,
+        model_client=model_client,
+        port_factory=port_factory,
+    )
 
 
-_RUNTIME: RunsRuntime | None = None
+_RUNTIME: RequestOrchestrator | None = None
 
 
-def _runtime() -> RunsRuntime:
-    """The lazy per-process runtime: built on the first run request, so the
-    infra-only surface (/health, /ready) never needs the budget knobs."""
+def _runtime() -> RequestOrchestrator:
+    """The lazy per-process orchestrator: built on the first run request, so
+    the infra-only surface (/health, /ready) never needs the budget knobs."""
     global _RUNTIME
     if _RUNTIME is None:
-        _RUNTIME = RunsRuntime.from_env()
+        _RUNTIME = _build_orchestrator()
     return _RUNTIME
 
 
@@ -265,7 +251,7 @@ async def runs(body: RunRequestBody):
             {"error": "run_surface_unconfigured", "message": str(unconfigured)},
             status_code=503,
         )
-    admit_ctx = runtime.orchestrator.admit()
+    admit_ctx = runtime.admit()
     try:
         await admit_ctx.__aenter__()
     except AdmissionRefused as refused:
@@ -275,13 +261,20 @@ async def runs(body: RunRequestBody):
             status_code=429,
             headers={"Retry-After": RETRY_AFTER_SECONDS},
         )
-    request = AgentRunRequest(
-        question=body.question,
-        deadline_ms=body.deadline_ms,
-        context=body.context,
-        bearer=body.bearer,
-    )
-    return StreamingResponse(
-        _run_stream(runtime.orchestrator, request, admit_ctx),
-        media_type="text/event-stream",
-    )
+    try:
+        request = AgentRunRequest(
+            question=body.question,
+            deadline_ms=body.deadline_ms,
+            context=body.context,
+            bearer=body.bearer,
+        )
+        return StreamingResponse(
+            _run_stream(runtime, request, admit_ctx),
+            media_type="text/event-stream",
+        )
+    except BaseException:
+        # Between the claim and the stream start no generator owns the
+        # release yet — a failure here (request assembly, response
+        # construction) must release the slot itself, never leak it.
+        await admit_ctx.__aexit__(None, None, None)
+        raise

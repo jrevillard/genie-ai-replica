@@ -64,7 +64,7 @@ OUTCOME_ERROR = "error"
 OUTCOME_BUDGET_EXHAUSTED = "budget_exhausted"
 OUTCOME_CANCELLED = "cancelled"
 
-_MESSAGE_TRUNCATION = 200
+MESSAGE_TRUNCATION = 200
 
 
 @dataclass(frozen=True)
@@ -103,7 +103,11 @@ class LoopModelClient(Protocol):
     ``max_output_tokens`` is the remaining token allowance the monitor
     hands the call — the token bound riding the request (``None`` when the
     allowance is unknowable and the field must be omitted, the deployed
-    only-when-configured rule).
+    only-when-configured rule). The IMPLEMENTER caps the bound to what one
+    call can serve — ``min(bound, window room)``, omitting the field when
+    there is no room — because a cumulative RUN allowance may exceed the
+    endpoint's window, and an unanchored ``max_tokens`` is rejected
+    outright.
     """
 
     async def complete(
@@ -185,11 +189,15 @@ class AgentLoop:
                     self._messages.append(self._assistant_tool_call_message(turn))
                     for request in turn.tool_calls:
                         result_payload = await self._dispatch_tool(request)
+                        # One serialization home: the evidence size and the
+                        # tool message report the same bytes.
+                        result_json = json.dumps(result_payload)
+                        self.monitor.record_evidence(len(result_json.encode("utf-8")))
                         self._messages.append(
                             {
                                 "role": "tool",
                                 "tool_call_id": request.call_id,
-                                "content": json.dumps(result_payload),
+                                "content": result_json,
                             }
                         )
                     continue
@@ -201,8 +209,8 @@ class AgentLoop:
         except BudgetExhausted as exhausted:
             return self._fail(OUTCOME_BUDGET_EXHAUSTED, str(exhausted))
         except Exception as failed:  # noqa: BLE001 — a failed run still gets its terminal event
-            logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:_MESSAGE_TRUNCATION])
-            return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:_MESSAGE_TRUNCATION]}")
+            logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:MESSAGE_TRUNCATION])
+            return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}")
 
     # -- the model turn ------------------------------------------------------
 
@@ -247,7 +255,6 @@ class AgentLoop:
         it ends the run); a port error or an invalid argument flows back to
         the model as the structured tool result. Both paths emit the
         ``tool_call_finished`` event that reports what actually happened.
-        The executed result's size is the evidence the run accumulates.
         """
         self.monitor.check_wall_clock()
         self.token.raise_if_cancelled()
@@ -259,7 +266,6 @@ class AgentLoop:
             call_id=request.call_id,
         )
         result_payload = await self._execute(request)
-        self.monitor.record_evidence(len(json.dumps(result_payload).encode("utf-8")))
         self.emitter.emit(EventKind.TOOL_CALL_FINISHED, result_payload, call_id=request.call_id)
         return result_payload
 
@@ -276,7 +282,7 @@ class AgentLoop:
                 code, operation = failed.code.value, failed.operation.value if failed.operation else None
             else:
                 code, operation = "invalid_arguments", None
-            detail = {"code": code, "operation": operation, "message": str(failed)[:_MESSAGE_TRUNCATION]}
+            detail = {"code": code, "operation": operation, "message": str(failed)[:MESSAGE_TRUNCATION]}
             logger.info(
                 "tool %s reported %s: %s",
                 request.name,
@@ -307,5 +313,5 @@ class AgentLoop:
 
     def _fail(self, outcome: str, message: str) -> RunResult:
         """End the run honestly: the terminal ``run_error``, no answer text."""
-        self.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:_MESSAGE_TRUNCATION]})
-        return self._terminal(outcome, error=message[:_MESSAGE_TRUNCATION])
+        self.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:MESSAGE_TRUNCATION]})
+        return self._terminal(outcome, error=message[:MESSAGE_TRUNCATION])

@@ -34,7 +34,6 @@ surface and the tests unchanged.
 import asyncio
 import json
 import logging
-import math
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -42,17 +41,16 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 
 from capabilities.contract import CallerContext, OperationBudget
+from noagent.config import required_positive_float, required_positive_int
 from noagent.lane import AdmissionLane, LaneBusyError
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
 from .events import EventEmitter, EventKind, EventSink
-from .loop import OUTCOME_CANCELLED, OUTCOME_ERROR, AgentLoop, LoopModelClient, RunResult
+from .loop import MESSAGE_TRUNCATION, OUTCOME_CANCELLED, OUTCOME_ERROR, AgentLoop, LoopModelClient, RunResult
 from .probe import PROBE_SYSTEM_PROMPT, document_toolset
 
 logger = logging.getLogger(__name__)
-
-_MESSAGE_TRUNCATION = 200
 
 
 class MissingKnobsError(RuntimeError):
@@ -80,44 +78,6 @@ class AdmissionRefused(RuntimeError):
     maps it to the defined admission behavior (the 429 with ``Retry-After``
     naming the saturation, sent before any stream byte).
     """
-
-
-def _required_positive_int(source, name: str, failed: list[str]) -> int | None:
-    """Read one REQUIRED integer knob; name it in ``failed`` when unset,
-    empty, non-numeric or below 1 — a knob that fails its bound is as
-    unusable as a knob that is absent."""
-    raw = source.get(name)
-    if raw is None or str(raw).strip() == "":
-        failed.append(name)
-        return None
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        failed.append(name)
-        return None
-    if value < 1:
-        failed.append(name)
-        return None
-    return value
-
-
-def _required_positive_float(source, name: str, failed: list[str]) -> float | None:
-    """The float twin of :func:`_required_positive_int` (strictly > 0 and
-    finite — a nan would silently disable the dimension it bounds, since
-    every comparison against it is False)."""
-    raw = source.get(name)
-    if raw is None or str(raw).strip() == "":
-        failed.append(name)
-        return None
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        failed.append(name)
-        return None
-    if not math.isfinite(value) or value <= 0:
-        failed.append(name)
-        return None
-    return value
 
 
 @dataclass(frozen=True)
@@ -149,15 +109,15 @@ class OrchestratorConfig:
         never falls into a number)."""
         source = os.environ if env is None else env
         failed: list[str] = []
-        max_steps = _required_positive_int(source, "AGENT_RUN_MAX_STEPS", failed)
-        max_model_calls = _required_positive_int(source, "AGENT_RUN_MAX_MODEL_CALLS", failed)
-        max_tool_calls = _required_positive_int(source, "AGENT_RUN_MAX_TOOL_CALLS", failed)
-        max_total_tokens = _required_positive_int(source, "AGENT_RUN_MAX_TOTAL_TOKENS", failed)
-        max_evidence_bytes = _required_positive_int(source, "AGENT_RUN_MAX_EVIDENCE_BYTES", failed)
-        wall_clock_ceiling_seconds = _required_positive_float(source, "AGENT_RUN_MAX_WALL_CLOCK_SECONDS", failed)
-        tool_timeout_ms = _required_positive_int(source, "AGENT_TOOL_TIMEOUT_MS", failed)
-        tool_max_results = _required_positive_int(source, "AGENT_TOOL_MAX_RESULTS", failed)
-        tool_max_result_bytes = _required_positive_int(source, "AGENT_TOOL_MAX_RESULT_BYTES", failed)
+        max_steps = required_positive_int(source, "AGENT_RUN_MAX_STEPS", failed)
+        max_model_calls = required_positive_int(source, "AGENT_RUN_MAX_MODEL_CALLS", failed)
+        max_tool_calls = required_positive_int(source, "AGENT_RUN_MAX_TOOL_CALLS", failed)
+        max_total_tokens = required_positive_int(source, "AGENT_RUN_MAX_TOTAL_TOKENS", failed)
+        max_evidence_bytes = required_positive_int(source, "AGENT_RUN_MAX_EVIDENCE_BYTES", failed)
+        wall_clock_ceiling_seconds = required_positive_float(source, "AGENT_RUN_MAX_WALL_CLOCK_SECONDS", failed)
+        tool_timeout_ms = required_positive_int(source, "AGENT_TOOL_TIMEOUT_MS", failed)
+        tool_max_results = required_positive_int(source, "AGENT_TOOL_MAX_RESULTS", failed)
+        tool_max_result_bytes = required_positive_int(source, "AGENT_TOOL_MAX_RESULT_BYTES", failed)
         if failed:
             raise MissingKnobsError(tuple(failed))
         return cls(
@@ -255,10 +215,6 @@ class RequestOrchestrator:
         self._model_client = model_client
         self._port_factory = port_factory
 
-    @property
-    def config(self) -> OrchestratorConfig:
-        return self._config
-
     @asynccontextmanager
     async def admit(self) -> AsyncIterator[None]:
         """Hold one admission-lane slot for the duration of the block.
@@ -315,8 +271,12 @@ class RequestOrchestrator:
             )
             raise
         except Exception as failed:  # noqa: BLE001 — a pre-loop build failure still gets its terminal
-            message = f"{type(failed).__name__}: {str(failed)[:_MESSAGE_TRUNCATION]}"
+            message = f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}"
             logger.warning("agent run failed before its first dispatch: %s", message)
+            # The loop announces run_started when it enters; a build failure
+            # happens after the run began, and every stream must begin with
+            # run_started — so the failure path announces it here.
+            emitter.emit(EventKind.RUN_STARTED, {"question": request.question})
             emitter.emit(EventKind.RUN_ERROR, {"code": OUTCOME_ERROR, "message": message})
             return self._record(run_id, OUTCOME_ERROR, monitor, error=message)
         return self._record(run_id, result.outcome, monitor, error=result.error)

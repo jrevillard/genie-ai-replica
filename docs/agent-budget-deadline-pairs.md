@@ -69,7 +69,8 @@ partial usage record intact.
 | Knob (name reserved for 2.4) | Meaning |
 |---|---|
 | `AGENT_UPSTREAM_TIMEOUT_MS` | the BFF's upstream timeout on the agent leg. **Pair rule: `AGENT_UPSTREAM_TIMEOUT_MS >= deadline_ms + translation reserve + finalization reserve` (see the derivation).** |
-| translation-leg allowances (names at 2.10) | `{ maxTokens, maxCalls }` the translation plans against after the run's usage record |
+| `AGENT_TRANSLATION_MAX_TOKENS` | the translation leg's token allowance: `{maxTokens}` the translation plans against after the run's usage record (story 2.10; REQUIRED, fail-closed — no numeric default) |
+| `AGENT_TRANSLATION_MAX_CALLS` | the translation leg's call allowance: `{maxCalls}` — the number of vLLM calls the leg may spend after the run (story 2.10; REQUIRED, fail-closed) |
 
 ## The timeout/deadline pair — the V08 derivation
 
@@ -138,3 +139,49 @@ loop's existing contract). The BFF's residual contract
 available, and `skip` with the recorded status when it is not — the
 English answer stays, the allowance is never exceeded. Story 2.10 wires
 the consumption; story 2.4 the stream.
+
+## The translation leg's contract (story 2.10)
+
+The leg (`components/gov-chat-backend/services/translation/agentic-translation-leg.js`)
+consumes the residual contract on the agentic path:
+
+- **GPU-only, routing-keyed.** The leg is constructed with the routing
+  decision as an explicit input and serves only the agentic one, always
+  against the vLLM GPU backend — never the CPU model, never the overlay's
+  translation image, never a probe fallback. A GPU that is unconfigured or
+  fails at request time is a skip with the recorded reason
+  (`gpu_not_configured` / `gpu_init_failed` in the accounting's
+  `configError`): the English answer stays.
+- **Fail-closed knobs.** `AGENT_TRANSLATION_MAX_TOKENS` and
+  `AGENT_TRANSLATION_MAX_CALLS` are REQUIRED. A missing or unusable knob
+  means translation cannot be bounded: skip, the knob named in an ERROR log
+  and in the accounting (`configError`). No numeric default anywhere.
+- **Residual discipline.** No call starts beyond the remaining deadline
+  (per-call `timeoutMs` = the time left at call start); `max_tokens` rides
+  the request at the remaining allowance; the caller's `AbortSignal`
+  destroys the downstream call and records `cancelled`, with no retry.
+  Mid-pass budget stops are failed requests (timeout-classified), never
+  skips — something was attempted.
+- **Usage returned or estimated.** The vLLM-served counts are returned
+  verbatim; an endpoint that discards them gets the chars/4 estimate —
+  an APPROXIMATION of the work that was done (dense-token scripts
+  under-count it), so what holds the allowance on the estimated path is
+  the per-request `max_tokens` bound, not the estimate. The estimate
+  never widens a bound, and the run's own usage is never estimated up to
+  the allowance (`usage_unavailable` skips). `estimated: true` means at
+  least one call of the pass was estimated: mixed served/estimated totals
+  are flagged, not broken down.
+- **Sizing the two knobs.** `AGENT_TRANSLATION_MAX_TOKENS` ≈ one
+  full-answer translation of the longest expected answer (prompt +
+  translated text per core call, summed over the pass's cores, plus
+  margin); `AGENT_TRANSLATION_MAX_CALLS` ≈ that pass's core count (one
+  model call per text-leaf core, one pass per unit in streaming mode) —
+  sized from a measured long answer, never defaulted.
+- **Skip is not failure.** The four frozen `SKIP_STATUSES` are the recorded
+  skip reasons; `done.translationFailed` stays false on a skip and true
+  only for attempted-and-failed translations. The V05
+  `query_translation_status` vocabulary is reused verbatim, never extended.
+  The accounting block (backend, decision, status, outcome,
+  queryTranslationStatus, usage with its estimate flag, configError, mode)
+  is the shape story 2.4 persists into the `queries` metadata execution
+  record.

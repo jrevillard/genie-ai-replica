@@ -846,6 +846,15 @@ services:
       # translates chat answers client-side, so with this off non-English UIs
       # get English answers). Set 0 to disable.
       - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-1}
+      # Agentic translation-leg allowances (story 2.10) — REQUIRED on the
+      # agentic path, read fail-closed by the BFF: a missing or unusable knob
+      # means answer translation cannot be bounded and is skipped (the English
+      # answer stays) with the knob named in an ERROR log and in the execution
+      # record — no numeric default exists anywhere. The leg bounds each vLLM
+      # call at the run's remaining allowance and at the request's remaining
+      # end-to-end deadline; docs/agent-budget-deadline-pairs.md.
+      - AGENT_TRANSLATION_MAX_TOKENS=${AGENT_TRANSLATION_MAX_TOKENS:-}
+      - AGENT_TRANSLATION_MAX_CALLS=${AGENT_TRANSLATION_MAX_CALLS:-}
       # OPEA runtime patches for remote GPU node (SSL bypass)
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
       # GPU node API key for Authorization: Bearer (translation, vLLM calls)

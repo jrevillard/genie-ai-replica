@@ -18,6 +18,12 @@ const MIN_OUTPUT_BUDGET = 256;
 // node rather than for a connection that is already established.
 const DEFAULT_HEALTH_TIMEOUT_MS = 30000;
 
+// Per-request budget for a chat completion. The deployed 30s timeout: the
+// legacy call sites pass no options, so they keep exactly this value. The
+// agentic leg (story 2.10) overrides it per call with the remaining
+// end-to-end deadline.
+const DEFAULT_CALL_TIMEOUT_MS = 30000;
+
 // Budget for the /v1/models read. It only widens the output budget ceiling, so
 // a miss degrades to the conservative default rather than failing the service.
 const DEFAULT_MODEL_INFO_TIMEOUT_MS = 5000;
@@ -437,11 +443,59 @@ class GpuTranslateBackend {
   }
 
   /**
-   * Call vLLM service
-   * @param {Object} requestBody - Request body
-   * @returns {Promise<string>} Translated text
+   * The endpoint-served token usage of a chat completion, or null when the
+   * response carries none. Only finite counts count: a partial usage object
+   * cannot be accounted.
+   * @param {Object} response - Parsed vLLM response body
+   * @returns {{prompt_tokens: number, completion_tokens: number}|null}
    */
-  async callVllmService(requestBody) {
+  _servedUsage(response) {
+    const usage = response && response.usage;
+    if (usage && Number.isFinite(usage.prompt_tokens) && Number.isFinite(usage.completion_tokens)) {
+      return { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens };
+    }
+    return null;
+  }
+
+  /**
+   * The chars/4 estimate of a call's token usage — the deployed constant (the
+   * same estimator the window math in `_capMaxTokens` uses). Used ONLY to
+   * account for usage the endpoint discarded, never to bound a call.
+   * @param {Object} requestBody - The request as it was sent
+   * @param {string} translated - The translation the call produced
+   * @returns {{prompt_tokens: number, completion_tokens: number}}
+   */
+  _estimateUsage(requestBody, translated) {
+    return {
+      prompt_tokens: Math.ceil(JSON.stringify(requestBody.messages).length / 4),
+      completion_tokens: Math.ceil((translated || '').length / 4)
+    };
+  }
+
+  /**
+   * POST one chat completion and resolve its content plus the endpoint-served
+   * usage. The transport internals of `callVllmService`; the string-only
+   * wrapper below keeps the legacy callers' resolved shape untouched.
+   * @param {Object} requestBody - Request body
+   * @param {Object} [options] - Additive per-call options (story 2.10); null
+   *   and undefined are both "no options".
+   * @param {number} [options.timeoutMs] - Per-call timeout; default 30s (the
+   *   deployed value). A non-finite value is treated as not provided — Node's
+   *   socket layer does not honour NaN/Infinity, and the call would never
+   *   expire. The agentic leg passes the remaining end-to-end deadline, so no
+   *   call runs past it.
+   * @param {AbortSignal} [options.signal] - Caller abort (the client
+   *   disconnect): an abort destroys the in-flight request. Absent on the
+   *   legacy path — the wiring is inert without it.
+   * @returns {Promise<{content: string, usage: {prompt_tokens: number, completion_tokens: number}|null}>}
+   */
+  async _postChatCompletion(requestBody, options) {
+    const { timeoutMs, signal } = options || {};
+    const callTimeoutMs = Number.isFinite(timeoutMs) ? timeoutMs : DEFAULT_CALL_TIMEOUT_MS;
+    // An already-aborted caller never produces a request at all.
+    if (signal && signal.aborted) {
+      throw new Error('vLLM service request aborted');
+    }
     const url = new URL(this.endpoint);
     const isHttps = url.protocol === 'https:';
     const client = isHttps ? https : http;
@@ -459,8 +513,19 @@ class GpuTranslateBackend {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData)
         }),
-        timeout: 30000 // 30 second timeout
+        timeout: callTimeoutMs // 30 second timeout (the legacy default; overridable per call)
       };
+
+      // Abort wiring (story 2.10). An abort destroys the in-flight request;
+      // the listener never outlives the settlement. Without a signal nothing
+      // here changes for the legacy callers.
+      let onAbort = null;
+      const settle = (fn) => (value) => {
+        if (onAbort && signal) signal.removeEventListener('abort', onAbort);
+        fn(value);
+      };
+      const resolveSettled = settle(resolve);
+      const rejectSettled = settle(reject);
 
       const req = client.request(options, (res) => {
         let data = '';
@@ -484,7 +549,7 @@ class GpuTranslateBackend {
                 logger.error(
                   `[GPU-BACKEND] vLLM stopped at max_tokens=${requestBody.max_tokens} without finishing the translation`
                 );
-                reject(new Error(`vLLM truncated the translation at max_tokens=${requestBody.max_tokens}`));
+                rejectSettled(new Error(`vLLM truncated the translation at max_tokens=${requestBody.max_tokens}`));
                 return;
               }
 
@@ -493,34 +558,171 @@ class GpuTranslateBackend {
                 // A choice with no content (null, or a tool-call shape) is not a
                 // translation. Resolving it as an empty string would blank the
                 // paragraph, so the request fails visibly instead.
-                reject(new Error('vLLM returned a choice with no message content'));
+                rejectSettled(new Error('vLLM returned a choice with no message content'));
                 return;
               }
-              resolve(content.trim());
+              resolveSettled({ content: content.trim(), usage: this._servedUsage(response) });
             } else {
               logger.error(`[GPU-BACKEND] vLLM service returned status ${res.statusCode}: ${data}`);
-              reject(new Error(`vLLM service error: ${res.statusCode}`));
+              rejectSettled(new Error(`vLLM service error: ${res.statusCode}`));
             }
           } catch (error) {
             logger.error(`[GPU-BACKEND] Failed to parse vLLM response: ${error.message}`);
-            reject(new Error(`Failed to parse vLLM response: ${error.message}`));
+            rejectSettled(new Error(`Failed to parse vLLM response: ${error.message}`));
           }
         });
       });
 
       req.on('error', (error) => {
         logger.error(`[GPU-BACKEND] vLLM service request failed: ${error.message}`);
-        reject(new Error(`vLLM service request failed: ${error.message}`));
+        rejectSettled(new Error(`vLLM service request failed: ${error.message}`));
       });
 
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('vLLM service request timeout'));
+        rejectSettled(new Error('vLLM service request timeout'));
       });
+
+      if (signal) {
+        // Abort wiring only: an already-aborted caller was refused above.
+        onAbort = () => req.destroy(new Error('vLLM service request aborted'));
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
 
       req.write(postData);
       req.end();
     });
+  }
+
+  /**
+   * Call vLLM service
+   * @param {Object} requestBody - Request body
+   * @param {Object} [options] - Additive per-call options (`timeoutMs`,
+   *   `signal`), passed through to `_postChatCompletion`. Omitted on the
+   *   legacy path, which keeps the deployed 30s timeout and no abort wiring.
+   * @returns {Promise<string>} Translated text
+   */
+  async callVllmService(requestBody, options) {
+    const { content } = await this._postChatCompletion(requestBody, options);
+    return content;
+  }
+
+  /**
+   * The usage-returning twin of `translate` (story 2.10 — the agentic leg).
+   *
+   * The legacy `translate` resolves strings only and its 30s timeout is
+   * private; the residual-budget contract (AD-6/AD-14) needs usage returned
+   * or estimated, a timeout bounded by the remaining deadline, and a
+   * disconnect that destroys the in-flight request. This entry point wraps
+   * the same internals (same prompt, same truncation rejection, same empty
+   * text skipping) and adds exactly that:
+   *
+   * - `options.maxTokens` — the output budget is capped at the caller's
+   *   bound (the remaining allowance) on top of the window math
+   *   `_capMaxTokens` already applies;
+   * - `options.timeoutMs` — the per-call timeout, overriding the 30s
+   *   default (a non-finite value is treated as not provided); across
+   *   several texts the budget shrinks with elapsed time, so a later text
+   *   cannot start past the deadline the caller set;
+   * - `options.signal` — a caller abort destroys the in-flight request;
+   * - the resolved usage — the endpoint-served counts when the response
+   *   carries them, otherwise the chars/4 estimate, flagged `estimated`;
+   *   null when no call was made at all (an empty input, or one of only
+   *   empty texts), so no-call stays distinguishable from zero-usage.
+   *
+   * The legacy `translate` is untouched: same signature, same 30s timeout,
+   * no usage reading.
+   *
+   * @param {string[]} texts - Texts to translate
+   * @param {string} sourceCode - Source language code (model-specific)
+   * @param {string} targetCode - Target language code (model-specific)
+   * @param {Object} [options] - `{maxTokens, timeoutMs, signal}`; null and
+   *   undefined are both "no options".
+   * @returns {Promise<{translations: string[], usage: {prompt_tokens: number, completion_tokens: number}|null, estimated: boolean}>}
+   */
+  async translateWithUsage(texts, sourceCode, targetCode, options) {
+    const { maxTokens, timeoutMs, signal } = options || {};
+    if (!this.initialized) {
+      logger.error('[GPU-BACKEND] Not initialized. Cannot perform translation.');
+      throw new Error('[GPU-BACKEND] Backend is not ready.');
+    }
+
+    if (!texts || texts.length === 0) {
+      logger.warn('[GPU-BACKEND] translateWithUsage called with empty array.');
+      return { translations: [], usage: null, estimated: false };
+    }
+
+    logger.info(`[GPU-BACKEND] Translating ${texts.length} texts from ${sourceCode} to ${targetCode}`);
+
+    const translations = [];
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let estimated = false;
+    let callsMade = 0;
+    // The caller's deadline: a later text must not start past it.
+    const deadline = Number.isFinite(timeoutMs) ? Date.now() + timeoutMs : null;
+
+    try {
+      for (let i = 0; i < texts.length; i++) {
+        const text = texts[i];
+
+        // Skip empty texts (the `translate` discipline)
+        if (!text || text.trim() === '') {
+          translations.push('');
+          continue;
+        }
+
+        let callTimeout = timeoutMs;
+        if (deadline !== null) {
+          callTimeout = deadline - Date.now();
+          if (callTimeout <= 0) {
+            // The budget the caller set is spent: no further call starts.
+            // The same failure a socket timeout reports, so the caller's
+            // classification is one check.
+            throw new Error('vLLM service request timeout');
+          }
+        }
+
+        const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
+        if (Number.isFinite(maxTokens)) {
+          // The residual bound rides the request: the smaller of the window
+          // math's cap and the remaining allowance.
+          requestBody.max_tokens = Math.min(requestBody.max_tokens ?? maxTokens, maxTokens);
+        }
+
+        const { content, usage } = await this._postChatCompletion(requestBody, {
+          timeoutMs: callTimeout,
+          signal
+        });
+        translations.push(content);
+        callsMade += 1;
+
+        if (usage) {
+          promptTokens += usage.prompt_tokens;
+          completionTokens += usage.completion_tokens;
+        } else {
+          const guess = this._estimateUsage(requestBody, content);
+          promptTokens += guess.prompt_tokens;
+          completionTokens += guess.completion_tokens;
+          estimated = true;
+        }
+
+        logger.debug(`[GPU-BACKEND] Translated text ${i + 1}/${texts.length}`);
+      }
+
+      return {
+        translations,
+        usage: callsMade > 0 ? { prompt_tokens: promptTokens, completion_tokens: completionTokens } : null,
+        estimated: callsMade > 0 ? estimated : false
+      };
+    } catch (error) {
+      logger.error(`[GPU-BACKEND] Translation failed: ${error.message}`, {
+        stack: error.stack,
+        sourceCode: sourceCode,
+        targetCode: targetCode
+      });
+      throw error;
+    }
   }
 
   /**

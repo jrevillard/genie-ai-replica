@@ -1463,6 +1463,15 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_AUTHORIZED_GRAPHS=
 # AGENT_AUTHORIZED_REPOS=
 # AGENT_PROBE_BEARER=
+# Agentic translation-leg allowances (story 2.10) — REQUIRED on the agentic
+# path, read fail-closed by the BFF: a missing or unusable knob means answer
+# translation cannot be bounded and is skipped (the English answer stays)
+# with the knob named in an ERROR log and in the execution record — no
+# numeric default exists anywhere. The leg bounds each vLLM call at the
+# run's remaining allowance and at the request's remaining end-to-end
+# deadline; docs/agent-budget-deadline-pairs.md.
+# AGENT_TRANSLATION_MAX_TOKENS=
+# AGENT_TRANSLATION_MAX_CALLS=
 #
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
 # ENABLE_OBSERVABILITY=0

@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:openapi/api.dart';
-import 'package:talker/talker.dart';
 
 import 'concept_browser_repository.dart';
+import 'okf_browser_log.dart';
 
 /// The concept browser's state (#1939 — the mobile mirror of the web's W9
 /// browser semantics): stale-guarded progressive pages, the honest arms
@@ -103,7 +103,7 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
   /// app's re-auth flow (no local retry, no unavailable arm, no toast).
   static const Set<int> _unavailableCodes = {403, 404, 501};
 
-  final Talker _log = Talker();
+  final _log = okfBrowserLog;
 
   /// Bumped on every repo switch and on close; an in-flight response from
   /// an older generation never commits over a newer run.
@@ -113,6 +113,22 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
   /// a newer selection (two quick tree taps race — the loser's commit must
   /// not rebuild the history from its pre-fetch snapshot).
   int _selectGeneration = 0;
+
+  /// The loaded tree's concept ids, maintained incrementally — extend()
+  /// dedupes each page against this instead of re-hashing every loaded id
+  /// on every Show-more (the /simplify review's O(N²/pageSize) finding).
+  /// Reset by [open].
+  final Set<String> _knownIds = <String>{};
+
+  /// The visit history's cap. A citizen browsing a long session does not
+  /// keep every visited card body alive — at a documented 250k-character
+  /// worst case, an unbounded history grows to megabytes (the /simplify
+  /// review's retention finding; a dispose-time close was rejected — the
+  /// provider is app-lifetime and notifying it during teardown reaches the
+  /// defunct element's own listener). The cap drops the OLDEST entries:
+  /// every new visit truncates the forward tail, so the tail is the live
+  /// end and back/forward keep working inside the window.
+  static const int _historyCap = 10;
 
   @override
   ConceptBrowserState build() => const ConceptBrowserState();
@@ -128,18 +144,63 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
     );
   }
 
+  /// The ONE failure ladder for open/extend/select — the /simplify review
+  /// found three hand-copies that had already drifted (only `open` logged
+  /// the expiry and generic arms). Maps the honest arms onto the state and
+  /// clears the failed operation's in-flight flag on every arm. Returns
+  /// true when the caller must RETHROW: a 401 is not a browser arm — the
+  /// session is dead app-wide and the exception propagates to the app's
+  /// re-auth flow.
+  bool _applyFailure(
+    Object e, {
+    required String event,
+    required String? repoId,
+    String conceptId = '',
+    required bool cardArm,
+    required ConceptBrowserState Function() clearInFlight,
+  }) {
+    final code = e is ApiException ? e.code : null;
+    final cleared = clearInFlight();
+    if (_isUnavailable(e)) {
+      if (cardArm) {
+        _logTransition('concept_unavailable', {
+          'concept_id': conceptId,
+          'code': code,
+        });
+        state = cleared.copyWith(selected: null, selectedUnavailable: true);
+      } else {
+        _logTransition('repo_unavailable', {'repo_id': repoId, 'code': code});
+        state = cleared.copyWith(unavailable: true, error: null);
+      }
+      return false;
+    }
+    if (_isSessionExpired(e)) {
+      _logTransition('session_expired', {
+        'repo_id': repoId,
+        'concept_id': conceptId,
+      });
+      state = cleared;
+      return true;
+    }
+    _logTransition('error', {'repo_id': repoId, 'error': e.toString()});
+    state = cleared.copyWith(error: e.toString());
+    return false;
+  }
+
   /// Open a repository's browser: reset everything and load the first
   /// page. A superseded response (an older generation) never commits.
   Future<void> open(String repoId) async {
     final gen = ++_generation;
     final repo = ref.read(conceptBrowserRepositoryProvider);
     _logTransition('open', {'repo_id': repoId, 'generation': gen});
+    _knownIds.clear();
     state = ConceptBrowserState(repoId: repoId, loading: true);
     try {
       final page = await repo.fetchTreePage(repoId, offset: 0);
       if (gen != _generation) return;
       final rows = page.concepts;
       final total = page.total;
+      _knownIds.addAll(rows.map((r) => r.conceptId));
       state = state.copyWith(
         rows: rows,
         total: total,
@@ -154,19 +215,14 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
       });
     } catch (e) {
       if (gen != _generation) return;
-      if (_isUnavailable(e)) {
-        _logTransition('repo_unavailable', {
-          'repo_id': repoId,
-          'code': e is ApiException ? e.code : null,
-        });
-        state = state.copyWith(loading: false, unavailable: true, error: null);
-      } else if (_isSessionExpired(e)) {
-        _logTransition('session_expired', {'repo_id': repoId});
-        state = state.copyWith(loading: false);
+      if (_applyFailure(
+        e,
+        event: 'open',
+        repoId: repoId,
+        cardArm: false,
+        clearInFlight: () => state.copyWith(loading: false),
+      )) {
         rethrow;
-      } else {
-        _logTransition('error', {'repo_id': repoId, 'error': e.toString()});
-        state = state.copyWith(loading: false, error: e.toString());
       }
     }
   }
@@ -187,11 +243,11 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
       final page = await repo.fetchTreePage(s.repoId!, offset: offset);
       if (gen != _generation) return;
       final loaded = page.concepts;
-      final knownIds = s.rows.map((r) => r.conceptId).toSet();
       final rows = [
         ...s.rows,
-        ...loaded.where((r) => !knownIds.contains(r.conceptId)),
+        ...loaded.where((r) => !_knownIds.contains(r.conceptId)),
       ];
+      _knownIds.addAll(rows.map((r) => r.conceptId));
       final total = page.total;
       state = state.copyWith(
         rows: rows,
@@ -207,17 +263,14 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
       });
     } catch (e) {
       if (gen != _generation) return;
-      if (_isUnavailable(e)) {
-        state = state.copyWith(
-          extending: false,
-          unavailable: true,
-          error: null,
-        );
-      } else if (_isSessionExpired(e)) {
-        state = state.copyWith(extending: false);
+      if (_applyFailure(
+        e,
+        event: 'extend',
+        repoId: s.repoId,
+        cardArm: false,
+        clearInFlight: () => state.copyWith(extending: false),
+      )) {
         rethrow;
-      } else {
-        state = state.copyWith(extending: false, error: e.toString());
       }
     }
   }
@@ -245,10 +298,15 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
           s.historyIndex >= 0 &&
           s.historyIndex < s.history.length &&
           s.history[s.historyIndex].conceptId == conceptId;
-      final history = atCurrent
+      var history = atCurrent
           ? s.history
           : [...s.history.take(s.historyIndex + 1), card];
-      final index = atCurrent ? s.historyIndex : history.length - 1;
+      var index = atCurrent ? s.historyIndex : history.length - 1;
+      if (history.length > _historyCap) {
+        final drop = history.length - _historyCap;
+        history = history.sublist(drop);
+        index -= drop;
+      }
       state = state.copyWith(
         selected: card,
         selectedLoading: false,
@@ -261,45 +319,34 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
       );
     } catch (e) {
       if (gen != _selectGeneration || repoGen != _generation) return;
-      if (_isUnavailable(e)) {
-        _logTransition('concept_unavailable', {
-          'concept_id': conceptId,
-          'code': e is ApiException ? e.code : null,
-        });
-        state = state.copyWith(
-          selected: null,
-          selectedLoading: false,
-          selectedUnavailable: true,
-        );
-      } else if (_isSessionExpired(e)) {
-        state = state.copyWith(selectedLoading: false);
+      if (_applyFailure(
+        e,
+        event: 'select',
+        repoId: s.repoId,
+        conceptId: conceptId,
+        cardArm: true,
+        clearInFlight: () => state.copyWith(selectedLoading: false),
+      )) {
         rethrow;
-      } else {
-        state = state.copyWith(selectedLoading: false, error: e.toString());
       }
     }
   }
 
   /// One step back over the visited concepts (restored from the cached
   /// history, no refetch). Boundary: no-op.
-  void goBack() {
-    final s = state;
-    if (s.historyIndex <= 0) return;
-    final i = s.historyIndex - 1;
-    state = s.copyWith(
-      selected: s.history[i],
-      selectedUnavailable: false,
-      historyIndex: i,
-    );
-  }
+  void goBack() => _step(-1);
 
   /// One step forward (re-opens the entry after the current position,
   /// including from the list after backToList). Boundary: no-op.
-  void goForward() {
+  void goForward() => _step(1);
+
+  /// The shared back/forward body: one boundary-and-commit for both
+  /// directions (the /simplify review flagged the mirrored pair).
+  void _step(int delta) {
     final s = state;
     if (s.historyIndex < 0) return;
-    final i = s.historyIndex + 1;
-    if (i >= s.history.length) return;
+    final i = s.historyIndex + delta;
+    if (i < 0 || i >= s.history.length) return;
     state = s.copyWith(
       selected: s.history[i],
       selectedUnavailable: false,

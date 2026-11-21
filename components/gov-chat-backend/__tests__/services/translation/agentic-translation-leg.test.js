@@ -655,9 +655,10 @@ describe('agentic translation leg (story 2.10)', () => {
 
     it('cuts a hung init at the abort: cancelled without a chat call, inside the probe budget', async () => {
       // The abort fires the moment the health request exists; without the
-      // race's signal leg the budget leg would still cut at the caller's
-      // 30s — failing the outcome assertion (skipped, not cancelled). The
-      // signal leg is what makes the cut land at the abort.
+      // race's signal leg the budget leg would still cut, but 30s later
+      // (inside Jest's 60s testTimeout): the outcome is still cancelled via
+      // the `aborted()` check — the signal leg is what makes the cut land
+      // at the abort.
       const controller = new AbortController();
       const { calls } = serve({
         health: {

@@ -111,6 +111,17 @@ class AuthInterceptor extends http.BaseClient {
       _refreshCompleter!.complete(newToken);
       return newToken;
     } catch (e) {
+      // #2019 half two: this catch is the app's ONLY witness to WHY a
+      // refresh failed — AuthNotifier's paths log their own arms, but a
+      // throw here (appauth platform error, disposed ref, consumed tokens)
+      // vanished silently, and logcat could not distinguish a Keycloak
+      // invalid_grant from a local fault. Surface the cause.
+      _logger?.logAuthFailure(
+        errorCode: 'INTERCEPTOR_REFRESH_THROWN',
+        httpStatus: 401,
+        message: 'Token refresh threw — cause: $e',
+        source: 'AuthInterceptor._refreshMutex',
+      );
       _refreshCompleter!.complete(null);
       return null;
     } finally {

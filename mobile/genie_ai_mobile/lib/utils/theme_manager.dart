@@ -25,7 +25,17 @@ class ThemeManager extends ChangeNotifier {
 
   double fontSize = 50.0;
 
-  late AppTokens _tokens;
+  /// Eagerly initialized to the default light tokens: the FIRST frame reads
+  /// [tokens] through [lightTheme] inside MyApp.build, before the async
+  /// config load reaches [setConfiguration]. A `late` field here threw
+  /// LateInitializationError on every cold start (the emulator, 2026-11-20)
+  /// and — as the run's first exception — suppressed the full detail block
+  /// of the next exception behind it.
+  AppTokens _tokens = AppTokens.fromConfig(
+    config: const {},
+    isDark: false,
+    fontScale: 1.0,
+  );
 
   AppTokens get tokens => _tokens;
 

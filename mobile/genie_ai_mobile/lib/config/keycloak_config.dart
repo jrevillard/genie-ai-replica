@@ -32,6 +32,18 @@ class KeycloakConfig {
   final String backendUrl;
   final bool allowInsecureConnections;
 
+  /// Rewrite the OIDC discovery doc's advertised endpoint origins to the
+  /// origin discovery itself succeeded on ([keycloakUrl]). The e2e emulator
+  /// harness needs this: the local build's Keycloak advertises
+  /// `https://localhost/auth/...`, and inside an emulator `localhost` is the
+  /// DEVICE — nothing listens there, so the authorization page, the token
+  /// POST and end-session all die with ERR_CONNECTION_REFUSED. Discovery
+  /// reached Keycloak through [keycloakUrl]'s origin (the slirp host alias
+  /// 10.0.2.2), so the advertised endpoints are reachable the same way.
+  /// Off by default — every non-emulator consumer follows the advertised
+  /// origins verbatim.
+  final bool rewriteAdvertisedOrigins;
+
   /// Locale codes active for this deployment's flavor. Defaults to all shipped
   /// locales; a flavor may restrict this (e.g. el-salvador → ['en', 'es']).
   final List<String> supportedLocaleCodes;
@@ -43,6 +55,7 @@ class KeycloakConfig {
     required this.redirectScheme,
     required this.backendUrl,
     this.allowInsecureConnections = false,
+    this.rewriteAdvertisedOrigins = false,
     this.supportedLocaleCodes = allSupportedLocaleCodes,
   }) : assert(
          redirectScheme.isNotEmpty &&
@@ -66,6 +79,7 @@ class KeycloakConfig {
           redirectScheme == other.redirectScheme &&
           backendUrl == other.backendUrl &&
           allowInsecureConnections == other.allowInsecureConnections &&
+          rewriteAdvertisedOrigins == other.rewriteAdvertisedOrigins &&
           listEquals(supportedLocaleCodes, other.supportedLocaleCodes);
 
   @override
@@ -76,6 +90,7 @@ class KeycloakConfig {
     redirectScheme,
     backendUrl,
     allowInsecureConnections,
+    rewriteAdvertisedOrigins,
     Object.hashAll(supportedLocaleCodes),
   );
 }

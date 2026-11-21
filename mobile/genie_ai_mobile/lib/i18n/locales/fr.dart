@@ -1025,6 +1025,8 @@ const Map<String, dynamic> frLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Sources associées ({n})",
+    "sourceUnavailable": "Cette source n’est pas disponible pour consultation.",
     "aiGeneratedNoDocs":
         "Généré par IA — non basé sur les documents de la bibliothèque",
     "translationUnavailable":
@@ -1190,4 +1192,24 @@ const Map<String, dynamic> frLocale = {
     "copyright": "Tous droits réservés.",
   },
   'welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
+  "okfBrowser": {
+    "title": "Parcourir le dépôt",
+    "currentNotice":
+        "Affiche ce qui est indexé actuellement — pas nécessairement la version citée.",
+    "selectHint":
+        "Sélectionnez un concept dans la vue arborescente pour le lire ici.",
+    "showMore": "Afficher plus",
+    "back": "Retour",
+    "forward": "Avancer",
+    "backToList": "Retour à la liste",
+    "conceptUnavailable": "Ce concept n’est pas disponible.",
+    "unavailable": "Ce dépôt ne peut pas être parcouru pour le moment.",
+    "download": "Télécharger",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "Échec du téléchargement.",
+    "close": "Fermer",
+    "filesLabel": "Fichiers",
+    "filterHint": "Filtrer les fichiers",
+    "indexBadge": "index",
+  },
 };

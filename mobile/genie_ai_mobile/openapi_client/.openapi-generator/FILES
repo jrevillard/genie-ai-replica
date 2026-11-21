@@ -95,6 +95,11 @@ doc/AuthenticationApi.md
 doc/CategoryTree.md
 doc/CategoryTreeChildrenInner.md
 doc/ChatHistoryApi.md
+doc/ConceptCard.md
+doc/ConceptCardLink.md
+doc/ConceptCardSource.md
+doc/ConceptTreePage.md
+doc/ConceptTreeRow.md
 doc/Conversation.md
 doc/ConversationListResponse.md
 doc/ConversationStats.md
@@ -109,9 +114,11 @@ doc/Folder.md
 doc/FolderListResponse.md
 doc/Message.md
 doc/MessageListResponse.md
+doc/OkfApi.md
 doc/QueriesApi.md
 doc/Query.md
 doc/QueryContext.md
+doc/ResolveRepoResponse.md
 doc/SearchResponse.md
 doc/SearchResponseResultsInner.md
 doc/ServiceCategoriesApi.md
@@ -129,6 +136,7 @@ lib/api/authentication_api.dart
 lib/api/chat_history_api.dart
 lib/api/current_user_api.dart
 lib/api/database_operations_api.dart
+lib/api/okf_api.dart
 lib/api/queries_api.dart
 lib/api/service_categories_api.dart
 lib/api/services_api.dart
@@ -231,6 +239,11 @@ lib/model/api_weather_post503_response.dart
 lib/model/api_weather_post_request.dart
 lib/model/category_tree.dart
 lib/model/category_tree_children_inner.dart
+lib/model/concept_card.dart
+lib/model/concept_card_link.dart
+lib/model/concept_card_source.dart
+lib/model/concept_tree_page.dart
+lib/model/concept_tree_row.dart
 lib/model/conversation.dart
 lib/model/conversation_list_response.dart
 lib/model/conversation_stats.dart
@@ -245,6 +258,7 @@ lib/model/message.dart
 lib/model/message_list_response.dart
 lib/model/query.dart
 lib/model/query_context.dart
+lib/model/resolve_repo_response.dart
 lib/model/search_response.dart
 lib/model/search_response_results_inner.dart
 lib/model/session.dart
@@ -344,6 +358,11 @@ test/authentication_api_test.dart
 test/category_tree_children_inner_test.dart
 test/category_tree_test.dart
 test/chat_history_api_test.dart
+test/concept_card_link_test.dart
+test/concept_card_source_test.dart
+test/concept_card_test.dart
+test/concept_tree_page_test.dart
+test/concept_tree_row_test.dart
 test/conversation_list_response_test.dart
 test/conversation_stats_conversations_by_category_inner_test.dart
 test/conversation_stats_messages_by_type_test.dart
@@ -358,9 +377,11 @@ test/folder_list_response_test.dart
 test/folder_test.dart
 test/message_list_response_test.dart
 test/message_test.dart
+test/okf_api_test.dart
 test/queries_api_test.dart
 test/query_context_test.dart
 test/query_test.dart
+test/resolve_repo_response_test.dart
 test/search_response_results_inner_test.dart
 test/search_response_test.dart
 test/service_categories_api_test.dart

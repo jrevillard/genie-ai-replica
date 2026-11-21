@@ -1005,6 +1005,8 @@ const Map<String, dynamic> manLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Hobbe jowtaande ({n})",
+    "sourceUnavailable": "Cha nel y bun shoh ry-akin dy fakin.",
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "translationUnavailable":
         "Translation unavailable — this answer may contain untranslated text.",
@@ -1161,4 +1163,23 @@ const Map<String, dynamic> manLocale = {
     "copyright": "Sariyaalu biling maratolu.",
   },
   'welcomeMessage': 'Welcome! How can I assist you today?',
+  "okfBrowser": {
+    "title": "Browse y repository",
+    "currentNotice":
+        "Ta shoh fockley magh cre ta goll er oltchiaragley nish — cha nee yn wershoon va cit shickyr.",
+    "selectHint": "Tagh concept ass y billey dy lhaih aynshoh.",
+    "showMore": "Jeeagh ny smoo",
+    "back": "Ass",
+    "forward": "Ersooylt",
+    "backToList": "Goll er-ash gys y rolley",
+    "conceptUnavailable": "Cha nel y concept ry-akin.",
+    "unavailable": "Cha nel y repository ry-akin dy browse nish.",
+    "download": "Download",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "Download failed.",
+    "close": "Close",
+    "filesLabel": "Files",
+    "filterHint": "Filter files",
+    "indexBadge": "index",
+  },
 };

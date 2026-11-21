@@ -1005,6 +1005,8 @@ const Map<String, dynamic> thLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "แหล่งข้อมูลที่เกี่ยวข้อง ({n})",
+    "sourceUnavailable": "แหล่งข้อมูลนี้ไม่สามารถดูได้",
     "aiGeneratedNoDocs": "สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร",
     "translationUnavailable":
         "ไม่สามารถแปลได้ — คำตอบนี้อาจมีข้อความที่ยังไม่ได้แปล",
@@ -1163,4 +1165,23 @@ const Map<String, dynamic> thLocale = {
     "copyright": "สงวนลิขสิทธิ์",
   },
   'welcomeMessage': 'ยินดีต้อนรับ! วันนี้ฉันช่วยคุณได้อย่างไร?',
+  "okfBrowser": {
+    "title": "เรียกดูคลังข้อมูล",
+    "currentNotice":
+        "แสดงสิ่งที่จัดทำดัชนีไว้ในปัจจุบัน — ไม่จำเป็นต้องเป็นเวอร์ชันที่ถูกอ้างถึง",
+    "selectHint": "เลือกแนวคิดจากมุมมองต้นไม้เพื่ออ่านที่นี่",
+    "showMore": "แสดงเพิ่มเติม",
+    "back": "ย้อนกลับ",
+    "forward": "ไปข้างหน้า",
+    "backToList": "กลับไปที่รายการ",
+    "conceptUnavailable": "ความคิดนี้ไม่พร้อมใช้งาน",
+    "unavailable": "ไม่สามารถเรียกดูคลังข้อมูลนี้ได้ในขณะนี้",
+    "download": "ดาวน์โหลด",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "ดาวน์โหลดไม่สำเร็จ",
+    "close": "ปิด",
+    "filesLabel": "ไฟล์",
+    "filterHint": "กรองไฟล์",
+    "indexBadge": "index",
+  },
 };

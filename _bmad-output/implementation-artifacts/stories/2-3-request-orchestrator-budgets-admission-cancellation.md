@@ -2,7 +2,7 @@
 title: 'Story 2.3 — Request orchestrator: budgets, admission, cancellation'
 type: 'feature'
 created: '2026-11-21'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '88215907e5709ddbac1c4f8a97696f7732fce644'
@@ -127,6 +127,13 @@ context:
 
 | Round | Finding | Verdict | Evidence / disposition |
 |---|---|---|---|
+| G1 | per-call token bound = cumulative remaining allowance, no window anchor: AGENT_RUN_MAX_TOTAL_TOKENS > endpoint window → vLLM 400 on every first call (probe smoke 524288 vs 65536 window proves it) | high | verified real: `remaining_output_tokens()` is cross-call cumulative; vLLM rejects prompt+max_tokens > max_model_len; fix: client-side per-call cap min(allowance, window − prompt estimate − safety), omit when no room |
+| G1 | non-MissingKnobs assembly failures → raw 500; compose cannot supply port-assembly knobs (no AGENT_DOCREPO_URL/OKF/GRAPHS pass-throughs) | high | verified real: `runs()` catches only MissingKnobsError; build_stateless_adapters raises ValueError on missing docrepo/okf URLs; compose block carries only AGENT_ENABLED/LOG_LEVEL/10 budget knobs; fix: 503 run_surface_unconfigured + assembly-knob pass-throughs (full wiring = 2.5) |
+| G1 | `_required_positive_float` accepts nan/inf: nan ceiling silently disables the wall-clock dimension (min(nan, x)=nan; `elapsed >= nan` always False) | low | verified real: no math.isfinite check; fix: isfinite alongside positivity |
+| G1 | pre-loop failures (port_factory/document_toolset before the try) → 200 stream sent then truncated: no terminal event, no usage record | low | verified real: registry build sits outside the loop's try; fix: build inside try, map to run_error + usage record |
+| G1 | conftest doubles define `max_output_tokens=None` default against the protocol's deliberate no-default | low | verified real; fix: drop the defaults in the doubles |
+| G1 | docs usage-record example omits the `error` field RunUsageRecord carries | low | verified real; fix: add `"error": null` to the example |
+| G1 | test helper `_orchestrator(lane_dir=None)` builds `AdmissionLane(slots, "None")` in CWD | low | verified real: any future admit() test without lane_dir writes stray lock files; fix: make lane_dir required |
 
 ## Design Notes
 
@@ -145,3 +152,12 @@ context:
 - `cd components/agent-service && ruff check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/ && ruff format --check app.py agent/` -- expected: clean
 - `cd components/gov-chat-backend && npx jest __tests__/services/agent-residual-budget.test.js` -- expected: green
 - `cd tests/config-validator && npm test` -- expected: green (OPEA-free gate over the new modules, CI-shell gate over the compose/.gitlab-ci.yml edits)
+- **Review round 1 (coordinator findings, all addressed with the smallest change):**
+  (1) the per-call token bound is now window-anchored in `ProbeModelClient.complete` — the component that knows the endpoint caps `max_tokens` to `min(bound, room)` with room = window − prompt estimate − 128 safety, using the deployed arithmetic matched with `AnswerTranslator` (4 chars/token + 20 offset; window via the deployed three tiers: `AGENT_WINDOW_OVERRIDE_TOKENS` → probed `max_model_len` captured from the same discovery as the model id, cached per client → `MAX_MODEL_LEN_TEXTGEN` fallback carried on `ProbeConfig`); room <= 0 omits the field (an oversized prompt fails honestly on its own). The monitor and loop semantics untouched.
+  (2) `runs()` answers the assembly `ValueError`s (docrepo/okf URLs, TEI endpoints) with the same 503 under `run_surface_unconfigured`; compose + env gain the five port-assembly pass-throughs (`AGENT_DOCREPO_URL`, `AGENT_OKF_URL`, `AGENT_AUTHORIZED_GRAPHS`, `AGENT_AUTHORIZED_REPOS`, `AGENT_PROBE_BEARER`) with the deliberate-scope comment (the TEI/Arango/vLLM endpoints ride the integration story's assembly wiring).
+  (3) `_required_positive_float` now rejects nan/inf (`math.isfinite`) — a nan ceiling silently disabled the wall-clock dimension.
+  (4) the orchestrator builds the registry/loop inside its try; a pre-loop build failure emits `RUN_ERROR` `{"code": "error"}` and returns the "error" usage record, so a started stream always carries a defined terminal + record.
+  (5) the conftest doubles carry the protocol's keyword-only no-default `max_output_tokens`.
+  (6) the V08 doc's usage-record example carries `"error": null` plus the field's meaning.
+  (7) the orchestrator test helper's `lane_dir` is a required positional — no stray lock files in the CWD.
+  Verification of the round: agent-service full pytest 675 passed; ruff check/format clean; config-validator `config-validation` + `agent-service` suites 357 passed (compose/env coverage).

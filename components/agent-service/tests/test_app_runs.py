@@ -114,6 +114,23 @@ def test_unconfigured_knobs_answer_503_naming_every_missing_knob(monkeypatch):
     assert set(body["missing_knobs"]) == set(REQUIRED_KNOBS)
 
 
+def test_an_unassembled_port_answers_503_naming_the_knob(monkeypatch):
+    """The port assembly's own fail-closed reads (here: the doc-repo base
+    URL) are the same honest 503 under a distinct code — never a raw 500
+    traceback from the assembly wiring."""
+    for knob in REQUIRED_KNOBS:
+        monkeypatch.setenv(knob, "1")
+    monkeypatch.delenv("AGENT_DOCREPO_URL", raising=False)
+    monkeypatch.setattr(app_module, "_RUNTIME", None)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"] == "run_surface_unconfigured"
+    assert "AGENT_DOCREPO_URL" in body["message"]
+
+
 def test_a_configured_environment_admits_and_serves(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(multihop_turns()), tmp_path=tmp_path))
     with TestClient(app_module.app) as client:

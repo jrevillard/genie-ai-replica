@@ -1467,6 +1467,18 @@ services:
       - AGENT_TOOL_MAX_RESULT_BYTES=${AGENT_TOOL_MAX_RESULT_BYTES:-}
       # Optional two-tier prompt override (empty = the governed default).
       - AGENT_RUN_SYSTEM_PROMPT=${AGENT_RUN_SYSTEM_PROMPT:-}
+      # Port-assembly knobs the run surface reads fail-closed: an unset
+      # base URL (or TEI endpoint) is answered 503 with the code
+      # run_surface_unconfigured naming what is missing. Deliberate scope:
+      # this is the corpus/model knob set the FULL assembly needs — the
+      # remaining TEI/Arango/vLLM endpoints ride the governed assembly
+      # wiring in the integration story, and until then the 503 names
+      # exactly what is missing.
+      - AGENT_DOCREPO_URL=${AGENT_DOCREPO_URL:-}
+      - AGENT_OKF_URL=${AGENT_OKF_URL:-}
+      - AGENT_AUTHORIZED_GRAPHS=${AGENT_AUTHORIZED_GRAPHS:-}
+      - AGENT_AUTHORIZED_REPOS=${AGENT_AUTHORIZED_REPOS:-}
+      - AGENT_PROBE_BEARER=${AGENT_PROBE_BEARER:-}
     build:
       context: components/agent-service/
       dockerfile: Dockerfile

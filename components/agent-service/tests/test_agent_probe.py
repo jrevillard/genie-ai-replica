@@ -14,6 +14,7 @@ model id, typed transient failures).
 
 import asyncio
 import json
+import math
 
 import pytest
 from conftest import (
@@ -309,11 +310,36 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
     assert "max_tokens" not in payload  # the bound was None: the field is omitted
 
 
-def test_complete_carries_the_output_bound_as_max_tokens_when_one_exists():
+def test_complete_carries_the_output_bound_when_the_window_has_room():
+    # Passthrough: the run allowance (1234) is below what one call can
+    # serve against the window (8192 discovered − 128 safety − the tiny
+    # prompt estimate), so the bound rides verbatim.
     transport = _transport((200, _chat_body(content="a")))
     client = ProbeModelClient(_probe_config(), transport=transport)
     asyncio.run(client.complete([], (), max_output_tokens=1234))
     assert transport.calls[-1]["payload"]["max_tokens"] == 1234
+
+
+def test_complete_caps_the_bound_to_the_window_room():
+    # The run-level allowance may exceed the endpoint's window (the smoke
+    # budget's 524288 tokens vs a 1000-token window here): sending it
+    # verbatim makes vLLM reject every call — the bound is capped to the
+    # room (window − prompt estimate − 128 safety).
+    transport = _transport((200, _chat_body(content="a")))
+    config = _probe_config(AGENT_WINDOW_OVERRIDE_TOKENS="1000")
+    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
+    payload = transport.calls[-1]["payload"]
+    expected_room = 1000 - math.ceil((len("[]") + 20) / 4) - 128
+    assert payload["max_tokens"] == expected_room
+
+
+def test_complete_omits_the_bound_when_the_prompt_leaves_no_room():
+    # An oversized prompt fails honestly on its own (vLLM names the
+    # overflow); no max_tokens is invented for a call that cannot run.
+    transport = _transport((200, _chat_body(content="a")))
+    config = _probe_config(AGENT_WINDOW_OVERRIDE_TOKENS="100")
+    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
+    assert "max_tokens" not in transport.calls[-1]["payload"]
 
 
 def test_complete_carries_the_bearer_when_configured():

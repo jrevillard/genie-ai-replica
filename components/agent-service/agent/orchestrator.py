@@ -34,6 +34,7 @@ surface and the tests unchanged.
 import asyncio
 import json
 import logging
+import math
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -45,11 +46,13 @@ from noagent.lane import AdmissionLane, LaneBusyError
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
-from .events import EventEmitter, EventSink
-from .loop import OUTCOME_CANCELLED, AgentLoop, LoopModelClient, RunResult
+from .events import EventEmitter, EventKind, EventSink
+from .loop import OUTCOME_CANCELLED, OUTCOME_ERROR, AgentLoop, LoopModelClient, RunResult
 from .probe import PROBE_SYSTEM_PROMPT, document_toolset
 
 logger = logging.getLogger(__name__)
+
+_MESSAGE_TRUNCATION = 200
 
 
 class MissingKnobsError(RuntimeError):
@@ -99,7 +102,9 @@ def _required_positive_int(source, name: str, failed: list[str]) -> int | None:
 
 
 def _required_positive_float(source, name: str, failed: list[str]) -> float | None:
-    """The float twin of :func:`_required_positive_int` (strictly > 0)."""
+    """The float twin of :func:`_required_positive_int` (strictly > 0 and
+    finite — a nan would silently disable the dimension it bounds, since
+    every comparison against it is False)."""
     raw = source.get(name)
     if raw is None or str(raw).strip() == "":
         failed.append(name)
@@ -109,7 +114,7 @@ def _required_positive_float(source, name: str, failed: list[str]) -> float | No
     except (TypeError, ValueError):
         failed.append(name)
         return None
-    if value <= 0:
+    if not math.isfinite(value) or value <= 0:
         failed.append(name)
         return None
     return value
@@ -283,18 +288,25 @@ class RequestOrchestrator:
         monitor = RunBudgetMonitor(self._config.budget_for(request.deadline_ms))
         token = CancellationToken()
         emitter = EventEmitter(run_id=run_id, sink=sink)
-        registry = document_toolset(
-            self._port_factory(request.context, request.bearer), request.context, self._config.operation_budget
-        )
-        loop = AgentLoop(
-            model=self._model_client,
-            registry=registry,
-            monitor=monitor,
-            token=token,
-            emitter=emitter,
-            system_prompt=self._config.system_prompt,
-        )
         try:
+            # The per-request assembly is INSIDE the try: a build failure
+            # (a port-factory refusal, a registry defect) must reach the
+            # caller as the honest terminal — the RUN_ERROR event and the
+            # "error" usage record — never as an exception past the stream
+            # that already started. The loop's own failures never get here:
+            # the loop catches its Exceptions internally and returns them
+            # as its result.
+            registry = document_toolset(
+                self._port_factory(request.context, request.bearer), request.context, self._config.operation_budget
+            )
+            loop = AgentLoop(
+                model=self._model_client,
+                registry=registry,
+                monitor=monitor,
+                token=token,
+                emitter=emitter,
+                system_prompt=self._config.system_prompt,
+            )
             result: RunResult = await loop.run(request.question)
         except asyncio.CancelledError:
             logger.warning(
@@ -302,6 +314,11 @@ class RequestOrchestrator:
                 json.dumps(self._record(run_id, OUTCOME_CANCELLED, monitor, error=None).as_dict()),
             )
             raise
+        except Exception as failed:  # noqa: BLE001 — a pre-loop build failure still gets its terminal
+            message = f"{type(failed).__name__}: {str(failed)[:_MESSAGE_TRUNCATION]}"
+            logger.warning("agent run failed before its first dispatch: %s", message)
+            emitter.emit(EventKind.RUN_ERROR, {"code": OUTCOME_ERROR, "message": message})
+            return self._record(run_id, OUTCOME_ERROR, monitor, error=message)
         return self._record(run_id, result.outcome, monitor, error=result.error)
 
     def _record(self, run_id: str, outcome: str, monitor: RunBudgetMonitor, *, error: str | None) -> RunUsageRecord:

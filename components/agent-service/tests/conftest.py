@@ -224,7 +224,7 @@ class ScriptedLoopModel:
         self._turns = list(turns)
         self.requests: list[dict] = []
 
-    async def complete(self, messages, tool_definitions, *, max_output_tokens=None):
+    async def complete(self, messages, tool_definitions, *, max_output_tokens):
         self.requests.append(
             {
                 "messages": [dict(message) for message in messages],
@@ -265,7 +265,7 @@ class HangingLoopModel:
     def __init__(self, recorder: dict):
         self._recorder = recorder
 
-    async def complete(self, messages, tool_definitions, *, max_output_tokens=None):
+    async def complete(self, messages, tool_definitions, *, max_output_tokens):
         await hang_until_cancelled(self._recorder)  # never returns
 
 

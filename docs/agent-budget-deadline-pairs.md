@@ -121,10 +121,14 @@ counters, the state translation budgets against:
     "run_id": "...", "outcome": "answered | error | budget_exhausted",
     "steps": 3, "model_calls": 3, "aux_model_calls": 0, "tool_calls": 2,
     "evidence_bytes": 1234, "prompt_tokens": 90, "completion_tokens": 30,
-    "wall_clock_seconds": 4.2
+    "wall_clock_seconds": 4.2, "error": null
   }
 }
 ```
+
+`error` is null on a normally-terminated run and carries the truncated
+failure message on an errored one (including `budget_exhausted`, where it
+names the dimension that stopped the run).
 
 A cancelled run emits NO terminal event and NO usage record — the partial
 counts ride the service's evidence log line instead (cancellation is the

@@ -39,6 +39,7 @@ question against ``VLLM_ENDPOINT``.
 import asyncio
 import json
 import logging
+import math
 import os
 import uuid
 from dataclasses import asdict, dataclass
@@ -80,6 +81,18 @@ from .loop import (
 from .registry import ToolDefinition, ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+# The one-call output-budget arithmetic — the deployed estimate the answer
+# translator runs over the same endpoint family (``noagent.pipeline``):
+# the prompt is estimated at 4 chars/token (+20 offset), the room is the
+# window minus that estimate minus 128 safety tokens, and a ``max_tokens``
+# larger than the room would make vLLM reject the call outright
+# ("prompt + max_tokens exceeds the context window"). Matched values, one
+# comment home each — the translation leg owns the translation-shaped
+# copies, this client the generation-shaped one.
+MODEL_CHARS_PER_TOKEN_ESTIMATE = 4
+MODEL_PROMPT_OFFSET_TOKENS = 20
+MODEL_INPUT_SAFETY_TOKENS = 128
 
 RUNTIME_ID = "custom-minimal-loop"
 """The provisional candidate's runtime id — the field the runtime decision compares on."""
@@ -313,7 +326,12 @@ def _make_read_executor(port: DocumentCapabilityPort, context: CallerContext, bu
 
 @dataclass(frozen=True)
 class ProbeConfig:
-    """The probe's env knobs — the model leg plus the live-port assembly."""
+    """The probe's env knobs — the model leg plus the live-port assembly.
+
+    The window tiers (``window_override_tokens`` / ``fallback_window_tokens``)
+    ride along because the model client caps the per-call output bound to
+    what one call can serve against the window the endpoint serves.
+    """
 
     generation_endpoint: str
     model_id_override: str
@@ -327,14 +345,17 @@ class ProbeConfig:
     authorized_graphs: str
     authorized_repos: str
     user_bearer: str | None
+    window_override_tokens: int
+    fallback_window_tokens: int
 
     @classmethod
     def load(cls, env=None) -> "ProbeConfig":
         # The model-leg knobs are the deployed generation config's, read
         # through ITS loader (NoAgentConfig): the endpoint resolution rule,
-        # the model-id override, the discovery bearer and TLS posture, and
-        # the tolerant timeout reads have one home, so the probe measures
-        # the same endpoint and payload rules the deployment serves.
+        # the model-id override, the discovery bearer and TLS posture, the
+        # tolerant timeout reads and the window tiers have one home, so the
+        # probe measures the same endpoint and payload rules the deployment
+        # serves.
         noagent = NoAgentConfig.load(env)
         source = os.environ if env is None else env
         return cls(
@@ -355,6 +376,8 @@ class ProbeConfig:
             authorized_graphs=str(source.get("AGENT_AUTHORIZED_GRAPHS", "")),
             authorized_repos=str(source.get("AGENT_AUTHORIZED_REPOS", "")),
             user_bearer=source.get("AGENT_PROBE_BEARER"),
+            window_override_tokens=noagent.window_override_tokens,
+            fallback_window_tokens=noagent.fallback_window_tokens,
         )
 
 
@@ -379,6 +402,8 @@ class ProbeModelClient:
         self._config = config
         self._transport = transport if transport is not None else HttpxTransport(config.tls_verify)
         self._model_id: str | None = None
+        self._discovered_window: int | None = None
+        self._window: int | None = None
 
     async def _resolve_model_id(self) -> str:
         if self._config.model_id_override:
@@ -397,7 +422,24 @@ class ProbeModelClient:
             if not entry or not entry.get("id"):
                 raise ProbeTransientError("the model discovery carried no model id")
             self._model_id = str(entry["id"])
+            # The same probe serves the window the one-call cap is anchored
+            # on; a garbage or absent value falls to the configured tier.
+            discovered = entry.get("max_model_len")
+            if isinstance(discovered, int) and discovered > 0:
+                self._discovered_window = discovered
         return self._model_id
+
+    async def _window_tokens(self) -> int:
+        """The window one call must fit — the deployed three tiers, resolved
+        once per client like the model id (the consumer-side cap, then the
+        probed ``max_model_len``, then the configured fallback)."""
+        if self._window is None:
+            if self._config.window_override_tokens > 0:
+                self._window = self._config.window_override_tokens
+            else:
+                await self._resolve_model_id()  # idempotent; runs the probe when no override
+                self._window = self._discovered_window or self._config.fallback_window_tokens
+        return self._window
 
     async def complete(
         self, messages: list[dict], tool_definitions: tuple[dict, ...], *, max_output_tokens: int | None
@@ -406,8 +448,12 @@ class ProbeModelClient:
 
         ``max_output_tokens`` rides the request as ``max_tokens`` when the
         caller has a bound to state — omitted otherwise (the deployed
-        only-when-configured rule), so the server's own default answers
-        when the run cannot honestly bound its output.
+        only-when-configured rule). The bound is capped to what ONE call
+        can serve: the run-level allowance may exceed the endpoint's
+        window, and a ``max_tokens`` beyond the window makes vLLM reject
+        the call outright — so the bound sent is the smaller of the
+        allowance and the window room. An oversized prompt (room <= 0)
+        omits the field and fails honestly on its own.
         """
         model_id = await self._resolve_model_id()
         payload = {
@@ -418,7 +464,13 @@ class ProbeModelClient:
             **RECORDED_SAMPLING_PARAMS,
         }
         if max_output_tokens is not None:
-            payload["max_tokens"] = max_output_tokens
+            window = await self._window_tokens()
+            input_tokens = math.ceil(
+                (len(json.dumps(messages)) + MODEL_PROMPT_OFFSET_TOKENS) / MODEL_CHARS_PER_TOKEN_ESTIMATE
+            )
+            room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
+            if room > 0:
+                payload["max_tokens"] = min(max_output_tokens, room)
         url = f"{self._config.generation_endpoint}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
         try:

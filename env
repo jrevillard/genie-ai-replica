@@ -1452,6 +1452,17 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_TOOL_MAX_RESULT_BYTES=
 # Optional system-prompt override for governed runs (empty = the governed default).
 # AGENT_RUN_SYSTEM_PROMPT=
+# Port-assembly knobs the run surface reads fail-closed: an unset base URL
+# is answered 503 with the code run_surface_unconfigured naming what is
+# missing. Deliberate scope: the corpus/model knob set the full assembly
+# needs — the remaining TEI/Arango/vLLM endpoints ride the governed
+# assembly wiring in the integration story, and until then the 503 names
+# exactly what is missing.
+# AGENT_DOCREPO_URL=
+# AGENT_OKF_URL=
+# AGENT_AUTHORIZED_GRAPHS=
+# AGENT_AUTHORIZED_REPOS=
+# AGENT_PROBE_BEARER=
 #
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
 # ENABLE_OBSERVABILITY=0

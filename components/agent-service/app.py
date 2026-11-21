@@ -255,6 +255,16 @@ async def runs(body: RunRequestBody):
             },
             status_code=503,
         )
+    except ValueError as unconfigured:
+        # The port assembly's own fail-closed reads (the doc-repo /
+        # okf-server base URLs, the TEI endpoints the search capability
+        # requires) — every assembly defect in this component raises
+        # ValueError with the knob named. Same honest 503, a distinct code.
+        logger.warning("run refused: %s", unconfigured)
+        return JSONResponse(
+            {"error": "run_surface_unconfigured", "message": str(unconfigured)},
+            status_code=503,
+        )
     admit_ctx = runtime.orchestrator.admit()
     try:
         await admit_ctx.__aenter__()

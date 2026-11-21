@@ -27,7 +27,7 @@ from conftest import (
 
 from agent.budget import RunBudget
 from agent.events import BFF_FRAME_NAMES, AgentEvent
-from agent.loop import OUTCOME_ANSWERED, OUTCOME_CANCELLED, ModelTurn
+from agent.loop import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR, ModelTurn
 from agent.orchestrator import (
     AdmissionRefused,
     AgentRunRequest,
@@ -60,7 +60,7 @@ def _port() -> AgentFakePort:
     return AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
 
 
-def _orchestrator(model, port=None, *, config=None, slots=1, lane_dir=None):
+def _orchestrator(model, port, lane_dir, *, config=None, slots=1):
     """One orchestrator over fakes; ``port_calls`` records every per-request
     port build (context + bearer)."""
     port_calls: list[dict] = []
@@ -153,6 +153,8 @@ def test_an_empty_value_counts_as_missing(unset):
         {"AGENT_RUN_MAX_STEPS": "0"},
         {"AGENT_RUN_MAX_WALL_CLOCK_SECONDS": "-1"},
         {"AGENT_TOOL_MAX_RESULT_BYTES": "0"},
+        {"AGENT_RUN_MAX_WALL_CLOCK_SECONDS": "nan"},
+        {"AGENT_RUN_MAX_WALL_CLOCK_SECONDS": "inf"},
     ],
 )
 def test_an_unusable_value_counts_as_missing(broken):
@@ -220,7 +222,7 @@ def test_the_budget_carries_the_deployment_numbers_and_the_derived_clock():
 
 
 def test_a_saturated_lane_refuses_with_the_typed_error(tmp_path):
-    orchestrator, _, lane = _orchestrator(ScriptedLoopModel(multihop_turns()), lane_dir=tmp_path / "lane.lock")
+    orchestrator, _, lane = _orchestrator(ScriptedLoopModel(multihop_turns()), None, tmp_path / "lane.lock")
 
     async def scenario():
         async with lane.acquire():
@@ -232,7 +234,7 @@ def test_a_saturated_lane_refuses_with_the_typed_error(tmp_path):
 
 
 def test_the_admission_claim_holds_for_the_whole_run_and_releases_after(tmp_path):
-    orchestrator, _, lane = _orchestrator(ScriptedLoopModel(multihop_turns()), lane_dir=tmp_path / "lane.lock")
+    orchestrator, _, lane = _orchestrator(ScriptedLoopModel(multihop_turns()), None, tmp_path / "lane.lock")
 
     async def scenario():
         async with orchestrator.admit():
@@ -254,10 +256,10 @@ def test_the_admission_claim_holds_for_the_whole_run_and_releases_after(tmp_path
 # ---------------------------------------------------------------------
 
 
-def test_a_completed_run_answers_the_usage_record_of_the_shared_counters():
+def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_path):
     turns = tuple(replace(turn, prompt_tokens=10, completion_tokens=5) for turn in multihop_turns())
     port = _port()
-    orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(turns), port=port)
+    orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(turns), port, tmp_path)
     events: list[AgentEvent] = []
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
@@ -288,9 +290,9 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters():
         assert event.kind.value not in BFF_FRAME_NAMES
 
 
-def test_the_executor_is_built_per_request_with_the_request_context_and_bearer():
+def test_the_executor_is_built_per_request_with_the_request_context_and_bearer(tmp_path):
     port = _port()
-    orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(multihop_turns() * 2), port=port)
+    orchestrator, port_calls, _ = _orchestrator(ScriptedLoopModel(multihop_turns() * 2), port, tmp_path)
     asyncio.run(orchestrator.run(_request(bearer="bearer-1", context=CONTEXT)))
     asyncio.run(orchestrator.run(_request(bearer="bearer-2", context=CONTEXT)))
 
@@ -299,19 +301,19 @@ def test_the_executor_is_built_per_request_with_the_request_context_and_bearer()
     assert len(port.search_calls) == 2  # both runs dispatched through the port
 
 
-def test_the_registry_is_bound_to_the_request_context_and_the_operation_budget():
+def test_the_registry_is_bound_to_the_request_context_and_the_operation_budget(tmp_path):
     port = _port()
     config = _config(operation_budget=OperationBudget(timeout_ms=777, max_results=3, max_result_bytes=999))
-    orchestrator, _, _ = _orchestrator(ScriptedLoopModel(multihop_turns()), port=port, config=config)
+    orchestrator, _, _ = _orchestrator(ScriptedLoopModel(multihop_turns()), port, tmp_path, config=config)
     asyncio.run(orchestrator.run(_request()))
 
     assert port.search_calls[0]["budget"] == config.operation_budget
     assert port.search_calls[0]["context"] == CONTEXT
 
 
-def test_the_system_prompt_reaches_the_model_call():
+def test_the_system_prompt_reaches_the_model_call(tmp_path):
     model = ScriptedLoopModel((ModelTurn(content="done"),))
-    orchestrator, _, _ = _orchestrator(model, config=_config(system_prompt="the deployed prompt"))
+    orchestrator, _, _ = _orchestrator(model, None, tmp_path, config=_config(system_prompt="the deployed prompt"))
     asyncio.run(orchestrator.run(_request()))
     assert model.requests[0]["messages"][0] == {"role": "system", "content": "the deployed prompt"}
 
@@ -323,7 +325,7 @@ def test_the_system_prompt_reaches_the_model_call():
 
 def test_a_cancellation_logs_the_partial_record_and_propagates_untouched(tmp_path, caplog):
     recorder: dict = {}
-    orchestrator, _, lane = _orchestrator(HangingLoopModel(recorder), lane_dir=tmp_path / "lane.lock")
+    orchestrator, _, lane = _orchestrator(HangingLoopModel(recorder), None, tmp_path / "lane.lock")
 
     async def scenario():
         async with orchestrator.admit():
@@ -353,10 +355,42 @@ def test_a_cancellation_logs_the_partial_record_and_propagates_untouched(tmp_pat
 # ---------------------------------------------------------------------
 
 
-def test_an_exhausted_run_reports_budget_exhausted_with_no_answer_text():
+def test_an_exhausted_run_reports_budget_exhausted_with_no_answer_text(tmp_path):
     turns = multihop_turns(answer="the fabricated answer")
-    orchestrator, _, _ = _orchestrator(ScriptedLoopModel(turns), config=_config(max_model_calls=1))
+    orchestrator, _, _ = _orchestrator(ScriptedLoopModel(turns), None, tmp_path, config=_config(max_model_calls=1))
     record = asyncio.run(orchestrator.run(_request()))
     assert record.outcome == "budget_exhausted"
     assert record.model_calls == 1
     assert record.error is not None
+
+
+# ---------------------------------------------------------------------
+# A pre-loop build failure is an honest terminal, not a truncated stream
+# ---------------------------------------------------------------------
+
+
+def test_a_port_factory_failure_answers_the_honest_terminal(tmp_path):
+    """A build failure before the loop's first dispatch (here: the port
+    factory refusing an unassembled knob) reaches the caller as the
+    defined terminal — the run_error event and the "error" usage record —
+    so a started stream carries its terminal + record and never truncates."""
+    events: list[AgentEvent] = []
+
+    def broken_factory(context, bearer):
+        raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
+
+    orchestrator = RequestOrchestrator(
+        config=_config(),
+        lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
+        model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
+        port_factory=broken_factory,
+    )
+
+    record = asyncio.run(orchestrator.run(_request(), sink=events.append))
+
+    assert record.outcome == OUTCOME_ERROR
+    assert record.error is not None
+    assert "AGENT_DOCREPO_URL" in record.error
+    assert [event.kind.value for event in events] == ["run_error"]
+    assert events[-1].payload["code"] == OUTCOME_ERROR
+    assert record.as_dict()["steps"] == 0  # nothing ran; the record is the honest zero

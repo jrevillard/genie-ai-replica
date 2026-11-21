@@ -117,6 +117,31 @@ class _FakeDb:
         return [{"name": "GRAPH_BM25_VIEW"}]
 
 
+def _split_db(rows_file_id, rows_identity):
+    """A db whose AQL answers the file_id enrichment with ``rows_file_id``
+    and the CAP-1 identity join with ``rows_identity`` — the two batched
+    queries dispatch on the collection the query names."""
+
+    class SplitAql:
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            rows = rows_identity if "okf_concepts_meta" in query else rows_file_id
+
+            class C:
+                def __iter__(self):
+                    return iter(rows)
+
+            return C()
+
+    class SplitDb:
+        def __init__(self):
+            self.aql = SplitAql()
+
+        def views(self):
+            return [{"name": "GRAPH_BM25_VIEW"}]
+
+    return SplitDb()
+
+
 def make_capability(embedding=None, reranking=None, rows=None):
     rows = rows or []
     embedding = embedding or FakeEmbedding()
@@ -235,26 +260,8 @@ def test_cap1_resolved_candidate_carries_okf_provenance_and_unresolved_carries_l
         ScoredCandidate(text="beta", score=0.6, position=1),
     )
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
-
-    class SplitAql:
-        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
-            rows = rows_identity if "okf_concepts_meta" in query else rows_file_id
-
-            class C:
-                def __iter__(self):
-                    return iter(rows)
-
-            return C()
-
-    class SplitDb:
-        def __init__(self):
-            self.aql = SplitAql()
-
-        def views(self):
-            return [{"name": "GRAPH_BM25_VIEW"}]
-
     capability, _e, _r, _f = make_capability(reranking=reranking)
-    capability._db_factory = lambda graph: SplitDb()
+    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     assert isinstance(result.hits[0].provenance, OkfConceptProvenance)
     assert result.hits[0].provenance.concept_id == "f1"
@@ -298,26 +305,8 @@ def test_okf_candidate_with_unresolvable_file_id_is_skipped_not_cited_with_an_em
     rows_identity = [{"key": "c1", "repo_id": "repo-1", "bundle_version": 7}]
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
-
-    class SplitAql:
-        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
-            rows = rows_identity if "okf_concepts_meta" in query else rows_file_id
-
-            class C:
-                def __iter__(self):
-                    return iter(rows)
-
-            return C()
-
-    class SplitDb:
-        def __init__(self):
-            self.aql = SplitAql()
-
-        def views(self):
-            return [{"name": "GRAPH_BM25_VIEW"}]
-
     capability, _e, _r, _f = make_capability(reranking=reranking)
-    capability._db_factory = lambda graph: SplitDb()
+    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     assert result.hits == ()
 

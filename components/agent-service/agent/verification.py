@@ -252,9 +252,7 @@ def judge_messages(answer_text: str, citations: list[dict]) -> list[dict]:
     error, and an error is ``unverified`` — never parse-guessed into
     ``grounded``.
     """
-    passages = "\n\n".join(
-        f"[{index}] {entry['text']}" for index, entry in enumerate(citations, start=1)
-    )
+    passages = "\n\n".join(f"[{index}] {entry['text']}" for index, entry in enumerate(citations, start=1))
     system = (
         "You are an answer-grounding judge. You receive an assistant answer and the passages "
         "its citations resolve to. Decide whether every factual assertion of the answer is "

@@ -225,7 +225,8 @@ def test_no_retrieval_at_all_verifies_unverified_with_the_judge_skipped():
 
 def test_retrieval_with_nothing_validly_citable_is_ungrounded_before_the_judge():
     pipeline, monitor = _pipeline(
-        judge_turns=(ModelTurn(content="never asked"),), authorized_repos=()  # r-1 not authorized
+        judge_turns=(ModelTurn(content="never asked"),),
+        authorized_repos=(),  # r-1 not authorized
     )
     pipeline.record_tool_result("search_knowledge", _search_payload([OKF_HIT]))
     verdict = asyncio.run(pipeline.finalize("the answer"))

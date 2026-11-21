@@ -453,8 +453,11 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
       context: { serviceLabels: ['taxes'] }
     });
 
-    const body = axios.post.mock.calls[0][1];
+    const [url, body, options] = axios.post.mock.calls[0];
+    expect(url).toBe('http://agent-service:8010');
     expect(body.deadline_ms).toBe(60000 - _internals.TRANSLATION_RESERVE_MS - _internals.FINALIZATION_MARGIN_MS);
+    // The wire-level timeout is the configured 60000, not a derived value.
+    expect(options.timeout).toBe(60000);
     expect(body.context.authorized_graph_names).toEqual(['OKF_a_v1']);
     expect(body.context.authorized_repos).toEqual([{ repo_id: 'r-kenya', graph_name: 'OKF_a_v1' }]);
     expect(body.context.requested_labels).toEqual(['taxes']);
@@ -464,22 +467,43 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
   it('a timeout above the reserves still derives deadline = timeout − reserves', () => {
     // 40000 covers reserves (35000) plus the floor: the pair rule holds.
     expect(_internals.deriveDeadlineMs(40000)).toBe(5000);
+    expect(_internals.resolveUpstreamTimeoutMs()).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
   });
 
-  it('a timeout that cannot cover the reserves + floor is absorbed (default applies, one warning)', () => {
-    // 20000 ≤ 30000 + 5000 + 1000: deriving deadline = −15000 would break
-    // the pair rule — the derivation warns naming the knob and falls back to
-    // the default timeout's deadline instead.
-    expect(_internals.deriveDeadlineMs(20000)).toBe(
-      _internals.DEFAULT_UPSTREAM_TIMEOUT_MS - _internals.TRANSLATION_RESERVE_MS - _internals.FINALIZATION_MARGIN_MS
+  it('an under-sized configuration is absorbed ONCE — every consumer reads the default', () => {
+    // 20000 ≤ reserves + floor: deriving deadline = −15000 would break the
+    // pair rule. resolveUpstreamTimeoutMs warns naming the knob and applies
+    // the default — and BOTH consumers (the deadline derivation and the
+    // wire-level timeout) read that same resolved value.
+    const { logger } = require('../mocks/shared-lib');
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '20000';
+    expect(_internals.resolveUpstreamTimeoutMs()).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
+    expect(_internals.deriveDeadlineMs(_internals.resolveUpstreamTimeoutMs())).toBe(3600000 - 30000 - 5000);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'AgentFrameWriter.upstream_timeout_below_reserves',
+      expect.objectContaining({ knob: 'AGENT_UPSTREAM_TIMEOUT_MS', configured: 20000, applied: 3600000 })
     );
-    expect(
-      _internals.deriveDeadlineMs(
-        _internals.TRANSLATION_RESERVE_MS + _internals.FINALIZATION_MARGIN_MS + _internals.DEADLINE_FLOOR_MS
-      )
-    ).toBe(
-      _internals.DEFAULT_UPSTREAM_TIMEOUT_MS - _internals.TRANSLATION_RESERVE_MS - _internals.FINALIZATION_MARGIN_MS
-    );
+    delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+  });
+
+  it('an under-sized configured timeout reads the absorbed default on the wire (deadline AND axios timeout)', async () => {
+    setupAgentQuery();
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '20000';
+
+    await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+
+    const [url, body, options] = axios.post.mock.calls[0];
+    expect(url).toBe('http://agent-service:8010');
+    // The deadline the run paces against AND the timeout the BFF aborts with
+    // are the SAME absorbed value — the small configuration aborts nothing
+    // ahead of the run's own honest ending.
+    expect(body.deadline_ms).toBe(3600000 - 30000 - 5000);
+    expect(options.timeout).toBe(3600000);
+    delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
   });
 });
 
@@ -531,6 +555,48 @@ describe('POST /api/queries/stream — pre-stream refusals (JSON, before any SSE
   it('an unparseable 429 body still answers the documented error name', async () => {
     setupAgentQuery();
     axios.post.mockResolvedValue({ status: 429, headers: {}, data: dataStream('gateway timeout') });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    expect(response.status).toBe(429);
+    expect(response.body).toEqual({ error: 'admission_refused' });
+  });
+
+  it('a body past the 64 KiB cap is truncated with a warning, the prefix still parsed best-effort', async () => {
+    setupAgentQuery();
+    // A 503 body whose useful JSON head fits the cap but whose total size
+    // breaches it: the read stops buffering, warns once with the status, and
+    // the prefix (valid JSON here) still parses.
+    const head = JSON.stringify({ error: 'budget_configuration_missing', message: 'x'.repeat(1024) });
+    const oversized = head + ' '.repeat(70 * 1024);
+    axios.post.mockResolvedValue({ status: 503, headers: {}, data: dataStream(oversized) });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual(expect.objectContaining({ error: 'budget_configuration_missing' }));
+    // The truncation itself is loud: one warning names the status and the
+    // size that breached the cap.
+    const { logger } = require('../mocks/shared-lib');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'AgentFrameWriter.upstream_body_truncated',
+      expect.objectContaining({ status: 503, bytes: expect.any(Number) })
+    );
+  });
+
+  it('a body whose JSON only exists past the cap degrades to the documented fallback', async () => {
+    setupAgentQuery();
+    // The cap discards the whole JSON object: the prefix is whitespace, the
+    // parse fails, and the client still gets the documented error name —
+    // never a raw string body forwarded as JSON.
+    const oversized = ' '.repeat(70 * 1024) + JSON.stringify({ error: 'late_object' });
+    axios.post.mockResolvedValue({ status: 429, headers: {}, data: dataStream(oversized) });
 
     const response = await authPost('/api/queries/stream', {
       sessionId: 's1',
@@ -664,7 +730,11 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
   it('a transport error mid-stream answers AGENT_STREAM_ERROR with the error contract', async () => {
     setupAgentQuery();
     const mockStream = new Readable({ read() {} });
-    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+    let capturedSignal = null;
+    axios.post.mockImplementation((_url, _body, options) => {
+      capturedSignal = options.signal;
+      return Promise.resolve({ status: 200, headers: {}, data: mockStream });
+    });
 
     const responsePromise = authPost('/api/queries/stream', {
       sessionId: 's1',
@@ -690,6 +760,56 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     expect(frames[frames.length - 1].code).toBe('AGENT_STREAM_ERROR');
     expect(frames.find((f) => f.type === 'done')).toBeUndefined();
     expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+    // The client was told the run failed: the agent leg must not keep
+    // working behind the dead response.
+    expect(capturedSignal.aborted).toBe(true);
+  });
+
+  it('a stream that trickles past the wall-clock bound is aborted and ends with the error contract', async () => {
+    // 40000 > reserves + floor: the effective timeout is the configured one,
+    // so the deadline timer is a real 40000 ms bound on the BODY.
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      setupAgentQuery();
+      const mockStream = new Readable({ read() {} });
+      let capturedSignal = null;
+      axios.post.mockImplementation((_url, _body, options) => {
+        capturedSignal = options.signal;
+        return Promise.resolve({ status: 200, headers: {}, data: mockStream });
+      });
+
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'q' }]
+      });
+      responsePromise.catch(() => {});
+      for (let i = 0; i < 200 && mockStream.listenerCount('data') === 0; i++) {
+        await new Promise(setImmediate);
+      }
+      expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+
+      // The stream trickles: chunks keep arriving, the leg never ends.
+      mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'slow' }, { seq: 0 }))}\n\n`);
+      await new Promise(setImmediate);
+      jest.advanceTimersByTime(40000);
+
+      // The wall-clock bound fired: the upstream leg is aborted...
+      expect(capturedSignal.aborted).toBe(true);
+      // ...and (what the real adapter does on the aborted socket) the stream
+      // errors out — the error contract ends the response.
+      mockStream.emit('error', new Error('aborted'));
+
+      const response = await responsePromise;
+      const frames = parseSSEEvents(response.text);
+      expect(frames.some((f) => f.type === 'chunk')).toBe(true);
+      expect(frames[frames.length - 1].type).toBe('error');
+      expect(frames.find((f) => f.type === 'done')).toBeUndefined();
+      expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+    }
   });
 
   it('ignores an unknown seam kind instead of breaking the stream (additive envelope)', async () => {

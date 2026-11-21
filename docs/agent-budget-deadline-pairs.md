@@ -88,10 +88,12 @@ with the reserves as named module constants beside the derivation in
 `gpu-translate-backend.js`) and `FINALIZATION_MARGIN_MS = 5000` (metadata
 persistence, frame write, SSE teardown). The pair rule holds whenever the
 timeout exceeds the reserves; a configured timeout at or below the reserves
-plus the floor (≤ 36000 ms on the shipped numbers) cannot — the derivation
+plus the floor (≤ 36000 ms on the shipped numbers) cannot — the resolution
 absorbs it (one warning names `AGENT_UPSTREAM_TIMEOUT_MS`, the 3600000
-default applies) instead of shipping a deadline that turns a bounded run
-into a BFF-attributed abort. The judge-overrun ceiling
+default applies to EVERY consumer of the pair: the deadline derivation, the
+wire-level timeout of the leg, and the stream's wall-clock bound) instead of
+shipping a deadline one thing paces against and another aborts ahead of —
+the BFF-attributed abort. The judge-overrun ceiling
 (`AGENT_VERDICT_JUDGE_TIMEOUT_MS`) is NOT part of the derivation yet: the
 run surface bounds its own wall clock and answers honestly, so a long run
 surfaces as the agent's own `budget_exhausted`/`run_error`, never as a BFF

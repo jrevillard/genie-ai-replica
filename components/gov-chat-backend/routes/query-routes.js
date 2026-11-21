@@ -363,6 +363,48 @@ module.exports = (queryService) => {
         return;
       }
 
+      // Stream state the disconnect listener reads — declared BEFORE the
+      // listener registration and before the chatqna await: a client that
+      // leaves during the connect / time-to-first-byte window must find the
+      // listener already armed, with no temporal-dead-zone bindings behind it.
+      const doneState = { handled: false };
+      let fullResponseText = '';
+      // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
+      // forwarded to the client instead of running a separate backend-side retrieval.
+      let capturedMetadata = null;
+      opeaController = new AbortController();
+
+      // Client disconnect. `req.on('close')` does not fire here — express.json()
+      // consumes the request body before the route handler runs, so `req` has
+      // already emitted 'close' by the time the first `await` resolves; the
+      // signal is `res.on('close')`. The dead `req` listener this replaces
+      // carried exactly the cleanup below (story 2.4 put it on the living
+      // object, armed BEFORE the upstream call so the connect window is
+      // covered); `close` fires on EVERY response end, so the
+      // `doneState.handled` guard keeps a normally completed stream from being
+      // re-finalized as a partial save, and the stream-error branch marks
+      // itself handled to keep the error contract (error frame then end — no
+      // metadata, no done).
+      res.on('close', () => {
+        cleanupKeepalive();
+        if (doneState.handled) return;
+        doneState.handled = true;
+        if (opeaController && !opeaController.signal.aborted) {
+          opeaController.abort();
+          logger.info('QueryService.stream_client_disconnected', { queryId });
+          if (fullResponseText) {
+            queryService
+              .finalizeStreamQuery(
+                queryId,
+                fullResponseText,
+                Date.now() - streamStartTime,
+                capturedMetadata || emptyStreamMetadata()
+              )
+              .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
+          }
+        }
+      });
+
       // SSE response headers
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -372,7 +414,6 @@ module.exports = (queryService) => {
       });
 
       const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
-      opeaController = new AbortController();
 
       // Stamp the correlation id on the span covering THIS handler — the server
       // span for the incoming request — so a trace whose chatqna side never got
@@ -421,12 +462,7 @@ module.exports = (queryService) => {
         : await axios.post(opeaUrl, opeaPayload, opeaRequestOptions); // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
 
       const stream = opeaResponse.data;
-      let fullResponseText = '';
       let buffer = '';
-      const doneState = { handled: false };
-      // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
-      // forwarded to the client instead of running a separate backend-side retrieval.
-      let capturedMetadata = null;
 
       function cleanupKeepalive() {
         if (keepalive !== null) {
@@ -553,35 +589,6 @@ module.exports = (queryService) => {
         }
       });
 
-      // Client disconnect. `req.on('close')` does not fire here — express.json()
-      // consumes the request body before the route handler runs, so `req` has
-      // already emitted 'close' by the time the first `await` resolves; the
-      // signal is `res.on('close')`. The dead `req` listener this replaces
-      // carried exactly the cleanup below (story 2.4 put it on the living
-      // object); `close` fires on EVERY response end, so the `doneState.handled`
-      // guard keeps a normally completed stream from being re-finalized as a
-      // partial save, and the stream-error branch marks itself handled to keep
-      // the error contract (error frame then end — no metadata, no done).
-      res.on('close', () => {
-        cleanupKeepalive();
-        if (doneState.handled) return;
-        doneState.handled = true;
-        if (opeaController && !opeaController.signal.aborted) {
-          opeaController.abort();
-          logger.info('QueryService.stream_client_disconnected', { queryId });
-          if (fullResponseText) {
-            queryService
-              .finalizeStreamQuery(
-                queryId,
-                fullResponseText,
-                Date.now() - streamStartTime,
-                capturedMetadata || emptyStreamMetadata()
-              )
-              .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
-          }
-        }
-      });
-
       keepalive = setInterval(() => {
         if (res.writableEnded) {
           cleanupKeepalive();
@@ -592,6 +599,12 @@ module.exports = (queryService) => {
     } catch (error) {
       if (keepalive !== null) clearInterval(keepalive);
       logger.error('QueryService.stream_setup_error', { error: error.message });
+      if (res.writableEnded || res.destroyed) {
+        // The client is already gone (e.g. it disconnected during the chatqna
+        // connect window and the close listener aborted the leg): the answer
+        // would be written to a destroyed socket — an error nobody reads.
+        return;
+      }
       if (!res.headersSent) {
         if (error.statusCode === 401) {
           // Story 1.1: an expired/invalid bearer caught during fan-out

@@ -1915,6 +1915,10 @@ describe('query id correlation on the server span', () => {
     const res = {
       writableEnded: false,
       headersSent: false,
+      // The handler registers its disconnect listener on the response
+      // (story 2.4 hoists it before the chatqna await) — a real res is an
+      // EventEmitter; the fake carries the same seam.
+      on: jest.fn(),
       writeHead: jest.fn(() => {
         res.headersSent = true;
       }),
@@ -2254,6 +2258,76 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
 
     // Exactly ONE finalize — the terminal's, not the close listener's.
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('a disconnect during the chatqna connect window aborts the call (listener armed before the POST)', async () => {
+    // The listener is registered BEFORE `await axios.post` — a client that
+    // leaves while chatqna is still connecting aborts the upstream leg, it
+    // does not run to full cost behind a dead response. A raw http server we
+    // own (not supertest): an aborted supertest request leaves its ephemeral
+    // server listening — the handle this test must be able to close.
+    const http = require('http');
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    let capturedSignal = null;
+    axios.post.mockImplementation((_url, _body, options) => {
+      capturedSignal = options.signal;
+      // chatqna never answers; the abort rejects (what the real adapter does
+      // with the signal).
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          const error = new Error('canceled');
+          error.code = 'ERR_CANCELED';
+          reject(error);
+        });
+      });
+    });
+
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    const nodeReq = http.request({
+      host: '127.0.0.1',
+      port: server.address().port,
+      path: '/api/queries/stream',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${validToken}`
+      }
+    });
+    nodeReq.end(JSON.stringify({ sessionId: 's1', messages: [{ role: 'user', content: 'hello' }] }));
+    // The destroy below surfaces as ECONNRESET on the request — an expected
+    // part of the scenario, swallowed here.
+    nodeReq.on('error', () => {});
+
+    try {
+      for (let i = 0; i < 100 && axios.post.mock.calls.length === 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(axios.post.mock.calls.length).toBe(1);
+      // The route handler is parked INSIDE the POST await — no stream
+      // listeners exist yet; only the hoisted close listener can catch this.
+      expect(capturedSignal).not.toBeNull();
+
+      // The client leaves: the socket is destroyed → the server `res` emits
+      // 'close' → the hoisted listener aborts the controller.
+      nodeReq.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(capturedSignal.aborted).toBe(true);
+      // Nothing was streamed: nothing to partial-save (the silent branch of
+      // the same listener the late-registration disconnect path exercises).
+      expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });
 

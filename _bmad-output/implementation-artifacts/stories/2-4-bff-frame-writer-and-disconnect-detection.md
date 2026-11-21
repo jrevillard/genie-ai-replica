@@ -239,6 +239,49 @@ exact control over the close timing.
 full verification runs on the coordinator side); eslint + prettier clean; `tests/config-validator`
 667 passed (covers the compose/env edits).
 
+### 2026-11-21 — review round 2 fixes (global review findings)
+
+- **Effective timeout, resolved once** (`agent-frame-writer.js`): new
+  `resolveUpstreamTimeoutMs()` performs the absorption (warn + default) and
+  `proxyAgentRun` reads ONE `effectiveTimeoutMs` for ALL consumers — the deadline derivation, the
+  axios `timeout` option, and the stream wall-clock bound. Previously a too-small configuration
+  paced the run against a 1 h deadline while the leg still aborted at the small value — the exact
+  BFF-attributed abort the pair rule forbids, with a warn `applied` field that lied. `deriveDeadlineMs`
+  is pure again; the pairs-doc wording updated (every consumer of the pair reads the same resolved
+  value).
+- **Legacy disconnect listener hoisted** (`query-routes.js`): `res.on('close')` now registers right
+  after `initStreamQuery` returns (queryId exists) and BEFORE `writeHead`/the chatqna POST —
+  disconnects during the connect / time-to-first-byte window are caught. The listener body is
+  identical; `doneState`, `fullResponseText`, `capturedMetadata` and the controller assignment were
+  hoisted above the registration so no binding sits in the temporal dead zone when close fires
+  early. Two companion necessities: the route catch now returns instead of answering when
+  `res.writableEnded || res.destroyed` (an answer to a client that is gone is an error nobody
+  reads — without it the connect-window path wrote a 504 into a destroyed socket), and the
+  span-stamping test's fake `res` grew the `on: jest.fn()` seam the hoisted registration needs.
+- **`finishWithErrorFrame` aborts the upstream leg** (guard: only when not already aborted) — the
+  agent leg must not keep making model calls (and holding its admission slot) behind a response the
+  client was told failed.
+- **Stream wall-clock bound**: once the upstream headers arrive the axios timeout degenerates to an
+  inactivity bound; the writer now arms `setTimeout(effectiveTimeoutMs)` when the stream starts —
+  on fire it warns (`AgentFrameWriter.stream_deadline_exceeded`) and aborts the controller (the
+  stream's 'error' path ends with the error contract). Cleared on every terminal path: the agent
+  terminal, `finishWithErrorFrame`, the close listener.
+- **Truncated upstream body is visible**: `readUpstreamBody(data, status)` stops buffering past the
+  64 KiB cap and warns `AgentFrameWriter.upstream_body_truncated` (status + bytes) once, instead of
+  silently JSON-parsing a cut prefix into the generic fallback.
+- **Tests** (same suites): the under-sized configuration pins BOTH wire consumers (deadline AND
+  axios timeout) reading the absorbed default, plus the warn payload; the wall-clock test uses fake
+  timers (effective 40000 ms, stream trickles, bound fires → signal aborted → error contract, no
+  finalize); the transport-error test asserts the controller signal is aborted; the legacy suite
+  gains a connect-window disconnect test (raw `http` server we own — an aborted supertest request
+  leaks its ephemeral listening server — client socket destroyed while the handler is parked inside
+  the POST await → signal aborted, silent no-save).
+
+**Verification (review round 2)**: `agent-frame-writer` 28 passed; `query-routes` 85 passed
+(113 total across the two covering suites, clean jest exit — the earlier rounds' "did not exit"
+open handle came from the aborted-supertest-request shape and is gone with the owned-server test);
+eslint + prettier clean on the four touched files.
+
 ## Spec Change Log
 
 <!-- Append-only. Populated by step-04 during review loops. -->

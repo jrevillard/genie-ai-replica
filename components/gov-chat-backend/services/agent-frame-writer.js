@@ -53,25 +53,38 @@ function upstreamTimeoutMs() {
 }
 
 /**
- * The agent-phase deadline the run request communicates: the upstream timeout
- * minus the translation and finalization reserves. A configured timeout that
- * cannot cover the reserves plus the floor would break the pair rule
- * (`deadline_ms + reserves > timeout`) and turn a bounded run into a
+ * The EFFECTIVE upstream timeout — the one value BOTH consumers of the pair
+ * read (the deadline derivation and the axios `timeout` option). A configured
+ * timeout that cannot cover the reserves plus the floor would break the pair
+ * rule (`deadline_ms + reserves > timeout`) and turn a bounded run into a
  * BFF-attributed abort — the misattribution the pairs doc forbids — so it is
- * absorbed instead: one warning names the knob and the default timeout
- * applies.
- * @param {number} timeoutMs - The upstream timeout.
+ * absorbed: one warning names the knob (configured vs applied) and the
+ * default applies to everything downstream.
+ * @returns {number}
+ */
+function resolveUpstreamTimeoutMs() {
+  const configured = upstreamTimeoutMs();
+  if (configured <= TRANSLATION_RESERVE_MS + FINALIZATION_MARGIN_MS + DEADLINE_FLOOR_MS) {
+    logger.warn('AgentFrameWriter.upstream_timeout_below_reserves', {
+      knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
+      configured,
+      applied: DEFAULT_UPSTREAM_TIMEOUT_MS
+    });
+    return DEFAULT_UPSTREAM_TIMEOUT_MS;
+  }
+  return configured;
+}
+
+/**
+ * The agent-phase deadline the run request communicates: the upstream timeout
+ * minus the translation and finalization reserves. The caller passes the
+ * EFFECTIVE timeout (`resolveUpstreamTimeoutMs()` — the absorption happens
+ * there, once, so the deadline and the wire-level timeout can never read two
+ * different values).
+ * @param {number} timeoutMs - The effective upstream timeout.
  * @returns {number}
  */
 function deriveDeadlineMs(timeoutMs) {
-  if (timeoutMs <= TRANSLATION_RESERVE_MS + FINALIZATION_MARGIN_MS + DEADLINE_FLOOR_MS) {
-    logger.warn('AgentFrameWriter.upstream_timeout_below_reserves', {
-      knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
-      configured: timeoutMs,
-      applied: DEFAULT_UPSTREAM_TIMEOUT_MS
-    });
-    return DEFAULT_UPSTREAM_TIMEOUT_MS - TRANSLATION_RESERVE_MS - FINALIZATION_MARGIN_MS;
-  }
   return Math.max(DEADLINE_FLOOR_MS, timeoutMs - TRANSLATION_RESERVE_MS - FINALIZATION_MARGIN_MS);
 }
 
@@ -199,11 +212,14 @@ const passthroughBody = (parsed) => (parsed && typeof parsed === 'object' && !Ar
  * Read an upstream non-2xx body (a stream under `responseType: 'stream'`) and
  * parse it as JSON, best-effort — the 429/503 answers are passed through to
  * the client verbatim when they parse, with a generic fallback when they do
- * not.
+ * not. A body beyond the 64 KiB cap stops buffering (the prefix still parses
+ * when it can) and warns: an operator must know a real body was cut, not see
+ * a silent degrade to the fallback.
  * @param {Object} data - The axios response data (a Node stream).
+ * @param {number} [status] - The upstream status, for the truncation warning.
  * @returns {Promise<{text: string, parsed: Object|null}>}
  */
-function readUpstreamBody(data) {
+function readUpstreamBody(data, status) {
   return new Promise((resolve) => {
     if (!data || typeof data.on !== 'function') {
       resolve({ text: '', parsed: null });
@@ -211,10 +227,17 @@ function readUpstreamBody(data) {
     }
     const chunks = [];
     let size = 0;
+    let truncated = false;
     data.on('data', (chunk) => {
       size += chunk.length;
       if (size <= 65536) {
         chunks.push(chunk);
+      } else if (!truncated) {
+        truncated = true;
+        logger.warn('AgentFrameWriter.upstream_body_truncated', {
+          status,
+          bytes: size
+        });
       }
     });
     data.on('end', () => {
@@ -269,7 +292,11 @@ async function proxyAgentRun({
   handleStreamDone,
   emptyStreamMetadata
 }) {
-  const timeoutMs = upstreamTimeoutMs();
+  // The EFFECTIVE timeout — resolved once here, so the deadline derivation
+  // and the wire-level timeout (and the stream wall-clock bound below) all
+  // read the SAME value: an under-sized configuration is absorbed at this
+  // one point, never partially.
+  const effectiveTimeoutMs = resolveUpstreamTimeoutMs();
   const controller = new AbortController();
   const bearer = authHeaders?.authorization || null;
 
@@ -305,6 +332,30 @@ async function proxyAgentRun({
     }
   };
 
+  // The stream's wall-clock bound. Once the upstream response HEADERS have
+  // arrived, the axios timeout degenerates to an inactivity bound — a
+  // trickling upstream would hold the run (and its admission slot) forever.
+  // The bound is the SAME effective timeout the leg was dialed with; on fire
+  // the controller aborts and the stream's 'error' path ends the response
+  // with the error contract.
+  let streamDeadline = null;
+  const clearStreamDeadline = () => {
+    if (streamDeadline !== null) {
+      clearTimeout(streamDeadline);
+      streamDeadline = null;
+    }
+  };
+  const armStreamDeadline = () => {
+    clearStreamDeadline();
+    streamDeadline = setTimeout(() => {
+      streamDeadline = null;
+      logger.warn('AgentFrameWriter.stream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
+      if (!controller.signal.aborted) {
+        controller.abort();
+      }
+    }, effectiveTimeoutMs);
+  };
+
   const assembleMetadata = () =>
     assembleAgentMetadata({ emptyStreamMetadata, verdict: capturedVerdict, runId, usageRecord });
 
@@ -315,6 +366,7 @@ async function proxyAgentRun({
   // or errored stream from being re-finalized as a partial save.
   res.on('close', () => {
     cleanupKeepalive();
+    clearStreamDeadline();
     if (streamFinished) return;
     streamFinished = true;
     doneState.handled = true;
@@ -354,7 +406,7 @@ async function proxyAgentRun({
 
   const runBody = {
     question: queryService.pickUserText(queryData.messages, queryData.userQuestion),
-    deadline_ms: deriveDeadlineMs(timeoutMs),
+    deadline_ms: deriveDeadlineMs(effectiveTimeoutMs),
     context: callerContext,
     bearer
   };
@@ -368,7 +420,7 @@ async function proxyAgentRun({
         'Content-Type': 'application/json'
       },
       responseType: 'stream',
-      timeout: timeoutMs,
+      timeout: effectiveTimeoutMs,
       signal: controller.signal,
       httpAgent: new http.Agent({ keepAlive: true }),
       httpsAgent: new https.Agent({ keepAlive: true }),
@@ -390,7 +442,7 @@ async function proxyAgentRun({
 
   const status = response.status;
   if (status === 429) {
-    const { parsed } = await readUpstreamBody(response.data);
+    const { parsed } = await readUpstreamBody(response.data, status);
     // The lane hint passes through (the caller retries on it); a body that
     // did not parse (or is not an object) falls back to the documented error
     // name.
@@ -401,7 +453,7 @@ async function proxyAgentRun({
     return res.status(429).json(passthroughBody(parsed) || { error: 'admission_refused' });
   }
   if (status === 503) {
-    const { parsed } = await readUpstreamBody(response.data);
+    const { parsed } = await readUpstreamBody(response.data, status);
     logger.warn('AgentFrameWriter.run_surface_unconfigured', { queryId, body: parsed });
     return res.status(503).json(passthroughBody(parsed) || { error: 'budget_configuration_missing' });
   }
@@ -409,12 +461,12 @@ async function proxyAgentRun({
     // A malformed run request is a request problem, not an outage — the
     // upstream's validation answer passes through (the fallback names it as
     // the BFF's own invalid request).
-    const { parsed } = await readUpstreamBody(response.data);
+    const { parsed } = await readUpstreamBody(response.data, status);
     logger.warn('AgentFrameWriter.run_request_invalid', { queryId, body: parsed });
     return res.status(422).json(passthroughBody(parsed) || { error: 'invalid_run_request' });
   }
   if (status !== 200 || !response.data) {
-    const { parsed } = await readUpstreamBody(response.data);
+    const { parsed } = await readUpstreamBody(response.data, status);
     logger.error('AgentFrameWriter.upstream_status_error', { queryId, status });
     return res
       .status(502)
@@ -454,6 +506,12 @@ async function proxyAgentRun({
     streamFinished = true;
     doneState.handled = true;
     cleanupKeepalive();
+    clearStreamDeadline();
+    // The client was told the run failed: the agent leg must not keep making
+    // model calls (and holding its admission slot) behind a dead response.
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
     writeClientFrame(res, { type: 'error', message, code });
     res.end();
   };
@@ -462,6 +520,7 @@ async function proxyAgentRun({
     if (doneState.handled || res.writableEnded || res.destroyed) return;
     doneState.handled = true;
     cleanupKeepalive();
+    clearStreamDeadline();
     try {
       let alreadyFailedTranslation = false;
       if (streamRelay) {
@@ -585,6 +644,7 @@ async function proxyAgentRun({
   // Multi-byte UTF-8 characters can split across chunk boundaries — decode on
   // the stream, never per chunk.
   stream.setEncoding('utf8');
+  armStreamDeadline();
   stream.on('data', (chunk) => {
     buffer += chunk;
     const lines = buffer.split('\n');
@@ -631,6 +691,7 @@ module.exports = {
     DEADLINE_FLOOR_MS,
     deriveDeadlineMs,
     upstreamTimeoutMs,
+    resolveUpstreamTimeoutMs,
     assembleAgentMetadata,
     citationToSourceDocument
   }

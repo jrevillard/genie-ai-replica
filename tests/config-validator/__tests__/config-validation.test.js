@@ -5005,3 +5005,73 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(pkg.scripts['lint:fix']).toBe('eslint . --fix');
   });
 });
+
+// --- Slim build lane cache contract (#2031) ---
+// The slim lane (jobs declaring SLIM_REQUIREMENTS_FILE: dataprep, retriever,
+// reranker) builds the SAME Dockerfiles as the fat lane — Dockerfiles the
+// build-time gate requires to declare ARG CACHE_BUST on their apt upgrade
+// layer. The fat lane passes a fresh CACHE_BUST under FORCE_IMAGE_REBUILD
+// (the monthly rebuild); the slim lane passed none, so its registry cache
+// kept the upgrade layer a permanent hit and slim images shipped frozen
+// Debian packages on every monthly rebuild — exactly what the CACHE_BUST
+// gate exists to prevent. The same lane also referenced $NOCACHE, defined
+// nowhere in the file: dead under the runner's sh, fatal under set -u.
+// These pins fail if either lane ever drops the force-refresh arm or the
+// dead token returns.
+describe('the slim build lane cache contract (#2031)', () => {
+  const ciBlocks = () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    return blocks;
+  };
+  // The slim lane lives in the shared build template, so every aliasing
+  // job's block carries it. The defect's audience is the three jobs that
+  // declare SLIM_REQUIREMENTS_FILE — naming them keeps the pin from
+  // passing vacuously on a deleted or renamed slim lane.
+  const slimAudience = ['build:dataprep-arango', 'build:retriever-arango', 'build:reranker'];
+  const slimBlocks = () => ciBlocks().filter((b) => b.text.includes('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]'));
+  // The variable REFERENCE, not any NOCACHE substring: a comment mentioning
+  // the token's history or a differently-named var must not trip the pin.
+  const UNDEFINED_NOCACHE_RE = /\$\{?NOCACHE\b/;
+
+  test('the slim lane covers the three SLIM_REQUIREMENTS_FILE jobs', () => {
+    const owners = slimBlocks().map((b) => b.owner);
+    for (const job of slimAudience) expect(owners).toContain(job);
+  });
+
+  test('no build block references the undefined $NOCACHE variable', () => {
+    const offending = ciBlocks()
+      .filter((b) => UNDEFINED_NOCACHE_RE.test(b.text))
+      .map((b) => b.owner);
+    expect(offending).toEqual([]);
+  });
+
+  test('both lanes bust their cache under FORCE_IMAGE_REBUILD, each before its buildx call', () => {
+    // The contract is the RELATION, not either lane's spelling: both
+    // buildx invocations in the shared template must sit AFTER a
+    // FORCE_IMAGE_REBUILD conditional that passes a CACHE_BUST build-arg —
+    // pinning only one lane's literal let the other lane refreeze its
+    // packages while the test stayed green (the drift class #2031 is).
+    // Matching the conditional line + the build-arg (not a full literal)
+    // survives reformatting while still failing when an arm is dropped,
+    // moved after the build, or de-conditionalized. The value may be
+    // spelled quoted (the slim lane's positional style) or not (the fat
+    // lane's BUILD_ARGS style) — either spelling passes the arg.
+    const CACHE_BUST_ARG_RE = /--build-arg "?CACHE_BUST=/;
+    for (const b of slimBlocks()) {
+      const fatBuildIdx = b.text.indexOf('docker buildx build');
+      expect(fatBuildIdx).toBeGreaterThan(0);
+      const fatArm = b.text.slice(0, fatBuildIdx);
+      expect(fatArm.includes('if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then')).toBe(true);
+      expect(CACHE_BUST_ARG_RE.test(fatArm)).toBe(true);
+      const slimIdx = b.text.indexOf('if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]');
+      const slim = b.text.slice(slimIdx);
+      const slimBuildIdx = slim.indexOf('docker buildx build');
+      expect(slimBuildIdx).toBeGreaterThan(0);
+      const slimArm = slim.slice(0, slimBuildIdx);
+      expect(slimArm.includes('if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then')).toBe(true);
+      expect(CACHE_BUST_ARG_RE.test(slimArm)).toBe(true);
+    }
+  });
+});

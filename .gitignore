@@ -214,6 +214,8 @@ bash.exe.stackdump
 
 # OKF smoke tokens (host-side mint output — never commit)
 okf-smoke-tokens.json
+# OKF lab scenario credentials (host-side principal passwords — never commit)
+okf-scenario-credentials.json
 
 # Story 8-6 smoke exports (host-side xlsx output — never commit)
 smoke-*.xlsx

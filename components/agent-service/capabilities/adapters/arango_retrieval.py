@@ -69,6 +69,18 @@ def validate_graph_name(graph_name: str) -> str:
     return graph_name
 
 
+def _materialized_rows(db, aql, bind_vars) -> list:
+    """Run one AQL and return its rows as a plain list.
+
+    Runs inside an ``asyncio.to_thread`` worker: python-arango answers with a
+    lazy Cursor, so draining it on the event loop would turn every batch past
+    the first into a blocking network call on the loop. Every AQL read in
+    this module materializes through this helper (the chunks.py ``_run``
+    idiom).
+    """
+    return list(db.aql.execute(aql, bind_vars=bind_vars))
+
+
 def _escape_aql_string(value) -> str:
     """Escape a value for interpolation into an AQL string literal.
 
@@ -261,8 +273,7 @@ class ArangoRetrievalAdapter:
             "k": self._config.k,
         }
         try:
-            # Materialize inside the worker thread (see bm25_search).
-            rows = await asyncio.to_thread(lambda: list(self._db.aql.execute(aql, bind_vars=bind_vars)))
+            rows = await asyncio.to_thread(_materialized_rows, self._db, aql, bind_vars)
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
             return []
@@ -373,11 +384,7 @@ class ArangoRetrievalAdapter:
         bind_vars = {"query": query, "analyzer": self._hybrid.bm25_analyzer, "n": n}
         results = []
         try:
-            # Materialize inside the worker thread: python-arango answers
-            # with a lazy Cursor, so draining it on the event loop would
-            # turn every batch past the first into a blocking network call
-            # on the loop.
-            rows = await asyncio.to_thread(lambda: list(self._db.aql.execute(aql, bind_vars=bind_vars)))
+            rows = await asyncio.to_thread(_materialized_rows, self._db, aql, bind_vars)
             for row in rows:
                 chunk_labels = row.get("chunk_labels")
                 if not chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
@@ -467,8 +474,7 @@ class ArangoRetrievalAdapter:
                     FILTER doc._key IN @chunk_ids
                     RETURN {{key: doc._key, file_id: doc.{ARANGO_FILE_ID_FIELD}}}
             """
-            # Materialize inside the worker thread (see bm25_search).
-            rows = await asyncio.to_thread(lambda: list(self._db.aql.execute(aql, bind_vars={"chunk_ids": chunk_ids})))
+            rows = await asyncio.to_thread(_materialized_rows, self._db, aql, {"chunk_ids": chunk_ids})
             file_id_by_key = {row["key"]: row["file_id"] for row in rows}
             for r in results:
                 fid = file_id_by_key.get(r["doc"].key)
@@ -493,12 +499,10 @@ class ArangoRetrievalAdapter:
                     RETURN {{key: doc._key, repo_id: meta.repo_id, bundle_version: meta.bundle_version}}
             """
             identity_rows = await asyncio.to_thread(
-                lambda: list(
-                    self._db.aql.execute(
-                        identity_aql,
-                        bind_vars={"chunk_ids": chunk_ids, "graph_name": self.graph_name},
-                    )
-                )
+                _materialized_rows,
+                self._db,
+                identity_aql,
+                {"chunk_ids": chunk_ids, "graph_name": self.graph_name},
             )
             identity_by_key = {row["key"]: row for row in identity_rows}
             for r in results:

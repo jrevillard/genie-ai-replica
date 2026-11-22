@@ -99,7 +99,9 @@ void main() {
 
   /// Mounts the chatbot on an open stream and returns the controller the
   /// test feeds frames into.
-  Future<StreamController<Uint8List>> mountStreaming(WidgetTester tester) async {
+  Future<StreamController<Uint8List>> mountStreaming(
+    WidgetTester tester,
+  ) async {
     final controller = StreamController<Uint8List>();
     final mock = _AgentStreamMockClient(tree, controller);
     // The phone surface: the composer's send control is tappable at the
@@ -277,7 +279,11 @@ void main() {
     (tester) async {
       final controller = await mountStreaming(tester);
 
-      controller.add(_frames([{'type': 'chunk', 'content': 'Plain answer'}]));
+      controller.add(
+        _frames([
+          {'type': 'chunk', 'content': 'Plain answer'},
+        ]),
+      );
       await tester.pump();
 
       expect(find.byKey(const ValueKey('agent-activity-line')), findsNothing);
@@ -327,76 +333,74 @@ void main() {
     },
   );
 
-  testWidgets(
-    'the ungrounded verdict keeps the existing warning',
-    (tester) async {
-      final controller = await mountStreaming(tester);
+  testWidgets('the ungrounded verdict keeps the existing warning', (
+    tester,
+  ) async {
+    final controller = await mountStreaming(tester);
 
-      controller.add(
-        _frames([
-          {'type': 'chunk', 'content': 'Answer'},
-          {
-            'type': 'metadata',
-            'source_documents': <dynamic>[],
-            'confidence_score': 0.9,
-            'grounding_status': 'ungrounded',
-            'is_grounded': false,
-          },
-          {'type': 'done', 'queryId': 'q1'},
-        ]),
-      );
-      await controller.close();
-      await tester.pumpAndSettle();
+    controller.add(
+      _frames([
+        {'type': 'chunk', 'content': 'Answer'},
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'ungrounded',
+          'is_grounded': false,
+        },
+        {'type': 'done', 'queryId': 'q1'},
+      ]),
+    );
+    await controller.close();
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text('AI-generated — not based on library documents'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Response verification could not be completed.'),
-        findsNothing,
-      );
-    },
-  );
+    expect(
+      find.text('AI-generated — not based on library documents'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Response verification could not be completed.'),
+      findsNothing,
+    );
+  });
 
-  testWidgets(
-    'a grounded English turn renders no verdict note and no caption',
-    (tester) async {
-      final controller = await mountStreaming(tester);
+  testWidgets('a grounded English turn renders no verdict note and no caption', (
+    tester,
+  ) async {
+    final controller = await mountStreaming(tester);
 
-      controller.add(
-        _frames([
-          {'type': 'chunk', 'content': 'Answer'},
-          {
-            'type': 'metadata',
-            'source_documents': <dynamic>[],
-            'confidence_score': 0.9,
-            'grounding_status': 'grounded',
-            'is_grounded': true,
-          },
-          {'type': 'done', 'queryId': 'q1'},
-        ]),
-      );
-      await controller.close();
-      await tester.pumpAndSettle();
+    controller.add(
+      _frames([
+        {'type': 'chunk', 'content': 'Answer'},
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+        },
+        {'type': 'done', 'queryId': 'q1'},
+      ]),
+    );
+    await controller.close();
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text('AI-generated — not based on library documents'),
-        findsNothing,
-      );
-      expect(
-        find.text('Response verification could not be completed.'),
-        findsNothing,
-      );
-      // EN UI: no translation was delivered, no scope caption.
-      expect(
-        find.text(
-          'Grounding was verified on the original-language answer — this translation is not covered by that check.',
-        ),
-        findsNothing,
-      );
-    },
-  );
+    expect(
+      find.text('AI-generated — not based on library documents'),
+      findsNothing,
+    );
+    expect(
+      find.text('Response verification could not be completed.'),
+      findsNothing,
+    );
+    // EN UI: no translation was delivered, no scope caption.
+    expect(
+      find.text(
+        'Grounding was verified on the original-language answer — this translation is not covered by that check.',
+      ),
+      findsNothing,
+    );
+  });
 
   testWidgets(
     'the translated-grounded caption renders in a non-English UI and a failed translation suppresses it',
@@ -532,7 +536,10 @@ void main() {
         tester.binding.platformDispatcher.clearAccessibilityFeaturesTestValue();
       });
 
-      const line = AgentActivityLine(status: 'started', operation: 'search_knowledge');
+      const line = AgentActivityLine(
+        status: 'started',
+        operation: 'search_knowledge',
+      );
       await tester.pumpWidget(testApp(line));
       await tester.pumpAndSettle();
 
@@ -567,13 +574,14 @@ void main() {
   testWidgets(
     'the failed label wraps instead of truncating; running truncates',
     (tester) async {
-      const failed = AgentActivityLine(status: 'failed', operation: 'read_source');
+      const failed = AgentActivityLine(
+        status: 'failed',
+        operation: 'read_source',
+      );
       await tester.pumpWidget(testApp(failed));
       await tester.pumpAndSettle();
       expect(
-        tester
-            .widget<Text>(find.text('Reading the source failed.'))
-            .maxLines,
+        tester.widget<Text>(find.text('Reading the source failed.')).maxLines,
         isNull,
       );
 
@@ -585,10 +593,7 @@ void main() {
       // A pump: the running marker (DsSpinner) animates forever, a
       // settle would never return.
       await tester.pump();
-      expect(
-        tester.widget<Text>(find.text('Reading source…')).maxLines,
-        1,
-      );
+      expect(tester.widget<Text>(find.text('Reading source…')).maxLines, 1);
     },
   );
 }

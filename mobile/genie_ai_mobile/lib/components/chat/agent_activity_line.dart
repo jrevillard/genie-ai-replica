@@ -31,11 +31,7 @@ class AgentActivityLine extends StatelessWidget {
   /// word comes from the label.
   final String status;
 
-  const AgentActivityLine({
-    super.key,
-    required this.status,
-    this.operation,
-  });
+  const AgentActivityLine({super.key, required this.status, this.operation});
 
   @override
   Widget build(BuildContext context) {
@@ -46,14 +42,10 @@ class AgentActivityLine extends StatelessWidget {
 
     final marker = ExcludeSemantics(
       child: failed
-          ? Icon(
-              Icons.warning_amber_rounded,
-              size: 16,
-              color: tokens.warning,
-            )
+          ? Icon(Icons.warning_amber_rounded, size: 16, color: tokens.warning)
           : (completed || reduceMotion)
-              ? _StaticDot(color: completed ? tokens.muted : tokens.accent)
-              : const DsSpinner(size: DsSpinnerSize.sm),
+          ? _StaticDot(color: completed ? tokens.muted : tokens.accent)
+          : const DsSpinner(size: DsSpinnerSize.sm),
     );
 
     return Semantics(
@@ -105,13 +97,11 @@ class AgentActivityLine extends StatelessWidget {
       final value = tr(key);
       if (value != key) return value;
     }
-    return tr(
-      switch (stateKey) {
-        'completed' => 'chatbot.agentActivity.stepCompleted',
-        'failed' => 'chatbot.agentActivity.stepFailed',
-        _ => 'chatbot.agentActivity.working',
-      },
-    );
+    return tr(switch (stateKey) {
+      'completed' => 'chatbot.agentActivity.stepCompleted',
+      'failed' => 'chatbot.agentActivity.stepFailed',
+      _ => 'chatbot.agentActivity.working',
+    });
   }
 }
 

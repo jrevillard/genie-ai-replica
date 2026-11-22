@@ -1083,7 +1083,8 @@ const Map<String, dynamic> enLocale = {
       "working": "Working…",
       "stepCompleted": "Step completed.",
       "stepFailed": "A step failed.",
-      "verificationUnavailable": "Response verification could not be completed.",
+      "verificationUnavailable":
+          "Response verification could not be completed.",
       "verificationTranslated":
           "Grounding was verified on the original-language answer — this translation is not covered by that check.",
       "operations": {

@@ -136,15 +136,14 @@ Widget chatBotUnderTest(
   GlobalKey<ChatBotComponentState>? key, {
   http.Client? httpClient,
   String? streamBaseUrl,
-}) =>
-    ChatBotComponent(
-      key: key,
-      userId: 'user-1',
-      onRefreshSidebar: () {},
-      onRelatedDocumentsUpdate: (_) {},
-      httpClient: httpClient,
-      streamBaseUrl: streamBaseUrl,
-    );
+}) => ChatBotComponent(
+  key: key,
+  userId: 'user-1',
+  onRefreshSidebar: () {},
+  onRelatedDocumentsUpdate: (_) {},
+  httpClient: httpClient,
+  streamBaseUrl: streamBaseUrl,
+);
 
 /// The mocked API overrides every widget-test mount shares: both
 /// generated API clients answer through the test's mock HTTP client.

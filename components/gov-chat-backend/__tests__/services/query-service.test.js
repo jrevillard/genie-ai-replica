@@ -39,6 +39,15 @@ jest.mock('path', () => ({
   join: jest.fn((...parts) => parts.join('/'))
 }));
 
+// The shared routing module (the component's single AGENT_ENABLED read) is
+// mocked so the routing suite drives the flag at its own boundary; the
+// module's own suite (agent-routing.test.js) pins the real read semantics.
+jest.mock('../../services/agent-routing', () => ({
+  isAgentPathEnabled: jest.fn(),
+  agentServiceUrl: jest.fn(() => 'http://agent-service:8010')
+}));
+const routingFlag = require('../../services/agent-routing');
+
 function createMockCollection() {
   return {
     save: jest.fn().mockResolvedValue({ _key: 'query-1' }),
@@ -1963,6 +1972,107 @@ describe('QueryService', () => {
   });
 });
 
+describe('query routing — one flag, both entries', () => {
+  beforeEach(async () => {
+    await queryService.init();
+    routingFlag.isAgentPathEnabled.mockReturnValue(false);
+    routingFlag.agentServiceUrl.mockReturnValue('http://agent-service:8010');
+  });
+
+  const LEGACY_URL = 'http://chatqna-xeon-backend-server:8888/v1/chatqna';
+  const REFUSAL = 'AGENTIC_PATH_NOT_SERVED';
+
+  it('flag off: the streaming entry is branch-neutral and returns the legacy target', async () => {
+    // The streaming entry does NOT read the flag itself — its agentic branch
+    // is served by the frame writer in the route handler. The entry serves
+    // both branches: flag off or on, it validates, persists and returns the
+    // legacy chatqna target for the legacy relay.
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-1' });
+    const result = await queryService.initStreamQuery(createMockQueryData(), {});
+    expect(result.opeaUrl).toBe(LEGACY_URL);
+    expect(mockQueriesCollection.save).toHaveBeenCalled();
+  });
+
+  it('flag off: the non-stream entry routes legacy and the worker receives the helper target', async () => {
+    await withEnv({ CONTEXT_OPTION: undefined }, async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const workerSpy = jest
+        .spyOn(queryService, 'runOPEAWorker')
+        .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
+      try {
+        await queryService.createQuery(createMockQueryData());
+        expect(workerSpy.mock.calls[0][0]).toBe(LEGACY_URL);
+        // The worker URL is the routing helper's own decision — one
+        // construction source, no per-entry drift.
+        expect(workerSpy.mock.calls[0][0]).toBe(queryService.resolveQueryRoute().url);
+      } finally {
+        workerSpy.mockRestore();
+      }
+    });
+  });
+
+  it('flag off: the legacy target still honors the deployment overrides', async () => {
+    await withEnv({ OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899', CONTEXT_OPTION: undefined }, async () => {
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-2' });
+      const result = await queryService.initStreamQuery(createMockQueryData(), {});
+      expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
+    });
+  });
+
+  it('resolveQueryRoute: the flag on resolves the agent service, never the chatqna/OPEA URL', async () => {
+    // The behavioral never-OPEA assertion (the CI dependency gate cannot see
+    // the BFF runtime call graph, so no grep enforces this). The agentic
+    // branch is structurally incapable of producing the chatqna URL: it
+    // returns only what the shared routing module names as the agent target,
+    // whatever the legacy leg's own OPEA_HOST/OPEA_PORT configuration says.
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    routingFlag.agentServiceUrl.mockReturnValue('http://agent.internal:9999');
+    const route = queryService.resolveQueryRoute();
+    expect(route.agentic).toBe(true);
+    expect(route.url).toBe('http://agent.internal:9999');
+    expect(route.url.includes('/v1/chatqna')).toBe(false);
+  });
+
+  it('resolveQueryRoute: the flag off resolves the legacy chatqna target', () => {
+    routingFlag.isAgentPathEnabled.mockReturnValue(false);
+    expect(queryService.resolveQueryRoute()).toEqual({ agentic: false, url: LEGACY_URL });
+  });
+
+  it('flag on: the non-stream entry refuses with the marker before any persistence or upstream call', async () => {
+    // The refusal rides the shared routing module's flag (the same single
+    // read the streaming entry's branch consumes — the two entries cannot
+    // disagree), fires before the query record is written, and carries the
+    // code/status the routes map to a 503.
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    mockDb.query.mockResolvedValue(createMockCursor([]));
+    const workerSpy = jest
+      .spyOn(queryService, 'runOPEAWorker')
+      .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
+    let refusal = null;
+    try {
+      await queryService.createQuery(createMockQueryData());
+    } catch (error) {
+      refusal = error;
+    } finally {
+      workerSpy.mockRestore();
+    }
+    expect(refusal).not.toBeNull();
+    expect(refusal.message).toContain(REFUSAL);
+    expect(refusal.code).toBe('AGENTIC_PATH_NOT_SERVED');
+    expect(refusal.statusCode).toBe(503);
+    expect(workerSpy).not.toHaveBeenCalled();
+    expect(mockQueriesCollection.save).not.toHaveBeenCalled();
+  });
+
+  it('flag on: test-mode refuses too — the routing decision precedes the mock bypass', async () => {
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    mockDb.query.mockResolvedValue(createMockCursor([]));
+    await expect(queryService.createQuery(createMockQueryData(), null)).rejects.toThrow(REFUSAL);
+    expect(mockQueriesCollection.save).not.toHaveBeenCalled();
+    expect(mockQueriesCollection.update).not.toHaveBeenCalled();
+  });
+});
 // ============================================================
 // Story 2.4 — the agent CallerContext builder: the REAL method (the graph-set
 // rule is one home shared with the fan-out carrier; the repos mapping

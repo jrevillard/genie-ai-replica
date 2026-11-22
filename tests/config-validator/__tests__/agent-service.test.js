@@ -217,3 +217,41 @@ describe('the pre-adoption checklist is satisfied for every pinned dependency', 
     expect(lane).not.toMatch(/pytest==/);
   });
 });
+
+describe('agentic activation wiring on the BFF container', () => {
+  let backendBlock;
+  let backendEnvVars;
+  let envDocumented;
+
+  beforeAll(() => {
+    const composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
+    backendBlock = parseComposeServiceBlock(composeText, 'backend');
+    backendEnvVars = parseComposeServiceContracts(COMPOSE_PATH).find((s) => s.service === 'backend').envVars;
+    envDocumented = parseEnvTemplate(ENV_PATH).documented;
+  });
+
+  test('the backend container receives AGENT_ENABLED and AGENT_SERVICE_URL', () => {
+    // Guards the wiring the shared query routing helper needs: a variable
+    // absent from the service's environment block is unreachable by the
+    // container, so an unwired flag leaves the BFF serving legacy while the
+    // agent service runs. The exact defaults are pinned below — the flag
+    // default must park the agentic branch ('0') and the URL default must
+    // name the documented topology.
+    expect(backendEnvVars).toEqual(expect.arrayContaining(['AGENT_ENABLED', 'AGENT_SERVICE_URL']));
+    expect(backendBlock).toMatch(/- AGENT_ENABLED=\$\{AGENT_ENABLED:-0\}/);
+    expect(backendBlock).toMatch(/- AGENT_SERVICE_URL=\$\{AGENT_SERVICE_URL:-http:\/\/agent-service:8010\}/);
+  });
+
+  test('the env template documents the routing target as an optional override', () => {
+    const documented = envDocumented.find((entry) => entry.name === 'AGENT_SERVICE_URL');
+    expect(documented).toBeDefined();
+    expect(documented.value).toBe('http://agent-service:8010');
+    // The ansible channel renders the same knob (the pair rides together —
+    // the flag and its target must never half-wire on one deployment
+    // channel).
+    const envJ2 = fs.readFileSync(ENV_J2_PATH, 'utf-8');
+    expect(envJ2).toMatch(/AGENT_SERVICE_URL=\{\{ agent_service_url \| default\('http:\/\/agent-service:8010'\) \}\}/);
+    const groupVars = fs.readFileSync(GROUP_VARS_PATH, 'utf-8');
+    expect(groupVars).toMatch(/^agent_service_url: "http:\/\/agent-service:8010"$/m);
+  });
+});

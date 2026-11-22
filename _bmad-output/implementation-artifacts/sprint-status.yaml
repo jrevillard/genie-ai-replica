@@ -64,7 +64,7 @@ development_status:
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-one-flag-both-paths-provably: review
+  3-1-one-flag-both-paths-provably: done
   3-2-rollback-continuity: backlog
   3-3-rehearsed-rollback-and-rollout-record-v08: backlog
   epic-3-retrospective: optional

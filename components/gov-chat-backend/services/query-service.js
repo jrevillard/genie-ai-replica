@@ -1027,11 +1027,24 @@ class QueryService {
    * helper for all three finalize paths). An EMPTY set is persisted too:
    * that is what lets _loadStickyGraphs reset a session's stickiness when
    * routing moves on (see the load-side note).
+   *
+   * Story 2.4b — an AGENTIC answer never persists: the agent citation
+   * envelope carries no `graph_name` by contract (capabilities/citations.py
+   * drops it deliberately), so the derivation below would always return []
+   * and every agentic answer would falsely RESET the session's sticky set —
+   * an answer that cannot name routed graphs must leave the stickiness
+   * untouched. The `okfRoutedGraphs` key stays unset on the update payload.
+   * Carrying graph_name through the envelope is an iteration-2 decision
+   * owned agent-side.
    * @param {Object} updateData - The update payload being assembled
    * @param {Object} metadata - Finalized metadata (source_documents)
    * @param {string} queryId - Correlation for logs
    */
   _persistRoutedGraphs(updateData, metadata, queryId) {
+    if (metadata?.agent_run) {
+      logger.info('QueryService.sticky_routed_graphs_skipped_agentic', { queryId });
+      return;
+    }
     const routedGraphs = this._deriveRoutedGraphs(metadata);
     updateData.okfRoutedGraphs = routedGraphs;
     logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
@@ -1188,7 +1201,11 @@ class QueryService {
       // never runs twice), aggregates the answer and the result flows into
       // the ONE persist/analytics/return tail below. A genuine failure is a
       // thrown typed error — the tail never runs, the doc stays unanswered.
-      if (isAgentPathEnabled()) {
+      // TEST MODE outranks the flag: a test-mode deployment stays
+      // deterministic whatever AGENT_ENABLED says (the mock is the whole
+      // point of the mode), and the routing helper stays the only
+      // AGENT_ENABLED read.
+      if (isAgentPathEnabled() && backendMode !== 'test-mode') {
         logger.info('QueryService.create_query_agentic_branch', { queryId });
         const turn = await runAgentJsonTurn({
           queryService: this,

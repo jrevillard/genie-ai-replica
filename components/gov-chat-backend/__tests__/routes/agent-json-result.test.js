@@ -371,10 +371,13 @@ describe('POST /api/queries — the agentic success contract', () => {
           grounding_status: 'grounded',
           is_grounded: true,
           agent_run: { run_id: 'run-abc', usage_record: USAGE_RECORD }
-        }),
-        okfRoutedGraphs: []
+        })
       })
     );
+    // An agentic answer cannot name routed graphs (the citation envelope
+    // carries no graph_name by contract): the sticky set is left UNTOUCHED —
+    // no `okfRoutedGraphs` key on the payload, never a false reset.
+    expect(collections.update.mock.calls[0][1]).not.toHaveProperty('okfRoutedGraphs');
     expect(analytics.recordQuery).toHaveBeenCalledTimes(1);
   });
 
@@ -386,6 +389,34 @@ describe('POST /api/queries — the agentic success contract', () => {
     // The doc was minted first; the id that completes it is the minted one.
     expect(collections.save).toHaveBeenCalledTimes(1);
     expect(collections.update).toHaveBeenCalledWith('q1', expect.anything());
+  });
+
+  it('the run request carries the language: the requested locale, null when none asked', async () => {
+    // The preparation module's named-locale hint (beats detection): a
+    // translated request names its locale, an English request carries null —
+    // the agent always ANSWERS English either way.
+    axios.post.mockImplementation(() => Promise.resolve({ status: 200, headers: {}, data: answeredRunStream() }));
+
+    await postQuery({ context: { language: 'FR' } });
+    expect(axios.post.mock.calls[0][1].language).toBe('fr');
+
+    await postQuery();
+    expect(axios.post.mock.calls[1][1].language).toBeNull();
+  });
+
+  it('a test-mode deployment stays deterministic whatever the flag says (mock outranks the agent)', async () => {
+    process.env.CONTEXT_OPTION = 'test-mode';
+    try {
+      const response = await postQuery();
+
+      // The mock branch served: no agent leg, no /v1/runs call.
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(response.status).toBe(201);
+      expect(response.body.response).toContain('mock response');
+      expect(collections.update).toHaveBeenCalledWith('q1', expect.objectContaining({ isAnswered: true }));
+    } finally {
+      delete process.env.CONTEXT_OPTION;
+    }
   });
 
   it('flushes the trailing unterminated seam line before the terminal (the frame-writer remainder idiom)', async () => {

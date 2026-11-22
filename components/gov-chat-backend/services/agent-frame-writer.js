@@ -192,6 +192,11 @@ async function proxyAgentRun({
     question: queryService.pickUserText(queryData.messages, queryData.userQuestion),
     deadline_ms: deriveDeadlineMs(effectiveTimeoutMs),
     context: callerContext,
+    // The named-locale display hint the preparation module consumes (beats
+    // detection); null when this request is answered in English — the agent
+    // always ANSWERS English, the run body never carries a language the run
+    // should answer IN.
+    language: wantsTranslation(targetLanguage) ? targetLanguage : null,
     bearer
   };
 

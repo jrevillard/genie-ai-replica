@@ -428,6 +428,25 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(options.timeout).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
   });
 
+  it('the run request carries the language: the requested locale, null when none asked', async () => {
+    setupAgentQuery();
+    // A fresh stream per call — one Readable is consumed by one request.
+    axios.post.mockImplementation(() => Promise.resolve({ status: 200, headers: {}, data: answeredRunStream() }));
+
+    await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'What is the tax rate?' }],
+      context: { language: 'FR' }
+    });
+    expect(axios.post.mock.calls[0][1].language).toBe('fr');
+
+    await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'What is the tax rate?' }]
+    });
+    expect(axios.post.mock.calls[1][1].language).toBeNull();
+  });
+
   it('derives a smaller deadline from a configured timeout and forwards the labels narrowing', async () => {
     setupAgentQuery();
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });

@@ -1161,6 +1161,23 @@ describe('QueryService', () => {
       await queryService.finalizeStreamQuery('q1', 'text', 100, {});
       expect(mockQueriesCollection.update).toHaveBeenCalled();
     });
+
+    it('an agentic answer leaves the session sticky set untouched (no okfRoutedGraphs on the update)', async () => {
+      // Story 2.4b — the agent citation envelope carries no graph_name by
+      // contract, so an agentic finalize cannot name routed graphs: the
+      // derivation would return [] and falsely RESET the session's
+      // stickiness. The `agent_run` marker skips the persist entirely.
+      await queryService.finalizeStreamQuery('q1', 'answer', 100, {
+        grounding_status: 'grounded',
+        source_documents: [{ document_id: 'doc_a', url: '' }],
+        agent_run: { run_id: 'run-abc' }
+      });
+      expect(mockQueriesCollection.update).toHaveBeenCalledWith(
+        'q1',
+        expect.objectContaining({ response: 'answer', isAnswered: true })
+      );
+      expect(mockQueriesCollection.update.mock.calls[0][1]).not.toHaveProperty('okfRoutedGraphs');
+    });
   });
 
   describe('getSimilarQueries', () => {

@@ -157,6 +157,27 @@ context:
   fallbacks, zero-text answered run, test-mode + fanout persist-tail
   assertions.
 
+- **Review round 2 (coordinator, 2026-11-22) — fixes applied**: both runBody
+  objects now carry `language` (`wantsTranslation(targetLanguage) ? targetLanguage
+  : null`) — the preparation module's named-locale hint that beats detection;
+  without it a detection failure with NO locale would refuse the query as
+  insufficiency (pinned in both suites). Sticky-reset root cause: the agent
+  citation envelope is deliberately MINUS `graph_name` — a recorded contract
+  delta in agent-service capabilities/citations.py — so `_deriveRoutedGraphs`
+  on an agentic answer always returns [] and every agentic finalize would
+  have falsely RESET the session's sticky set (story 1.3's empty-set
+  semantics) on BOTH entries. The consumer-side skip in `_persistRoutedGraphs`
+  (`metadata?.agent_run` present → leave `okfRoutedGraphs` unset) is the
+  honest fix: an answer that cannot name routed graphs must not touch the
+  stickiness; carrying `graph_name` through the envelope is an iteration-2
+  decision owned agent-side. Also: the agentic branch now yields to test-mode
+  (`backendMode !== 'test-mode'` gate) so a test-mode deployment stays
+  deterministic whatever the flag says — pinned by a flag-on + test-mode
+  test. Note: the streaming-agent sticky pin lives in query-service.test.js,
+  not the frame-writer suite — the frame-writer suite mocks the whole
+  query-service module, so the real `_persistRoutedGraphs` behavior is only
+  observable through the real service.
+
 ## Spec Change Log
 
 <!-- Append-only. Populated by step-04 during review loops. Do not modify or delete existing entries. -->

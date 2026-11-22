@@ -59,6 +59,54 @@ function opeaChatQnaUrl() {
   return `http://${process.env.OPEA_HOST || DEFAULT_OPEA_HOST}:${process.env.OPEA_PORT || DEFAULT_OPEA_PORT}/v1/chatqna`;
 }
 
+// The agentic branch's flag and target come from the shared routing module —
+// the ONLY place in the component that reads AGENT_ENABLED (its own suite
+// pins the single-read invariant). This adapter is the decision shape both
+// entries consume: a deployment that flips the flag cannot end up with one
+// path agentic and the other legacy. The agentic target is the agent
+// service — it can never be the chatqna/OPEA URL, a guarantee a test
+// carries behaviorally (no grep can see the BFF runtime call graph).
+const { isAgentPathEnabled, agentServiceUrl } = require('./agent-routing');
+
+function resolveQueryRoute() {
+  if (isAgentPathEnabled()) {
+    return { agentic: true, url: agentServiceUrl() };
+  }
+  return { agentic: false, url: opeaChatQnaUrl() };
+}
+
+// The refusal the non-streaming entry throws while the flag is on: its
+// agentic serving path (the JSON integration) does not exist yet. One
+// constant, one constructor — the entries cannot answer an activated flag
+// with different refusal texts. The 503 + code let the routes map an
+// intentional, configuration-driven refusal away from the 500 "unexpected
+// server fault" class (monitors and retry clients read those as crashes).
+const AGENTIC_REFUSAL_CODE = 'AGENTIC_PATH_NOT_SERVED';
+const AGENTIC_REFUSAL_MESSAGE =
+  'AGENTIC_PATH_NOT_SERVED: the agentic path is activated (AGENT_ENABLED=1) ' +
+  'but the non-streaming entry has no agentic serving path yet; the request ' +
+  'is refused before any upstream call';
+
+function agenticRefusalError() {
+  const error = new Error(AGENTIC_REFUSAL_MESSAGE);
+  error.code = AGENTIC_REFUSAL_CODE;
+  error.statusCode = 503;
+  return error;
+}
+
+// The legacy target the non-streaming entry consumes: the routing decision,
+// taken once, with the refusal attached to the agentic branch, before the
+// query record is written — a refused request persists nothing. (The
+// streaming entry's agentic branch is served by the frame writer in the
+// route handler; the entry itself stays branch-neutral.)
+function resolveLegacyQueryUrl() {
+  const route = resolveQueryRoute();
+  if (route.agentic) {
+    throw agenticRefusalError();
+  }
+  return route.url;
+}
+
 // The target language the client asked for. It travels to OPEA, which
 // validates it against its own language map before it is used, so only a
 // string is forwarded: anything else is dropped rather than handed to the
@@ -619,9 +667,11 @@ class QueryService {
     const queryId = query._key;
     logger.info('QueryService.stream_query_created', { queryId });
 
-    // Build OPEA payload with stream: true
+    // Build OPEA payload with stream: true. The URL is the legacy chatqna
+    // target: the streaming entry's agentic branch is served by the frame
+    // writer in the route handler and never consumes it, while the legacy
+    // branch relays through it unchanged.
     const opeaUrl = opeaChatQnaUrl();
-
     let opeaPayload;
     if (backendMode === 'single-message') {
       opeaPayload = { messages: queryText, stream: true };
@@ -1131,6 +1181,14 @@ class QueryService {
       }
       logger.info('[DEBUG] All validations passed successfully.');
 
+      // The routing decision — the shared routing module's flag, read at
+      // the same pre-record position the streaming entry's branch reads it
+      // (one flag source, two entries, no disagreement). The decision
+      // precedes the test-mode bypass: a mocked OPEA answer under an
+      // activated flag would present itself as an agentic answer, so the
+      // refusal is mode-independent.
+      const opeaUrl = resolveLegacyQueryUrl();
+
       // Derive text from the last message for backward compatibility and analytics
       const queryText = pickUserText(queryData.messages, queryData.userQuestion);
       if (!queryText) {
@@ -1190,7 +1248,8 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaUrl = opeaChatQnaUrl();
+        // opeaUrl comes from the routing decision taken above (the legacy
+        // branch of resolveQueryRoute).
 
         let opeaPayload;
         if (backendMode === 'single-message') {
@@ -2385,3 +2444,9 @@ module.exports = instance;
 // on the singleton object; do not refactor into a class method without also
 // updating the unit tests (query-service.test.js: pickUserText suite).
 module.exports.pickUserText = pickUserText;
+// Attached for unit-test access (query-service.test.js: the routing suite).
+// Pure helper, no instance state — the production branch points are the two
+// request entries, which read it internally.
+module.exports.resolveQueryRoute = resolveQueryRoute;
+// The refusal marker, exported for the routes' 503 mapping and the tests.
+module.exports.AGENTIC_REFUSAL_CODE = AGENTIC_REFUSAL_CODE;

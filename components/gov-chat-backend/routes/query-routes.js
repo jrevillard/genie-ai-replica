@@ -608,6 +608,12 @@ module.exports = (queryService) => {
           // resolution propagates as 401 — never silently degraded to the
           // legacy path (the request itself is invalid).
           res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+        } else if (error.statusCode && error.code) {
+          // Typed-error passthrough, the repo's general contract: the error
+          // declares its own status and machine-readable code, so an
+          // intentional, named state never renders as the 500
+          // unexpected-fault class below.
+          res.status(error.statusCode).json({ error: error.code, message: error.message });
         } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
           res.status(504).json({ error: 'CHATQNA_UNAVAILABLE', message: 'ChatQnA service unavailable or timed out' });
         } else {
@@ -826,6 +832,14 @@ module.exports = (queryService) => {
       // fault.
       if (error.statusCode === 401) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+      }
+      // Typed-error passthrough (the streaming path applies the same
+      // mapping): the error declares its own status and machine-readable
+      // code — the non-streaming agentic refusal declares
+      // 503 + AGENTIC_PATH_NOT_SERVED — never the 500 "unexpected server
+      // fault" class.
+      if (error.statusCode && error.code) {
+        return res.status(error.statusCode).json({ error: error.code, message: error.message });
       }
       res.status(500).json({ message: error.message });
     }

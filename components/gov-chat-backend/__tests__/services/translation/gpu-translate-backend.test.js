@@ -297,6 +297,8 @@ describe('GpuTranslateBackend startup probe', () => {
       else process.env[envKey] = value;
     }
     jest.clearAllMocks();
+    // `clearAllMocks` keeps installed implementations — reset the request mock.
+    http.request.mockReset();
   });
 
   const backendWithEnv = (env) => {
@@ -354,6 +356,39 @@ describe('GpuTranslateBackend startup probe', () => {
     requestThatTimesOut({});
 
     await expect(new GpuTranslateBackend().fetchModelInfo()).resolves.toBeUndefined();
+  });
+
+  // A /health answer that is not 2xx: `healthCheck` reads only `statusCode`.
+  const servingStatus = (statusCode) => {
+    const res = new EventEmitter();
+    res.statusCode = statusCode;
+    // The refusal path drains the response (`resume`), which a real
+    // IncomingMessage carries; the double models that interface piece, as a
+    // jest.fn so the tests can pin the drain.
+    res.resume = jest.fn();
+    http.request.mockImplementation((opts, cb) => {
+      const req = new EventEmitter();
+      req.end = () => process.nextTick(() => cb(res));
+      return req;
+    });
+    return res;
+  };
+
+  it.each([500, 503, 404])('rejects on health status %d — an unready service fails the gate', async (status) => {
+    const res = servingStatus(status);
+
+    await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow(new RegExp(`status ${status}`));
+    expect(res.resume).toHaveBeenCalled();
+  });
+
+  it('keeps init from marking a 503-serving vLLM as initialized', async () => {
+    servingStatus(503);
+    const backend = new GpuTranslateBackend();
+
+    await expect(backend.init()).rejects.toThrow(/unhealthy/);
+
+    expect(backend.initialized).toBe(false);
+    expect(backend.healthCheckPassed).toBe(false);
   });
 
   it('does not treat the in-cluster worker as a configured GPU API', () => {

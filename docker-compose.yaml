@@ -1983,6 +1983,11 @@ services:
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
+    # Tool-calling pin (REC-6, issue #2052): granite4 is the vLLM 0.29
+    # documented parser for the shipped default model (granite-4.1-8b); the
+    # flags are inert for requests that carry no tools. A deployment
+    # overriding VLLM_LLM_MODEL_ID outside Granite 4.x must replace this
+    # parser with its model's documented one.
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
@@ -1991,6 +1996,8 @@ services:
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager
+      --enable-auto-tool-choice
+      --tool-call-parser granite4
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}

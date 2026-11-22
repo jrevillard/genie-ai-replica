@@ -4173,6 +4173,12 @@ docs:validate:
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local
     - grep -q "vllm-reranker" /tmp/gpu-rocm.yaml
     - '! grep -q "vllm-reranker" /tmp/gpu-nvidia.yaml'
+    # The REC-6 tool-calling pin (#2052): the granite4 flags render ONLY
+    # when the served model is Granite 4.x — present on a granite-4.1-8b
+    # render, absent on the 3.3 default render.
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-granite4.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-4.1-8b"
+    - grep -q -- "--tool-call-parser granite4" /tmp/gpu-granite4.yaml
+    - '! grep -q "tool-call-parser" /tmp/gpu-nvidia.yaml'
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers

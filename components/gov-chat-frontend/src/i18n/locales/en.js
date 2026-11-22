@@ -1401,6 +1401,26 @@ export default {
     chatUpdated: 'Conversation updated',
     savingConversation: 'Saving…',
     thinking: 'Thinking…',
+    agentActivity: {
+      working: 'Working…',
+      stepCompleted: 'Step completed.',
+      stepFailed: 'A step failed.',
+      verificationUnavailable: 'Response verification could not be completed.',
+      verificationTranslationScope:
+        'The verification covered the original-language answer — the translation was not verified.',
+      operations: {
+        search_knowledge: {
+          running: 'Searching knowledge…',
+          completed: 'Searched the knowledge base.',
+          failed: 'Searching the knowledge base failed.'
+        },
+        read_source: {
+          running: 'Reading source…',
+          completed: 'Read the source.',
+          failed: 'Reading the source failed.'
+        }
+      }
+    },
     newChatTitle: 'Start New Chat',
     exportChat: 'Export Chat',
     exportFilename: 'File Name',

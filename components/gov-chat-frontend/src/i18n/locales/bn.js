@@ -1406,6 +1406,25 @@ export default {
     chatUpdated: 'কথোপকথন আপডেট হয়েছে',
     savingConversation: 'সংরক্ষণ হচ্ছে…',
     thinking: 'ভাবছে…',
+    agentActivity: {
+      working: 'কাজ চলছে…',
+      stepCompleted: 'ধাপ সম্পন্ন হয়েছে',
+      stepFailed: 'ধাপ ব্যর্থ হয়েছে.',
+      verificationUnavailable: 'যাচাই করা যায়নি — উত্তরটি উৎসের সঙ্গে মিলিয়ে দেখা যায়নি।',
+      verificationTranslationScope: 'যাচাইটি মূল ভাষার উত্তরকে কভার করেছিল — অনুবাদটি যাচাই করা হয়নি।',
+      operations: {
+        search_knowledge: {
+          running: 'জ্ঞানভাণ্ডারে খোঁজা হচ্ছে…',
+          completed: 'জ্ঞানভাণ্ডারে খোঁজা হয়েছে',
+          failed: 'জ্ঞানভাণ্ডারে খোঁজা ব্যর্থ হয়েছে'
+        },
+        read_source: {
+          running: 'উৎস নথি পড়া হচ্ছে…',
+          completed: 'উৎস নথি পড়া হয়েছে',
+          failed: 'উৎস নথি পড়া যায়নি'
+        }
+      }
+    },
     newChatTitle: 'নতুন চ্যাট শুরু করুন',
     exportChat: 'চ্যাট এক্সপোর্ট করুন',
     exportFilename: 'ফাইলের নাম',

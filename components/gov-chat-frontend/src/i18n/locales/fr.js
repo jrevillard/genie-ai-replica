@@ -1422,6 +1422,26 @@ export default {
     chatUpdated: 'Conversation mise à jour',
     savingConversation: 'Enregistrement…',
     thinking: 'Réflexion…',
+    agentActivity: {
+      working: 'Traitement en cours…',
+      stepCompleted: 'Étape terminée',
+      stepFailed: 'Étape échouée.',
+      verificationUnavailable: 'Vérification indisponible — la réponse n’a pas pu être confrontée aux sources.',
+      verificationTranslationScope:
+        'La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.',
+      operations: {
+        search_knowledge: {
+          running: 'Recherche dans la base de connaissances…',
+          completed: 'Base de connaissances consultée',
+          failed: 'Échec de la recherche dans la base de connaissances'
+        },
+        read_source: {
+          running: 'Lecture du document source…',
+          completed: 'Document source lu',
+          failed: 'Impossible de lire le document source'
+        }
+      }
+    },
     newChatTitle: 'Commencer une nouvelle discussion',
     exportChat: 'Exporter la discussion',
     exportFilename: 'Nom du fichier',

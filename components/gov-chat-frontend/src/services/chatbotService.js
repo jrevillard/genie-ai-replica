@@ -50,7 +50,9 @@ export default {
    * Submit a streaming query via SSE.
    * Uses native Fetch API (not axios) for streaming response support.
    * @param {Object} queryData - Query data
-   * @param {Object} callbacks - { onChunk, onMetadata, onTranslation, onDone, onError }
+   * @param {Object} callbacks - { onChunk, onMetadata, onTranslation, onDone, onError,
+   *   onAgentActivity, onAgentVerdict } — the two agent callbacks are optional;
+   *   callers that do not pass them simply ignore the additive frames.
    * @returns {AbortController} Controller to cancel the stream
    */
   submitQueryStream(queryData, callbacks) {
@@ -219,6 +221,16 @@ export default {
                   callbacks.onError?.(error);
                   return;
                 }
+                // The additive agent-path frames:
+                // forwarded to their optional callbacks and otherwise
+                // inert — a client that never registered them behaves
+                // exactly as the legacy client did.
+                case 'agent_activity':
+                  callbacks.onAgentActivity?.(data);
+                  break;
+                case 'agent_verdict':
+                  callbacks.onAgentVerdict?.(data);
+                  break;
               }
             } catch {
               // Ignore JSON parse errors for non-data lines

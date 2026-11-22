@@ -1412,6 +1412,25 @@ export default {
     chatUpdated: 'Percakapan diperbarui',
     savingConversation: 'Menyimpan…',
     thinking: 'Berpikir…',
+    agentActivity: {
+      working: 'Sedang bekerja…',
+      stepCompleted: 'Langkah selesai',
+      stepFailed: 'Langkah gagal.',
+      verificationUnavailable: 'Verifikasi tidak tersedia — jawaban tidak dapat diperiksa terhadap sumber.',
+      verificationTranslationScope: 'Verifikasi mencakup jawaban dalam bahasa aslinya — terjemahan tidak diverifikasi.',
+      operations: {
+        search_knowledge: {
+          running: 'Mencari di basis pengetahuan…',
+          completed: 'Pencarian basis pengetahuan selesai',
+          failed: 'Pencarian di basis pengetahuan gagal'
+        },
+        read_source: {
+          running: 'Membaca dokumen sumber…',
+          completed: 'Dokumen sumber dibaca',
+          failed: 'Tidak dapat membaca dokumen sumber'
+        }
+      }
+    },
     newChatTitle: 'Mulai Obrolan Baru',
     exportChat: 'Ekspor Obrolan',
     exportFilename: 'Nama File',

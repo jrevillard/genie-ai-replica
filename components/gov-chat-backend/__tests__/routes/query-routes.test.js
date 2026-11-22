@@ -1273,18 +1273,21 @@ describe('POST /', () => {
     expect(response.body.message).toBe('Create failed');
   });
 
-  it('maps the intentional agentic refusal to 503 with the marker as the code', async () => {
-    // The same mapping the streaming path applies: the refusal is a named,
-    // configuration-driven state, never the 500 unexpected-fault class.
-    const refusal = new Error('AGENTIC_PATH_NOT_SERVED: the agentic path is activated');
-    refusal.code = 'AGENTIC_PATH_NOT_SERVED';
-    refusal.statusCode = 503;
-    queryService.createQuery.mockRejectedValue(refusal);
+  it('maps a typed error through its own statusCode and code', async () => {
+    // The same mapping the streaming path applies: an intentional, named,
+    // configuration-driven state is never rendered as the 500
+    // unexpected-fault class. (Story 3.1's AGENTIC_PATH_NOT_SERVED refusal
+    // was removed when story 2.4b served the path it guarded — the general
+    // statusCode+code passthrough stays, any named state rides it.)
+    const typed = new Error('the named condition');
+    typed.code = 'NAMED_CONDITION';
+    typed.statusCode = 503;
+    queryService.createQuery.mockRejectedValue(typed);
 
     const response = await authPost('/api/queries', { sessionId: 's1' });
 
     expect(response.status).toBe(503);
-    expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
+    expect(response.body.error).toBe('NAMED_CONDITION');
   });
 
   // Review 2026-10-29 round 3: a bearer failure caught during OKF fan-out

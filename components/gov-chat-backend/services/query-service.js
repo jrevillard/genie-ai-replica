@@ -1177,11 +1177,12 @@ class QueryService {
 
       // The routing decision — the shared routing module's flag, read at
       // the same pre-record position the streaming entry's branch reads it
-      // (one flag source, two entries, no disagreement). The value is the
-      // LEGACY leg's target: the agentic branch below consumes the same
-      // flag first and serves the agent leg, so this URL is only reached
-      // when the flag is off (and under test-mode, which outranks the flag
-      // on this entry — the mock branch is the honest one there).
+      // (one flag source, two entries, no disagreement). Flag off: the
+      // value is the LEGACY chatqna target, consumed by the legacy branch
+      // below (test-mode outranks the flag — the mock branch is the honest
+      // one there). Flag on: resolveQueryRoute() answers the AGENT url at
+      // this line, so the value is DEAD — the agentic branch below serves
+      // the run before the legacy leg is ever reached.
       const opeaUrl = resolveQueryRoute().url;
 
       // Derive text from the last message for backward compatibility and analytics

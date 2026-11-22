@@ -752,6 +752,36 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     expect(capturedSignal.aborted).toBe(true);
   });
 
+  it('a stream destroyed with only a close emission still ends the response (no keepalive hang)', async () => {
+    // A destroyed stream can report 'close' WITHOUT 'end' or 'error': the
+    // 'close' terminal is what ends the SSE response honestly — without it
+    // the response hangs on keepalives and the admission slot stays held.
+    setupAgentQuery();
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+    responsePromise.catch(() => {});
+    for (let i = 0; i < 500 && mockStream.listenerCount('data') === 0; i++) {
+      await flush(10);
+    }
+    expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+    mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'partial' }, { seq: 0 }))}\n\n`);
+    await flush();
+    mockStream.emit('close'); // close ALONE — no 'end', no 'error'
+
+    const response = await responsePromise;
+    const frames = parseSSEEvents(response.text);
+    expect(frames[frames.length - 1].type).toBe('error');
+    expect(frames[frames.length - 1].code).toBe('AGENT_STREAM_ERROR');
+    expect(frames[frames.length - 1].message).toBe('the agent stream terminated');
+    expect(frames.find((f) => f.type === 'done')).toBeUndefined();
+    expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+  });
+
   it('a stream that trickles past the wall-clock bound is aborted and ends with the error contract', async () => {
     // 40000 > reserves + floor: the effective timeout is the configured one,
     // so the deadline timer is a real 40000 ms bound on the BODY.

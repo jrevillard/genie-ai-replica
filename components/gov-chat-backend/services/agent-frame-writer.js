@@ -167,9 +167,14 @@ async function proxyAgentRun({
   });
 
   // The shared posture resolution (one home with the fan-out carrier — no
-  // double upstream calls, no drift). Fail-closed: any resolver problem
-  // except a 401 (the request itself is invalid — it propagates) degrades to
-  // an empty authorized set, the same direction the carrier degrades to.
+  // double upstream calls, no drift). Fail-closed, DELIBERATELY stricter
+  // than the legacy carrier: any resolver problem except a 401 (the request
+  // itself is invalid — it propagates) builds an empty CallerContext, whose
+  // search_knowledge raises AuthorizationError — the run ends in the
+  // insufficiency answer, the epic's own fail-closed direction for degraded
+  // retrieval. (The legacy carrier's degrade instead keeps the
+  // byte-identical legacy-corpus payload — same trigger, intended
+  // different outcome.)
   let callerContext;
   try {
     const posture = await queryService.resolveFanoutPosture(authHeaders, {
@@ -433,7 +438,13 @@ async function proxyAgentRun({
     } else if (parsed.type === 'usage_record') {
       usageRecord = parsed.record;
     } else {
-      logger.warn('AgentFrameWriter.seam_parse_error', { queryId, raw: parsed.raw });
+      logger.warn('AgentFrameWriter.seam_parse_error', {
+        queryId,
+        // Bounded: a misbehaving upstream must not flood the log pipeline
+        // with unbounded raw lines.
+        raw: parsed.raw.slice(0, 200),
+        rawLength: parsed.raw.length
+      });
     }
   };
 
@@ -476,6 +487,16 @@ async function proxyAgentRun({
     }
     buffer = '';
     doAgentTerminal();
+  });
+
+  stream.on('close', () => {
+    // A destroyed stream reporting 'close' ALONE never runs 'end' or
+    // 'error': without this terminal the SSE response hangs on keepalives
+    // forever and the admission slot stays held. The sibling discipline of
+    // the JSON consumer — the error contract ends the response honestly.
+    if (streamFinished) return;
+    logger.error('AgentFrameWriter.agent_stream_close', { queryId });
+    finishWithErrorFrame('the agent stream terminated', 'AGENT_STREAM_ERROR');
   });
 }
 

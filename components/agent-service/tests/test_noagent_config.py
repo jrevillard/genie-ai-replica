@@ -106,6 +106,18 @@ def test_bearers_are_the_deployed_split():
     assert config.probe_bearer == "vk-probe"  # the /v1/models + /tokenize probes
 
 
+def test_data_bearer_falls_back_to_the_gpu_node_key():
+    """The data-call bearer reads the probe client's selection rule
+    (``OPENAI_API_KEY or VLLM_API_KEY``): the canonical venue carries only
+    the GPU-node key, and an in-process run inherits the operator's shell —
+    not the compose mapping that fills OPENAI_API_KEY from VLLM_API_KEY
+    (#2065). An explicit OPENAI_API_KEY still wins."""
+    fallback = NoAgentConfig.load(env={"VLLM_API_KEY": "vk-probe"})
+    assert fallback.bearer == "vk-probe"
+    assert fallback.probe_bearer == "vk-probe"
+    assert NoAgentConfig.load(env={}).bearer is None
+
+
 def test_answer_reserve_uses_the_deployed_default():
     """The guard plans against 3896 when no max_tokens is configured, and
     against the configured one when it is — the generation request itself

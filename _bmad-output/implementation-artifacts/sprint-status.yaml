@@ -70,7 +70,7 @@ development_status:
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-evaluation-harness-one-runway: review
+  4-1-evaluation-harness-one-runway: done
   4-2-authorization-and-injection-scenario-suite: backlog
   4-3-e01-behavior-preservation-a-vs-b: backlog
   4-4-thresholds-and-counter-metrics: backlog

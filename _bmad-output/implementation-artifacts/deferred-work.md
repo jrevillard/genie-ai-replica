@@ -3138,3 +3138,24 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
   summary: Test-mode precedence is asymmetric across the two query entries — on AGENT_ENABLED=1 + CONTEXT_OPTION=test-mode, POST /api/queries serves the deterministic mock (2.12's gate) while /api/queries/stream still serves the agent leg (it gates on the flag only).
   evidence: FIX review of the 2.12 correction chain (non-blocking finding 2); the streaming entry has no test-mode concept anywhere today — the symmetric gate (or an explicit "test-mode deployments keep AGENT_ENABLED=0 for streaming" rule) belongs to story 2.9's SSE contract regression coverage.
+- source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
+  summary: Epic 2's FRs-covered list (epics.md ~158) omits FR-19 although the coverage map assigns it (V07a) to Epic 2.
+  evidence: global review round 1, spot-verified — coverage map line 130 vs the per-epic covered list; pre-existing umbrella planning artifact, outside the story diff.
+- source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
+  summary: The traceability strip invents FR-19a/FR-19b sub-ids (epics.md 649/669) that exist nowhere in the PRD's FR inventory.
+  evidence: global review round 1, spot-verified by grep — no definition anywhere; pre-existing.
+- source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
+  summary: Routing prd.md frontmatter sources_of_truth dropped the epics.md and sprint-status.yaml pointers the previous routing artifact carried.
+  evidence: global review round 1, spot-verified at prd.md:10-14; pre-existing.
+- source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
+  summary: Living PRD open question 3 (contract placement) still reads open while the D01 decision row records the acted placement.
+  evidence: global review round 1; pre-existing document-internal inconsistency.
+- source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
+  summary: sprint-status.yaml carries the unfilled template placeholder project_key: NOKEY on the active initiative tracker.
+  evidence: global review round 1, spot-verified; pre-existing template line.
+- source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
+  summary: sprint-status.yaml generated/last_updated use US MM-DD-YYYY while the artifact set otherwise uses ISO dates.
+  evidence: global review round 1, spot-verified; pre-existing template convention.
+- source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
+  summary: The admin-logs-victorialogs archival commit (cc4238fcc) landed on feat/agentic-foundations/prd instead of main, against POST-PRD-ARCHIVAL's archive-on-main rule.
+  evidence: global review round 1; pre-existing history; remedy (cherry-pick to main) is the operator's — surfaced to the orchestrator.

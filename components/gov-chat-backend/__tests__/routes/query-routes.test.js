@@ -2185,6 +2185,11 @@ describe('POST /:queryId/link/:messageId', () => {
 // The ON side of the wiring lives in agent-frame-writer.test.js.
 // ============================================================
 describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
+  // The relay-mode tests flip the streaming-translation flag; scrub it even
+  // on failure so a red test cannot flip its siblings' mode.
+  afterEach(() => {
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+  });
   // A local stream setup: the SSE helpers above are scoped to their describe.
   function setupLegacyStream() {
     queryService.initStreamQuery.mockResolvedValue({
@@ -2373,7 +2378,6 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
 
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
     expect(queryService.finalizeStreamQuery.mock.calls[0][3].answer_interrupted).toBeUndefined();
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
   it('a normal completion is NOT partial-saved by the close event (doneState guard)', async () => {

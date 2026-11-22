@@ -22,7 +22,10 @@
 
 Every driver: per-case rows, atomic writes (``harness.write_json``), and
 resume — an interrupted run keeps its completed rows on disk and re-runs
-ONLY the unfinished case ids.
+ONLY the unfinished case ids. Multi-turn cases (story 4.2) execute their
+turns strictly in order, each turn a full run with its own caller context;
+a turn's row carries the turn-indexed id ``<case_id>#t<n>`` and the turn
+index.
 
 STDLIB-ONLY: no new runtime dependency (the eval toolchain's constraint).
 """
@@ -42,6 +45,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from harness import write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
+
+from .evalset import turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -78,6 +83,54 @@ def _load_entries(set_path: str | Path) -> list[dict]:
     except SetValidationError as failed:
         raise DriverError(f"{set_path} is not a valid assessment set: {failed}") from failed
     return entries
+
+
+# The reason a config-A row records for a security case (story 4.2): config A
+# is the legacy fixed RAG — no authorization executor, no steerable agent.
+A_SECURITY_SKIP_REASON = (
+    "config A is the legacy fixed RAG: no agent surface to authorize or steer —"
+    " the security scenario executes on the pair's B/C legs"
+)
+
+
+def _turn_field(entry: dict) -> dict:
+    """The row's turn stamp (or nothing) — ONE helper so the turn-index rows
+    never drift from the turn-indexed ids."""
+    if entry.get("turn") is not None:
+        return {"turn": entry["turn"]}
+    return {}
+
+
+def security_skip_rows(entries: list[dict]) -> dict:
+    """The skipped rows a config-A reference run records for a set's security
+    cases — one per turn entry, keyed by the same turn-indexed ids the
+    verdict layer judges (a multi-turn case skips per turn). Recorded, never
+    silent and never findings."""
+    rows = {}
+    for case in entries:
+        if not isinstance(case, dict) or not case.get("security_scenario"):
+            continue
+        for entry in turn_entries(case):
+            row = {"case_id": entry["id"], "outcome": "skipped", "reason": A_SECURITY_SKIP_REASON}
+            row.update(_turn_field(entry))
+            rows[entry["id"]] = row
+    return rows
+
+
+def _pending_in_order(cases: list[dict], done: set[str]) -> list[dict]:
+    """The per-turn entries to run, in strict turn order (story 4.2): a
+    multi-turn case re-runs from its FIRST missing turn through the end — a
+    later turn never executes before an earlier one, so a partial prior run
+    re-runs the tail rather than resuming mid-sequence."""
+    pending: list[dict] = []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        expanded = turn_entries(case) if case.get("turns") else [case]
+        first_missing = next((index for index, entry in enumerate(expanded) if entry["id"] not in done), None)
+        if first_missing is not None:
+            pending.extend(expanded[first_missing:])
+    return pending
 
 
 def _read_rows_file(rows_path: Path) -> dict:
@@ -125,15 +178,19 @@ def run_config_a(
     seed: int,
     runner=None,
     env_extra: dict | None = None,
+    entries: list[dict] | None = None,
 ) -> dict:
-    """One config-A anchor run over the set; return ``{"report", "report_path"}``.
+    """One config-A anchor run over the set; return ``{"report", "report_path", "rows"}``.
 
     The runner is injected so tests drive it without a live stack; the
     default reuses the capture machinery's subprocess invocation (never a
-    fork). The report path is STABLE per set run — run_eval resumes from its
-    own ``.done`` sidecar, so an interrupted run continues where it died.
-    Fail-fast on missed traces (the anchor's existing behavior): a reference
-    measurement with missed traces is a zero baseline in disguise.
+    fork). ``entries`` — the set's already-loaded entries (the CLI validated
+    the set before calling); when absent the set file is loaded here so a
+    direct driver caller enforces the same contract. The report path is
+    STABLE per set run — run_eval resumes from its own ``.done`` sidecar, so
+    an interrupted run continues where it died. Fail-fast on missed traces
+    (the anchor's existing behavior): a reference measurement with missed
+    traces is a zero baseline in disguise.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -149,7 +206,13 @@ def run_config_a(
             f"config A run missed {n_missed} trace(s), {n_unmapped} unmapped chunk key(s) "
             "(observability off? stale traces?) — refusing to record a partial reference"
         )
-    return {"report": report, "report_path": str(report_path)}
+    # The security cases (story 4.2): A has no agent surface — the skipped rows
+    # record the reason so the pair's report shows an intentional difference,
+    # never a silent absence.
+    skip_rows = security_skip_rows(entries if entries is not None else _load_entries(set_path))
+    rows_path = out_dir / "config-a.rows.json"
+    write_json(rows_path, {"cases": skip_rows}, ensure_ascii=False)
+    return {"report": report, "report_path": str(report_path), "rows": skip_rows, "rows_path": str(rows_path)}
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +294,7 @@ def run_config_b(
     cases = _load_entries(set_path)
     prior = _read_rows_file(rows_path)
     done = set(prior.get("cases") or {})
-    pending = [c for c in cases if c.get("id") not in done]
+    pending = _pending_in_order(cases, done)
 
     if pending:
         # Nothing pending → no container round-trip at all (a converged resume
@@ -376,6 +439,15 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
         "context": {
             "user_id": str(raw.get("user_id") or "eval-config-c"),
             "authorized_graph_names": list(raw.get("authorized_graph_names") or []),
+            # The repo→graph mapping the CallerContext contract carries — the
+            # OKF read scope. A malformed entry is dropped (the context block
+            # is free-form at the schema level); an entry naming a graph
+            # outside the authorized set fails on the service's own validator.
+            "authorized_repos": [
+                {"repo_id": str(repo["repo_id"]), "graph_name": str(repo["graph_name"])}
+                for repo in (raw.get("authorized_repos") or [])
+                if isinstance(repo, dict) and repo.get("repo_id") and repo.get("graph_name")
+            ],
             "requested_labels": list(raw.get("requested_labels") or []),
         },
     }
@@ -423,6 +495,7 @@ def run_one_case_c(
     answer_parts: list[str] = []
     run_id: str | None = None
     usage_record: dict | None = None
+    source_documents: list | None = None
     outcome: str | None = None
     error_text: str | None = None
     events_seen = 0
@@ -456,6 +529,13 @@ def run_one_case_c(
                         error_text = f"{error_text}: {payload['message']}"
                 elif "usage_record" in event:
                     usage_record = event["usage_record"]
+                elif kind == "verdict":
+                    # The citation-verdict projection (AD-7): its
+                    # source_documents carry the delivered provenance the
+                    # security verdict layer's subset check reads (story 4.2).
+                    verdict_payload = event.get("payload") or {}
+                    if isinstance(verdict_payload.get("source_documents"), list):
+                        source_documents = verdict_payload["source_documents"]
                 if is_cancellation and events_seen >= 1:
                     break
             if is_cancellation and events_seen >= 1 and outcome is None:
@@ -490,8 +570,13 @@ def run_one_case_c(
         row["answer"] = "".join(answer_parts)
     if usage_record is not None:
         row["usage_record"] = usage_record
+    if source_documents is not None:
+        row["source_documents"] = source_documents
     if error_text is not None:
         row["error_text"] = error_text
+    # A turn's row records its turn index (story 4.2) — the id carries the
+    # same fact, the field keeps it machine-readable without parsing.
+    row.update(_turn_field(case))
     if is_cancellation:
         row["cancel_requested"] = True
         row["cancelled"] = outcome == OUTCOME_CANCELLED
@@ -507,7 +592,9 @@ def run_config_c(
     deadline_ms: int = 600_000,
 ) -> dict:
     """Run the assessment set through config C's governed seam; per-case rows,
-    atomic writes, resume (only unfinished case ids are re-run)."""
+    atomic writes, resume (only unfinished case ids are re-run). Multi-turn
+    cases run their turns strictly in order (story 4.2), each turn its own
+    run under its own context."""
     transport = transport or UrllibCTransport()
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -516,7 +603,7 @@ def run_config_c(
     cases = _load_entries(set_path)
     prior = _read_rows_file(rows_path)
     done = set(prior.get("cases") or {})
-    pending = [c for c in cases if c.get("id") not in done]
+    pending = _pending_in_order(cases, done)
 
     for case in pending:
         row = run_one_case_c(case, base_url=base_url, transport=transport, deadline_ms=deadline_ms)

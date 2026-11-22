@@ -19,7 +19,17 @@ with the protocol fields every case carries:
   ``{"expect_abstained": true}`` for an unanswerable case, ``{"require_citation":
   true}`` for a citation check). Free-form; the driver layer reads it;
 * ``script`` — optional ``latin`` / ``non-latin`` override; when absent the
-  validator derives the script from the query text's Unicode blocks.
+  validator derives the script from the query text's Unicode blocks;
+* ``security_scenario`` — optional security vocabulary (story 4.2): one of
+  the four authorization conditions (``restricted_repo``, ``cross_user_id``,
+  ``narrowed_scope``, ``permission_change``) or either injection vector
+  (``injection_document``, ``injection_tool_output``). An ASSESSMENT set must
+  carry and count every one of them;
+* ``turns`` — optional multi-turn execution shape: a non-empty list of
+  per-turn objects (``query``, optional ``context``), one per turn in strict
+  execution order. When ``turns`` is present the turn list IS the case's
+  queries (the case-level ``query`` is then not required). A turn's row
+  carries the turn-indexed id ``<case_id>#t<n>``.
 
 Set files carry a ``_meta`` block with the set-level ``provenance`` (must
 agree with every case's) and optional ``minimums`` overrides of the composition
@@ -74,6 +84,27 @@ DEFAULT_COMPOSITION_MINIMUMS = {
 
 DEFAULT_ACCESS_MINIMUMS = {"public": 1, "restricted": 1}
 
+# The security vocabulary a case's optional ``security_scenario`` field draws
+# from (story 4.2, FR-25): the four authorization conditions, then the two
+# injection vectors. Security scenarios execute only on configs B and C (the
+# surfaces with an authorization executor and a steerable agent); a config-A
+# reference run records them as skipped rows.
+AUTHORIZATION_SCENARIOS = (
+    "restricted_repo",
+    "cross_user_id",
+    "narrowed_scope",
+    "permission_change",
+)
+INJECTION_SCENARIOS = ("injection_document", "injection_tool_output")
+SECURITY_SCENARIOS = AUTHORIZATION_SCENARIOS + INJECTION_SCENARIOS
+
+# The per-scenario minimums for an ASSESSMENT set (each of the four
+# authorization conditions and both injection vectors present and countable).
+# Extends the same ``_meta.minimums`` override mechanism as the composition
+# classes: an operator may raise them, never lower them below 1 — presence is
+# the invariant.
+DEFAULT_SECURITY_MINIMUMS = {scenario: 1 for scenario in SECURITY_SCENARIOS}
+
 # The minimum of non-Latin cases inside the representative_language class.
 DEFAULT_NON_LATIN_MINIMUM = 1
 
@@ -121,13 +152,43 @@ def has_non_latin_text(text: str) -> bool:
 
 def case_is_non_latin(case: dict) -> bool:
     """The case's script judgment: the explicit ``script`` override first, then
-    the query text's Unicode blocks."""
+    the query text's Unicode blocks. A multi-turn case's queries live in its
+    turns — the judgment reads them (any non-Latin turn makes the case
+    non-Latin)."""
     script = case.get("script")
     if script == "non-latin":
         return True
     if script == "latin":
         return False
+    turns = case.get("turns")
+    if turns:
+        return any(isinstance(turn, dict) and case_is_non_latin(turn) for turn in turns)
     return has_non_latin_text(str(case.get("query", "")))
+
+
+def turn_entries(case: dict) -> list[dict]:
+    """The case's per-turn execution entries — ONE expansion, shared by the
+    drivers and the verdict layer so the row ids and the verdict ids can never
+    drift.
+
+    A single-turn case yields the case itself; a multi-turn case yields one
+    entry per turn: the turn-indexed id ``<case_id>#t<n>`` (1-based, in the
+    turns' declared order), the turn's own ``query``/``context`` overriding the
+    case-level ones, the 1-based ``turn`` index recorded on the entry (the
+    driver copies it into the row), and the ``turns`` block itself dropped.
+    """
+    turns = case.get("turns")
+    if not turns:
+        return [case]
+    entries = []
+    for index, turn in enumerate(turns, start=1):
+        entry = {key: value for key, value in case.items() if key != "turns"}
+        if isinstance(turn, dict):
+            entry.update(turn)
+        entry["id"] = f"{case.get('id')}#t{index}"
+        entry["turn"] = index
+        entries.append(entry)
+    return entries
 
 
 def _validate_case(index: int, case: dict, errors: list[str]) -> None:
@@ -138,7 +199,22 @@ def _validate_case(index: int, case: dict, errors: list[str]) -> None:
     label = case.get("id") or f"<entry {index}>"
     if not case.get("id") or not isinstance(case.get("id"), str):
         errors.append(f"entry {index} carries no string id")
-    if not str(case.get("query", "")).strip():
+    turns = case.get("turns")
+    if turns is not None:
+        if not isinstance(turns, list) or not turns:
+            errors.append(f"case {label}: turns, when present, must be a non-empty list of per-turn objects")
+        else:
+            for turn_index, turn in enumerate(turns, start=1):
+                if not isinstance(turn, dict):
+                    errors.append(f"case {label}: turn {turn_index} is not an object")
+                    continue
+                if not str(turn.get("query", "")).strip():
+                    errors.append(f"case {label}: turn {turn_index} must carry query text")
+                if turn.get("context") is not None and not isinstance(turn.get("context"), dict):
+                    errors.append(f"case {label}: turn {turn_index} context, when present, must be an object")
+    elif not str(case.get("query", "")).strip():
+        # A multi-turn case's queries live in its turns; a single-turn case
+        # carries the case-level query.
         errors.append(f"case {label}: query must carry text")
     if not str(case.get("language", "")).strip():
         errors.append(f"case {label}: language is required (representative-language axis)")
@@ -161,6 +237,11 @@ def _validate_case(index: int, case: dict, errors: list[str]) -> None:
         errors.append(f"case {label}: expectations, when present, must be an object")
     if case.get("script") is not None and case.get("script") not in ("latin", "non-latin"):
         errors.append(f"case {label}: script, when present, must be 'latin' or 'non-latin'")
+    if case.get("security_scenario") is not None and case.get("security_scenario") not in SECURITY_SCENARIOS:
+        errors.append(
+            f"case {label}: security_scenario must be one of {', '.join(SECURITY_SCENARIOS)}"
+            f" (got {case.get('security_scenario')!r})"
+        )
 
 
 def _validate_composition(
@@ -172,6 +253,7 @@ def _validate_composition(
     """The ASSESSMENT composition floor + the tuning/assessment separation."""
     class_minimums = dict(DEFAULT_COMPOSITION_MINIMUMS)
     access_minimums = dict(DEFAULT_ACCESS_MINIMUMS)
+    security_minimums = dict(DEFAULT_SECURITY_MINIMUMS)
     non_latin_minimum = DEFAULT_NON_LATIN_MINIMUM
     for key, value in (minimums_override or {}).items():
         try:
@@ -183,6 +265,8 @@ def _validate_composition(
             class_minimums[key] = numeric
         elif key in access_minimums:
             access_minimums[key] = numeric
+        elif key in security_minimums:
+            security_minimums[key] = numeric
         elif key == "non_latin":
             non_latin_minimum = numeric
         else:
@@ -190,6 +274,7 @@ def _validate_composition(
 
     counts: dict[str, int] = {c: 0 for c in COMPOSITION_CLASSES}
     access_counts: dict[str, int] = {a: 0 for a in ACCESS_SCENARIOS}
+    security_counts: dict[str, int] = {s: 0 for s in SECURITY_SCENARIOS}
     for case in entries:
         if not isinstance(case, dict):
             continue
@@ -198,6 +283,8 @@ def _validate_composition(
             counts[case_class] += 1
         if case.get("access_scenario") in access_counts:
             access_counts[case["access_scenario"]] += 1
+        if case.get("security_scenario") in security_counts:
+            security_counts[case["security_scenario"]] += 1
 
     for case_class, minimum in class_minimums.items():
         if counts.get(case_class, 0) < minimum:
@@ -222,6 +309,16 @@ def _validate_composition(
             errors.append(
                 f"composition: access scenario {scenario!r} is missing or under-counted"
                 f" ({access_counts.get(scenario, 0)} present, {minimum} required)"
+            )
+
+    # The security floor (story 4.2): each of the four authorization
+    # conditions and both injection vectors present and countable — a set
+    # missing one fails naming it.
+    for scenario, minimum in security_minimums.items():
+        if security_counts.get(scenario, 0) < minimum:
+            errors.append(
+                f"composition: security scenario {scenario!r} is missing or under-counted"
+                f" ({security_counts.get(scenario, 0)} present, {minimum} required)"
             )
 
 

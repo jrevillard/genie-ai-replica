@@ -31,15 +31,25 @@ EVALUATOR_INSTRUCTIONS = str(Path(__file__).resolve().parent / "protocol" / "eva
 # ---------------------------------------------------------------------------
 
 
+def _a_set_file(tmp_path):
+    """A real (composition-valid) set file for the config-A tests — the A
+    driver reads the set to record the security cases' skipped rows."""
+    sample = Path(__file__).resolve().parent / "protocol" / "sets" / "assessment.sample.json"
+    path = tmp_path / "set.json"
+    path.write_text(sample.read_text(encoding="utf-8"), encoding="utf-8")
+    return path
+
+
 def test_config_a_runs_the_anchor_pattern_and_records_the_report(tmp_path):
     calls = []
+    set_path = _a_set_file(tmp_path)
 
     def fake_runner(gold, out, seed, env_extra=None):
         calls.append({"gold": str(gold), "out": str(out), "seed": seed, "env_extra": env_extra})
         out.write_text(json.dumps({"aggregate": {"recall": 0.9}, "n_missed_traces": 0}), encoding="utf-8")
         return {"aggregate": {"recall": 0.9}, "n_missed_traces": 0}
 
-    result = drivers.run_config_a("set.json", tmp_path, seed=7, runner=fake_runner)
+    result = drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=fake_runner)
     assert calls[0]["seed"] == 7
     assert calls[0]["gold"].endswith("set.json")
     assert calls[0]["out"].endswith("config-a.report.json")
@@ -63,13 +73,14 @@ def test_config_a_uses_the_capture_machinery_subprocess_by_default(monkeypatch, 
     """The default runner IS capture_baseline._run_anchor_eval — reuse, never a fork."""
     import capture_baseline
 
+    set_path = _a_set_file(tmp_path)
     seen = {}
     monkeypatch.setattr(
         capture_baseline,
         "_run_anchor_eval",
         lambda gold, out, seed, env_extra=None: seen.update({"seed": seed}) or {"n_missed_traces": 0},
     )
-    result = drivers.run_config_a("set.json", tmp_path, seed=42)
+    result = drivers.run_config_a(set_path, tmp_path / "out", seed=42)
     assert seen["seed"] == 42
     assert result["report"] == {"n_missed_traces": 0}
 
@@ -82,13 +93,15 @@ def test_config_a_uses_the_capture_machinery_subprocess_by_default(monkeypatch, 
 class FakeBTransport:
     """Replays the container side: decodes the shipped payload, returns rows
     for the case ids it received (any id in `failure_ids` becomes a failure
-    row — the run must continue anyway)."""
+    row — the run must continue anyway; a shipped per-turn entry's ``turn``
+    index rides the row like the real driver writes it)."""
 
     def __init__(self, failure_ids=()):
         self.cmds: list[str] = []
         self.failure_ids = set(failure_ids)
         self.shipped_driver: bytes | None = None
         self.cases_seen: list[list[str]] = []
+        self.shipped_cases: list[dict] = []
 
     def exec_cmd(self, container, cmd, timeout=600, pass_env=()):
         self.cmds.append(cmd)
@@ -113,6 +126,10 @@ class FakeBTransport:
                         "metadata": {},
                         "wall_ms": 12.0,
                     }
+            turn_by_id = {case["id"]: case.get("turn") for case in self.shipped_cases}
+            for case_id, turn in turn_by_id.items():
+                if case_id in rows and turn is not None:
+                    rows[case_id]["turn"] = turn
             payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b", "env": {"AGENT_X": "1"}}})
             return base64.b64encode(payload.encode("utf-8")).decode("ascii")
         quoted = re.findall(r"printf %s '([^']+)'", cmd)
@@ -120,6 +137,7 @@ class FakeBTransport:
             # The cases ship + the driver runs in this call.
             cases = json.loads(base64.b64decode(quoted[0]).decode("utf-8"))["cases"]
             self.cases_seen.append([c["id"] for c in cases])
+            self.shipped_cases.extend(cases)
         else:
             # The driver script ships alone in this call.
             self.shipped_driver = base64.b64decode(quoted[0])
@@ -145,9 +163,9 @@ def _case(id_, query, case_class, access="public", **extra):
 def _b_set(tmp_path, ids):
     """A composition-VALID assessment set: the requested ids are the
     answerable public cases; `_`-prefixed filler cases carry every other
-    required class (the drivers enforce the floor on the data path, so a
-    driver-test set must be a real one). The enumerating assertions filter
-    the `_` fillers out."""
+    required class AND every required security scenario (the drivers enforce
+    the floor on the data path, so a driver-test set must be a real one). The
+    enumerating assertions filter the `_` fillers out."""
     entries = [_case(i, f"q {i}", "answerable") for i in ids]
     entries.append(_case("_ans-restricted", "restricted q", "answerable", access="restricted"))
     while sum(1 for e in entries if e["case_class"] == "answerable") < 2:
@@ -160,6 +178,36 @@ def _b_set(tmp_path, ids):
     entries.append(_case("_lang-es", "¿Dónde se presenta?", "representative_language"))
     entries.append(_case("_fail", "the failure question", "failure"))
     entries.append(_case("_cancel", "the cancellation question", "cancellation"))
+    entries.append(
+        _case(
+            "_sec-restricted",
+            "the restricted-repo question",
+            "answerable",
+            access="restricted",
+            security_scenario="restricted_repo",
+        )
+    )
+    entries.append(_case("_sec-xuser-a", "the cross-user question", "answerable", security_scenario="cross_user_id"))
+    entries.append(_case("_sec-xuser-b", "the cross-user question", "answerable", security_scenario="cross_user_id"))
+    entries.append(
+        _case("_sec-narrow", "the narrowed-scope question", "answerable", security_scenario="narrowed_scope")
+    )
+    entries.append(
+        _case(
+            "_sec-perm",
+            "the permission-change question",
+            "answerable",
+            access="restricted",
+            security_scenario="permission_change",
+            turns=[{"query": "turn one"}, {"query": "turn two"}],
+        )
+    )
+    entries.append(
+        _case("_sec-inj-doc", "the injection question", "answerable", security_scenario="injection_document")
+    )
+    entries.append(
+        _case("_sec-inj-tool", "the tool-injection question", "answerable", security_scenario="injection_tool_output")
+    )
     path = tmp_path / "set.json"
     path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
     return path
@@ -306,6 +354,133 @@ def test_config_b_splits_the_payload_by_bytes_before_the_argv_cap(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Multi-turn execution (story 4.2)
+# ---------------------------------------------------------------------------
+
+
+def _multiturn_set(tmp_path):
+    """A `_b_set` floor set plus one REAL two-turn permission-change case the
+    multi-turn tests observe shipping (the `_sec-perm` filler stays in the set
+    for the floor and is `_`-filtered out of the enumerating assertions)."""
+    set_path = _b_set(tmp_path, ())
+    data = json.loads(set_path.read_text(encoding="utf-8"))
+    data["entries"].append(
+        {
+            "id": "perm-1",
+            "case_class": "answerable",
+            "access_scenario": "restricted",
+            "provenance": "assessment",
+            "language": "en",
+            "security_scenario": "permission_change",
+            "turns": [
+                {"query": "summarize wide", "context": {"user_id": "u", "authorized_source_ids": ["doc-1", "doc-2"]}},
+                {"query": "answer narrower", "context": {"user_id": "u", "authorized_source_ids": ["doc-1"]}},
+            ],
+        }
+    )
+    set_path.write_text(json.dumps(data), encoding="utf-8")
+    return set_path
+
+
+def test_config_b_multiturn_ships_turn_entries_in_order(tmp_path):
+    """The harness expands a multi-turn case into per-turn entries with
+    turn-indexed ids; the shipped payload carries each turn's own context and
+    the rows come back keyed `case#t{n}` with the turn index recorded."""
+    set_path = _multiturn_set(tmp_path)
+    transport = FakeBTransport()
+    result = drivers.run_config_b(set_path, tmp_path / "out", transport=transport)
+    shipped = [case_id for batch in transport.cases_seen for case_id in batch if case_id.startswith("perm")]
+    assert shipped == ["perm-1#t1", "perm-1#t2"]
+    # The rows carry the turn index and the per-turn ids.
+    assert result["rows"]["perm-1#t1"]["turn"] == 1
+    assert result["rows"]["perm-1#t2"]["turn"] == 2
+
+
+def test_config_b_multiturn_resume_reruns_from_the_first_missing_turn(tmp_path):
+    """Strict turn order on resume: a turn-2-only prior row is stale — the
+    run restarts the case at turn 1 and re-runs the tail."""
+    set_path = _multiturn_set(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "config-b.rows.json").write_text(
+        json.dumps({"cases": {"perm-1#t2": {"case_id": "perm-1#t2", "status": "ok"}}}),
+        encoding="utf-8",
+    )
+    transport = FakeBTransport()
+    result = drivers.run_config_b(set_path, out, transport=transport)
+    shipped = [case_id for batch in transport.cases_seen for case_id in batch if case_id.startswith("perm")]
+    assert shipped == ["perm-1#t1", "perm-1#t2"]
+    assert result["rows"]["perm-1#t1"]["status"] == "ok"
+
+
+def test_config_c_multiturn_runs_sequential_per_turn_contexts(tmp_path):
+    """Each turn is a separate /v1/runs request under its own context, in
+    order; the rows carry the turn-indexed ids and the turn index."""
+    set_path = _multiturn_set(tmp_path)
+    transport = FakeCTransport(FakeRunStream(events=_answered_events()))
+    result = drivers.run_config_c(set_path, tmp_path / "out", base_url="http://agent:8000", transport=transport)
+    questions = [r["payload"]["question"] for r in transport.requests]
+    assert questions.count("summarize wide") == 1
+    assert questions.count("answer narrower") == 1
+    assert questions.index("summarize wide") < questions.index("answer narrower")
+    assert result["rows"]["perm-1#t1"]["turn"] == 1
+    assert result["rows"]["perm-1#t2"]["turn"] == 2
+    assert result["rows"]["perm-1#t2"]["outcome"] == "answered"
+
+
+def test_config_c_captures_the_verdict_source_documents(tmp_path):
+    """The citation-verdict projection's source_documents ride the row — the
+    security verdict layer's subset-check input on config C."""
+    events = _answered_events() + [
+        {
+            "run_id": "r-1",
+            "call_id": None,
+            "seq": 4,
+            "kind": "verdict",
+            "payload": {"source_documents": [{"document_id": "doc-1", "score": 0.9}], "grounding_status": "grounded"},
+        }
+    ]
+    row = drivers.run_one_case_c(
+        {"id": "v1", "query": "q", "case_class": "answerable"},
+        base_url="http://agent:8000",
+        transport=FakeCTransport(FakeRunStream(events=events)),
+    )
+    assert row["source_documents"] == [{"document_id": "doc-1", "score": 0.9}]
+
+
+def test_config_a_writes_skipped_rows_for_security_cases(tmp_path):
+    """Config A has no agent surface: the security cases (per turn for a
+    multi-turn case) record skipped rows with the reason."""
+    from protocol.evalset import turn_entries
+
+    set_path = _multiturn_set(tmp_path)
+    # Add one single-turn injection case so both shapes are covered.
+    data = json.loads(set_path.read_text(encoding="utf-8"))
+    data["entries"].append(
+        _case("inj-1", "the injection question", "answerable", security_scenario="injection_document")
+    )
+    set_path.write_text(json.dumps(data), encoding="utf-8")
+
+    def runner(gold, out, seed, env_extra=None):
+        out.write_text(json.dumps({"aggregate": {}, "n_missed_traces": 0}), encoding="utf-8")
+        return {"aggregate": {}, "n_missed_traces": 0}
+
+    result = drivers.run_config_a(set_path, tmp_path / "out", seed=0, runner=runner)
+    rows = result["rows"]
+    expected = sorted(
+        entry["id"]
+        for case in data["entries"]
+        if case.get("security_scenario")
+        for entry in turn_entries(case)
+    )
+    assert sorted(rows) == expected
+    assert all(row["outcome"] == "skipped" for row in rows.values())
+    assert all("no agent surface" in row["reason"] for row in rows.values())
+    assert rows["perm-1#t1"]["turn"] == 1
+    assert (tmp_path / "out" / "config-a.rows.json").exists()
+
+
+# ---------------------------------------------------------------------------
 # Config C — fake SSE transport
 # ---------------------------------------------------------------------------
 
@@ -448,10 +623,13 @@ def test_config_c_venue_down_is_a_typed_row_and_the_run_continues(tmp_path):
     """The open sits INSIDE the per-case try: a venue-down transport failure
     records a typed stream_error row for that case; the assessment run
     continues with the remaining cases — it never dies untyped."""
+    from protocol.evalset import turn_entries
+
     set_path = _b_set(tmp_path, ("c1", "c2"))
     transport = VenueDownTransport()
     result = drivers.run_config_c(set_path, tmp_path / "out", base_url="http://agent:8000", transport=transport)
-    assert transport.open_attempts == len(json.loads(set_path.read_text(encoding="utf-8"))["entries"])
+    n_entries = sum(len(turn_entries(case)) for case in json.loads(set_path.read_text(encoding="utf-8"))["entries"])
+    assert transport.open_attempts == n_entries
     assert result["rows"]["c1"]["outcome"] == "stream_error"
     assert result["rows"]["c2"]["outcome"] == "stream_error"
     assert "venue down" in result["rows"]["c1"]["error_text"]
@@ -664,7 +842,7 @@ def test_reference_run_is_never_gated(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         rp,
         "run_config_a",
-        lambda set_path_arg, out_dir, seed=None: {
+        lambda set_path_arg, out_dir, seed=None, runner=None, env_extra=None, entries=None: {
             "report": {"aggregate": {"recall": 0.9}, "n_missed_traces": 0},
             "report_path": str(Path(out_dir) / "config-a.report.json"),
         },
@@ -703,3 +881,38 @@ def test_discover_model_ids_reads_the_serving_endpoint():
     assert ids == {"llm": "granite-4.1-8b"}
     with pytest.raises(drivers.DriverError):
         drivers.discover_model_ids("http://vllm:8000", fetch=lambda url, timeout: {"data": []})
+
+
+# ---------------------------------------------------------------------------
+# authorized_repos forwarding (global-review round 1)
+# ---------------------------------------------------------------------------
+
+
+def test_c_payload_forwards_authorized_repos():
+    """The C payload carries the repo→graph mapping — the OKF read scope the
+    CallerContext contract field exists for."""
+    case = {
+        "id": "c1",
+        "query": "q",
+        "context": {
+            "user_id": "u",
+            "authorized_graph_names": ["G"],
+            "authorized_repos": [{"repo_id": "repo-a", "graph_name": "G"}],
+        },
+    }
+    payload = drivers.c_payload_for_case(case, deadline_ms=1000)
+    assert payload["context"]["authorized_repos"] == [{"repo_id": "repo-a", "graph_name": "G"}]
+
+
+def test_c_payload_drops_malformed_repo_entries():
+    """A malformed authorized_repos entry is dropped (the context block is
+    free-form at the schema level); well-formed entries survive."""
+    case = {
+        "id": "c1",
+        "query": "q",
+        "context": {
+            "authorized_repos": [{"repo_id": "x"}, "junk", {"repo_id": "r", "graph_name": "G"}],
+        },
+    }
+    payload = drivers.c_payload_for_case(case, deadline_ms=1000)
+    assert payload["context"]["authorized_repos"] == [{"repo_id": "r", "graph_name": "G"}]

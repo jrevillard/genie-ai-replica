@@ -1083,6 +1083,26 @@ const Map<String, dynamic> bnLocale = {
         "চ্যাট এক্সপোর্ট করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
     "thinking": "জিনি ভাবছে...",
     "generating": "প্রতিক্রিয়া তৈরি হচ্ছে...",
+    "agentActivity": {
+      "working": "কাজ চলছে…",
+      "stepCompleted": "ধাপ সম্পন্ন হয়েছে।",
+      "stepFailed": "একটি ধাপ ব্যর্থ হয়েছে।",
+      "verificationUnavailable": "উত্তরের যাচাই সম্পন্ন করা যায়নি।",
+      "verificationTranslationScope":
+          "যাচাইটি মূল ভাষার উত্তরকে কভার করেছিল — অনুবাদটি যাচাই করা হয়েনি।",
+      "operations": {
+        "search_knowledge": {
+          "running": "জ্ঞানভান্ডারে খোঁজ চলছে…",
+          "completed": "জ্ঞানভান্ডারে খোঁজ সম্পন্ন হয়েছে।",
+          "failed": "জ্ঞানভান্ডারে খোঁজ ব্যর্থ হয়েছে।",
+        },
+        "read_source": {
+          "running": "উৎস পড়া হচ্ছে…",
+          "completed": "উৎস পড়া হয়েছে।",
+          "failed": "উৎস পড়তে ব্যর্থ।",
+        },
+      },
+    },
     "contextPrefix": "কনটেক্সট:",
     "removeContext": "কনটেক্সট সরান",
     "dialogs": {

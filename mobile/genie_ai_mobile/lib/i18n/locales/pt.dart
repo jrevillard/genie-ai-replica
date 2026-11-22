@@ -1084,6 +1084,27 @@ const Map<String, dynamic> ptLocale = {
     "exportError": "Falha ao exportar chat. Por favor, tente novamente.",
     "thinking": "Genie está pensando...",
     "generating": "Gerando resposta...",
+    "agentActivity": {
+      "working": "A trabalhar…",
+      "stepCompleted": "Etapa concluída.",
+      "stepFailed": "Uma etapa falhou.",
+      "verificationUnavailable":
+          "Não foi possível concluir a verificação da resposta.",
+      "verificationTranslationScope":
+          "A verificação cobriu a resposta no idioma original — a tradução não foi verificada.",
+      "operations": {
+        "search_knowledge": {
+          "running": "A pesquisar na base de conhecimento…",
+          "completed": "Pesquisa na base de conhecimento concluída.",
+          "failed": "A pesquisa na base de conhecimento falhou.",
+        },
+        "read_source": {
+          "running": "A ler a fonte…",
+          "completed": "Fonte lida.",
+          "failed": "Falha ao ler a fonte.",
+        },
+      },
+    },
     "contextPrefix": "Contexto:",
     "removeContext": "Remover Contexto",
     "dialogs": {

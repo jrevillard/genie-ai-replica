@@ -1069,6 +1069,26 @@ const Map<String, dynamic> arLocale = {
     "exportError": "فشل تصدير المحادثة. يرجى المحاولة مرة أخرى.",
     "thinking": "جيني يفكر...",
     "generating": "جاري إنشاء الاستجابة...",
+    "agentActivity": {
+      "working": "جارٍ العمل…",
+      "stepCompleted": "اكتملت الخطوة.",
+      "stepFailed": "فشلت إحدى الخطوات.",
+      "verificationUnavailable": "تعذّر إكمال التحقق من صحة الإجابة.",
+      "verificationTranslationScope":
+          "غطّى التحقق الإجابة بلغتها الأصلية — لم يتم التحقق من الترجمة.",
+      "operations": {
+        "search_knowledge": {
+          "running": "جارٍ البحث في قاعدة المعرفة…",
+          "completed": "اكتمل البحث في قاعدة المعرفة.",
+          "failed": "فشل البحث في قاعدة المعرفة.",
+        },
+        "read_source": {
+          "running": "جارٍ قراءة المصدر…",
+          "completed": "تمت قراءة المصدر.",
+          "failed": "فشلت قراءة المصدر.",
+        },
+      },
+    },
     "contextPrefix": "السياق:",
     "removeContext": "إزالة السياق",
     "dialogs": {

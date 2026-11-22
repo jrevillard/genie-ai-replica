@@ -48,6 +48,39 @@ String leadOf(String caption) {
   return caption.substring(0, colon.start);
 }
 
+/// Navigates a dotted key through a locale map; null when any segment is
+/// missing (the same traversal `I18nService.translate` performs).
+dynamic resolveDottedKey(Map<String, dynamic> map, String dottedKey) {
+  dynamic current = map;
+  for (final segment in dottedKey.split('.')) {
+    if (current is Map && current.containsKey(segment)) {
+      current = current[segment];
+    } else {
+      return null;
+    }
+  }
+  return current;
+}
+
+/// The `chatbot.agentActivity.*` keys the activity-line contract names:
+/// the four state notes, the translated-grounded caption, and the two
+/// operations' three lifecycle labels each. Mobile locale parity has no
+/// CI fallback gate (a missing key degrades to English silently), so the
+/// full set is asserted here for EVERY shipped locale file.
+const List<String> agentActivityKeys = [
+  'working',
+  'stepCompleted',
+  'stepFailed',
+  'verificationUnavailable',
+  'verificationTranslationScope',
+  'operations.search_knowledge.running',
+  'operations.search_knowledge.completed',
+  'operations.search_knowledge.failed',
+  'operations.read_source.running',
+  'operations.read_source.completed',
+  'operations.read_source.failed',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -181,6 +214,25 @@ void main() {
             bad.add(
               '$code: the outage caption borrows the configuration-problem lead',
             );
+          }
+        }
+        expect(bad, isEmpty);
+      },
+    );
+
+    test(
+      'all 11 chatbot.agentActivity keys ship in all 14 dart locale files',
+      () {
+        final bad = <String>[];
+        for (final entry in shippedLocales.entries) {
+          for (final key in agentActivityKeys) {
+            final value = resolveDottedKey(
+              entry.value,
+              'chatbot.agentActivity.$key',
+            );
+            if (value is! String || value.isEmpty) {
+              bad.add('${entry.key}: missing chatbot.agentActivity.$key');
+            }
           }
         }
         expect(bad, isEmpty);

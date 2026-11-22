@@ -1079,6 +1079,26 @@ const Map<String, dynamic> ruLocale = {
         "Не удалось экспортировать чат. Пожалуйста, попробуйте снова.",
     "thinking": "Genie думает...",
     "generating": "Генерация ответа...",
+    "agentActivity": {
+      "working": "Работаю…",
+      "stepCompleted": "Шаг завершён.",
+      "stepFailed": "Шаг завершился с ошибкой.",
+      "verificationUnavailable": "Не удалось завершить проверку ответа.",
+      "verificationTranslationScope":
+          "Проверка охватывала ответ на исходном языке — перевод не проверялся.",
+      "operations": {
+        "search_knowledge": {
+          "running": "Ищу в базе знаний…",
+          "completed": "Поиск в базе знаний завершён.",
+          "failed": "Поиск в базе знаний завершился ошибкой.",
+        },
+        "read_source": {
+          "running": "Читаю источник…",
+          "completed": "Источник прочитан.",
+          "failed": "Не удалось прочитать источник.",
+        },
+      },
+    },
     "contextPrefix": "Контекст:",
     "removeContext": "Удалить контекст",
     "dialogs": {

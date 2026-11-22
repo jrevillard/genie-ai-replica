@@ -430,6 +430,15 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
         "context": {
             "user_id": str(raw.get("user_id") or "eval-config-c"),
             "authorized_graph_names": list(raw.get("authorized_graph_names") or []),
+            # The repo→graph mapping the CallerContext contract carries — the
+            # OKF read scope. A malformed entry is dropped (the context block
+            # is free-form at the schema level); an entry naming a graph
+            # outside the authorized set fails on the service's own validator.
+            "authorized_repos": [
+                {"repo_id": str(repo["repo_id"]), "graph_name": str(repo["graph_name"])}
+                for repo in (raw.get("authorized_repos") or [])
+                if isinstance(repo, dict) and repo.get("repo_id") and repo.get("graph_name")
+            ],
             "requested_labels": list(raw.get("requested_labels") or []),
         },
     }

@@ -152,12 +152,19 @@ def has_non_latin_text(text: str) -> bool:
 
 def case_is_non_latin(case: dict) -> bool:
     """The case's script judgment: the explicit ``script`` override first, then
-    the query text's Unicode blocks."""
+    the query text's Unicode blocks. A multi-turn case's queries live in its
+    turns — the judgment reads them (any non-Latin turn makes the case
+    non-Latin)."""
     script = case.get("script")
     if script == "non-latin":
         return True
     if script == "latin":
         return False
+    turns = case.get("turns")
+    if turns:
+        return any(
+            isinstance(turn, dict) and case_is_non_latin(turn) for turn in turns
+        )
     return has_non_latin_text(str(case.get("query", "")))
 
 

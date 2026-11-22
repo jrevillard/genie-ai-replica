@@ -99,6 +99,37 @@ context:
 
 ## Implementation Notes
 
+**Delivered (2026-11-22, branch `feat/agentic-foundations/4-2-authorization-and-injection-scenario-suite`).**
+The security scenario layer over the 4.1 harness: `evalset.py` (security_scenario vocabulary,
+`DEFAULT_SECURITY_MINIMUMS`, `turn_entries` multi-turn expansion), `verdicts.py` (deterministic
+per-case verdicts + 7 finding kinds; `steering_attempt` alone never fails a case), `findings.py`
+(the findings report: FR-25 honest-evidence header, per-case verdicts, findings list, config-A
+intentional difference, canonical-JSON digest), drivers (strict-turn-order multi-turn B/C, A
+security-skip rows, C verdict `source_documents` capture), `run_protocol.py` (report wired into
+assess/reference; `verdicts` re-judge subcommand), evaluator instructions dimensions 6+7, sample
+set (16 entries, every security class), 31+ tests through fake seams. Verified: 170 protocol+capture
+tests, 186 eval tests (+1 skipped), ruff clean (agent-service config), py_compile clean.
+
+**Global code-review round 1 (commit f313d3a76, 11 findings: 5 important, 6 nit) — all fixed
+in the corrections commit:**
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | important | A reference findings report marked every non-security case error (absent rows → error; A has no per-case rows) | **Fixed**: `build_verdicts(..., absent_rows=)` — reference path passes `"skipped"` (A evaluates through the anchor report); default stays `error` for B/C |
+| 2 | important | `expect_denied` on config C failed honest refusals (C denials complete as answered runs) | **Fixed**: lane-aware `_denial_on_terminal` — B abstention passes, B answer fails (masked), C answered row is the judge handoff per the frozen facts; evaluator-instructions rule rewritten |
+| 3 | important | `context.authorized_repos` accepted by the verdict layer but never forwarded to the service | **Fixed**: both payload builders forward the repo→graph mapping (`c_payload_for_case`, `build_context`); malformed entries dropped; tests pin both |
+| 4 | important | `_identity_authorized` prefix-matched ANY `/`-containing id (soundness hole: `doc-1/annex` passed as `doc-1`) | **Fixed**: prefix reading ONLY for OKF-shaped entries; legacy ids exact-only; `(identity, okf)` pairs carried into the revoked-scope check; test pins the sibling-id disclosure |
+| 5 | important | Subset check granularity false-fires vs the service's graph/repo-level enforcement | **Fixed**: documented contract (module docstring + evaluator instructions + sample `_doc`): `authorized_source_ids` is the suite's stricter assertion, declare only when the test demands the narrower citation set |
+| 6 | nit | `earlier_authorized` accumulated only on answer-terminal turns | **Fixed**: per-turn helper accumulates regardless of outcome; test pins turn-1-failure → revoked-scope on turn 2 |
+| 7 | nit | Multi-turn cross-user cases silently excluded from pairing | **Fixed**: collected error on each turn record (never silent); test pins it |
+| 8 | nit | `cmd_verdicts` unguarded `json.loads` → traceback on corrupt rows file | **Fixed**: typed REFUSED + exit 1; test pins it |
+| 9 | nit | Sample `_doc` counts stale (said 9 answerable / 6 restricted; file has 10 / 7) | **Fixed** (counts verified live) |
+| 10 | nit | Cross-user pairing key ignored `language` (en/es same-question pair → false divergence) | **Fixed**: language in `_cross_user_key`; test pins the split |
+| 11 | nit | `case_is_non_latin` ignored `turns` (multi-turn non-Latin case failed the floor confusingly) | **Fixed**: judgment reads turn queries; test pins it |
+
+Post-fix verification: 170 protocol+capture tests green (14 new), 186 eval green + 1 skipped,
+ruff clean, py_compile clean.
+
 ## Spec Change Log
 
 ## Review Triage Log

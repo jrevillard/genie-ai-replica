@@ -151,10 +151,17 @@ def _validated_entries(args: argparse.Namespace) -> list | None:
     return entries
 
 
-def _write_findings_report(out_dir: Path, config: str, entries: list, rows: dict) -> tuple[Path, dict]:
+def _write_findings_report(
+    out_dir: Path, config: str, entries: list, rows: dict, absent_rows: str = "error"
+) -> tuple[Path, dict]:
     """The findings report (story 4.2): rows → verdicts → report, written into
-    the run out-dir beside the rows and the manifest. No silent pass."""
-    report = build_findings_report(config=config, verdicts_result=verdicts_mod.build_verdicts(entries, rows))
+    the run out-dir beside the rows and the manifest. No silent pass. The
+    reference path passes ``absent_rows="skipped"`` — config A evaluates
+    through the anchor report, so a case without a row is the expected shape
+    (see :func:`verdicts.build_verdicts`)."""
+    report = build_findings_report(
+        config=config, verdicts_result=verdicts_mod.build_verdicts(entries, rows, absent_rows=absent_rows)
+    )
     path = _write_manifest(Path(out_dir), "findings.report.json", report)
     return path, report
 
@@ -219,7 +226,9 @@ def cmd_reference(args: argparse.Namespace) -> int:
     if pair_failed is not None:
         return pair_failed
     path = _write_manifest(Path(args.out_dir), "reference.manifest.json", manifest)
-    report_path, report = _write_findings_report(Path(args.out_dir), "A", entries, result.get("rows") or {})
+    report_path, report = _write_findings_report(
+        Path(args.out_dir), "A", entries, result.get("rows") or {}, absent_rows="skipped"
+    )
     _print_findings_summary(report)
     print(f"reference run: report {result['report_path']}")
     print(f"reference manifest: {path}")
@@ -329,7 +338,11 @@ def cmd_verdicts(args: argparse.Namespace) -> int:
         for error in failed.errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
-    rows_data = json.loads(Path(args.rows_path).read_text(encoding="utf-8"))
+    try:
+        rows_data = json.loads(Path(args.rows_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as failed:
+        print(f"REFUSED: {args.rows_path}: {failed}", file=sys.stderr)
+        return 1
     rows = rows_data.get("cases") if isinstance(rows_data, dict) else None
     if not isinstance(rows, dict):
         print(f"REFUSED: {args.rows_path} carries no cases mapping", file=sys.stderr)

@@ -319,3 +319,23 @@ def test_cli_validate_set_via_subprocess():
     )
     assert result.returncode == 0, result.stderr
     assert "OK" in result.stdout
+
+
+def test_multiturn_nonlatin_case_is_detected_from_its_turns():
+    """A multi-turn case's queries live in its turns — the non-Latin judgment
+    reads them, so a turns-only non-Latin case satisfies the composition
+    floor (no confusing 'missing non-Latin' error)."""
+    case = {
+        "id": "mt-lang",
+        "case_class": "representative_language",
+        "provenance": "tuning",
+        "language": "ar",
+        "access_scenario": "public",
+        "turns": [
+            {"query": "ما هي الخدمات المتاحة؟", "context": {"user_id": "u"}},
+            {"query": "أجب بالعربية فقط"},
+        ],
+    }
+    assert es.case_is_non_latin(case)
+    data = {"_meta": {"provenance": "tuning"}, "entries": [case]}
+    assert es.validate_set(data, "tuning") == []

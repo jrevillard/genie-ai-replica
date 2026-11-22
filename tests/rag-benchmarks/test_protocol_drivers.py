@@ -881,3 +881,38 @@ def test_discover_model_ids_reads_the_serving_endpoint():
     assert ids == {"llm": "granite-4.1-8b"}
     with pytest.raises(drivers.DriverError):
         drivers.discover_model_ids("http://vllm:8000", fetch=lambda url, timeout: {"data": []})
+
+
+# ---------------------------------------------------------------------------
+# authorized_repos forwarding (global-review round 1)
+# ---------------------------------------------------------------------------
+
+
+def test_c_payload_forwards_authorized_repos():
+    """The C payload carries the repo→graph mapping — the OKF read scope the
+    CallerContext contract field exists for."""
+    case = {
+        "id": "c1",
+        "query": "q",
+        "context": {
+            "user_id": "u",
+            "authorized_graph_names": ["G"],
+            "authorized_repos": [{"repo_id": "repo-a", "graph_name": "G"}],
+        },
+    }
+    payload = drivers.c_payload_for_case(case, deadline_ms=1000)
+    assert payload["context"]["authorized_repos"] == [{"repo_id": "repo-a", "graph_name": "G"}]
+
+
+def test_c_payload_drops_malformed_repo_entries():
+    """A malformed authorized_repos entry is dropped (the context block is
+    free-form at the schema level); well-formed entries survive."""
+    case = {
+        "id": "c1",
+        "query": "q",
+        "context": {
+            "authorized_repos": [{"repo_id": "x"}, "junk", {"repo_id": "r", "graph_name": "G"}],
+        },
+    }
+    payload = drivers.c_payload_for_case(case, deadline_ms=1000)
+    assert payload["context"]["authorized_repos"] == [{"repo_id": "r", "graph_name": "G"}]

@@ -85,6 +85,14 @@ def build_context(case: dict):
     return CallerContext(
         user_id=str(raw.get("user_id") or "eval-config-b"),
         authorized_graph_names=tuple(raw.get("authorized_graph_names") or ()),
+        # The repo→graph mapping the contract carries — the OKF read scope
+        # (dicts coerce into the pydantic AuthorizedRepo; a mapping naming a
+        # graph outside the authorized set fails the model's own validator).
+        authorized_repos=tuple(
+            {"repo_id": str(repo["repo_id"]), "graph_name": str(repo["graph_name"])}
+            for repo in (raw.get("authorized_repos") or [])
+            if isinstance(repo, dict) and repo.get("repo_id") and repo.get("graph_name")
+        ),
         requested_labels=tuple(raw.get("requested_labels") or ()),
     )
 

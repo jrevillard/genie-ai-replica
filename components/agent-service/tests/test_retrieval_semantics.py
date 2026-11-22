@@ -10,6 +10,7 @@ CAP-1 absence.
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,10 @@ def make_adapter(rows_per_query=None, views=(), config_env=None):
             self._rows = rows
 
         def __iter__(self):
+            # Records the thread that drains the cursor: the retrieval legs
+            # must materialize it inside their worker thread — a drain on
+            # the event-loop thread is the recorded defect.
+            iterated_on.append(threading.current_thread())
             return iter(self._rows)
 
     class FakeAql:
@@ -69,6 +74,7 @@ def make_adapter(rows_per_query=None, views=(), config_env=None):
             created.append((name, properties))
 
     created: list = []
+    iterated_on: list = []
     db = FakeDb()
     env = config_env if config_env is not None else {}
     arango_config = ArangoConfig.load({**recorded_knobs_env(), **env})
@@ -76,6 +82,7 @@ def make_adapter(rows_per_query=None, views=(), config_env=None):
     adapter = ArangoRetrievalAdapter(db, arango_config, hybrid)
     adapter.executed = executed
     adapter.created = created
+    adapter.iterated_on = iterated_on
     return adapter
 
 
@@ -528,3 +535,37 @@ def test_the_modules_aql_doubles_track_the_real_driver_signature():
     from conftest import assert_module_aql_fakes_faithful
 
     assert_module_aql_fakes_faithful(Path(__file__))
+
+
+# ---------------------------------------------------------------------
+# Cursor materialization off the event loop
+# ---------------------------------------------------------------------
+
+
+def _assert_drained_off_the_event_loop(adapter):
+    """Every cursor the adapter executed must have been drained inside the
+    ``asyncio.to_thread`` worker — python-arango answers with a lazy Cursor,
+    so a drain on the event-loop thread is a blocking network call on the
+    loop once the result set exceeds one server batch."""
+    assert adapter.iterated_on, "the fake cursor was never drained"
+    assert all(thread is not threading.main_thread() for thread in adapter.iterated_on), (
+        f"cursors drained on the event loop: {adapter.iterated_on}"
+    )
+
+
+def test_bm25_rows_are_materialized_off_the_event_loop():
+    adapter = make_adapter({"SORT _bm25_score DESC": [{"key": "c1", "text": "a", "score": 5.0}]})
+    run(adapter.bm25_search("q", "GRAPH", [], "OR"))
+    _assert_drained_off_the_event_loop(adapter)
+
+
+def test_file_id_enrichment_rows_are_materialized_off_the_event_loop():
+    adapter = _enrichment_adapter()
+    run(adapter.enrich([{"doc": _chunk("c1", "a"), "score": 0.9}]))
+    _assert_drained_off_the_event_loop(adapter)
+
+
+def test_cap1_identity_rows_are_materialized_off_the_event_loop():
+    adapter = _enrichment_adapter()
+    run(adapter.enrich([{"doc": _chunk("c1", "a"), "score": 0.9}]))
+    _assert_drained_off_the_event_loop(adapter)

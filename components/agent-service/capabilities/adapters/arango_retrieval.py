@@ -372,8 +372,12 @@ class ArangoRetrievalAdapter:
         bind_vars = {"query": query, "analyzer": self._hybrid.bm25_analyzer, "n": n}
         results = []
         try:
-            cursor = await asyncio.to_thread(self._db.aql.execute, aql, bind_vars=bind_vars)
-            for row in cursor:
+            # Materialize inside the worker thread: python-arango answers
+            # with a lazy Cursor, so draining it on the event loop would
+            # turn every batch past the first into a blocking network call
+            # on the loop.
+            rows = await asyncio.to_thread(lambda: list(self._db.aql.execute(aql, bind_vars=bind_vars)))
+            for row in rows:
                 chunk_labels = row.get("chunk_labels")
                 if not chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
                     continue
@@ -462,10 +466,9 @@ class ArangoRetrievalAdapter:
                     FILTER doc._key IN @chunk_ids
                     RETURN {{key: doc._key, file_id: doc.{ARANGO_FILE_ID_FIELD}}}
             """
-            file_id_by_key = {
-                row["key"]: row["file_id"]
-                for row in await asyncio.to_thread(self._db.aql.execute, aql, bind_vars={"chunk_ids": chunk_ids})
-            }
+            # Materialize inside the worker thread (see bm25_search).
+            rows = await asyncio.to_thread(lambda: list(self._db.aql.execute(aql, bind_vars={"chunk_ids": chunk_ids})))
+            file_id_by_key = {row["key"]: row["file_id"] for row in rows}
             for r in results:
                 fid = file_id_by_key.get(r["doc"].key)
                 r["doc"].file_ids = [fid] if fid else []
@@ -488,14 +491,15 @@ class ArangoRetrievalAdapter:
                     )
                     RETURN {{key: doc._key, repo_id: meta.repo_id, bundle_version: meta.bundle_version}}
             """
-            identity_by_key = {
-                row["key"]: row
-                for row in await asyncio.to_thread(
-                    self._db.aql.execute,
-                    identity_aql,
-                    bind_vars={"chunk_ids": chunk_ids, "graph_name": self.graph_name},
+            identity_rows = await asyncio.to_thread(
+                lambda: list(
+                    self._db.aql.execute(
+                        identity_aql,
+                        bind_vars={"chunk_ids": chunk_ids, "graph_name": self.graph_name},
+                    )
                 )
-            }
+            )
+            identity_by_key = {row["key"]: row for row in identity_rows}
             for r in results:
                 ident = identity_by_key.get(r["doc"].key) or {}
                 if ident.get("repo_id"):

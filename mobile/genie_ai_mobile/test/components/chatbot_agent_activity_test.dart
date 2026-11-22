@@ -198,6 +198,51 @@ void main() {
   );
 
   testWidgets(
+    'a chunk that precedes any activity frame keeps the line unrendered for the whole turn',
+    (tester) async {
+      final controller = await mountStreaming(tester);
+
+      // The answer starts before the first tool call: the frame is a
+      // post-chunk frame from birth and must never render the line — the
+      // legacy in-flight indicator keeps the slot.
+      controller.add(
+        _frames([
+          {'type': 'chunk', 'content': 'Partial'},
+        ]),
+      );
+      await tester.pump();
+      expect(find.byKey(const ValueKey('streaming-indicator')), findsOneWidget);
+
+      controller.add(
+        _frames([
+          {
+            'type': 'agent_activity',
+            'version': 1,
+            'status': 'started',
+            'operation': 'search_knowledge',
+            'callId': 'c1',
+          },
+          {'type': 'chunk', 'content': ' answer'},
+        ]),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('agent-activity-line')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-activity-op-search_knowledge')),
+        findsNothing,
+      );
+      // The legacy indicator still owns the slot (no activity frame ever
+      // rendered pre-chunk).
+      expect(find.byKey(const ValueKey('streaming-indicator')), findsOneWidget);
+
+      await controller.close();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Partial'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'the line collapses at the first chunk, never re-opens, and the legacy indicator stays gone',
     (tester) async {
       final controller = await mountStreaming(tester);
@@ -364,6 +409,39 @@ void main() {
     );
   });
 
+  testWidgets('an unknown verdict state falls back to the is_grounded rule', (
+    tester,
+  ) async {
+    final controller = await mountStreaming(tester);
+
+    // A future verdict state this client does not know: it must never
+    // silently retire the answer-level warning — is_grounded decides.
+    controller.add(
+      _frames([
+        {'type': 'chunk', 'content': 'Answer'},
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'exempt',
+          'is_grounded': false,
+        },
+        {'type': 'done', 'queryId': 'q1'},
+      ]),
+    );
+    await controller.close();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('AI-generated — not based on library documents'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Response verification could not be completed.'),
+      findsNothing,
+    );
+  });
+
   testWidgets('a grounded English turn renders no verdict note and no caption', (
     tester,
   ) async {
@@ -469,6 +547,45 @@ void main() {
           'Traduction indisponible — cette réponse peut contenir du texte non traduit.',
         ),
         findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'a restored failed translation renders the untranslated caption, never the scope caption',
+    (tester) async {
+      // The persisted record says the translation broke (status != 'ok'):
+      // the answer on screen IS the verified English original, so the
+      // scope caption must not claim otherwise — and the untranslated
+      // caption must come back with the message.
+      await I18nService().changeLanguage('fr');
+      mockChatbotConfigAsset(tester, config);
+      final mock = _RestoredVerdictMockClient(
+        tree,
+        messageMetadata: {
+          'sources': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+          'translation_status': 'failed',
+        },
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      await pumpChatBot(tester, mock, chatKey: chatKey);
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Traduction indisponible — cette réponse peut contenir du texte non traduit.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          "La vérification de l'ancrage a été effectuée sur la réponse dans sa langue d'origine — cette traduction n'est pas couverte par cette vérification.",
+        ),
+        findsNothing,
       );
     },
   );

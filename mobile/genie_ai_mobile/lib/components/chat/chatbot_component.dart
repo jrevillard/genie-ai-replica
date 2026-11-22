@@ -91,16 +91,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _isStreaming = false;
 
   // The agent activity line's per-turn state. `active` flips on the first
-  // agent_activity frame of the turn and supersedes the legacy in-flight
-  // indicator for the rest of it; `collapsed` is set by the first chunk
-  // and suppresses the whole trailing slot — the line never coexists with
-  // answer text and never re-opens; the (operation, status) pair is the
-  // single current row (a started frame replaces it, a completed/failed
-  // one holds until the next frame). Nothing here persists.
+  // agent_activity frame of the turn — which is the ONLY turn phase the
+  // line ever renders in: a frame seen after this turn's first chunk is
+  // accepted but unrendered (`chunkSeen`), whatever the line's state —
+  // and while it is active it supersedes the legacy in-flight indicator.
+  // `active` + `chunkSeen` together collapse the turn's trailing slot —
+  // the line never coexists with answer text and never re-opens. The
+  // (operation, status) pair is the single current row (a started frame
+  // replaces it, a completed/failed one holds until the next frame).
+  // Nothing here persists.
   bool _agentLineActive = false;
-  bool _agentLineCollapsed = false;
+  bool _agentChunkSeen = false;
   String? _agentOperation;
   String _agentStatus = 'started';
+
+  /// Whether the line has collapsed this turn: it rendered, and the
+  /// answer has taken over.
+  bool get _agentLineCollapsed => _agentLineActive && _agentChunkSeen;
+
   StreamSubscription<String>? _streamSubscription;
 
   bool get _canStream => httpClient != null && streamBaseUrl != null;
@@ -966,6 +974,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       List<Map<String, dynamic>> loadedMessages = [];
       if (conv['messages'] != null && conv['messages'] is List) {
         loadedMessages = (conv['messages'] as List).map((m) {
+          // One shape guard for every metadata read: a corrupted record
+          // (a scalar where the map belongs) must degrade the FIELDS, not
+          // fail the whole conversation load.
+          final Map<String, dynamic>? metadata = m['metadata'] is Map
+              ? m['metadata'] as Map<String, dynamic>
+              : null;
           return {
             'id': m['_id'] ?? m['id'],
             'role': m['sender'] == 'user' ? 'user' : 'assistant',
@@ -973,17 +987,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             'timestamp': m['timestamp'],
             'isSaved': true,
             'confidence': m['confidence'],
-            'metadata': m['metadata'],
+            'metadata': metadata,
             // Whatever the live path sets, the restore sets too — the
             // restored conversation speaks the same verdict truth table
             // (the is_grounded derivation the web's own restore applies).
-            'isGrounded': m['metadata'] is Map
-                ? m['metadata']['is_grounded']
-                : null,
-            'sources': m['metadata'] != null
-                ? (m['metadata']['sources'] ??
-                      m['metadata']['source_documents'])
-                : [],
+            'isGrounded': metadata?['is_grounded'],
+            // Whether the answer the record carries is an untranslated
+            // English original (the persisted translation_status, where
+            // the lane persisted it): without this, a failed translation
+            // restores as if its answer were a delivered translation —
+            // the untranslated caption vanishes and the scope caption
+            // (which a translation does not inherit) shows in its place.
+            'translationFailed': isTranslationFailed(metadata),
+            'sources':
+                metadata?['sources'] ?? metadata?['source_documents'] ?? [],
           };
         }).toList();
       }
@@ -1105,7 +1122,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// collapse can never suppress a later turn's in-flight row.
   void _resetAgentActivityLine() {
     _agentLineActive = false;
-    _agentLineCollapsed = false;
+    _agentChunkSeen = false;
     _agentOperation = null;
     _agentStatus = 'started';
   }
@@ -1321,25 +1338,27 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 }
                 switch (event) {
                   case SseChunkEvent(:final content):
-                    // The line collapses at the FIRST chunk — client-side,
-                    // never to re-open this turn; later chunks re-run this
-                    // branch with the collapse already done.
+                    // The turn's first chunk is remembered whatever the
+                    // line's state: a frame that arrives after it is a
+                    // post-chunk frame, and post-chunk frames are accepted
+                    // but unrendered. The line collapses at the FIRST
+                    // chunk — client-side, never to re-open this turn.
                     final collapseLine = _agentLineActive;
                     accumulatedContent += content;
                     setState(() {
                       msg['content'] = accumulatedContent;
-                      if (collapseLine && !_agentLineCollapsed) {
-                        _agentLineCollapsed = true;
+                      _agentChunkSeen = true;
+                      if (collapseLine) {
                         _agentOperation = null;
                       }
                     });
                     _scrollToBottom();
                   case SseAgentActivityEvent(:final operation, :final status):
-                    // Post-chunk activity frames are accepted but
-                    // unrendered (the line never coexists with answer
-                    // text); before the first chunk every frame replaces
-                    // the single current row.
-                    if (!_agentLineCollapsed) {
+                    // The line renders BEFORE the first chunk only: a
+                    // frame seen after it (the answer already streaming)
+                    // never activates the line — the legacy in-flight
+                    // indicator keeps the slot for the rest of the turn.
+                    if (!_agentChunkSeen) {
                       setState(() {
                         _agentLineActive = true;
                         _agentOperation = operation;
@@ -2608,13 +2627,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     final msg = _messages[index];
                     final bool isUser = msg['role'] == 'user';
                     // The verdict truth table's inputs for this message:
-                    // the tri-state decides when the metadata carries it
-                    // (agentic turns, live or restored); a legacy turn has
-                    // none and falls back to is_grounded alone.
+                    // the tri-state decides when the metadata carries a
+                    // KNOWN value (agentic turns, live or restored); a
+                    // legacy turn (no field) — or a future state this
+                    // client does not know — falls back to is_grounded
+                    // alone, so an unfamiliar verdict can never silently
+                    // retire the answer-level warning.
                     final String? groundingStatus = _groundingStatusOf(msg);
-                    final bool isUngrounded = groundingStatus != null
-                        ? groundingStatus == 'ungrounded'
-                        : msg['isGrounded'] == false;
+                    final bool knownVerdict =
+                        groundingStatus == 'grounded' ||
+                        groundingStatus == 'ungrounded' ||
+                        groundingStatus == 'unverified';
+                    final bool isUngrounded =
+                        groundingStatus == 'ungrounded' ||
+                        (!knownVerdict && msg['isGrounded'] == false);
                     final bool isUnverified = groundingStatus == 'unverified';
                     // The translated-grounded caption: the verdict
                     // certifies the source-language text, so a DELIVERED

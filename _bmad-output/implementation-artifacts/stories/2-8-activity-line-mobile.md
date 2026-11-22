@@ -108,9 +108,26 @@ context:
 
 <!-- Append-only. Populated by step-04 during review loops. -->
 
+### G1 (2026-11-22, global review, correction commit 6cadaa42a)
+
+| Finding | Disposition |
+|---|---|
+| F1 (important): a chunk that precedes any activity frame left `_agentLineCollapsed` false, so a later frame rendered the line under the streaming answer | FIXED: the turn remembers its first chunk (`_agentChunkSeen`) whatever the line's state; frames after it never activate the line; the collapse derives from `active && chunkSeen`, so the legacy turn's indicator keeps its slot. New test covers the chunk→frame order. |
+| F2 (important): the restore lost `translationFailed` — a restored failed translation could render the scope caption | FIXED on the derivable surface: the restore derives the flag from the persisted `translation_status` (`isTranslationFailed`), which also restores the untranslated caption. RESIDUAL: the agent lane never persists the answer-translation outcome — filed as issue #2080 (`status::backlog`), backend surface outside this story. |
+| F3 (pre-existing): the restore's `'sources'` guard (`!= null`) could crash the whole load on a scalar metadata | FIXED in passing: one `is Map` guard shapes every metadata read in the map. |
+| F4 (nit): the frozen block's "byte-for-byte" vs the legacy label's `Expanded` wrap | KEPT, flagged: the deviation is operator-visible on the MR (note posted; sign-off requested at merge time). The wrap fixes a real 34 px clipping the new tests surface; reverting it would ship the overflow or force the tests to dodge the phone width. |
+| F5 (nit): man/st ship the new keys as English copies | NAMED (recorded decision below): both files' own precedent keeps long copy English until a native review (the same gap the web locale notes carry); st carries real Sesotho for the short strings. |
+| F6 (nit): no default branch for an unknown `grounding_status` value — a future state silently retired the warning | FIXED: an unknown state falls back to the `is_grounded` rule. New test covers it. |
+
+**Recorded decision (F5):** `man.dart` ships all 11 keys as English copies and `st.dart` ships `verificationTranslated` as English, matching each file's own precedent for long copy (its complex strings are English today); the parity AC (11 keys present in 14 files) holds. A native review translating them later moves no code.
+
 ## Review Triage Log
 
 <!-- Append-only. Populated by step-04 on every review pass. -->
+
+### Global review G1 (2026-11-22, whole branch vs origin/feat/agentic-foundations/prd)
+
+6 findings: 2 important (F1, F2 — both real, both fixed with tests), 1 pre_existing (F3 — fixed in passing), 3 nits (F4 kept+flagged, F5 named, F6 fixed with test). Verified non-defects: `tr(key) == key` catalogue fallback, `grounding_status` persistence path, all terminal resets, parser cast tolerance, harness import/params.
 
 ## Design Notes
 

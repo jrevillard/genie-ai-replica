@@ -66,8 +66,11 @@ class AgentJsonTurnError extends Error {
  *     carries the mechanical reasons (`insufficient_evidence.reasons`,
  *     comma-joined — the V05 field is one machine-readable string; the
  *     Inspector renders unknown codes generically);
- *   - NO verdict → the overlay does not run: `abstained` stays `null`
- *     ("decision never reported" — the base shape's meaning).
+ *   - NO verdict (or a decision field that never reported a boolean
+ *     `required`) → the JSON entry restores `abstained: null` ("decision
+ *     never reported") over the assembled `false` base (story 3.2's
+ *     streaming normalization — this entry's V05 vocabulary is stricter:
+ *     without a reported decision, `false` would claim one).
  *
  * @param {Object} metadata - The assembled metadata (mutated in place).
  * @param {Object|null} verdict - The captured verdict payload.
@@ -75,18 +78,20 @@ class AgentJsonTurnError extends Error {
  */
 function applyAbstentionOverlay(metadata, verdict) {
   if (!verdict) {
+    metadata.abstained = null;
     return metadata;
   }
   const insufficient = verdict.insufficient_evidence;
   if (!insufficient || typeof insufficient !== 'object' || Array.isArray(insufficient)) {
     // A verdict whose decision field is missing or malformed is not a
-    // "not required" answer — it is a decision never reported. The overlay
-    // does not run: the base nulls stay.
+    // "not required" answer — it is a decision never reported.
+    metadata.abstained = null;
     return metadata;
   }
   if (typeof insufficient.required !== 'boolean') {
     // Same rule one level deeper: an object with no boolean `required`
     // reported no decision — never "answered, chose not to abstain".
+    metadata.abstained = null;
     return metadata;
   }
   const required = insufficient.required;

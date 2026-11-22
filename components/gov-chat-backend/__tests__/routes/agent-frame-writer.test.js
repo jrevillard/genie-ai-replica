@@ -319,9 +319,14 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     ]);
     expect(metadata.agent_run).toEqual({ run_id: 'run-abc', usage_record: USAGE_RECORD });
     expect(metadata.responseTime).toEqual(expect.any(Number));
-    // The legacy fallback keys stay (the empty-stream base).
-    expect(metadata.abstained).toBeNull();
+    // The legacy fallback keys stay (the empty-stream base) — with ONE
+    // deliberate override: an agentic turn is an ANSWER in the legacy
+    // abstention vocabulary, never the "chatqna never answered" null.
+    expect(metadata.abstained).toBe(false);
     expect(metadata.filter_labels).toBeNull();
+    // The interrupted marker is a partial-save-only field: a normal
+    // completion never carries it (ADR agentic-003).
+    expect(metadata.answer_interrupted).toBeUndefined();
 
     expect(done).toEqual({ type: 'done', queryId: 'q1', translationFailed: false });
 
@@ -331,7 +336,10 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
       'q1',
       'Hello world.',
       expect.any(Number),
-      expect.objectContaining({ grounding_status: 'grounded', is_grounded: true, agent_run: metadata.agent_run })
+      expect.objectContaining({ grounding_status: 'grounded', is_grounded: true, agent_run: metadata.agent_run }),
+      // Story 3.2 merged reality: the agentic finalize carries the
+      // branch-driven sticky-set skip as the trailing options argument.
+      expect.anything()
     );
   });
 
@@ -937,7 +945,9 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
       'q1',
       'First sentence. Second one.',
       expect.any(Number),
-      expect.any(Object)
+      expect.any(Object),
+      // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
+      expect.anything()
     );
   });
 
@@ -1093,11 +1103,34 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
       expect.objectContaining({
         grounding_status: 'unverified',
         is_grounded: false,
-        agent_run: { run_id: 'run-abc' }
-      })
+        agent_run: { run_id: 'run-abc' },
+        // The honesty marker: a partial save is never indistinguishable
+        // from a completion (ADR agentic-003).
+        answer_interrupted: true,
+        abstained: false
+      }),
+      // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
+      expect.anything()
     );
     // No frames after the disconnect.
     expect(res.writes.some((w) => w.includes('"type":"done"'))).toBe(false);
+  });
+
+  it('a disconnect before any text chunk leaves the doc unanswered (no partial save fabricated)', async () => {
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const res = fakeRes();
+    const runPromise = directRun(res);
+    await flush();
+    // The stream is open (headers written) but no text_message_content has
+    // arrived: the client leaves NOW.
+    res.emit('close');
+    await runPromise;
+
+    // Nothing streamed — nothing to partial-save; the at-start
+    // `isAnswered:false` doc stays untouched (the honest "never answered").
+    expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
   });
 
   it('a normal completion is not re-finalized as a partial save by the close event', async () => {
@@ -1117,8 +1150,10 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
     await flush();
 
     expect(res.writableEnded).toBe(true);
-    // Exactly ONE finalize — the terminal's, not the close listener's.
+    // Exactly ONE finalize — the terminal's, not the close listener's — and
+    // it carries NO interrupted marker (the partial-save-only field).
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.finalizeStreamQuery.mock.calls[0][3].answer_interrupted).toBeUndefined();
   });
 
   it('a verdict already received rides the partial save (grounding captured before the disconnect)', async () => {
@@ -1143,8 +1178,11 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
       expect.objectContaining({
         grounding_status: 'grounded',
         is_grounded: true,
-        agent_run: { run_id: 'run-abc' }
-      })
+        agent_run: { run_id: 'run-abc' },
+        answer_interrupted: true
+      }),
+      // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
+      expect.anything()
     );
     // The verdict frame was never written — the client was gone.
     expect(res.writes.some((w) => w.includes('"type":"agent_verdict"'))).toBe(false);

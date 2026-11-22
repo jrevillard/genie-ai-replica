@@ -825,6 +825,83 @@ describe('ChatBotComponent', () => {
       expect(msg.sources.length).toBe(0);
       expect(mockResolveRepo).not.toHaveBeenCalled();
     });
+
+    // The restore is the rollback contract's render half: an agentic-era
+    // conversation loads through the same legacy path, the snapshot rows the
+    // backend now carries identify the okf citations directly (no dead
+    // download URL, no live re-resolution), and the agentic metadata extras
+    // ride verbatim while the render reads only the legacy fields.
+    it('an agentic-era conversation restores on the legacy path: snapshot identity, extras unread', async () => {
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        files: [
+          {
+            id: 'conc_1',
+            documentName: 'conc 1',
+            url: null,
+            score: 0.9,
+            source: 'okf-concept',
+            concept_id: 'conc_1',
+            repo_id: 'repo-1',
+            bundle_version: 3
+          }
+        ],
+        messages: [
+          { sender: 'user', content: 'q' },
+          {
+            sender: 'assistant',
+            content: 'a',
+            queryId: 'q-7',
+            metadata: {
+              grounding_status: 'grounded',
+              agent_run: { run_id: 'run-9' },
+              confidence_score: 0.92,
+              is_grounded: true,
+              abstained: false,
+              source_documents: [
+                {
+                  document_id: 'conc_1',
+                  document_name: 'conc 1',
+                  url: '',
+                  source: 'okf-concept',
+                  concept_id: 'conc_1',
+                  repo_id: 'repo-1',
+                  bundle_version: 3,
+                  score: 0.9
+                }
+              ]
+            }
+          }
+        ]
+      });
+
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      await wrapper.vm.loadExistingConversation('conv-1');
+      await flushPromises();
+
+      // The per-message citation rebuilt through the existing path,
+      // identified and URL-free.
+      const msg = wrapper.vm.openMessages.find((m) => m.sender === 'bot' && m.content === 'a');
+      expect(msg.sources.length).toBe(1);
+      expect(msg.sources[0].source).toBe('okf-concept');
+      expect(msg.sources[0].repoId).toBe('repo-1');
+      expect(msg.sources[0].url).toBe('');
+      // The render fields are the legacy ones; the agentic extras sit on the
+      // carried metadata, unread by the restore mapping.
+      expect(msg.isGrounded).toBe(true);
+      expect(msg.confidenceScore).toBe(0.92);
+      expect(msg.metadata.agent_run).toEqual({ run_id: 'run-9' });
+      expect(msg.metadata.grounding_status).toBe('grounded');
+
+      // The sidebar resolved from the snapshot identity directly: no dead
+      // doc-repo URL, and no live repo re-resolution needed.
+      const sidebarRow = wrapper.vm.relatedDocuments.find((d) => d.id === 'conc_1');
+      expect(sidebarRow.source).toBe('okf-concept');
+      expect(sidebarRow.repoId).toBe('repo-1');
+      expect(sidebarRow.url).toBe('');
+      expect(mockResolveRepo).not.toHaveBeenCalled();
+    });
   });
 
   describe('Subtask 3a — SSE streaming', () => {

@@ -171,11 +171,19 @@ const emptyStreamMetadata = () => ({
  *
  * Base: the legacy empty-stream shape (`emptyStreamMetadata()` — abstained
  * null, filter_labels null), so an agentic doc is indistinguishable in shape
- * from a legacy one. The verdict overlays the additive grounding fields and
- * the citation set; a run WITHOUT a verdict event defaults to `unverified` —
- * never a confident default. The `agent_run` block (run_id + the terminal
- * usage record when one arrived) rides additively on the wire and into the
- * persisted doc — the version-record persistence of this story.
+ * from a legacy one — with ONE deliberate override (story 3.2): `abstained`
+ * normalizes to `false`, the legacy answered vocabulary. An agentic turn is
+ * an ANSWER (its insufficiency, when any, lives in grounding_status / the
+ * marking), and the legacy `null` means "chatqna never answered" — an
+ * agentic turn must never read as that in abstention analytics. The
+ * non-streaming JSON consumer re-derives `abstained` from the verdict on top
+ * of this base (story 2.4b's V05 vocabulary: a verdict-bearing answered run
+ * is false unless the insufficiency was required; NO verdict restores null —
+ * "decision never reported"). The verdict overlays the additive grounding
+ * fields and the citation set; a run WITHOUT a verdict event defaults to
+ * `unverified` — never a confident default. The `agent_run` block (run_id +
+ * the terminal usage record when one arrived) rides additively on the wire
+ * and into the persisted doc — the version-record persistence of this story.
  *
  * The base factory defaults to THIS module's own `emptyStreamMetadata` — the
  * one home: a caller cannot inject a divergent base shape (the streaming
@@ -195,7 +203,9 @@ function assembleAgentMetadata({
   runId,
   usageRecord
 }) {
-  const metadata = baseFactory();
+  // ONE deliberate override on the legacy empty-stream base (story 3.2):
+  // analytics vocabulary parity with the legacy answered path.
+  const metadata = { ...baseFactory(), abstained: false };
   if (verdict) {
     metadata.grounding_status = verdict.grounding_status;
     metadata.is_grounded = verdict.is_grounded === true;

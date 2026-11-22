@@ -1051,20 +1051,26 @@ class QueryService {
    * that is what lets _loadStickyGraphs reset a session's stickiness when
    * routing moves on (see the load-side note).
    *
-   * Story 2.4b — an AGENTIC answer never persists: the agent citation
-   * envelope carries no `graph_name` by contract (capabilities/citations.py
-   * drops it deliberately), so the derivation below would always return []
-   * and every agentic answer would falsely RESET the session's sticky set —
-   * an answer that cannot name routed graphs must leave the stickiness
-   * untouched. The `okfRoutedGraphs` key stays unset on the update payload.
-   * Carrying graph_name through the envelope is an iteration-2 decision
-   * owned agent-side.
+   * Story 2.4b — the AGENTIC finalize paths pass `skipRoutedGraphs`: the
+   * agent citation envelope carries no `graph_name` by contract
+   * (capabilities/citations.py drops it deliberately), so an agentic answer
+   * cannot name routed graphs — it leaves the stickiness untouched instead
+   * of falsely resetting it (the `okfRoutedGraphs` key stays unset on the
+   * update payload). The skip is BRANCH-DRIVEN, never sniffed off the
+   * metadata: story 3.2's rollback self-healing finalizes a legacy turn
+   * over agentic-shaped metadata and MUST persist the empty set (the flag
+   * flipped off — stale stickiness must not glue the legacy path). Carrying
+   * graph_name through the envelope is an iteration-2 decision owned
+   * agent-side; until then the agentic entries pass the skip, everything
+   * else persists — including an empty set.
    * @param {Object} updateData - The update payload being assembled
    * @param {Object} metadata - Finalized metadata (source_documents)
    * @param {string} queryId - Correlation for logs
+   * @param {Object} [options] - `{skipRoutedGraphs}` — the agentic finalize
+   *   paths' explicit skip (see above).
    */
-  _persistRoutedGraphs(updateData, metadata, queryId) {
-    if (metadata?.agent_run) {
+  _persistRoutedGraphs(updateData, metadata, queryId, { skipRoutedGraphs = false } = {}) {
+    if (skipRoutedGraphs) {
       logger.info('QueryService.sticky_routed_graphs_skipped_agentic', { queryId });
       return;
     }
@@ -1079,8 +1085,11 @@ class QueryService {
    * @param {string} responseText - The full accumulated response text
    * @param {number} responseTime - Response time in milliseconds
    * @param {Object} metadata - Metadata object (source_documents, confidence_score)
+   * @param {Object} [options] - `{skipRoutedGraphs}` — the agentic terminal's
+   *   skip (see _persistRoutedGraphs); the legacy finalize never passes it,
+   *   so rollback-era legacy answers keep their self-healing empty-set reset.
    */
-  async finalizeStreamQuery(queryId, responseText, responseTime, metadata) {
+  async finalizeStreamQuery(queryId, responseText, responseTime, metadata, { skipRoutedGraphs = false } = {}) {
     logger.info('QueryService.finalize_stream_query_start', { queryId });
 
     const updateData = {
@@ -1090,7 +1099,7 @@ class QueryService {
       metadata
     };
     // Story 1.3 — persist the routed set (empty persists too: it RESETS stickiness).
-    this._persistRoutedGraphs(updateData, metadata, queryId);
+    this._persistRoutedGraphs(updateData, metadata, queryId, { skipRoutedGraphs });
     await this.queries.update(queryId, updateData);
 
     // Record analytics
@@ -1225,6 +1234,9 @@ class QueryService {
       // sibling of the streaming `done.translationFailed` flag). Legacy
       // branches never set it, so the flag-off return stays byte-identical.
       let jsonTranslationFailed = false;
+      // Whether THIS request was served by the agentic branch (the tail's
+      // routed-graph skip is branch-driven, never sniffed off the metadata).
+      let agenticTurn = false;
 
       // *** START: TEST MODE LOGIC ***
       // Story 2.4b — the guarded agentic branch sits FIRST (the routing
@@ -1256,6 +1268,10 @@ class QueryService {
         opeaMetadata = turn.metadata;
         opeaResponseTime = turn.responseTime;
         jsonTranslationFailed = turn.translationFailed === true;
+        // This branch produced the answer: its finalize must not touch the
+        // sticky routed-graph set (branch-driven skip — see
+        // _persistRoutedGraphs; never sniffed off the metadata).
+        agenticTurn = true;
       } else if (backendMode === 'test-mode') {
         logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
         const mockData = this.getMockOpeaResponse(queryData);
@@ -1344,7 +1360,12 @@ class QueryService {
         metadata: opeaMetadata
       };
       // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
-      this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
+      this._persistRoutedGraphs(
+        updateData,
+        opeaMetadata,
+        queryId,
+        agenticTurn ? { skipRoutedGraphs: true } : undefined
+      );
       await this.queries.update(queryId, updateData);
 
       // Record the query in analytics

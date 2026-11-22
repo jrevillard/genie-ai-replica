@@ -141,6 +141,12 @@ async function refuseUnsupportedLanguage(targetLanguage) {
 // assembles the same base shape, so the definition moved there and this file
 // imports it. The field conventions are documented beside the definition.
 
+// The partial-save metadata: the captured fields (or the empty-stream base
+// when nothing arrived) plus the interrupted marker — one composition, both
+// close paths and the end-without-completion-frame branch read it (ADR
+// agentic-003).
+const interruptedMetadata = (captured) => ({ ...(captured || emptyStreamMetadata()), answer_interrupted: true });
+
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
   router.use(keycloakAuthMiddleware.authenticate);
@@ -377,12 +383,16 @@ module.exports = (queryService) => {
           opeaController.abort();
           logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
+            // The partial save carries the `answer_interrupted` honesty
+            // marker (ADR agentic-003) — the same marker the agentic
+            // disconnect path writes: one finalize, one honesty contract,
+            // both paths.
             queryService
               .finalizeStreamQuery(
                 queryId,
                 fullResponseText,
                 Date.now() - streamStartTime,
-                capturedMetadata || emptyStreamMetadata()
+                interruptedMetadata(capturedMetadata)
               )
               .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }
@@ -561,6 +571,15 @@ module.exports = (queryService) => {
 
       stream.on('end', () => {
         if (fullResponseText && res.writableEnded === false) {
+          // The stream ended without a `done` frame (a truncated upstream —
+          // generator abort, proxy trim): this finalize is a partial save and
+          // carries the same `answer_interrupted` honesty marker as the
+          // close paths (ADR agentic-003). A `done` frame already handled
+          // leaves the metadata untouched — the marker must never leak into
+          // a normally completed answer.
+          if (!doneState.handled) {
+            capturedMetadata = interruptedMetadata(capturedMetadata);
+          }
           doHandleStreamDone();
         }
       });
@@ -611,7 +630,13 @@ module.exports = (queryService) => {
     startTime,
     res,
     capturedMetadata,
-    { targetLanguage = '', translator = null, skipPostStreamTranslation = false, alreadyFailedTranslation = false } = {}
+    {
+      targetLanguage = '',
+      translator = null,
+      skipPostStreamTranslation = false,
+      alreadyFailedTranslation = false,
+      skipRoutedGraphs = false
+    } = {}
   ) {
     if (res.writableEnded || res.destroyed) return;
 
@@ -662,7 +687,16 @@ module.exports = (queryService) => {
     }
 
     try {
-      await queryService.finalizeStreamQuery(queryId, fullResponseText, responseTime, metadata);
+      // The options object rides only when the skip is set — the legacy
+      // terminal's call keeps its exact legacy arity (the flag-off surface
+      // stays byte-parity, mocks included).
+      await queryService.finalizeStreamQuery(
+        queryId,
+        fullResponseText,
+        responseTime,
+        metadata,
+        ...(skipRoutedGraphs ? [{ skipRoutedGraphs }] : [])
+      );
     } catch (error) {
       logger.error('QueryService.stream_finalize_failed', { queryId, error: error.message });
     }

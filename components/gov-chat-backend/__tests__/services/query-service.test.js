@@ -1178,14 +1178,22 @@ describe('QueryService', () => {
 
     it('an agentic answer leaves the session sticky set untouched (no okfRoutedGraphs on the update)', async () => {
       // Story 2.4b — the agent citation envelope carries no graph_name by
-      // contract, so an agentic finalize cannot name routed graphs: the
-      // derivation would return [] and falsely RESET the session's
-      // stickiness. The `agent_run` marker skips the persist entirely.
-      await queryService.finalizeStreamQuery('q1', 'answer', 100, {
-        grounding_status: 'grounded',
-        source_documents: [{ document_id: 'doc_a', url: '' }],
-        agent_run: { run_id: 'run-abc' }
-      });
+      // contract, so an agentic finalize cannot name routed graphs. The
+      // branch-driven skip (`{skipRoutedGraphs: true}`) is what leaves the
+      // sticky set untouched — the DEFAULT finalize now persists (story
+      // 3.2's rollback self-healing, pinned above), so the option is the
+      // pin's substance.
+      await queryService.finalizeStreamQuery(
+        'q1',
+        'answer',
+        100,
+        {
+          grounding_status: 'grounded',
+          source_documents: [{ document_id: 'doc_a', url: '' }],
+          agent_run: { run_id: 'run-abc' }
+        },
+        { skipRoutedGraphs: true }
+      );
       expect(mockQueriesCollection.update).toHaveBeenCalledWith(
         'q1',
         expect.objectContaining({ response: 'answer', isAnswered: true })
@@ -2052,6 +2060,66 @@ describe('query routing — one flag, both entries', () => {
       const result = await queryService.initStreamQuery(createMockQueryData(), {});
       expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
     });
+  });
+
+  // Rollback continuity: a new turn in an agentic-era
+  // conversation (earlier turns finalized under the flag) must answer through
+  // the legacy pipeline into the SAME-SHAPED queries doc, reading and writing
+  // no agent-specific state (AD-12).
+  it('rollback continuity: the legacy entry mints the same-shaped doc, no agent field read or written', async () => {
+    routingFlag.isAgentPathEnabled.mockReturnValue(false);
+    mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-3' });
+    const result = await queryService.initStreamQuery(createMockQueryData(), {});
+    expect(result.opeaUrl).toBe(LEGACY_URL);
+    const savedDoc = mockQueriesCollection.save.mock.calls[0][0];
+    expect(savedDoc).toEqual(expect.objectContaining({ userId: 'user-1', sessionId: 'session-1', isAnswered: false }));
+    expect(savedDoc).toEqual(
+      expect.not.objectContaining({
+        agentRun: expect.anything(),
+        agent_run: expect.anything(),
+        routingPath: expect.anything()
+      })
+    );
+  });
+
+  it('rollback continuity: the legacy finalize over an agentic-shaped turn persists the empty routed set (self-healing)', async () => {
+    // The agentic citation rows carry no graph_name, so the routed-set
+    // derivation reads [] — the known limitation ADR agentic-003 records.
+    // The legacy finalize itself needs no agent-specific state: it persists
+    // over the doc and the analytics record reads it whole.
+    routingFlag.isAgentPathEnabled.mockReturnValue(false);
+    mockQueriesCollection.document.mockResolvedValueOnce({
+      _key: 'route-4',
+      metadata: { agent_run: { run_id: 'run-9' }, abstained: false, grounding_status: 'unverified' },
+      okfRoutedGraphs: []
+    });
+    await queryService.finalizeStreamQuery('route-4', 'legacy answer', 42, {
+      source_documents: [
+        {
+          document_id: 'conc_1',
+          document_name: 'conc 1',
+          url: '',
+          source: 'okf-concept',
+          concept_id: 'conc_1',
+          repo_id: 'r-1',
+          bundle_version: 2,
+          score: 0.8
+        }
+      ],
+      confidence_score: 0,
+      is_grounded: false,
+      abstained: false,
+      agent_run: { run_id: 'run-9' }
+    });
+    expect(mockQueriesCollection.update).toHaveBeenCalledWith(
+      'route-4',
+      expect.objectContaining({
+        isAnswered: true,
+        response: 'legacy answer',
+        okfRoutedGraphs: []
+      })
+    );
+    expect(mockAnalyticsService.recordQuery).toHaveBeenCalledTimes(1);
   });
 
   it('resolveQueryRoute: the flag on resolves the agent service, never the chatqna/OPEA URL', async () => {

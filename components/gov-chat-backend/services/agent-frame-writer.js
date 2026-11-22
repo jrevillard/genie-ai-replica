@@ -157,11 +157,20 @@ async function proxyAgentRun({
     }
     // A partial answer already streamed is partial-saved like the legacy
     // close path does — the agent-service cancels its in-flight work (its
-    // contract; a cancelled run emits no terminal event).
+    // contract; a cancelled run emits no terminal event). The save carries
+    // the `answer_interrupted` honesty marker (ADR agentic-003): a truncated
+    // answer must never persist indistinguishable from a complete one. A
+    // disconnect before any text chunk leaves the at-start doc unanswered —
+    // nothing is fabricated.
     if (fullResponseText) {
       const metadata = assembleMetadata();
+      metadata.answer_interrupted = true;
       queryService
-        .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, metadata)
+        .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, metadata, {
+          // The agentic answer cannot name routed graphs — the sticky set is
+          // left untouched (branch-driven skip; story 2.4b).
+          skipRoutedGraphs: true
+        })
         .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
     }
   });
@@ -344,7 +353,10 @@ async function proxyAgentRun({
         targetLanguage,
         translator,
         skipPostStreamTranslation: Boolean(streamRelay),
-        alreadyFailedTranslation
+        alreadyFailedTranslation,
+        // The agentic answer cannot name routed graphs — the sticky set is
+        // left untouched (branch-driven skip; story 2.4b).
+        skipRoutedGraphs: true
       });
     } catch (error) {
       logger.error('AgentFrameWriter.stream_done_failed', { queryId, error: error.message });

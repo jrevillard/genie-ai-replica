@@ -215,6 +215,11 @@ async function createContext(payload = {}, opts = {}) {
     tenant: input.tenant,
     filters: input.filters,
     resolved: {
+      // The EFFECTIVE scopes — the union the authority actually resolved
+      // from — not the input list. A context that names only groups has an
+      // empty INPUT scope list, and storing that alone would under-report
+      // the principal the snapshot was measured against.
+      scopes: resolved.scopes,
       graph_names: resolved.graph_names,
       repos: resolved.repos,
       scope_mode: resolved.scope_mode,
@@ -239,7 +244,7 @@ async function createContext(payload = {}, opts = {}) {
       context_id: doc._key,
       name: doc.name,
       version: doc.version,
-      scopes: doc.scopes.length,
+      scopes: doc.resolved.scopes.length,
       principal_refs: doc.principal_refs.length,
       graph_count: doc.resolved.graph_names.length,
       hash: doc.resolved.hash
@@ -271,8 +276,14 @@ async function getContext(id) {
 async function listContexts() {
   const db = await dbService.getConnection();
   await ensureCollection(db);
+  // `@@collection` is a COLLECTION-NAME bind parameter: the engine reads its
+  // value under the key `@collection` — the sigil stays in the key. The key
+  // `collection` leaves the placeholder empty and the engine refuses the
+  // whole query ("no value specified for declared bind parameter
+  // '@collection'") — measured live on 2026-11-22, which answered HTTP 500
+  // on this endpoint while every unit test was green.
   const cursor = await db.query('FOR c IN @@collection SORT c.created_at DESC RETURN c', {
-    collection: COLLECTION
+    '@collection': COLLECTION
   });
   const rows = await cursor.all();
   return rows || [];
@@ -289,6 +300,7 @@ async function refreshContext(id, opts = {}) {
   const next = {
     ...doc,
     resolved: {
+      scopes: resolved.scopes,
       graph_names: resolved.graph_names,
       repos: resolved.repos,
       scope_mode: resolved.scope_mode,

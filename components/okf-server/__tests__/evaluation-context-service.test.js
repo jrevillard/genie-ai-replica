@@ -238,4 +238,41 @@ describe('#2061 E-1: the context is a named, versioned, immutable object', () =>
   test('an unknown context id is REFUSED (never a silently empty carrier)', async () => {
     await expect(evalCtx.getContext('no-such-context')).rejects.toThrow(/not found/i);
   });
+
+  test('the LIST issues a query ArangoDB can resolve (the engine refuses a wrong bind key)', async () => {
+    // Measured live on 2026-11-22: the list endpoint answered HTTP 500 —
+    // "no value specified for declared bind parameter '@collection'". A
+    // `@@collection` placeholder is a COLLECTION-NAME bind parameter and
+    // the engine reads its value under the key `@collection`; the key
+    // `collection` leaves the placeholder empty and the engine refuses the
+    // whole query. The mock refuses it the same way, so the defect cannot
+    // be green in the unit suite and red in production.
+    seedServing([servingRow({ repo_id: 'r-a' })]);
+    await evalCtx.createContext(
+      { name: 'analysts', scopes: ['okf:t:r-a:read'], principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    const items = await evalCtx.listContexts();
+    expect(items.map((c) => c.name)).toEqual(['analysts']);
+    const [text, bindVars] = mockDb.query.mock.calls[mockDb.query.mock.calls.length - 1];
+    expect(text).toContain('@@collection');
+    expect(Object.keys(bindVars)).toEqual(['@collection']);
+  });
+
+  test('the snapshot records the EFFECTIVE scopes it resolved from (not only the inputs)', async () => {
+    // The input scopes are what the operator typed; the EFFECTIVE scopes are
+    // what the groups contributed — the union that was actually resolved.
+    // A context that names only groups and stores an empty scope list
+    // under-reports its own principal, and the audit row counts zero.
+    seedServing([servingRow({ repo_id: 'r-fence-a', acl: { restricted: true } })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', scopes: [], principal_refs: ['g-fence-a'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    expect(ctx.scopes).toEqual([]); // the INPUT is empty — that is the input
+    expect(ctx.resolved.scopes).toEqual(['okf:t:r-fence-a:read']); // the EFFECTIVE set
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ details: expect.objectContaining({ scopes: 1 }) })
+    );
+  });
 });

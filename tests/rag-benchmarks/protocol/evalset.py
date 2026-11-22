@@ -162,9 +162,7 @@ def case_is_non_latin(case: dict) -> bool:
         return False
     turns = case.get("turns")
     if turns:
-        return any(
-            isinstance(turn, dict) and case_is_non_latin(turn) for turn in turns
-        )
+        return any(isinstance(turn, dict) and case_is_non_latin(turn) for turn in turns)
     return has_non_latin_text(str(case.get("query", "")))
 
 

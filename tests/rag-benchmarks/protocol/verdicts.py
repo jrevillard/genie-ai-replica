@@ -298,9 +298,7 @@ def _verdict_for_findings(findings: list[dict], clean_reason: str) -> tuple[str,
     return VERDICT_PASS, clean_reason
 
 
-def _no_row_record(
-    case_id: str, scenario: str | None, turn: int | None = None, absent_rows: str = "error"
-) -> dict:
+def _no_row_record(case_id: str, scenario: str | None, turn: int | None = None, absent_rows: str = "error") -> dict:
     if absent_rows == "skipped":
         return _record(
             case_id,
@@ -389,12 +387,12 @@ def _one_turn_record(
     if outcome not in _ROW_TERMINAL:
         if _expects_denial(turn_case) and _row_is_typed_denial(row):
             return _record(
-            turn_id,
-            scenario,
-            VERDICT_PASS,
-            "typed authorization denial recorded as expected",
-            turn=turn,
-        )
+                turn_id,
+                scenario,
+                VERDICT_PASS,
+                "typed authorization denial recorded as expected",
+                turn=turn,
+            )
         return _record(
             turn_id,
             scenario,

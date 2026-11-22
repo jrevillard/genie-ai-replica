@@ -7,6 +7,7 @@ and stack identity match the current code and set; every mismatch is named in
 the refusal report; there is no override.
 """
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -100,7 +101,10 @@ def test_gold_sha_derived_from_the_artifacts_recorded_path(tmp_path):
     artifact = _artifact(runs={"gold_dataset": str(gold), "gold_sha256": "11" * 32})
     report = reuse.check_capture_artifact(artifact, harness_sha=HARNESS_SHA)
     (mismatch,) = report["mismatches"]
-    assert mismatch["current_value"] == reuse.current_gold_sha256(gold)
+    # The derived current value is the file's REAL digest, computed here
+    # independently of the reuse helper (a helper-side hash bug cannot
+    # self-confirm).
+    assert mismatch["current_value"] == hashlib.sha256(gold.read_bytes()).hexdigest()
 
 
 def test_missing_recorded_gold_is_a_mismatch_row_not_a_crash(tmp_path):

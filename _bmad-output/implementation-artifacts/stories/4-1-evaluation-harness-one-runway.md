@@ -2,7 +2,7 @@
 title: 'Story 4.1 — Evaluation harness (one runway)'
 type: 'feature'
 created: '2026-11-22'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '95dcd8d9aa200c03af98fcb412505e8289c1db7a'
@@ -196,6 +196,30 @@ Scoped fix review, round 1 (`1fb17e055..681f979fc`, f=0, fresh context, correcti
 | The unconditional driver-script ship broke the converged-resume semantic: zero pending now required a container round-trip (old flow did zero execs) | low | confirmed (old `range(0, len(pending), batch)` did nothing on zero pending) | **Fixed**: the ship is `if pending:`-gated; the resume test pins `converged.cmds == []` |
 
 Scoped fix review, round 2 (`681f979fc..24b9e7889`, f=1, fresh context, correction diff only) — **CLEAN**: all three corrections verified (closure traced import-by-import; the pin diverges under the reverted expression; the `if pending:` gate preserves the pending-case ship and zeroes the converged case; scope exact). 114 passed. One minor doc-only finding filed and applied directly (bounded, non-behavioral): the `run_config_b` docstring's "ships ONCE per invocation" contradicted the new converged-resume behavior — reworded "at most once per invocation (zero times on a converged resume)". No further review needed for a doc-only delta.
+
+**Quality phase (commit `b6d7e5a1f`).** /simplify over the full story diff
+(four angles — reuse, simplification, efficiency, altitude; 27 raw findings,
+deduplicated): 12 applied — the gate's single out-dir scan (the rows file no
+longer parsed twice per gated run); the separation check at ONE call site in
+`validate_set` for both provenances; the run path validating as ASSESSMENT
+(a tuning set can never produce reference/gated evidence); the explicit
+resolved-env precedence (pinned > in-container record > live snapshot,
+never emptiness-dependent); the dead `--pair` reference flag dropped; shared
+`_corpus_record`/`_check_pair_or_fail` helpers; `sha256_file` reusing
+`capture_baseline.file_sha256`; the drivers' loader riding the evalset
+validator; the speculative knobs folded (`timeout_margin_s`,
+`cancel_after_events`, `verify_tls`); the constant C-row status field and
+consumer-less `done_ids` dropped; `PAIR_IDS` derived; consumer-less
+`require_suitable` deleted; the config-B atomic write reduced to
+tmp+replace with the deliberate harness.write_json duplication recorded.
+6 skipped with reasons recorded in the commit message (outside-diff
+refactors, behavioral-surface unifications, twice-reviewed deliberate
+choices). Test-audit over the five protocol suites: one tautological
+half-assertion tightened (the gold-sha derivation now checked against an
+independently computed digest, not the same helper's output); zero
+deletions — the retention bar holds (every suite survived two
+review rounds' mutation checks). 113 protocol+capture tests green, ruff
+check + format clean, eval tree green except the pre-existing fanout flake.
 
 ## Spec Change Log
 

@@ -78,6 +78,34 @@ spend; the residual translation plan's bound accounts recorded spend only.
 | `AGENT_TRANSLATION_MAX_TOKENS` | the translation leg's token allowance: `{maxTokens}` the translation plans against after the run's usage record (story 2.10; REQUIRED, fail-closed — no numeric default) |
 | `AGENT_TRANSLATION_MAX_CALLS` | the translation leg's call allowance: `{maxCalls}` — the number of vLLM calls the leg may spend after the run (story 2.10; REQUIRED, fail-closed) |
 
+**Landed (story 2.4).** `AGENT_UPSTREAM_TIMEOUT_MS` ships with a `3600000`
+default (1 h; the legacy chatqna stream timeout `CHATQNA_STREAM_TIMEOUT`
+templates at `300000` — 5 min — the two are independent knobs), passed
+through to the backend in `docker-compose.yaml` and documented in the `env`
+template. The BFF derives the run's deadline as
+
+```
+deadline_ms = AGENT_UPSTREAM_TIMEOUT_MS − TRANSLATION_RESERVE_MS − FINALIZATION_MARGIN_MS   (floor 1000 ms)
+```
+
+with the reserves as named module constants beside the derivation in
+`components/gov-chat-backend/services/agent-frame-writer.js`:
+`TRANSLATION_RESERVE_MS = 30000` (the GPU translator's own hard timeout in
+`gpu-translate-backend.js`) and `FINALIZATION_MARGIN_MS = 5000` (metadata
+persistence, frame write, SSE teardown). The pair rule holds whenever the
+timeout exceeds the reserves; a configured timeout at or below the reserves
+plus the floor (≤ 36000 ms on the shipped numbers) cannot — the resolution
+absorbs it (one warning names `AGENT_UPSTREAM_TIMEOUT_MS`, the 3600000
+default applies to EVERY consumer of the pair: the deadline derivation, the
+wire-level timeout of the leg, and the stream's wall-clock bound) instead of
+shipping a deadline one thing paces against and another aborts ahead of —
+the BFF-attributed abort. The judge-overrun ceiling
+(`AGENT_VERDICT_JUDGE_TIMEOUT_MS`) is NOT part of the derivation yet: the
+run surface bounds its own wall clock and answers honestly, so a long run
+surfaces as the agent's own `budget_exhausted`/`run_error`, never as a BFF
+timeout. Story 2.10 revisits the reserves when the translation-leg
+allowances land.
+
 ## The timeout/deadline pair — the V08 derivation
 
 ```

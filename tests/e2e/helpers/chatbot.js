@@ -194,6 +194,39 @@ async function botStreamingFlag(page) {
 }
 
 /**
+ * The page-side read behind the ungrounded-warning assertion: the LAST bot
+ * answer card's warning element, the paint it carries, the design-system
+ * `--warning-bg` token it must equal (read through a throwaway probe div —
+ * a hardcoded expected color would drift from the token), and whether the
+ * card carries a sources section (an ungrounded answer must not).
+ *
+ * ONE home for the DOM mechanics — both warning-path specs
+ * (chat-conversation, sse-contract) read through it, so a warning-handle
+ * rename or a token readout change is one edit, not two drifting copies.
+ * The assertions stay in the specs, where they are visible.
+ *
+ * @param {object} page - the Playwright page
+ * @returns {Promise<{warnBg: string|null, token: string, sources: boolean}>}
+ */
+async function ungroundedWarningOf(page) {
+  return page.evaluate(() => {
+    const cards = document.querySelectorAll('[data-testid="chat-message-bot"] [data-testid="answer-card"]');
+    const card = cards[cards.length - 1];
+    const warn = card.querySelector('[data-testid="answer-warning"]');
+    const probe = document.createElement('div');
+    probe.style.background = 'var(--warning-bg)';
+    document.body.appendChild(probe);
+    const token = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return {
+      warnBg: warn ? getComputedStyle(warn).backgroundColor : null,
+      token,
+      sources: !!card.querySelector('[data-testid="answer-sources"]')
+    };
+  });
+}
+
+/**
  * The page-side read: the open conversation's messages and their
  * streaming flags, in the shape the decision needs.
  *
@@ -522,6 +555,7 @@ module.exports = {
   lastBotTranslationFailedOf,
   NOT_READABLE,
   botStreamingFlag,
+  ungroundedWarningOf,
   loginViaUI,
   navigateToChatbot,
   LOGIN_BUDGET_TIMEOUT_MS,

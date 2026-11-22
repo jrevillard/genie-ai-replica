@@ -67,7 +67,9 @@ function sseBody(chunks, metadata, options = {}) {
   if (options.verdict) {
     // A verdict payload cannot override the frame's discriminator or
     // version — the same rule the BFF frame writer applies
-    // (agent-frame-writer.js deletes its own type/version before spreading).
+    // (agent-frame-writer.js deletes its payload's own type/version before
+    // spreading; spread-and-delete over destructuring because the suite's
+    // lint flags the unused named keys).
     const verdictProjection = { ...options.verdict };
     delete verdictProjection.type;
     delete verdictProjection.version;

@@ -9,13 +9,19 @@
 // through the same handle this spec pins as absent.
 const { test, expect } = require('@playwright/test');
 const { withWelcomeSession, DEFAULT_SESSION } = require('../helpers/welcome');
-const { mockChatStream, waitForBotResponse, BOT_BUBBLE, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
+const {
+  mockChatStream,
+  waitForBotResponse,
+  ungroundedWarningOf,
+  BOT_BUBBLE,
+  LOGIN_BUDGET_TIMEOUT_MS
+} = require('../helpers/chatbot');
 
 // The verdict projection payloads mirror the BFF's wire shape
 // (services/agent-frame-writer.js, story 2.4): the frame carries
 // {type, version: 1, ...projection} — mockChatStream adds the frame keys.
-const VERDICT_GROUNDED = { grounding_status: 'grounded', is_grounded: true, translation_mode: 'none' };
-const VERDICT_UNGROUNDED = {
+const GROUNDED_VERDICT = { grounding_status: 'grounded', is_grounded: true, translation_mode: 'none' };
+const UNGROUNDED_VERDICT = {
   grounding_status: 'ungrounded',
   is_grounded: false,
   translation_mode: 'none',
@@ -54,7 +60,7 @@ test.describe('SSE contract — graceful degradation (story 2.9)', () => {
       // the BFF writes for a tool call between two text events.
       await mockChatStream(page, ['GENIE.AI answers from the library', ' documents.'], GROUNDED_METADATA, {
         activity: ACTIVITY,
-        verdict: VERDICT_GROUNDED
+        verdict: GROUNDED_VERDICT
       });
       await page.locator('[data-testid="welcome-composer"] textarea').fill('How do I apply for a national ID?');
       await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -82,7 +88,7 @@ test.describe('SSE contract — graceful degradation (story 2.9)', () => {
         page,
         ['GENIE.AI answers from its own knowledge', ' when no document supports the point.'],
         { is_grounded: false, confidence_score: 0.78 },
-        { activity: ACTIVITY, verdict: VERDICT_UNGROUNDED }
+        { activity: ACTIVITY, verdict: UNGROUNDED_VERDICT }
       );
       await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
       await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -90,21 +96,7 @@ test.describe('SSE contract — graceful degradation (story 2.9)', () => {
       await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', {
         timeout: 45000
       });
-      const s = await page.evaluate(() => {
-        const cards = document.querySelectorAll('[data-testid="chat-message-bot"] [data-testid="answer-card"]');
-        const card = cards[cards.length - 1];
-        const warn = card.querySelector('[data-testid="answer-warning"]');
-        const probe = document.createElement('div');
-        probe.style.background = 'var(--warning-bg)';
-        document.body.appendChild(probe);
-        const token = getComputedStyle(probe).backgroundColor;
-        probe.remove();
-        return {
-          warnBg: warn ? getComputedStyle(warn).backgroundColor : null,
-          token,
-          sources: !!card.querySelector('[data-testid="answer-sources"]')
-        };
-      });
+      const s = await ungroundedWarningOf(page);
       expect(s.warnBg, 'the amber warning paints (the mocked frame ran)').not.toBeNull();
       expect(s.warnBg, 'the warning paints the warning token, not red').toBe(s.token);
       expect(s.sources, 'no empty sources section on an ungrounded answer').toBe(false);

@@ -1476,6 +1476,45 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_AUTHORIZED_GRAPHS=
 # AGENT_AUTHORIZED_REPOS=
 # AGENT_PROBE_BEARER=
+# Query preparation (the preparation module, wired into the run surface): the
+# agent service consumes the SAME preparation knobs the deployed query
+# path reads (documented at their own sections above) — the translation
+# endpoint/model, the char budget, the discovery knobs and the bearers. These are SHARED
+# vars: an override here moves the agent service's preparation AND the
+# chatqna/backend consumers of the same names together — never one world
+# alone. Leave them unset to run on the compose defaults.
+# DEPLOYMENT DEPENDENCY: the default translation endpoint
+# (http://vllm-translation-guardrail:9031) is served by the gpu-models
+# profile only — on a core-only stack every non-English query fails closed
+# to the honest insufficiency answer (the run record's preparation_status
+# carries the fallback reason; nothing crashes). An explicit
+# VLLM_TRANSLATION_ENDPOINT to a reachable endpoint is the alternative.
+# BEHAVIOR DELTAS on the agentic path (review-flagged): with a non-English
+# request locale, EVERY search query rides the translation leg — one
+# auxiliary fleet model call per search (the locale hint beats detection,
+# per the preparation contract's own order; an English locale rides
+# passthrough_english, no call); a query whose detection fails with no
+# locale named is refused as an insufficiency, never searched raw.
+# TRANSLATION_SERVICE_HOST_IP=
+# TRANSLATION_SERVICE_PORT=
+# VLLM_TRANSLATION_ENDPOINT=
+# VLLM_TRANSLATION_MODEL_ID=
+# TRANSLATION_SERVICE_TIMEOUT=
+# MAX_TRANSLATION_CHARS=
+# MODEL_DETECT_TTL=
+# MODEL_PROBE_TIMEOUT_SECONDS=
+# OPENAI_API_KEY=
+# VLLM_API_KEY=
+# OPEA_SSL_SKIP_VERIFY=
+# Agentic translation-leg allowances (story 2.10) — REQUIRED on the agentic
+# path, read fail-closed by the BFF: a missing or unusable knob means answer
+# translation cannot be bounded and is skipped (the English answer stays)
+# with the knob named in an ERROR log and in the execution record — no
+# numeric default exists anywhere. The leg bounds each vLLM call at the
+# run's remaining allowance and at the request's remaining end-to-end
+# deadline; docs/agent-budget-deadline-pairs.md.
+# AGENT_TRANSLATION_MAX_TOKENS=
+# AGENT_TRANSLATION_MAX_CALLS=
 #
 # BFF agent-leg knobs (story 2.4) — read by the backend when it proxies an
 # agentic request (the branch is gated by AGENT_ENABLED through the shared

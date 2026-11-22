@@ -619,3 +619,92 @@ def test_spent_evidence_refuses_the_next_tool_dispatch():
         "tool_call_finished",
         "run_error",
     ]
+
+
+# ---------------------------------------------------------------------
+# The split finalize (story 2.5 review): the judge never delays first chunk
+# ---------------------------------------------------------------------
+
+
+def test_the_judge_runs_after_the_text_events_never_before_the_first_chunk():
+    """The finalize is split around the text events: the judged call (the
+    finalize's only latency) happens AFTER text_message_finished and BEFORE
+    the verdict event — a hung-judge latency can never sit between the run
+    start and the first chunk."""
+    sequence: list[str] = []
+
+    class RecordingJudgeModel:
+        async def complete(self, messages, tool_definitions, *, max_output_tokens):
+            sequence.append("judge-call")
+            return ModelTurn(content='{"verdict": "grounded"}')
+
+    monitor = RunBudgetMonitor(DEFAULT_BUDGET)
+    verifier = VerificationPipeline(
+        policy="verdict-marked",
+        judge_timeout_ms=5000,
+        judge_model_client=RecordingJudgeModel(),
+        monitor=monitor,
+        authorized_repos=PROBE_CONTEXT.authorized_repos,
+    )
+    loop = AgentLoop(
+        model=ScriptedLoopModel(MULTI_HOP_TURNS),
+        registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
+        monitor=monitor,
+        token=CancellationToken(),
+        emitter=EventEmitter(run_id="run-1", sink=lambda event: sequence.append(event.kind.value)),
+        system_prompt="the production prompt",
+        verifier=verifier,
+    )
+
+    asyncio.run(loop.run("q"))
+
+    assert sequence == [
+        "run_started",
+        "tool_call_started",
+        "tool_call_finished",
+        "tool_call_started",
+        "tool_call_finished",
+        "text_message_started",
+        "text_message_content",
+        "text_message_finished",
+        "judge-call",  # the judged latency sits AFTER the last text event
+        "verdict",
+        "run_finished",
+    ]
+
+
+def test_a_missing_query_argument_is_structured_tool_feedback_on_both_toolset_paths():
+    """The search executor's argument validation (probe and prepared paths
+    alike) refuses a missing query with the pydantic ValidationError the
+    loop maps to the structured tool result — the run survives, the model
+    sees the refusal as data, and the port is never reached."""
+
+    class _RecordingPreparer:
+        def __init__(self):
+            self.calls = []
+
+        async def prepare(self, text, source_language=None):
+            self.calls.append(text)
+            raise AssertionError("the refusal must precede preparation")
+
+    for preparer in (None, _RecordingPreparer()):
+        port = _port()
+        loop, collector, _ = _loop(
+            ScriptedLoopModel(
+                (
+                    _turn(tool_calls=(_tool_call("call-1", "search_knowledge", {}),)),
+                    _turn(content="the search refused my empty query; I answer from what I have."),
+                )
+            ),
+            port=port,
+            registry=document_toolset(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET, preparer=preparer),
+        )
+        result = asyncio.run(loop.run("q"))
+
+        assert result.outcome == OUTCOME_ANSWERED  # the run survived the bad argument
+        finished = next(event for event in collector if event.kind.value == "tool_call_finished")
+        assert finished.payload["error"]["code"] == "invalid_arguments"
+        assert port.search_calls == []  # the port was never reached
+        # The message list carried the structured error back to the model.
+        served = [m for request in loop.model.requests for m in request["messages"]]
+        assert any(m.get("role") == "tool" and "invalid_arguments" in m.get("content", "") for m in served)

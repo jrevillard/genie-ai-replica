@@ -54,12 +54,12 @@ development_status:
   2-3-request-orchestrator-budgets-admission-cancellation: done
   2-4-bff-frame-writer-and-disconnect-detection: review
   2-4b-non-streaming-integration-json-path: backlog
-  2-5-the-governed-answer-path-integration-slice: backlog
+  2-5-the-governed-answer-path-integration-slice: done
   2-6-citation-verification-pipeline-and-tri-state-verdict: done
   2-7-activity-line-web: backlog
   2-8-activity-line-mobile: backlog
   2-9-sse-contract-regression-coverage: backlog
-  2-10-answer-translation-on-the-agentic-path: backlog
+  2-10-answer-translation-on-the-agentic-path: done
   2-11-execution-attribution-and-observability: backlog
   epic-2-retrospective: optional
 

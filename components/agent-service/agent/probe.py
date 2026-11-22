@@ -44,23 +44,11 @@ import os
 import uuid
 from dataclasses import asdict, dataclass
 
-from pydantic import TypeAdapter
-
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
 from capabilities.adapters.env_config import ArangoConfig
 from capabilities.adapters.okf import OkfAdapter
-from capabilities.contract import (
-    AuthorizedRepo,
-    CallerContext,
-    DocumentCapabilityPort,
-    OperationBudget,
-    PreparedQuery,
-    QueryPreparationStatus,
-    ReadSourceInput,
-    SearchKnowledgeInput,
-    SourceRef,
-)
+from capabilities.contract import AuthorizedRepo, CallerContext, DocumentCapabilityPort, OperationBudget
 from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
@@ -78,7 +66,11 @@ from .loop import (
     ModelTurn,
     ToolCallRequest,
 )
-from .registry import ToolDefinition, ToolRegistry
+
+# The registered toolset is a production surface, not a probe artifact — it
+# lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
+# name stays importable from here for the probe harness and its suites.
+from .toolset import document_toolset
 
 logger = logging.getLogger(__name__)
 
@@ -243,88 +235,6 @@ async def run_probe(
         completion_tokens=result.completion_tokens,
         error=result.error,
     )
-
-
-def document_toolset(
-    port: DocumentCapabilityPort,
-    context: CallerContext,
-    operation_budget: OperationBudget,
-) -> ToolRegistry:
-    """The probe's small toolset: search + read, executors bound to the port.
-
-    The executors adapt the model-generated JSON arguments into the
-    contract's input types — a ``PreparedQuery`` with
-    ``passthrough_english`` (the probe question is English by
-    construction, so no preparation call is needed) and a ``SourceRef`` —
-    and carry the fixed ``CallerContext``. The narrowing travels in the
-    context, never in the arguments, so nothing the model contributes can
-    widen the scope; the port stays the only corpus access. An
-    argument the contract refuses (a missing query, a malformed target)
-    raises ``ValidationError``, which the loop feeds back as the
-    structured tool result.
-    """
-    registry = ToolRegistry()
-    registry.register(
-        ToolDefinition(
-            name="search_knowledge",
-            description=(
-                "Search the authorized knowledge corpus. Returns ranked passages with their provenance, "
-                "or an explicit insufficient-evidence outcome."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "The English search query."},
-                },
-                "required": ["query"],
-            },
-        ),
-        _make_search_executor(port, context, operation_budget),
-    )
-    registry.register(
-        ToolDefinition(
-            name="read_source",
-            description=(
-                "Read one source the search results pointed at. A legacy document is addressed by its "
-                'file_id ("target": {"file_id": ...}); an OKF concept by repo_id and concept_id '
-                '("target": {"repo_id": ..., "concept_id": ...}).'
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "target": {
-                        "type": "object",
-                        "description": 'Either {"file_id": ...} or {"repo_id": ..., "concept_id": ...}.',
-                    },
-                },
-                "required": ["target"],
-            },
-        ),
-        _make_read_executor(port, context, operation_budget),
-    )
-    return registry
-
-
-def _make_search_executor(port: DocumentCapabilityPort, context: CallerContext, budget: OperationBudget):
-    async def execute(arguments: dict) -> dict:
-        query = PreparedQuery(
-            text=arguments.get("query"), preparation_status=QueryPreparationStatus.PASSTHROUGH_ENGLISH
-        )
-        result = await port.search_knowledge(context, SearchKnowledgeInput(query=query), budget)
-        return result.model_dump(mode="json")
-
-    return execute
-
-
-def _make_read_executor(port: DocumentCapabilityPort, context: CallerContext, budget: OperationBudget):
-    _source_ref = TypeAdapter(SourceRef)
-
-    async def execute(arguments: dict) -> dict:
-        target = _source_ref.validate_python(arguments.get("target"))
-        result = await port.read_source(context, ReadSourceInput(target=target), budget)
-        return result.model_dump(mode="json")
-
-    return execute
 
 
 @dataclass(frozen=True)

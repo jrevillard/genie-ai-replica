@@ -21,14 +21,21 @@ One instance of this class answers one HTTP run request end to end:
   a cancellation leaves the monitor's partial counts readable (the
   ``CancelledError`` is logged with the partial usage record and
   re-raised untouched — a cancelled run has no honest terminal state).
+  The per-request wiring also builds the preparation entry (the
+  preparation module) over the run's monitor — every query the model
+  writes is prepared (detected, translated to English) under the aux
+  model-call budget before it reaches the port.
 * **the terminal usage record** — the shared counters the BFF's residual
   budget (translation) consumes: outcome, call counts (aux tallied
-  separately), evidence bytes, served token usage, wall clock.
+  separately), evidence bytes, served token usage, wall clock — plus the
+  request's display language, the preparation status and the taint scan's
+  finding count.
 
 The orchestrator is transport-free: it holds the lane, the config, the
-model client and a port FACTORY (the surface builds the stateless adapters
-once and the executor per request), so the same class serves the run
-surface and the tests unchanged.
+model client, a port FACTORY (the surface builds the stateless adapters
+once and the executor per request) and a preparer FACTORY (one preparation
+entry per run, sharing the process-wide discovery caches), so the same
+class serves the run surface and the tests unchanged.
 """
 
 import asyncio
@@ -43,12 +50,17 @@ from dataclasses import asdict, dataclass
 from capabilities.contract import CallerContext, OperationBudget
 from noagent.config import required_positive_float, required_positive_int
 from noagent.lane import AdmissionLane, LaneBusyError
+from preparation.config import PreparationConfig
+from preparation.prepare import QueryPreparer
+from preparation.registry import LanguageRegistry
+from preparation.translation import HttpxTransport, ModelEndpointCache, TranslationClient
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
 from .events import EventEmitter, EventKind, EventSink
 from .loop import MESSAGE_TRUNCATION, OUTCOME_CANCELLED, OUTCOME_ERROR, AgentLoop, LoopModelClient, RunResult
-from .probe import PROBE_SYSTEM_PROMPT, document_toolset
+from .prompt import PRODUCTION_SYSTEM_PROMPT
+from .toolset import document_toolset
 from .verification import (
     IMPLEMENTED_POLICIES,
     JUDGE_TIMEOUT_KNOB,
@@ -97,7 +109,9 @@ class OrchestratorConfig:
     the port's contract carries (timeout, result count, result bytes — all
     required by the contract, sourced here). ``system_prompt`` is the
     deployed two-tier override (``AGENT_RUN_SYSTEM_PROMPT``), defaulting to
-    the probe's governed text. ``verdict_policy`` is the citation
+    the governed production prompt (:data:`agent.prompt.PRODUCTION_SYSTEM_PROMPT`
+    — grounded-or-insufficient, cite-only-served-evidence, AD-13
+    data-never-instructions). ``verdict_policy`` is the citation
     verification release policy (``AGENT_VERDICT_POLICY``, default
     ``verdict-marked`` — iteration 1 implements only that value; an
     unusable value refuses the config load naming the knob). There is no
@@ -160,7 +174,7 @@ class OrchestratorConfig:
             operation_budget=OperationBudget(
                 timeout_ms=tool_timeout_ms, max_results=tool_max_results, max_result_bytes=tool_max_result_bytes
             ),
-            system_prompt=str(source.get("AGENT_RUN_SYSTEM_PROMPT", "")).strip() or PROBE_SYSTEM_PROMPT,
+            system_prompt=str(source.get("AGENT_RUN_SYSTEM_PROMPT", "")).strip() or PRODUCTION_SYSTEM_PROMPT,
             verdict_policy=verdict_policy,
             judge_timeout_ms=judge_timeout_ms,
         )
@@ -184,12 +198,16 @@ class AgentRunRequest:
     """One governed run request: the question, its agent-phase deadline and
     the trusted caller context (assembled server-side by the BFF — never by
     the model), plus the caller bearer the port forwards only to the
-    services that validate their own callers."""
+    services that validate their own callers. ``language`` is the UI locale
+    the caller asked the answer in (optional): the orchestrator does not
+    answer in it — the BFF's translation leg does — and records it on the
+    usage record so the leg's pairing needs nothing outside the record."""
 
     question: str
     deadline_ms: int
     context: CallerContext
     bearer: str | None = None
+    language: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.question, str) or not self.question.strip():
@@ -207,6 +225,15 @@ class RunUsageRecord:
     cancelled run never produces one (the partial counts ride the evidence
     log line instead), and no answer text rides it — the record carries
     what the run SPENT, never what it claimed.
+
+    The additive fields carry the per-request facts the integration slice
+    records: ``language`` — the requested display language, riding the same
+    record the translation leg plans against; ``preparation_status`` — the
+    FIRST search query's preparation status (the initial query's, in the
+    contract's preparation vocabulary; ``None`` when no query was prepared);
+    ``injection_findings`` — how many injection attempts the run's taint
+    scan recorded (AD-13: an attempt is a counted finding, the content
+    still passed as data).
     """
 
     run_id: str
@@ -220,9 +247,68 @@ class RunUsageRecord:
     completion_tokens: int | None
     wall_clock_seconds: float
     error: str | None = None
+    language: str | None = None
+    preparation_status: str | None = None
+    injection_findings: int = 0
 
     def as_dict(self) -> dict:
         return asdict(self)
+
+
+class BudgetedTranslationClient(TranslationClient):
+    """The preparation translator under the run's fleet model-call budget.
+
+    One subclass, one override: every translation dispatch claims one
+    AUXILIARY model call from the run's monitor BEFORE it goes out (the
+    check-then-count discipline — an exhausted budget refuses the dispatch,
+    and the refusal propagates into the loop's honest
+    ``budget_exhausted`` terminal). The claim is what makes preparation
+    bounded: translation is plumbing, tallied separately from the loop's
+    own calls, and it can never outrun the fleet budget. The claim precedes the
+    dispatch's internal gates, so a too-long refusal also counts one aux
+    call — the conservative direction (the record never undercounts); and
+    a run that a too-long refusal errored records the count without ever
+    being paired with a translation plan. The served token usage of a
+    translation call is not reportable through this seam (the preparation
+    module returns text only), so the totals are untouched — a lower
+    bound stays a lower bound, nothing is guessed.
+    """
+
+    def __init__(self, config: PreparationConfig, registry, monitor: RunBudgetMonitor, transport=None, cache=None):
+        super().__init__(config, registry, transport=transport, cache=cache)
+        self._budget_monitor = monitor
+
+    async def translate_prompt(self, prompt: str, translategemma: bool, model_id: str | None) -> str:
+        self._budget_monitor.take_aux_model_call()
+        return await super().translate_prompt(prompt, translategemma, model_id)
+
+
+def build_preparer_factory(env=None):
+    """The per-run preparer factory the orchestrator wires.
+
+    The expensive, stateless parts (the config, the language registry, the
+    HTTP transport and the TTL-cached endpoint discovery) are built ONCE
+    per process and shared by every run; each run gets its OWN
+    :class:`QueryPreparer` over a translator bound to ITS monitor, so the
+    budget claims land on the right run even with runs interleaved on one
+    event loop (the claim fires synchronously inside the translation
+    dispatch — no monitor swap can race it).
+    """
+    config = PreparationConfig.load(env)
+    registry = LanguageRegistry(config.registry_path)
+    transport = HttpxTransport(config.tls_verify)
+    cache = ModelEndpointCache(
+        config.translation_endpoint, transport, config.probe_timeout_seconds, config.detect_ttl_seconds
+    )
+
+    def factory(monitor: RunBudgetMonitor, language: str | None = None) -> QueryPreparer:
+        translator = BudgetedTranslationClient(config, registry, monitor, transport=transport, cache=cache)
+        # The request's locale is the run's DEFAULT hint (the named language
+        # beats detection in the preparation module — the deployed
+        # semantics); an explicit per-call hint still wins.
+        return QueryPreparer(config, registry, translator, default_source_language=language)
+
+    return factory
 
 
 class RequestOrchestrator:
@@ -241,11 +327,18 @@ class RequestOrchestrator:
         lane: AdmissionLane,
         model_client: LoopModelClient,
         port_factory,
+        preparer_factory=None,
     ) -> None:
         self._config = config
         self._lane = lane
         self._model_client = model_client
         self._port_factory = port_factory
+        # The preparation wiring (the preparation module, consumed per
+        # query): a factory building ONE preparer per run over the run's
+        # monitor. ``None`` keeps the probe-shaped toolset (no preparation
+        # leg) — the tests' and the probe's path; the governed surface
+        # always wires one.
+        self._preparer_factory = preparer_factory
 
     @asynccontextmanager
     async def admit(self) -> AsyncIterator[None]:
@@ -276,6 +369,17 @@ class RequestOrchestrator:
         monitor = RunBudgetMonitor(self._config.budget_for(request.deadline_ms))
         token = CancellationToken()
         emitter = EventEmitter(run_id=run_id, sink=sink)
+        # The preparation statuses land here, through the toolset's callback:
+        # the FIRST one is the initial query's — the record carries it.
+        preparation_statuses: list[str] = []
+
+        def record(outcome: str, *, error: str | None) -> RunUsageRecord:
+            """This run's terminal usage record — every exit path below is
+            a one-liner over the same request, monitor and statuses."""
+            return self._record(
+                run_id, outcome, monitor, error=error, request=request, preparation_statuses=preparation_statuses
+            )
+
         try:
             # The per-request assembly is INSIDE the try: a build failure
             # (a port-factory refusal, a registry defect) must reach the
@@ -284,8 +388,13 @@ class RequestOrchestrator:
             # that already started. The loop's own failures never get here:
             # the loop catches its Exceptions internally and returns them
             # as its result.
+            preparer = self._preparer_factory(monitor, request.language) if self._preparer_factory is not None else None
             registry = document_toolset(
-                self._port_factory(request.context, request.bearer), request.context, self._config.operation_budget
+                self._port_factory(request.context, request.bearer),
+                request.context,
+                self._config.operation_budget,
+                preparer=preparer,
+                on_preparation_status=preparation_statuses.append,
             )
             verifier = VerificationPipeline(
                 policy=self._config.verdict_policy,
@@ -307,7 +416,7 @@ class RequestOrchestrator:
         except asyncio.CancelledError:
             logger.warning(
                 "agent run cancelled mid-flight; the partial usage record: %s",
-                json.dumps(self._record(run_id, OUTCOME_CANCELLED, monitor, error=None).as_dict()),
+                json.dumps(record(OUTCOME_CANCELLED, error=None).as_dict()),
             )
             raise
         except Exception as failed:  # noqa: BLE001 — a pre-loop build failure still gets its terminal
@@ -318,10 +427,19 @@ class RequestOrchestrator:
             # run_started — so the failure path announces it here.
             emitter.emit(EventKind.RUN_STARTED, {"question": request.question})
             emitter.emit(EventKind.RUN_ERROR, {"code": OUTCOME_ERROR, "message": message})
-            return self._record(run_id, OUTCOME_ERROR, monitor, error=message)
-        return self._record(run_id, result.outcome, monitor, error=result.error)
+            return record(OUTCOME_ERROR, error=message)
+        return record(result.outcome, error=result.error)
 
-    def _record(self, run_id: str, outcome: str, monitor: RunBudgetMonitor, *, error: str | None) -> RunUsageRecord:
+    def _record(
+        self,
+        run_id: str,
+        outcome: str,
+        monitor: RunBudgetMonitor,
+        *,
+        error: str | None,
+        request: AgentRunRequest,
+        preparation_statuses: list[str],
+    ) -> RunUsageRecord:
         """The usage record: the monitor IS the source of every counter."""
         return RunUsageRecord(
             run_id=run_id,
@@ -335,4 +453,7 @@ class RequestOrchestrator:
             completion_tokens=monitor.completion_tokens,
             wall_clock_seconds=monitor.elapsed_seconds,
             error=error,
+            language=request.language,
+            preparation_status=preparation_statuses[0] if preparation_statuses else None,
+            injection_findings=monitor.injection_findings,
         )

@@ -3106,3 +3106,17 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/2-4-bff-frame-writer-and-disconnect-detection.md`
   summary: Both streaming upstream legs (chatqna relay and the new agent frame writer) create per-request `http.Agent`/`https.Agent` instances with `keepAlive: true` and never destroy them — pooled sockets outlive the request until GC.
   evidence: The deployed legacy idiom (query-routes.js chatqna options, pre-existing) was mirrored by the new agent-leg call in agent-frame-writer.js — the change added a new instance of the pattern, not the pattern itself. A real fix is module-level shared agents (or per-request destroy in a `finally`) spanning BOTH paths plus fd-leak evidence under load — a cross-path refactor with its own measurement, not a story-2.4 patch.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-10-answer-translation-on-the-agentic-path.md`
+  summary: Wire AGENT_TRANSLATION_MAX_TOKENS/MAX_CALLS (and 2.3's AGENT_* knobs) into the chart backend.yaml and the ansible env.j2 surfaces when the agentic path deploys.
+  evidence: The chart and ansible carry zero AGENT_* knobs today (2.3's knobs included) — the deployment-surface wiring is the deployment story's (2.4/Epic 3); until then those venues fail closed (translation skips, English answers, one ERROR per request).
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-10-answer-translation-on-the-agentic-path.md`
+  summary: Add AGENT_TRANSLATION_MAX_TOKENS/MAX_CALLS sizing guidance to .claude/rules/ENVIRONMENT.md with a worked example against AGENT_UPSTREAM_TIMEOUT_MS.
+  evidence: The knobs' pair rule lives in docs/agent-budget-deadline-pairs.md, but the repo's env-variable reference (agent-context file — defer-by-rule edit) carries neither the new knobs nor a sizing example.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-5-the-governed-answer-path-integration-slice.md`
+  summary: The BFF pairing test pins the run usage-record contract against a hand-copied fixture; the producer↔consumer contract can drift with both suites green.
+  evidence: verification-gap V2 — renaming `aux_model_calls` or `prompt_tokens` in `RunUsageRecord` reds nothing on either side while production silently under-bounds or skips translation; the natural home is a shared committed snapshot of the Python `as_dict` the JS test reads, when story 2.4 wires the real record through.
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-5-the-governed-answer-path-integration-slice.md`
+  summary: Tool-name coupling duplicated — `taint.scan_tool_result` and `RetrievalLedger.record` each hardcode `search_knowledge`/`read_source` separately, no shared guard.
+  evidence: blind B11 — a third retrieval-shaped tool registered later is silently unscanned and unledgered; no third tool exists today, so the shared guard (registry-derived names or a shared constant) is machinery without a current consumer.

@@ -87,21 +87,17 @@ class AgentActivityLine extends StatelessWidget {
   /// state label — `tr()` returns the dotted key when nothing matches,
   /// which is how the missing entry is detected.
   String _label() {
-    final stateKey = switch (status) {
-      'completed' => 'completed',
-      'failed' => 'failed',
-      _ => 'running',
+    final (stateKey, genericKey) = switch (status) {
+      'completed' => ('completed', 'chatbot.agentActivity.stepCompleted'),
+      'failed' => ('failed', 'chatbot.agentActivity.stepFailed'),
+      _ => ('running', 'chatbot.agentActivity.working'),
     };
     if (operation != null) {
       final key = 'chatbot.agentActivity.operations.$operation.$stateKey';
       final value = tr(key);
       if (value != key) return value;
     }
-    return tr(switch (stateKey) {
-      'completed' => 'chatbot.agentActivity.stepCompleted',
-      'failed' => 'chatbot.agentActivity.stepFailed',
-      _ => 'chatbot.agentActivity.working',
-    });
+    return tr(genericKey);
   }
 }
 

@@ -974,12 +974,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       List<Map<String, dynamic>> loadedMessages = [];
       if (conv['messages'] != null && conv['messages'] is List) {
         loadedMessages = (conv['messages'] as List).map((m) {
-          // One shape guard for every metadata read: a corrupted record
-          // (a scalar where the map belongs) must degrade the FIELDS, not
-          // fail the whole conversation load.
-          final Map<String, dynamic>? metadata = m['metadata'] is Map
-              ? m['metadata'] as Map<String, dynamic>
-              : null;
+          // One shape guard for every metadata read (`_metadataOf`): a
+          // corrupted record (a scalar where the map belongs) must degrade
+          // the FIELDS, not fail the whole conversation load.
+          final Map<String, dynamic>? metadata = _metadataOf(m['metadata']);
           return {
             'id': m['_id'] ?? m['id'],
             'role': m['sender'] == 'user' ? 'user' : 'assistant',
@@ -1134,12 +1132,50 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// restored messages share this one derivation, so the truth table
   /// renders identically on both.
   String? _groundingStatusOf(Map<String, dynamic> msg) {
-    final meta = msg['metadata'];
-    if (meta is Map) {
-      final status = meta['grounding_status'];
-      if (status is String && status.isNotEmpty) return status;
+    final status = _metadataOf(msg['metadata'])?['grounding_status'];
+    return status is String && status.isNotEmpty ? status : null;
+  }
+
+  /// The message's metadata as the typed map, or null — one shape guard
+  /// for every metadata read: a corrupted record (a scalar where the map
+  /// belongs) degrades the fields, not the load.
+  Map<String, dynamic>? _metadataOf(dynamic raw) =>
+      raw is Map<String, dynamic> ? raw : null;
+
+  /// The verdict truth table for one message — the three answer-level
+  /// outcomes, all false for a user message (nothing answer-level ever
+  /// renders on one). Known tri-state values decide; a legacy turn (no
+  /// field) — or a future state this client does not know — falls back
+  /// to `is_grounded` alone, so an unfamiliar verdict can never silently
+  /// retire the answer-level warning. The translated-grounded caption:
+  /// the verdict certifies the source-language text, so a DELIVERED
+  /// translation is not covered by it; a failed translation left the
+  /// English original on screen — the verified text itself, no caption.
+  ({bool ungrounded, bool unverified, bool scopeCaption}) _verdictTruthTableOf(
+    Map<String, dynamic> msg,
+    bool isUser,
+  ) {
+    if (isUser) {
+      return (ungrounded: false, unverified: false, scopeCaption: false);
     }
-    return null;
+    final groundingStatus = _groundingStatusOf(msg);
+    final knownVerdict =
+        groundingStatus == 'grounded' ||
+        groundingStatus == 'ungrounded' ||
+        groundingStatus == 'unverified';
+    final ungrounded =
+        groundingStatus == 'ungrounded' ||
+        (!knownVerdict && msg['isGrounded'] == false);
+    final unverified = groundingStatus == 'unverified';
+    final scopeCaption =
+        groundingStatus == 'grounded' &&
+        msg['translationFailed'] != true &&
+        I18nService().currentLocale.languageCode != 'en';
+    return (
+      ungrounded: ungrounded,
+      unverified: unverified,
+      scopeCaption: scopeCaption,
+    );
   }
 
   void _sendMessage(String text, {String? hiddenPrompt}) async {
@@ -1285,9 +1321,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'stream_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
       _isStreaming = true;
-      // A fresh turn: any state a previous turn left behind is cleared
-      // before its first frame can arrive.
-      _resetAgentActivityLine();
       _messages.add({
         'id': streamingId,
         'role': 'assistant',
@@ -1342,15 +1375,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     // line's state: a frame that arrives after it is a
                     // post-chunk frame, and post-chunk frames are accepted
                     // but unrendered. The line collapses at the FIRST
-                    // chunk — client-side, never to re-open this turn.
-                    final collapseLine = _agentLineActive;
+                    // chunk — client-side, never to re-open this turn
+                    // (the collapsed slot is dropped by itemCount, so no
+                    // row state needs clearing here).
                     accumulatedContent += content;
                     setState(() {
                       msg['content'] = accumulatedContent;
                       _agentChunkSeen = true;
-                      if (collapseLine) {
-                        _agentOperation = null;
-                      }
                     });
                     _scrollToBottom();
                   case SseAgentActivityEvent(:final operation, :final status):
@@ -2626,31 +2657,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
                     final msg = _messages[index];
                     final bool isUser = msg['role'] == 'user';
-                    // The verdict truth table's inputs for this message:
-                    // the tri-state decides when the metadata carries a
-                    // KNOWN value (agentic turns, live or restored); a
-                    // legacy turn (no field) — or a future state this
-                    // client does not know — falls back to is_grounded
-                    // alone, so an unfamiliar verdict can never silently
-                    // retire the answer-level warning.
-                    final String? groundingStatus = _groundingStatusOf(msg);
-                    final bool knownVerdict =
-                        groundingStatus == 'grounded' ||
-                        groundingStatus == 'ungrounded' ||
-                        groundingStatus == 'unverified';
-                    final bool isUngrounded =
-                        groundingStatus == 'ungrounded' ||
-                        (!knownVerdict && msg['isGrounded'] == false);
-                    final bool isUnverified = groundingStatus == 'unverified';
-                    // The translated-grounded caption: the verdict
-                    // certifies the source-language text, so a DELIVERED
-                    // translation is not covered by it. A failed
-                    // translation left the English original on screen —
-                    // the verified text itself, no caption.
-                    final bool showTranslationScopeCaption =
-                        groundingStatus == 'grounded' &&
-                        msg['translationFailed'] != true &&
-                        I18nService().currentLocale.languageCode != 'en';
+                    final verdict = _verdictTruthTableOf(msg, isUser);
 
                     return Align(
                       alignment: isUser
@@ -2754,7 +2761,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             // translation of it — the user reads the
                             // scope of the grounded claim, never a
                             // translated answer silently inheriting it.
-                            if (!isUser && showTranslationScopeCaption)
+                            if (verdict.scopeCaption)
                               Padding(
                                 padding: const EdgeInsets.only(
                                   top: DsSpacing.sm,
@@ -2802,7 +2809,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     // text flexes: the bubble is narrower
                                     // than the phone, and the long
                                     // localized labels clip otherwise.
-                                    if (isUngrounded)
+                                    if (verdict.ungrounded)
                                       Expanded(
                                         child: Text(
                                           tr('chatbot.aiGeneratedNoDocs'),
@@ -2813,7 +2820,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                           ),
                                         ),
                                       )
-                                    else if (isUnverified)
+                                    else if (verdict.unverified)
                                       Expanded(
                                         child: Text(
                                           tr(

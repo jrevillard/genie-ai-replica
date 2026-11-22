@@ -206,12 +206,6 @@ class SseParser {
   };
 
   SseMetadataEvent _parseMetadata(Map<String, dynamic> json) {
-    final extra = <String, dynamic>{};
-    json.forEach((key, value) {
-      if (!_knownMetadataKeys.contains(key)) {
-        extra[key] = value;
-      }
-    });
     return SseMetadataEvent(
       sourceDocuments: json['source_documents'] as List<dynamic>? ?? [],
       confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
@@ -221,8 +215,32 @@ class SseParser {
       responseTime: (json['responseTime'] as num?)?.toInt(),
       queryTranslationStatus: json['query_translation_status'] as String?,
       groundingStatus: json['grounding_status'] as String?,
-      extra: extra,
+      extra: _extraOf(json, _knownMetadataKeys),
     );
+  }
+
+  SseAgentVerdictEvent _parseVerdict(Map<String, dynamic> json) {
+    return SseAgentVerdictEvent(
+      groundingStatus: json['grounding_status'] as String?,
+      isGrounded: json['is_grounded'] as bool? ?? false,
+      extra: _extraOf(json, _knownVerdictKeys),
+    );
+  }
+
+  /// The keys of [json] outside [known] — the verbatim passthrough every
+  /// extra-bearing frame rides: a new diagnostic or projection field
+  /// reaches mobile without a parser edit.
+  static Map<String, dynamic> _extraOf(
+    Map<String, dynamic> json,
+    Set<String> known,
+  ) {
+    final extra = <String, dynamic>{};
+    json.forEach((key, value) {
+      if (!known.contains(key)) {
+        extra[key] = value;
+      }
+    });
+    return extra;
   }
 
   /// The `agent_verdict` keys the parser normalizes into typed fields;
@@ -253,19 +271,7 @@ class SseParser {
         operation: json['operation'] as String?,
         callId: json['callId'] as String?,
       ),
-      'agent_verdict' => () {
-        final extra = <String, dynamic>{};
-        json.forEach((key, value) {
-          if (!_knownVerdictKeys.contains(key)) {
-            extra[key] = value;
-          }
-        });
-        return SseAgentVerdictEvent(
-          groundingStatus: json['grounding_status'] as String?,
-          isGrounded: json['is_grounded'] as bool? ?? false,
-          extra: extra,
-        );
-      }(),
+      'agent_verdict' => _parseVerdict(json),
       _ => null,
     };
   }

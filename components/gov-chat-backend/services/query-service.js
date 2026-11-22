@@ -59,6 +59,30 @@ function opeaChatQnaUrl() {
   return `http://${process.env.OPEA_HOST || DEFAULT_OPEA_HOST}:${process.env.OPEA_PORT || DEFAULT_OPEA_PORT}/v1/chatqna`;
 }
 
+// The agent-service upstream is deployment configuration, read with the same
+// rule as the legacy OPEA leg: compose and the chart set it; the fallback is
+// the compose service name on the documented port, so an unset variable
+// points at the documented topology.
+const DEFAULT_AGENT_SERVICE_URL = 'http://agent-service:8010';
+
+function agentServiceUrl() {
+  return process.env.AGENT_SERVICE_URL || DEFAULT_AGENT_SERVICE_URL;
+}
+
+// The ONE routing decision of the query path. Both request entries
+// (initStreamQuery for /stream, createQuery for the non-stream path) take
+// their upstream target from this helper and from nowhere else: a deployment
+// that flips AGENT_ENABLED cannot end up with one path agentic and the other
+// legacy. The agentic target is the agent service — it can never be the
+// chatqna/OPEA URL, a guarantee a test carries (the CI dependency gate
+// cannot see the BFF runtime call graph, so no grep enforces it).
+function resolveQueryRoute() {
+  if (process.env.AGENT_ENABLED === '1') {
+    return { agentic: true, url: agentServiceUrl() };
+  }
+  return { agentic: false, url: opeaChatQnaUrl() };
+}
+
 // The target language the client asked for. It travels to OPEA, which
 // validates it against its own language map before it is used, so only a
 // string is forwarded: anything else is dropped rather than handed to the
@@ -578,6 +602,22 @@ class QueryService {
       throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
     }
 
+    // The routing decision is the request's upstream truth, taken once and
+    // taken before the query record is written: a request on the agentic
+    // branch persists nothing, because the branch has no serving path yet
+    // (the BFF frame writer is story 2.4's deliverable). Refusing loudly —
+    // on both entries, with the same marker — keeps an activated deployment
+    // honest; silently serving legacy under AGENT_ENABLED=1 would be the
+    // half-activated deployment the shared helper exists to prevent.
+    const route = resolveQueryRoute();
+    if (route.agentic) {
+      throw new Error(
+        'AGENTIC_PATH_NOT_SERVED: AGENT_ENABLED=1 activated the agentic path, ' +
+          'but its BFF serving path does not exist yet (story 2.4, BFF frame writer); ' +
+          'the request is refused before any upstream call'
+      );
+    }
+
     const queryText = pickUserText(queryData.messages, queryData.userQuestion);
     if (!queryText) {
       logger.warn('QueryService.init_stream_no_extractable_text', {
@@ -614,8 +654,9 @@ class QueryService {
     const queryId = query._key;
     logger.info('QueryService.stream_query_created', { queryId });
 
-    // Build OPEA payload with stream: true
-    const opeaUrl = opeaChatQnaUrl();
+    // Build OPEA payload with stream: true. The URL comes from the routing
+    // decision taken above (the legacy branch of resolveQueryRoute).
+    const opeaUrl = route.url;
 
     let opeaPayload;
     if (backendMode === 'single-message') {
@@ -977,6 +1018,20 @@ class QueryService {
       }
       logger.info('[DEBUG] All validations passed successfully.');
 
+      // The routing decision — the same helper the stream path reads, at the
+      // same position (before the query record is written). The decision
+      // precedes the test-mode bypass: a mocked OPEA answer under an
+      // activated flag would present itself as an agentic answer, so the
+      // refusal is mode-independent.
+      const route = resolveQueryRoute();
+      if (route.agentic) {
+        throw new Error(
+          'AGENTIC_PATH_NOT_SERVED: AGENT_ENABLED=1 activated the agentic path, ' +
+            'but its BFF serving path does not exist yet (story 2.4, BFF frame writer); ' +
+            'the request is refused before any upstream call'
+        );
+      }
+
       // Derive text from the last message for backward compatibility and analytics
       const queryText = pickUserText(queryData.messages, queryData.userQuestion);
       if (!queryText) {
@@ -1036,7 +1091,9 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaUrl = opeaChatQnaUrl();
+        // The URL comes from the routing decision taken above (the legacy
+        // branch of resolveQueryRoute).
+        const opeaUrl = route.url;
 
         let opeaPayload;
         if (backendMode === 'single-message') {
@@ -2231,3 +2288,7 @@ module.exports = instance;
 // on the singleton object; do not refactor into a class method without also
 // updating the unit tests (query-service.test.js: pickUserText suite).
 module.exports.pickUserText = pickUserText;
+// Attached for unit-test access (query-service.test.js: the routing suite).
+// Pure helper, no instance state — the production branch points are the two
+// request entries, which read it internally.
+module.exports.resolveQueryRoute = resolveQueryRoute;

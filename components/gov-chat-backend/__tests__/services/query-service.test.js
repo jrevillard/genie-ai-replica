@@ -1962,3 +1962,120 @@ describe('QueryService', () => {
     });
   });
 });
+
+describe('query routing — one flag, both entries', () => {
+  beforeEach(async () => {
+    await queryService.init();
+  });
+
+  const LEGACY_URL = 'http://chatqna-xeon-backend-server:8888/v1/chatqna';
+  const AGENTIC_URL = 'http://agent-service:8010';
+  const REFUSAL = 'AGENTIC_PATH_NOT_SERVED';
+
+  it('flag off: both entries route legacy and resolve the SAME target', async () => {
+    // The stream entry's target is the unchanged legacy construction.
+    await withEnv({ AGENT_ENABLED: undefined, CONTEXT_OPTION: undefined }, async () => {
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-1' });
+      const result = await queryService.initStreamQuery(createMockQueryData(), {});
+      expect(result.opeaUrl).toBe(LEGACY_URL);
+      expect(queryService.resolveQueryRoute()).toEqual({ agentic: false, url: LEGACY_URL });
+    });
+
+    // The non-stream entry — the worker must receive the same target the
+    // stream entry resolved above: one construction source, no per-entry
+    // drift. This is the "cannot disagree" assertion at the observable
+    // boundary: same environment, both entries, one decision.
+    await withEnv({ AGENT_ENABLED: undefined, CONTEXT_OPTION: undefined }, async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const workerSpy = jest
+        .spyOn(queryService, 'runOPEAWorker')
+        .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
+      try {
+        await queryService.createQuery(createMockQueryData());
+        expect(workerSpy.mock.calls[0][0]).toBe(LEGACY_URL);
+        expect(workerSpy.mock.calls[0][0]).toBe(queryService.resolveQueryRoute().url);
+      } finally {
+        workerSpy.mockRestore();
+      }
+    });
+  });
+
+  it('flag off: the legacy target still honors the deployment overrides', async () => {
+    await withEnv(
+      { AGENT_ENABLED: '0', OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899', CONTEXT_OPTION: undefined },
+      async () => {
+        mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-2' });
+        const result = await queryService.initStreamQuery(createMockQueryData(), {});
+        expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
+      }
+    );
+  });
+
+  it("flag vocabulary is strict '1': true / yes / 2 stay legacy", async () => {
+    for (const value of ['true', 'yes', '2', '0', '']) {
+      await withEnv({ AGENT_ENABLED: value }, () => {
+        expect(queryService.resolveQueryRoute()).toEqual({ agentic: false, url: LEGACY_URL });
+      });
+    }
+  });
+
+  it('flag on: both entries refuse with the same marker, before any persistence or upstream call', async () => {
+    // Stream entry: the refusal fires before the query record is written.
+    await withEnv({ AGENT_ENABLED: '1' }, async () => {
+      await expect(queryService.initStreamQuery(createMockQueryData(), {})).rejects.toThrow(REFUSAL);
+      expect(mockQueriesCollection.save).not.toHaveBeenCalled();
+    });
+
+    // Non-stream entry: same marker, the worker is never called, nothing
+    // persisted. Two genuinely separate entry points, one decision.
+    await withEnv({ AGENT_ENABLED: '1', CONTEXT_OPTION: undefined }, async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      const workerSpy = jest
+        .spyOn(queryService, 'runOPEAWorker')
+        .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
+      try {
+        await expect(queryService.createQuery(createMockQueryData())).rejects.toThrow(REFUSAL);
+        expect(workerSpy).not.toHaveBeenCalled();
+        expect(mockQueriesCollection.save).not.toHaveBeenCalled();
+      } finally {
+        workerSpy.mockRestore();
+      }
+    });
+  });
+
+  it('flag on: test-mode refuses too — the routing decision precedes the mock bypass', async () => {
+    await withEnv({ AGENT_ENABLED: '1', CONTEXT_OPTION: 'test-mode' }, async () => {
+      await expect(queryService.createQuery(createMockQueryData())).rejects.toThrow(REFUSAL);
+      expect(mockQueriesCollection.save).not.toHaveBeenCalled();
+      expect(mockQueriesCollection.update).not.toHaveBeenCalled();
+    });
+  });
+
+  it('flag on: the agentic target is the agent service and never the chatqna/OPEA URL', async () => {
+    // The behavioral never-OPEA assertion (the CI dependency gate cannot see
+    // the BFF runtime call graph, so no grep enforces this). The adversarial
+    // configuration: the legacy leg's own host/port NAME the agent host —
+    // the agentic route still resolves to the agent service, never to the
+    // chatqna URL that configuration would produce.
+    await withEnv(
+      {
+        AGENT_ENABLED: '1',
+        AGENT_SERVICE_URL: 'http://agent.internal:9999',
+        OPEA_HOST: 'agent.internal',
+        OPEA_PORT: '9999'
+      },
+      () => {
+        const route = queryService.resolveQueryRoute();
+        expect(route.agentic).toBe(true);
+        expect(route.url).toBe('http://agent.internal:9999');
+        expect(route.url).not.toBe('http://agent.internal:9999/v1/chatqna');
+        expect(route.url.includes('/v1/chatqna')).toBe(false);
+      }
+    );
+
+    // The default target is the documented compose topology.
+    await withEnv({ AGENT_ENABLED: '1', AGENT_SERVICE_URL: undefined }, () => {
+      expect(queryService.resolveQueryRoute()).toEqual({ agentic: true, url: AGENTIC_URL });
+    });
+  });
+});

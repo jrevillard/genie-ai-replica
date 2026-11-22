@@ -1421,6 +1421,12 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # MUST be 0 or 1, not true/false. Ansible: agent_enabled in group_vars.
 # AGENT_ENABLED=1
 #
+# The BFF's agentic routing target — the ONE routing helper both chat query
+# entries (streaming and non-streaming) read when AGENT_ENABLED=1. The
+# default is the compose service name on the documented port; a chart or
+# split deployment overrides it. The legacy path never reads this knob.
+# AGENT_SERVICE_URL=http://agent-service:8010
+#
 # Agent run-budget knobs (story 2.3) — REQUIRED for the run surface. Read
 # fail-closed: a run request against a deployment that has not set one of
 # them is answered 503 naming every missing knob — there is no numeric

@@ -1474,6 +1474,16 @@ services:
       # reports the value it sees in its readiness answer.
       - AGENT_ENABLED=${AGENT_ENABLED:-0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # OpenTelemetry — the compose↔source pair (AD-11, story 2.11): the
+      # SDK in tracing.py is a no-op unless ENABLE_OBSERVABILITY=1 (the
+      # single gate), and OTEL_SERVICE_NAME matches the compose block name
+      # AND the setup_tracing("agent-service") source default, so the
+      # dashboards' `service_name` label discovery resolves to agent-service
+      # without any dashboard edit (the backend block at the service pair
+      # convention is the pattern).
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      - OTEL_SERVICE_NAME=agent-service
       # Run-budget knobs (story 2.3) — REQUIRED for the run surface, read
       # fail-closed: a run request against a deployment that has not set
       # one is answered 503 naming every missing knob (no numeric default

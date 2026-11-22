@@ -1115,6 +1115,64 @@ class QueryService {
   }
 
   /**
+   * Story 2.11 — persist the run-start attribution block into the `queries`
+   * doc AT START (the run-start handshake, AD-11): `metadata.agent_run =
+   * {run_id, execution_versions, started_at}`. The doc was minted by
+   * initStreamQuery/createQuery before the agent leg ran, so a cancelled,
+   * timed-out or crashed run keeps its versions the same way a completed
+   * one does. Best-effort by contract: callers fire-and-forget with a
+   * catch — an attribution write failure must never break the answer path.
+   *
+   * @param {string} queryId - The `queries` doc key the entry minted.
+   * @param {string|null} runId - The seam run id.
+   * @param {Object|null} executionVersions - The FR-17 record from the
+   *   `run_started` payload (ids/fingerprints only). An older agent service
+   *   that does not send it still records run_id + started_at.
+   * @returns {Promise<void>}
+   */
+  async persistAgentRunStart(queryId, runId, executionVersions) {
+    logger.info('QueryService.agent_run_start_persist', { queryId });
+    const patch = { run_id: runId ?? null, started_at: new Date().toISOString() };
+    if (executionVersions && typeof executionVersions === 'object' && !Array.isArray(executionVersions)) {
+      patch.execution_versions = executionVersions;
+    }
+    await this._mergeAgentRunMetadata(queryId, patch);
+  }
+
+  /**
+   * Story 2.11 — persist the honest terminal outcome:
+   * `metadata.agent_run.outcome` + `finished_at`. Merges into the existing
+   * block without clobbering the versions the start write persisted (the
+   * success finalize carries its outcome inside the assembled metadata
+   * instead — this patch is the failure/terminal paths' write).
+   *
+   * @param {string} queryId - The `queries` doc key.
+   * @param {string} outcome - The outcome vocabulary (answered | error |
+   *   budget_exhausted | cancelled | timed_out | interrupted).
+   * @returns {Promise<void>}
+   */
+  async persistAgentRunOutcome(queryId, outcome) {
+    logger.info('QueryService.agent_run_outcome_persist', { queryId, outcome });
+    await this._mergeAgentRunMetadata(queryId, { outcome, finished_at: new Date().toISOString() });
+  }
+
+  /**
+   * The read-merge-write home both attribution writes share: the doc may
+   * already carry other metadata, and the block itself may already carry
+   * the start write — a patch replaces only the keys it names, never the
+   * siblings.
+   * @param {string} queryId - The `queries` doc key.
+   * @param {Object} patch - The `agent_run` keys to merge.
+   * @returns {Promise<void>}
+   */
+  async _mergeAgentRunMetadata(queryId, patch) {
+    const doc = await this.queries.document(queryId);
+    const metadata = { ...((doc && doc.metadata) || {}) };
+    metadata.agent_run = { ...(metadata.agent_run || {}), ...patch };
+    await this.queries.update(queryId, { metadata });
+  }
+
+  /**
    * Create a new query
    * @param {Object} queryData - Query data
    * @param {Object|null} headers - `{authorization}` for the OPEA call and

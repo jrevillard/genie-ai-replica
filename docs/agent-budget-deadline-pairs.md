@@ -231,3 +231,64 @@ consumes the residual contract on the agentic path:
   queryTranslationStatus, usage with its estimate flag, configError, mode)
   is the shape story 2.4 persists into the `queries` metadata execution
   record.
+
+## The execution-version record and the honest outcome (story 2.11)
+
+Every admitted run is attributable — including the ones whose final frame
+never arrives (AD-11, FR-17). Two writes onto the existing `queries` doc's
+`metadata.agent_run` block (AD-12: no new stores, no new shapes):
+
+1. **AT START.** Agent-service builds the execution-version record at run
+   assembly and carries it on the `run_started` seam event's payload as
+   `execution_versions`; the BFF persists
+   `metadata.agent_run = {run_id, execution_versions, started_at}`
+   immediately (`query-service.js persistAgentRunStart`). The record:
+
+   ```json
+   {
+     "implementation": {"version": "0.1.0"},
+     "model": {"id": "<resolved-or-configured>", "source": "override|discovered|unresolved"},
+     "prompt": {"version": "prod-1|override", "sha256": "<12 hex of the effective prompt>"},
+     "configuration": {"sha256": "<12 hex over canonical JSON>", "values": {"<resolved knobs>"}}
+   }
+   ```
+
+   Ids and fingerprints only — never credentials, never a prompt body (the
+   hash is the identity), never question/answer text. A model id that
+   cannot be resolved at assembly degrades to `source: "unresolved"` with a
+   truncated note; the run proceeds.
+
+2. **AT END — exactly one honest outcome**, in
+   `metadata.agent_run.outcome` (+ `finished_at`):
+
+   | Outcome | Written by | Fact |
+   |---|---|---|
+   | `answered` | the success finalize | the agent terminal |
+   | `error` / `budget_exhausted` | the seam `run_error` path | the agent's own verdict, verbatim the usage record's outcome |
+   | `cancelled` | the client-disconnect path | the client went away mid-run |
+   | `timed_out` | the BFF deadline abort | the BFF-attributed wall-clock bound fired |
+   | `interrupted` | the upstream error/close path | the stream died before the final metadata |
+
+   The first outcome fact wins (a deadline fire's `timed_out` is never
+   overwritten by the stream teardown it caused). `isAnswered` never flips
+   true outside the success finalize; the start write is never clobbered —
+   a finalize that never arrives leaves versions + outcome intact, which IS
+   the cancelled-run guarantee. `answer_interrupted` keeps its ADR
+   agentic-003 semantics; `outcome` is strictly additive alongside it.
+
+**Observability.** The compose↔source pair (`ENABLE_OBSERVABILITY`,
+`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME=agent-service` — the
+backend block's convention) turns on the OTel SDK; the run path emits
+`agent.run` (parent) with `agent.model_call` / `agent.tool_call` /
+`agent.verify_finalize` / `agent.grounding_judge` children (attributes are
+counters/ids only), and the outbound httpx (model endpoint, TEI) and
+requests (doc-repo, okf-server) hops are instrumented for W3C traceparent
+propagation behind the same gate. Container logs reach VictoriaLogs through
+the existing fluentd anchor. `service-health` and the RAG trace waterfall
+discover agent-service by the `service_name` label from the http-server
+duration series the FastAPI instrumentation already emits — no dashboard
+edit. The two outbound instrumentation pins
+(`opentelemetry-instrumentation-httpx`, `opentelemetry-instrumentation-requests`)
+carry their licence/defaults audit in
+`docs/dependencies/agent-service-dependency-evidence.json` like every other
+pin.

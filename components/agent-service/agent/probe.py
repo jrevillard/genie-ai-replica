@@ -342,6 +342,23 @@ class ProbeModelClient:
                 self._discovered_window = discovered
         return self._model_id
 
+    async def model_identity(self) -> tuple[str | None, str, str | None]:
+        """The execution-version record's model axis, resolved FAIL-SOFT.
+
+        The override wins without a probe (``override``); discovery reuses
+        the same ``/v1/models`` GET — and the same per-client cache — the
+        first model call runs (``discovered``); a discovery failure degrades
+        to the unresolved identity carrying the truncated reason, never an
+        exception past the run (the I/O matrix row: the record is built at
+        assembly and the run proceeds).
+        """
+        if self._config.model_id_override:
+            return self._config.model_id_override, "override", None
+        try:
+            return await self._resolve_model_id(), "discovered", None
+        except ProbeTransientError as failed:
+            return None, "unresolved", str(failed)[:200]
+
     async def _window_tokens(self) -> int:
         """The window one call must fit — the deployed three tiers of
         :func:`noagent.generation.resolve_window_tokens`, resolved once per

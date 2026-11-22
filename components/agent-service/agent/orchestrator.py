@@ -68,6 +68,10 @@ from .verification import (
     VERDICT_POLICY_KNOB,
     VerificationPipeline,
 )
+from .version_record import (
+    MODEL_SOURCE_UNRESOLVED,
+    build_execution_version_record,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -369,6 +373,14 @@ class RequestOrchestrator:
         monitor = RunBudgetMonitor(self._config.budget_for(request.deadline_ms))
         token = CancellationToken()
         emitter = EventEmitter(run_id=run_id, sink=sink)
+        # The execution-version record (FR-17) is built at run assembly,
+        # BEFORE the loop — it rides the run_started event, which is what
+        # the BFF persists into the queries doc AT START (AD-11: cancelled,
+        # timed-out and crashed runs keep their versions exactly because the
+        # record is on the START event, not the terminal one). The build is
+        # fail-soft by contract: an unresolvable model id degrades to the
+        # unresolved entry and the run proceeds (the I/O matrix row).
+        execution_versions = await self._execution_versions()
         # The preparation statuses land here, through the toolset's callback:
         # the FIRST one is the initial query's — the record carries it.
         preparation_statuses: list[str] = []
@@ -411,6 +423,7 @@ class RequestOrchestrator:
                 emitter=emitter,
                 system_prompt=self._config.system_prompt,
                 verifier=verifier,
+                execution_versions=execution_versions,
             )
             result: RunResult = await loop.run(request.question)
         except asyncio.CancelledError:
@@ -424,11 +437,46 @@ class RequestOrchestrator:
             logger.warning("agent run failed before its first dispatch: %s", message)
             # The loop announces run_started when it enters; a build failure
             # happens after the run began, and every stream must begin with
-            # run_started — so the failure path announces it here.
-            emitter.emit(EventKind.RUN_STARTED, {"question": request.question})
+            # run_started — so the failure path announces it here, carrying
+            # the SAME execution-version record the loop path carries.
+            emitter.emit(
+                EventKind.RUN_STARTED, {"question": request.question, "execution_versions": execution_versions}
+            )
             emitter.emit(EventKind.RUN_ERROR, {"code": OUTCOME_ERROR, "message": message})
             return record(OUTCOME_ERROR, error=message)
         return record(result.outcome, error=result.error)
+
+    async def _execution_versions(self) -> dict:
+        """The FR-17 record, fail-soft end to end: an unresolvable model id
+        (the endpoint unreachable at assembly) degrades to the unresolved
+        entry with a truncated note and the run proceeds — the record build
+        itself can never fail a run."""
+        model_id, model_source, model_note = await self._model_identity()
+        try:
+            return build_execution_version_record(
+                config=self._config, model_id=model_id, model_source=model_source, model_note=model_note
+            )
+        except Exception as failed:  # noqa: BLE001 — fail-soft by contract
+            return build_execution_version_record(
+                config=self._config,
+                model_id=None,
+                model_source=MODEL_SOURCE_UNRESOLVED,
+                model_note=f"record build degraded: {type(failed).__name__}: {str(failed)[:160]}",
+            )
+
+    async def _model_identity(self) -> tuple[str | None, str, str | None]:
+        """The model axis, through the client's fail-soft resolver when it
+        exposes one; a plain LoopModelClient (the tests, the probe harness)
+        has no identity source and resolves to the unresolved entry."""
+        resolve = getattr(self._model_client, "model_identity", None)
+        if resolve is None:
+            return None, MODEL_SOURCE_UNRESOLVED, "the model client exposes no identity"
+        try:
+            return await resolve()
+        except asyncio.CancelledError:
+            raise
+        except Exception as failed:  # noqa: BLE001 — the identity is fail-soft by contract
+            return None, MODEL_SOURCE_UNRESOLVED, f"{type(failed).__name__}: {str(failed)[:200]}"
 
     def _record(
         self,

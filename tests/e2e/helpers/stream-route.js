@@ -59,10 +59,10 @@ function sseBody(chunks, metadata, options = {}) {
     const a = options.activity?.[i];
     if (a) {
       frames.push(
-        `data: ${JSON.stringify({ type: 'agent_activity', version: 1, status: a.status, operation: a.operation, callId: a.callId })}`
+        sseFrame({ type: 'agent_activity', version: 1, status: a.status, operation: a.operation, callId: a.callId })
       );
     }
-    frames.push(`data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+    frames.push(sseFrame({ type: 'chunk', content: c }));
   });
   if (options.verdict) {
     // A verdict payload cannot override the frame's discriminator or
@@ -73,10 +73,10 @@ function sseBody(chunks, metadata, options = {}) {
     const verdictProjection = { ...options.verdict };
     delete verdictProjection.type;
     delete verdictProjection.version;
-    frames.push(`data: ${JSON.stringify({ type: 'agent_verdict', version: 1, ...verdictProjection })}`);
+    frames.push(sseFrame({ type: 'agent_verdict', version: 1, ...verdictProjection }));
   }
-  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
-  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
+  if (metadata) frames.push(sseFrame({ type: 'metadata', ...metadata }));
+  return [...frames, '', sseFrame({ type: 'done', queryId: 'mock-query-1' }), ''].join('\n');
 }
 
 /**

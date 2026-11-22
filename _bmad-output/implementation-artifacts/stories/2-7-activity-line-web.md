@@ -142,6 +142,10 @@ Verdict: no important findings — six nits. All verification targets re-checked
 | Story file text contradicted the shipped annotation (two passages still said the annotation was owed elsewhere) | FIXED: both passages (Code Map, Design Notes) updated to the landed state, pointing at the Spec Change Log amendment. |
 | Story refs in shipped-code comments (branch-wide pattern; this diff added its own) | FIXED for every comment THIS diff added — refs stripped, technical substance kept. Pre-existing files' refs are their own stories' output (branch-wide cleanup, out of this story's scope). |
 
+### FIX review F1 (2026-11-22, fresh context, correction diff f231bc8cf..8ad4aaedd only)
+
+Verdict: **CLEAN** — no findings. All six correction goals verified against the code: `storableMetadata` copy semantics (no store mutation; user messages byte-identical to before), metadata-blob consumers (backend stores verbatim, QueryInspector reads named keys only), the restore chain complete (save → backend → `loadConversation` → predicate), 13-locale value-only edits (gate green, en untouched), describe-string renames inert (no testNamePattern anywhere), comment sweep confirmed against the true branch point `016041d74` (residual refs blame to pre-branch merges). Suites re-verified by the reviewer: frontend 157/4610, backend 100/2649 (+38 node tests).
+
 ## Design Notes
 
 **State machine (turn-scoped, store root — not under `conversations`, stripped from persistence).** `{visible, operation, status, collapsed}`: `agent_activity` frame → if `collapsed`, ignore; else `visible=true` + set op/status (`started`→running, `completed`→completed, `failed`→failed, anything else → running). First `chunk` → `collapsed=true, visible=false`. Reset on new send, `finishStream`, `failStream`, `markInterrupted`. The msg object never carries activity state (nothing persisted, nothing replayed).

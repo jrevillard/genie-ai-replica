@@ -22,22 +22,16 @@ jest.mock('@/services/conceptService', () => ({
 const { createStore } = require('vuex');
 const conversationModule = require('@/store/modules/conversation.js').default;
 const { persistConversation, rehydrateConversation, STORAGE_KEY } = require('@/store/modules/conversation.js');
-
-// The status mutations sendStream's metadata/error paths commit; a stub is
-// enough — the activity machine never reads it.
-const statusStub = {
-  namespaced: true,
-  state: () => ({ online: true, responseTime: null }),
-  mutations: {
-    setOnline: () => {},
-    setOffline: () => {},
-    setResponseTime: () => {}
-  }
-};
+// The REAL status module — sendStream's metadata path commits its
+// mutations, and the sibling conversation suite wires it the same way.
+const statusModule = require('@/store/modules/status.js').default;
 
 function createStoreWithConversation() {
   const store = createStore({
-    modules: { conversation: { ...conversationModule, state: () => conversationModule.state() }, status: statusStub }
+    modules: {
+      conversation: { ...conversationModule, state: () => conversationModule.state() },
+      status: { ...statusModule, state: () => ({ ...statusModule.state }) }
+    }
   });
   return store;
 }

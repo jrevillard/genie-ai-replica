@@ -12,6 +12,7 @@ const { reactive } = require('vue');
 const { createAuthenticatedState } = require('../fixtures/store-state');
 // The real en locale — the wording the notification must end up showing.
 const enChatbot = require('../../i18n/locales/en.js').default.chatbot;
+const { realI18nMock } = require('../helpers/realI18n');
 
 // ---------------------------------------------------------------------------
 // Service mocks (closure-based refs for per-test control)
@@ -6521,16 +6522,10 @@ describe('W9 browse affordance (answer cards)', () => {
   // -----------------------------------------------------------------------
   describe('the agent activity line', () => {
     // The en catalogue, the way the app resolves it — the label tests need
-    // keys that RESOLVE, so this mount's $t reads the real en file.
+    // keys that RESOLVE, so this mount's $t is the real vue-i18n instance
+    // over the shipped en file (the shared rig, not a hand-rolled resolver).
     const enAgent = enChatbot.agentActivity;
-    const tCatalogue = (key) => {
-      const parts = key.split('.');
-      if (parts[0] === 'chatbot' && parts[1] === 'agentActivity') {
-        if (parts[2] === 'operations') return enAgent.operations[parts[3]]?.[parts[4]] ?? key;
-        return enAgent[parts[2]] ?? key;
-      }
-      return enChatbot[parts[1]] ?? key;
-    };
+    const tCatalogue = realI18nMock().t;
 
     function mountStreaming({ t = null } = {}) {
       const wrapper = createChatBotWrapper({}, { t });

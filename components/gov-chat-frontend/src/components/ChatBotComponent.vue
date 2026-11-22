@@ -710,6 +710,14 @@ import { resolveConfigText } from '../utils/configResolver';
 // scoped by the label the knowledge tree shows.
 const QUICK_HELP_SOURCE = 'quickHelp';
 
+// The state-generic activity labels, keyed by the rendered state the store
+// already normalized the wire status into (running/completed/failed).
+const GENERIC_ACTIVITY_KEYS = {
+  running: 'chatbot.agentActivity.working',
+  completed: 'chatbot.agentActivity.stepCompleted',
+  failed: 'chatbot.agentActivity.stepFailed'
+};
+
 // One Quick Help selection, in the shape every context item uses — whether it
 // was picked from the overlay, restored from a saved conversation, or re-added
 // when the last selected item was removed.
@@ -985,24 +993,20 @@ export default {
     },
     // State carried by the word: the per-operation label when the
     // catalogue knows the operation, the state-generic label otherwise.
-    // A missing catalogue entry degrades to the generic label, never
-    // blanks ($t falls back to en before it misses).
+    // The store already normalizes the wire status to running/completed/
+    // failed, so the suffix reads straight off it; a missing catalogue
+    // entry degrades to the generic label, never blanks (translate falls
+    // back to en before it misses).
     agentActivityLabel() {
       const st = this.agentActivity;
-      const suffix = st.status === 'completed' ? 'completed' : st.status === 'failed' ? 'failed' : 'running';
+      const suffix = st.status || 'running';
       if (st.operation) {
-        const key = `chatbot.agentActivity.operations.${st.operation}.${suffix}`;
-        const value = this.$t(key);
-        if (value !== key) return value;
+        return this.translate(
+          `chatbot.agentActivity.operations.${st.operation}.${suffix}`,
+          this.translate(GENERIC_ACTIVITY_KEYS[suffix])
+        );
       }
-      const genericKey =
-        suffix === 'completed'
-          ? 'chatbot.agentActivity.stepCompleted'
-          : suffix === 'failed'
-            ? 'chatbot.agentActivity.stepFailed'
-            : 'chatbot.agentActivity.working';
-      const generic = this.$t(genericKey);
-      return generic !== genericKey ? generic : genericKey;
+      return this.translate(GENERIC_ACTIVITY_KEYS[suffix]);
     },
     conversationId() {
       return this.openConversation.conversationId;

@@ -369,9 +369,9 @@ const actions = {
     const controller = chatbotService.submitQueryStream(queryData, {
       onChunk: (content) => {
         commit('appendChunk', content);
-        // The collapse latch fires on the FIRST chunk of the turn; the
-        // mutation is idempotent from the second chunk on.
-        commit('collapseAgentActivity');
+        // The collapse latch fires on the FIRST chunk of the turn; once it
+        // is latched the commit is a no-op, so the hot path skips it.
+        if (!state.agentActivity.collapsed) commit('collapseAgentActivity');
       },
       onMetadata: (metadata) => {
         commit('status/setOnline', null, { root: true });
@@ -658,12 +658,11 @@ export const STORAGE_KEY = 'genie.conversation.v1';
 
 export function persistConversation(moduleState) {
   try {
-    // The agent activity line is transient UI: it rides the
-    // module state but never the persisted payload — a rehydrated
-    // conversation carries no activity state, and the stored bytes carry
-    // no activity key at all.
-    const persisted = { ...moduleState };
-    delete persisted.agentActivity;
+    // The payload IS the rehydrate contract: the two keys the reader
+    // consumes, nothing else — transient module state (the agent activity
+    // line, and any future root-level transient) is excluded structurally,
+    // not by a per-feature denylist.
+    const persisted = { openId: moduleState.openId, conversations: moduleState.conversations };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch (error) {
     // A full or blocked storage degrades to navigation-only survival —

@@ -545,8 +545,8 @@ async function mockStagedChatStream(page) {
         const body = new ReadableStream({
           start(controller) {
             streamController = controller;
+            // The object's existence IS the readiness signal.
             window.__stagedStream = {
-              ready: true,
               send: (text) => streamController.enqueue(encoder.encode(text)),
               close: () => streamController.close()
             };
@@ -560,14 +560,22 @@ async function mockStagedChatStream(page) {
 }
 
 /**
- * Send one staged frame. Waits for the page-side stream to exist first —
- * the send is only meaningful once the app's request has been answered
- * by the shim (the wait is a condition with a budget, never a sleep).
+ * Wait for the page-side staged stream to exist — the send/close are only
+ * meaningful once the app's request has been answered by the shim (the
+ * wait is a condition with a budget, never a sleep).
+ * @param {import('@playwright/test').Page} page
+ */
+async function ensureStagedStream(page) {
+  await page.waitForFunction(() => window.__stagedStream != null, undefined, { timeout: 15000 });
+}
+
+/**
+ * Send one staged frame.
  * @param {import('@playwright/test').Page} page
  * @param {string} line - The full `data: ...` line, from `sseFrame`.
  */
 async function stagedSend(page, line) {
-  await page.waitForFunction(() => window.__stagedStream?.ready === true, undefined, { timeout: 15000 });
+  await ensureStagedStream(page);
   await page.evaluate((text) => window.__stagedStream.send(text), line);
 }
 
@@ -578,7 +586,7 @@ async function stagedSend(page, line) {
  * @param {import('@playwright/test').Page} page
  */
 async function stagedClose(page) {
-  await page.waitForFunction(() => window.__stagedStream?.ready === true, undefined, { timeout: 15000 });
+  await ensureStagedStream(page);
   await page.evaluate(() => window.__stagedStream.close());
 }
 

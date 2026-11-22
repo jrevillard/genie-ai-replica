@@ -318,6 +318,26 @@ def hang_until_cancelled(recorder: dict):
     return work()
 
 
+def slow_unwind_until_released(recorder: dict):
+    """A coroutine that hangs until cancelled and unwinds across a
+    controlled window: on cancellation it records ``unwinding``, stays
+    suspended on ``recorder["release_unwind"]`` until the test opens it,
+    records ``unwound`` and re-raises — the caller's exit can be observed
+    WHILE the cancelled work is still aborting."""
+
+    async def work():
+        recorder["started"] = True
+        try:
+            await asyncio.Event().wait()  # forever
+        except asyncio.CancelledError:
+            recorder["unwinding"] = True
+            await recorder["release_unwind"].wait()
+            recorder["unwound"] = True
+            raise
+
+    return work()
+
+
 class HangingLoopModel:
     """A ``LoopModelClient`` double whose completion hangs until cancelled."""
 
@@ -326,6 +346,19 @@ class HangingLoopModel:
 
     async def complete(self, messages, tool_definitions, *, max_output_tokens):
         await hang_until_cancelled(self._recorder)  # never returns
+
+
+class SlowUnwindLoopModel:
+    """A ``LoopModelClient`` double whose completion hangs until cancelled
+    and whose cancellation unwinds across the controlled window of
+    :func:`slow_unwind_until_released` — the test observes the lane slot's
+    state WHILE the cancelled run is still unwinding."""
+
+    def __init__(self, recorder: dict):
+        self._recorder = recorder
+
+    async def complete(self, messages, tool_definitions, *, max_output_tokens):
+        await slow_unwind_until_released(self._recorder)
 
 
 def cancel_when_started(recorder: dict, token, key: str = "started"):

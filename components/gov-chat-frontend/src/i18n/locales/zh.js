@@ -1376,6 +1376,25 @@ export default {
     chatUpdated: '对话已更新',
     savingConversation: '保存中…',
     thinking: '思考中…',
+    agentActivity: {
+      working: '处理中…',
+      stepCompleted: '步骤已完成',
+      stepFailed: '步骤失败 — 正在尝试继续',
+      verificationUnavailable: '无法验证 — 未能对照来源核查该回答。',
+      verificationTranslationScope: '验证针对的是原文回答 — 译文未经核查。',
+      operations: {
+        search_knowledge: {
+          running: '正在检索知识库…',
+          completed: '知识库检索完成',
+          failed: '知识库检索失败'
+        },
+        read_source: {
+          running: '正在读取来源文档…',
+          completed: '来源文档已读取',
+          failed: '无法读取来源文档'
+        }
+      }
+    },
     newChatTitle: '开始新聊天',
     exportChat: '导出聊天',
     exportFilename: '文件名',

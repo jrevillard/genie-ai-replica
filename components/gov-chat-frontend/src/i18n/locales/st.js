@@ -1418,6 +1418,25 @@ export default {
     chatUpdated: 'Puisano e ntlafalitsoe',
     savingConversation: 'E boloka…',
     thinking: 'E nahana…',
+    agentActivity: {
+      working: 'E sebetsa…',
+      stepCompleted: 'Mohato o phethiloe',
+      stepFailed: 'Mohato o hlolehile — ho lekwa ho tsoela pele',
+      verificationUnavailable: 'Netefatso ha e fumanehe — karabo ea ne ea hlahlojoa khahlanong le methopo.',
+      verificationTranslationScope: 'Netefatso e ne e sebetsa karabong ea puo ea pele — phetolelo ha ea hlahlojoa.',
+      operations: {
+        search_knowledge: {
+          running: 'Ho batloa polokello-tsebo…',
+          completed: 'Ho batloa polokello-tsebo ho phethiloe',
+          failed: 'Ho batloa polokello-tsebo ho hlolehile'
+        },
+        read_source: {
+          running: 'Ho bala tokomentum ea mohloli…',
+          completed: 'Tokomentum ea mohloli e baliloe',
+          failed: 'Ho hlolehetse ho bala tokomentum ea mohloli'
+        }
+      }
+    },
     newChatTitle: 'Qala Moqoqo o Motjha',
     exportChat: 'Ntshetsa Moqoqo Kantle',
     exportFilename: 'Lebitso la Faele',

@@ -827,6 +827,118 @@ describe('chatbotService', () => {
         expect.objectContaining({ signal: controller.signal })
       );
     });
+
+    // Story 2.7 — the additive agent-path frames: forwarded to their
+    // optional callbacks, inert without them, and never a disturbance to
+    // the five legacy cases.
+    describe('the additive agent frames', () => {
+      const streamOf = (body) => {
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          body: {
+            getReader: () => ({
+              read: jest
+                .fn()
+                .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(body) })
+                .mockResolvedValueOnce({ done: true })
+            })
+          }
+        });
+        global.fetch = mockFetch;
+      };
+
+      it('forwards agent_activity to onAgentActivity', async () => {
+        streamOf(
+          'data: {"type":"agent_activity","version":1,"status":"started","operation":"search_knowledge","callId":"c1"}\n\n'
+        );
+        const onAgentActivity = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onAgentActivity });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(onAgentActivity).toHaveBeenCalledTimes(1);
+        expect(onAgentActivity.mock.calls[0][0]).toEqual({
+          type: 'agent_activity',
+          version: 1,
+          status: 'started',
+          operation: 'search_knowledge',
+          callId: 'c1'
+        });
+      });
+
+      it('forwards agent_verdict to onAgentVerdict', async () => {
+        streamOf(
+          'data: {"type":"agent_verdict","version":1,"grounding_status":"grounded","is_grounded":true,"translation_mode":"none"}\n\n'
+        );
+        const onAgentVerdict = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onAgentVerdict });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(onAgentVerdict).toHaveBeenCalledTimes(1);
+        expect(onAgentVerdict.mock.calls[0][0]).toEqual({
+          type: 'agent_verdict',
+          version: 1,
+          grounding_status: 'grounded',
+          is_grounded: true,
+          translation_mode: 'none'
+        });
+      });
+
+      it('both frames ride with the legacy frames and every callback fires', async () => {
+        streamOf(
+          'data: {"type":"agent_activity","version":1,"status":"started","operation":"read_source"}\n\n' +
+            'data: {"type":"chunk","content":"partial"}\n\n' +
+            'data: {"type":"agent_verdict","version":1,"grounding_status":"unverified"}\n\n' +
+            'data: {"type":"metadata","confidence_score":0.9}\n\n' +
+            'data: {"type":"done","queryId":"q9"}\n\n'
+        );
+        const callbacks = {
+          onChunk: jest.fn(),
+          onMetadata: jest.fn(),
+          onAgentActivity: jest.fn(),
+          onAgentVerdict: jest.fn(),
+          onDone: jest.fn(),
+          onError: jest.fn()
+        };
+        chatbotService.submitQueryStream({ query: 'test' }, callbacks);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(callbacks.onChunk).toHaveBeenCalledWith('partial');
+        expect(callbacks.onMetadata).toHaveBeenCalledTimes(1);
+        expect(callbacks.onAgentActivity).toHaveBeenCalledTimes(1);
+        expect(callbacks.onAgentVerdict).toHaveBeenCalledTimes(1);
+        expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+        expect(callbacks.onError).not.toHaveBeenCalled();
+      });
+
+      it('the frames are inert when no agent callbacks were registered', async () => {
+        streamOf(
+          'data: {"type":"agent_activity","version":1,"status":"started","operation":"read_source"}\n\n' +
+            'data: {"type":"chunk","content":"still delivered"}\n\n' +
+            'data: {"type":"done","queryId":"q1"}\n\n'
+        );
+        const onChunk = jest.fn();
+        const onDone = jest.fn();
+        const onError = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onChunk, onDone, onError });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(onChunk).toHaveBeenCalledWith('still delivered');
+        expect(onDone).toHaveBeenCalledTimes(1);
+        expect(onError).not.toHaveBeenCalled();
+      });
+
+      it('an unknown frame type falls through silently (additive-safe for the future)', async () => {
+        streamOf(
+          'data: {"type":"agent_hologram","version":1,"whatever":true}\n\n' +
+            'data: {"type":"chunk","content":"unaffected"}\n\n' +
+            'data: {"type":"done","queryId":"q2"}\n\n'
+        );
+        const onChunk = jest.fn();
+        const onDone = jest.fn();
+        const onError = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onChunk, onDone, onError });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(onChunk).toHaveBeenCalledWith('unaffected');
+        expect(onDone).toHaveBeenCalledTimes(1);
+        expect(onError).not.toHaveBeenCalled();
+      });
+    });
   });
 
   // -----------------------------------------------------------------------

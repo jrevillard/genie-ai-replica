@@ -92,4 +92,15 @@ function sseFulfill(route, body) {
   return route.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
 }
 
-module.exports = { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill };
+/**
+ * One frame line for a caller that streams frames OUTSIDE a full body —
+ * the staged-stream helper (story 2.7's render windows). The payload
+ * shape is the caller's contract (the frame writer's, for the agent
+ * frames); this owns only the `data: ` prefix and the terminator, so a
+ * staged spec cannot drift from the wire spelling sseBody pins.
+ */
+function sseFrame(payload) {
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+module.exports = { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFrame, sseFulfill };

@@ -1398,6 +1398,25 @@ export default {
     chatUpdated: 'อัปเดตการสนทนาแล้ว',
     savingConversation: 'กำลังบันทึก…',
     thinking: 'กำลังคิด…',
+    agentActivity: {
+      working: 'กำลังทำงาน…',
+      stepCompleted: 'ขั้นตอนเสร็จสิ้น',
+      stepFailed: 'ขั้นตอนล้มเหลว — กำลังพยายามดำเนินการต่อ',
+      verificationUnavailable: 'ไม่สามารถตรวจสอบได้ — ไม่ได้ตรวจคำตอบเทียบกับแหล่งข้อมูล',
+      verificationTranslationScope: 'การตรวจสอบครอบคลุมคำตอบในภาษาต้นฉบับ — คำแปลไม่ได้รับการตรวจสอบ',
+      operations: {
+        search_knowledge: {
+          running: 'กำลังค้นคลังความรู้…',
+          completed: 'ค้นคลังความรู้แล้ว',
+          failed: 'ค้นคลังความรู้ไม่สำเร็จ'
+        },
+        read_source: {
+          running: 'กำลังอ่านเอกสารต้นทาง…',
+          completed: 'อ่านเอกสารต้นทางแล้ว',
+          failed: 'อ่านเอกสารต้นทางไม่สำเร็จ'
+        }
+      }
+    },
     newChatTitle: 'เริ่มแชทใหม่',
     exportChat: 'ส่งออกแชท',
     exportFilename: 'ชื่อไฟล์',

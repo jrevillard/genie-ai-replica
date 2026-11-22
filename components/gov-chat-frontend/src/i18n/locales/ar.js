@@ -1397,6 +1397,25 @@ export default {
     chatUpdated: 'تم تحديث المحادثة',
     savingConversation: 'جارٍ الحفظ…',
     thinking: 'جارٍ التفكير…',
+    agentActivity: {
+      working: 'جارٍ العمل…',
+      stepCompleted: 'اكتملت الخطوة',
+      stepFailed: 'فشلت الخطوة — محاولة المتابعة',
+      verificationUnavailable: 'التحقق غير متاح — لم يمكن مطابقة الإجابة مع المصادر.',
+      verificationTranslationScope: 'غطّى التحقق الإجابة بلغتها الأصلية — لم يتم التحقق من الترجمة.',
+      operations: {
+        search_knowledge: {
+          running: 'جارٍ البحث في قاعدة المعرفة…',
+          completed: 'تم البحث في قاعدة المعرفة',
+          failed: 'فشل البحث في قاعدة المعرفة'
+        },
+        read_source: {
+          running: 'جارٍ قراءة المستند المصدر…',
+          completed: 'تمت قراءة المستند المصدر',
+          failed: 'تعذر قراءة المستند المصدر'
+        }
+      }
+    },
     newChatTitle: 'بدء محادثة جديدة',
     exportChat: 'تصدير المحادثة',
     exportFilename: 'اسم الملف',

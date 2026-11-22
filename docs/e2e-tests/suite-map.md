@@ -72,7 +72,7 @@ one reads a missing directory as an accident.
 | `quick-help-scope.spec.js` | — | the Quick Help grid renders its declared scope and dead cards send nothing | core | `route`, `stream-route`, `welcome` |
 | `real-rag-citation.spec.js` | — | a real answer: the ingested fixture's fact in the answer text and the fixture cited in the sources | core | `auth`, `chatbot`, `documents`, `venue-profile` (+ `fixtures/` seed files) |
 | `send-message-and-stream.spec.js` | — | sending a message and the SSE stream rendering; the French answer with the UI locale pinned to `fr` | core | `chatbot`, `locale`, `venue-profile` |
-| `sse-contract.spec.js` | story 2.9 | the extended SSE envelope (agentic `agent_activity`/`agent_verdict` frames) rendered by the current client: degradation + warning path through declared handles | core | `welcome`, `chatbot` |
+| `sse-contract.spec.js` | stories 2.9 + 2.7 | the extended SSE envelope (agentic `agent_activity`/`agent_verdict` frames) rendered by the current client: degradation + warning path, the activity line's pre-chunk render / collapse latch / post-chunk acceptance (staged stream), and the verdict truth table — through declared handles | core | `welcome`, `chatbot` |
 
 ## `documents/` — document management
 

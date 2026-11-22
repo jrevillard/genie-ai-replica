@@ -30,7 +30,7 @@ const CHAT_TITLE_INPUT = '[data-testid="chat-title"]';
 // SSE envelope — no credential in it, so a spec that intercepts the
 // stream and needs nothing else never imports the credential module.
 // Re-exported here for the specs that already import the login helpers.
-const { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill } = require('./stream-route');
+const { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFrame, sseFulfill } = require('./stream-route');
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -512,6 +512,76 @@ async function mockChatStream(page, chunks, metadata, options) {
 }
 
 /**
+ * Script the answer stream in STAGES — story 2.7's render windows. A
+ * single-body mock processes every frame inside one read, so a frame
+ * followed by its chunk never paints between them; the activity line's
+ * pre-chunk render needs the body delivered incrementally. `page.route`
+ * cannot stream one fulfilment in stages, so the interception sits in
+ * an init script wrapping window.fetch: the app's own fetch + SSE
+ * parsing path still runs, only the bytes and their timing are
+ * scripted. Everything but the stream endpoint passes through, so a
+ * login that runs after the install is untouched.
+ *
+ * The spec drives the frames through the page-side controls
+ * (`window.__stagedStream`, via `stagedSend`) and asserts the RENDERED
+ * state between stages — each stage's assertion is the gate for the
+ * next send, so the staging has no fixed waits.
+ *
+ * Install BEFORE the login: withWelcomeSession's `setupPage` hook runs
+ * ahead of it, and addInitScript survives the session's navigations.
+ */
+async function mockStagedChatStream(page) {
+  // The endpoint travels as the init script's ARGUMENT (the page-side
+  // function cannot close over Node scope) — the literal stays owned by
+  // stream-route.js, per the e2e-stream-route gate.
+  await page.addInitScript((streamPath) => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input && input.url;
+      if (typeof url === 'string' && url.includes(streamPath)) {
+        const encoder = new TextEncoder();
+        let streamController = null;
+        const body = new ReadableStream({
+          start(controller) {
+            streamController = controller;
+            window.__stagedStream = {
+              ready: true,
+              send: (text) => streamController.enqueue(encoder.encode(text)),
+              close: () => streamController.close()
+            };
+          }
+        });
+        return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }));
+      }
+      return originalFetch(input, init);
+    };
+  }, STREAM_PATH);
+}
+
+/**
+ * Send one staged frame. Waits for the page-side stream to exist first —
+ * the send is only meaningful once the app's request has been answered
+ * by the shim (the wait is a condition with a budget, never a sleep).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} line - The full `data: ...` line, from `sseFrame`.
+ */
+async function stagedSend(page, line) {
+  await page.waitForFunction(() => window.__stagedStream?.ready === true, undefined, { timeout: 15000 });
+  await page.evaluate((text) => window.__stagedStream.send(text), line);
+}
+
+/**
+ * Close the staged stream — the terminal of a staged turn (the done
+ * frame ends the app's processing; the close ends the body so the
+ * transport does not sit open under the turn).
+ * @param {import('@playwright/test').Page} page
+ */
+async function stagedClose(page) {
+  await page.waitForFunction(() => window.__stagedStream?.ready === true, undefined, { timeout: 15000 });
+  await page.evaluate(() => window.__stagedStream.close());
+}
+
+/**
  * Mock a FAILED stream: the app must render the error card for a non-2xx
  * answer. Beside `mockChatStream` because it is the same contract — the
  * same endpoint, the same POST-only interception, the same CORS header a
@@ -563,8 +633,12 @@ module.exports = {
   waitForBotResponse,
   waitForBotMessage,
   sseBody,
+  sseFrame,
   sseFulfill,
   mockChatStream,
+  mockStagedChatStream,
+  stagedSend,
+  stagedClose,
   mockStreamError,
   ackFeedback,
   getMessages,

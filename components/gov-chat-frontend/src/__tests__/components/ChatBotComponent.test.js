@@ -166,7 +166,8 @@ jest.mock('@lucide/vue', () => ({
   Plus: { template: '<svg />' },
   Save: { template: '<svg />' },
   FileText: { template: '<svg />' },
-  Library: { template: '<svg />' }
+  Library: { template: '<svg />' },
+  Info: { template: '<svg />' }
 }));
 
 // ---------------------------------------------------------------------------
@@ -269,7 +270,10 @@ function chatbotStubs() {
   };
 }
 
-function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderStubDefaultSlot = false } = {}) {
+function createChatBotWrapper(
+  storeOverrides = {},
+  { rehydrate = false, renderStubDefaultSlot = false, t = null } = {}
+) {
   const store = createChatBotStore(storeOverrides);
   if (rehydrate) rehydrateConversation(store.state.conversation);
   return mount(ChatBotComponent, {
@@ -280,7 +284,9 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderSt
       // asks for the slot.
       renderStubDefaultSlot,
       mocks: {
-        $t: (key) => key,
+        // [t] overrides the identity $t with a catalogue-aware lookup —
+        // the label-resolution tests need keys that RESOLVE.
+        $t: t || ((key) => key),
         // Reactive, so a test can switch the locale the way the app does and
         // the component's locale watchers run.
         $i18n: reactive({ locale: 'en' })
@@ -6508,5 +6514,237 @@ describe('W9 browse affordance (answer cards)', () => {
     expect(dialog.exists()).toBe(true);
     expect(dialog.props('visible')).toBe(true);
     wrapper.unmount();
+  });
+
+  // -----------------------------------------------------------------------
+  // Story 2.7 — the agent activity line + the verdict truth table
+  // -----------------------------------------------------------------------
+  describe('story 2.7 — the agent activity line', () => {
+    // The en catalogue, the way the app resolves it — the label tests need
+    // keys that RESOLVE, so this mount's $t reads the real en file.
+    const enAgent = enChatbot.agentActivity;
+    const tCatalogue = (key) => {
+      const parts = key.split('.');
+      if (parts[0] === 'chatbot' && parts[1] === 'agentActivity') {
+        if (parts[2] === 'operations') return enAgent.operations[parts[3]]?.[parts[4]] ?? key;
+        return enAgent[parts[2]] ?? key;
+      }
+      return enChatbot[parts[1]] ?? key;
+    };
+
+    function mountStreaming({ t = null } = {}) {
+      const wrapper = createChatBotWrapper({}, { t });
+      wrapper.vm.$store.commit('conversation/appendBotMessage', {
+        sender: 'bot',
+        content: '',
+        timestamp: '2026-11-22T00:00:00.000Z',
+        isSaved: false,
+        metadata: {},
+        isStreaming: true,
+        translationFailed: false
+      });
+      return wrapper;
+    }
+
+    function frame(wrapper, status, operation) {
+      wrapper.vm.$store.commit('conversation/agentActivityFrame', { type: 'agent_activity', status, operation });
+      return wrapper.vm.$nextTick();
+    }
+
+    it('renders as the answer card’s FIRST child with role=status and a polite live region', async () => {
+      const wrapper = mountStreaming({ t: tCatalogue });
+      await frame(wrapper, 'started', 'search_knowledge');
+      // The line rides the turn in flight — the LAST answer card (the
+      // transcript carries the welcome answer ahead of it). Older cards
+      // must not repeat the live region.
+      const cards = wrapper.findAll('[data-testid="answer-card"]');
+      const card = cards.at(cards.length - 1);
+      const first = card.element.firstElementChild;
+      expect(first.getAttribute('data-testid')).toBe('agent-activity-line');
+      expect(first.getAttribute('role')).toBe('status');
+      expect(first.getAttribute('aria-live')).toBe('polite');
+      // Exactly ONE live region: the earlier cards carry no line.
+      expect(wrapper.findAll('[data-testid="agent-activity-line"]').length).toBe(1);
+      // The state carried by the word, not by the marker alone.
+      expect(first.textContent).toContain(enAgent.operations.search_knowledge.running);
+      wrapper.unmount();
+    });
+
+    it('running state: the per-op handle, the spinner marker (decorative), and the typing indicator replaced', async () => {
+      const wrapper = mountStreaming({ t: tCatalogue });
+      await frame(wrapper, 'started', 'search_knowledge');
+      const line = wrapper.find('[data-testid="agent-activity-line"]');
+      expect(line.find('[data-testid="agent-activity-op-search_knowledge"]').exists()).toBe(true);
+      // The marker hides from assistive tech; the spinner is the running marker.
+      expect(line.find('.agent-activity__marker').attributes('aria-hidden')).toBe('true');
+      expect(line.find('.ds-spinner').exists()).toBe(true);
+      // The line REPLACES the typing indicator, not stacks beside it.
+      expect(wrapper.find('[data-testid="streaming-indicator"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('completed state: the per-op completed label and the static dot, still pre-chunk', async () => {
+      const wrapper = mountStreaming({ t: tCatalogue });
+      await frame(wrapper, 'started', 'search_knowledge');
+      await frame(wrapper, 'completed', 'search_knowledge');
+      const line = wrapper.find('[data-testid="agent-activity-line"]');
+      expect(line.text()).toContain(enAgent.operations.search_knowledge.completed);
+      expect(line.find('.ds-spinner').exists()).toBe(false);
+      expect(line.find('.agent-activity__dot').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('failed state: the warning-family chip (never danger) with the failed label', async () => {
+      const wrapper = mountStreaming({ t: tCatalogue });
+      await frame(wrapper, 'failed', 'read_source');
+      const line = wrapper.find('[data-testid="agent-activity-line"]');
+      expect(line.text()).toContain(enAgent.operations.read_source.failed);
+      // The failed chip IS its class family — warning, never danger.
+      expect(line.classes()).toContain('agent-activity--failed');
+      expect(line.classes().join(' ')).not.toMatch(/danger/);
+      wrapper.unmount();
+    });
+
+    it('an unknown operation and a null operation degrade to the generic label; the handle is omitted when null', async () => {
+      const wrapper = mountStreaming({ t: tCatalogue });
+      await frame(wrapper, 'started', 'other_tool');
+      let line = wrapper.find('[data-testid="agent-activity-line"]');
+      expect(line.text()).toContain(enAgent.working);
+      // An unknown op still names its handle — the handle follows the operation string.
+      expect(wrapper.find('[data-testid="agent-activity-op-other_tool"]').exists()).toBe(true);
+      await frame(wrapper, 'started', null);
+      line = wrapper.find('[data-testid="agent-activity-line"]');
+      expect(line.text()).toContain(enAgent.working);
+      expect(line.find('[data-testid^="agent-activity-op-"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('the collapse latch: the first chunk removes the line and post-chunk frames never re-open it', async () => {
+      const wrapper = mountStreaming({ t: tCatalogue });
+      await frame(wrapper, 'started', 'search_knowledge');
+      expect(wrapper.find('[data-testid="agent-activity-line"]').exists()).toBe(true);
+      // The exact pair the sendStream wiring commits per chunk (the latch's
+      // own provenance — frame latched at the first chunk — is the store
+      // suite's test: conversation-agent-activity.test.js).
+      wrapper.vm.$store.commit('conversation/appendChunk', 'the answer starts');
+      wrapper.vm.$store.commit('conversation/collapseAgentActivity');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[data-testid="agent-activity-line"]').exists()).toBe(false);
+      // A post-chunk frame: accepted by the store (parsed, no error), unrendered.
+      wrapper.vm.$store.commit('conversation/agentActivityFrame', {
+        type: 'agent_activity',
+        status: 'completed',
+        operation: 'search_knowledge'
+      });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[data-testid="agent-activity-line"]').exists()).toBe(false);
+      // The answer itself still streams (the transcript carries the
+      // welcome message ahead of it — the last bot bubble is the turn).
+      const bubbles = wrapper.findAll('[data-testid="message-bubble-bot"]');
+      expect(bubbles.at(bubbles.length - 1).text()).toContain('the answer starts');
+      wrapper.unmount();
+    });
+
+    it('legacy path invariance: a turn with no activity frame keeps the typing indicator and never renders the line', async () => {
+      const wrapper = mountStreaming({ t: tCatalogue });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[data-testid="streaming-indicator"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="agent-activity-line"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    describe('the verdict truth table', () => {
+      // The real metadata path: the metadata frame lands through
+      // setLastBotMetadata, exactly as sendStream's onMetadata commits it.
+      function mountAnswerWithMetadata(wrapper, metadata) {
+        wrapper.vm.$store.commit('conversation/setLastBotMetadata', { metadata, sources: [] });
+        return wrapper.vm.$nextTick();
+      }
+
+      async function mountSettledAnswer() {
+        const wrapper = createChatBotWrapper({}, { t: tCatalogue });
+        wrapper.vm.$store.commit('conversation/appendBotMessage', {
+          sender: 'bot',
+          content: 'the delivered answer',
+          timestamp: '2026-11-22T00:00:00.000Z',
+          isSaved: false,
+          metadata: {},
+          isStreaming: false,
+          translationFailed: false
+        });
+        return wrapper;
+      }
+
+      it('grounded with no translation: no warning, no note, no caption', async () => {
+        const wrapper = await mountSettledAnswer();
+        await mountAnswerWithMetadata(wrapper, {
+          grounding_status: 'grounded',
+          is_grounded: true,
+          translation_mode: 'none'
+        });
+        expect(wrapper.find('[data-testid="answer-warning"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="answer-verification-note"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="answer-translation-scope"]').exists()).toBe(false);
+        wrapper.unmount();
+      });
+
+      it('grounded with a delivered translation: the scope caption only', async () => {
+        const wrapper = await mountSettledAnswer();
+        // The verdict frame wrote translationMode ahead of the metadata frame.
+        wrapper.vm.$store.commit('conversation/setLastBotProperty', ['translationMode', 'streamed']);
+        await mountAnswerWithMetadata(wrapper, {
+          grounding_status: 'grounded',
+          is_grounded: true,
+          translation_mode: 'none'
+        });
+        expect(wrapper.find('[data-testid="answer-warning"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="answer-verification-note"]').exists()).toBe(false);
+        const caption = wrapper.find('[data-testid="answer-translation-scope"]');
+        expect(caption.exists()).toBe(true);
+        expect(caption.text()).toContain(enAgent.verificationTranslationScope);
+        wrapper.unmount();
+      });
+
+      it('the caption falls back to the metadata row when no verdict property exists (the JSON path)', async () => {
+        const wrapper = await mountSettledAnswer();
+        await mountAnswerWithMetadata(wrapper, {
+          grounding_status: 'grounded',
+          is_grounded: true,
+          translation_mode: 'post-stream'
+        });
+        expect(wrapper.find('[data-testid="answer-translation-scope"]').exists()).toBe(true);
+        wrapper.unmount();
+      });
+
+      it('unverified: the neutral note and NEVER the ungrounded warning', async () => {
+        const wrapper = await mountSettledAnswer();
+        // The agent metadata assembly: is_grounded is DERIVED false for
+        // unverified — the exact case that must not read as ungrounded.
+        await mountAnswerWithMetadata(wrapper, { grounding_status: 'unverified', is_grounded: false });
+        const warning = wrapper.find('[data-testid="answer-warning"]');
+        expect(warning.exists()).toBe(false);
+        const note = wrapper.find('[data-testid="answer-verification-note"]');
+        expect(note.exists()).toBe(true);
+        expect(note.text()).toContain(enAgent.verificationUnavailable);
+        wrapper.unmount();
+      });
+
+      it('ungrounded: the existing warning (and neither note)', async () => {
+        const wrapper = await mountSettledAnswer();
+        await mountAnswerWithMetadata(wrapper, { grounding_status: 'ungrounded', is_grounded: false });
+        expect(wrapper.find('[data-testid="answer-warning"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="answer-verification-note"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="answer-translation-scope"]').exists()).toBe(false);
+        wrapper.unmount();
+      });
+
+      it('legacy metadata (no grounding_status): the warning renders on is_grounded false, exactly as before', async () => {
+        const wrapper = await mountSettledAnswer();
+        await mountAnswerWithMetadata(wrapper, { is_grounded: false, confidence_score: 0.78 });
+        expect(wrapper.find('[data-testid="answer-warning"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="answer-verification-note"]').exists()).toBe(false);
+        wrapper.unmount();
+      });
+    });
   });
 });

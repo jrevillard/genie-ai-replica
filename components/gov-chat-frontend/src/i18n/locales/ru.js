@@ -1410,6 +1410,25 @@ export default {
     chatUpdated: 'Беседа обновлена',
     savingConversation: 'Сохранение…',
     thinking: 'Думаю…',
+    agentActivity: {
+      working: 'Работаю…',
+      stepCompleted: 'Шаг выполнен',
+      stepFailed: 'Шаг не удался — продолжаем работу',
+      verificationUnavailable: 'Проверка недоступна — ответ не удалось сопоставить с источниками.',
+      verificationTranslationScope: 'Проверка охватывала ответ на исходном языке — перевод не проверялся.',
+      operations: {
+        search_knowledge: {
+          running: 'Поиск в базе знаний…',
+          completed: 'Поиск в базе знаний выполнен',
+          failed: 'Не удалось выполнить поиск в базе знаний'
+        },
+        read_source: {
+          running: 'Чтение исходного документа…',
+          completed: 'Исходный документ прочитан',
+          failed: 'Не удалось прочитать исходный документ'
+        }
+      }
+    },
     newChatTitle: 'Начать новый чат',
     exportChat: 'Экспортировать чат',
     exportFilename: 'Имя файла',

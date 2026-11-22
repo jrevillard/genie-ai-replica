@@ -123,10 +123,10 @@ class AnswerTranslator:
     space); the answer targets the CALLER's language. The budget follows the
     deployed gpu-translate-backend: the input is estimated at 4 chars/token,
     the completion cap is the smaller of the window room (minus the 128
-    safety tokens) and the need bound (4× the input + 256), and a prompt
-    that leaves too little room fails the translation instead of asking for
-    an unusable budget. A cut-off completion is a FAILURE, never a short
-    answer.
+    safety tokens) and the need bound (4× the estimated input + 256), and a
+    prompt that leaves too little room fails the translation instead of
+    asking for an unusable budget. A cut-off completion is a FAILURE, never
+    a short answer.
 
     Outcomes: ``ok`` (the translated answer), ``refused`` (the requested
     language is not one the registry knows — the caller's mistake, the

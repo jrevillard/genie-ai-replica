@@ -1,5 +1,7 @@
 'use strict';
 
+const http = require('http');
+const https = require('https');
 const { logger, parsePositiveInt } = require('../shared-lib');
 
 // Story 2.4b — the shared agent-run vocabulary. The deadline pair, the
@@ -9,6 +11,13 @@ const { logger, parsePositiveInt } = require('../shared-lib');
 // non-streaming JSON consumer (story 2.4b) — cannot drift apart. The frame
 // writer re-exports the pieces its test pins read; production code imports
 // from this module directly.
+
+// ONE shared keepAlive agent pair for the agent leg (both consumers dial the
+// same /v1/runs endpoint). Per-request `new Agent({keepAlive:true})` calls
+// leaked: the sockets pooled in agents nothing ever destroyed. Shared, the
+// keepAlive actually works — one pool, reused across turns, never destroyed.
+const agentHttpAgent = new http.Agent({ keepAlive: true });
+const agentHttpsAgent = new https.Agent({ keepAlive: true });
 
 // ─── the deadline derivation (docs/agent-budget-deadline-pairs.md) ──────────
 //
@@ -40,8 +49,8 @@ function resolveUpstreamTimeoutMs() {
   if (configured <= TRANSLATION_RESERVE_MS + FINALIZATION_MARGIN_MS + DEADLINE_FLOOR_MS) {
     // The event name keeps the AgentFrameWriter prefix the frame-writer suite
     // pins (`upstream_timeout_below_reserves`) — the helper moved here in
-    // 2.4b, the pin did not.
-    logger.warn('AgentFrameWriter.upstream_timeout_below_reserves', {
+    // 2.4b, the pin followed the rename to the module's own prefix.
+    logger.warn('AgentRunContract.upstream_timeout_below_reserves', {
       knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
       configured,
       applied: DEFAULT_UPSTREAM_TIMEOUT_MS
@@ -226,9 +235,8 @@ const passthroughBody = (parsed) => (parsed && typeof parsed === 'object' && !Ar
  * when it can) and warns: an operator must know a real body was cut, not see
  * a silent degrade to the fallback.
  *
- * The event name keeps the AgentFrameWriter prefix the frame-writer suite
- * pins (`upstream_body_truncated`) — the helper moved here in 2.4b, the pin
- * did not.
+ * The event name carries THIS module's prefix (the helper moved here in
+ * 2.4b from the frame writer; the suite pins followed the rename).
  *
  * @param {Object} data - The axios response data (a Node stream).
  * @param {number} [status] - The upstream status, for the truncation warning.
@@ -249,7 +257,7 @@ function readUpstreamBody(data, status) {
         chunks.push(chunk);
       } else if (!truncated) {
         truncated = true;
-        logger.warn('AgentFrameWriter.upstream_body_truncated', {
+        logger.warn('AgentRunContract.upstream_body_truncated', {
           status,
           bytes: size
         });
@@ -294,6 +302,9 @@ module.exports = {
   assembleAgentMetadata,
   passthroughBody,
   readUpstreamBody,
+  // The shared keepAlive pair — BOTH run-body call sites dial with these.
+  agentHttpAgent,
+  agentHttpsAgent,
   // Exposed for the tests that pin them — production code reads nothing here.
   _internals: {
     DEFAULT_UPSTREAM_TIMEOUT_MS,

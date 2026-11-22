@@ -199,6 +199,26 @@ context:
   (tool-call interleaving vs plain aggregation), each suite keeps its own.
   No translation-output logic change → no TRANSLATION_LOGIC_VERSION bump.
 
+- **Global review 2 (coordinator, 2026-11-22) — fixes applied**: ONE shared
+  keepAlive agent pair in the contract module (`agentHttpAgent`/
+  `agentHttpsAgent`), used by both run-body call sites — per-request
+  `new Agent({keepAlive:true})` leaked sockets into dead agents' pools
+  (identity-pinned across two calls in the JSON suite); the wall-clock
+  deadline now arms BEFORE the status ladder in BOTH consumers and clears
+  after each refusal body read (a trickling non-2xx body was unbounded —
+  pinned: 429 never-ending body, deadline fire, 'close' → 429 fallback);
+  `applyAbstentionOverlay` gates on `typeof required === 'boolean'` (`{}`
+  maps to no-decision, not abstained:false — table extended); the contract
+  module's warning events renamed to the `AgentRunContract.` prefix (the
+  frame-writer suite's two pins followed); the route's verbatim-error branch
+  keys on `error instanceof AgentJsonTurnError` (a future legacy
+  statusCode+body error cannot be answered verbatim by accident); the JSON
+  turn's responseTime anchors at `opeaStartTime` (post-mint — same meaning
+  as the legacy worker-leg time, param renamed `turnStartTime`); the
+  remainder flush applies the chunk handler's guard in BOTH consumers (only
+  a `data: ` line reaches the parser — a trailing SSE comment is dropped;
+  pinned with the bare-comment-line test).
+
 ## Spec Change Log
 
 <!-- Append-only. Populated by step-04 during review loops. Do not modify or delete existing entries. -->

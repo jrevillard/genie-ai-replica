@@ -1,8 +1,6 @@
 'use strict';
 
 const axios = require('axios');
-const http = require('http');
-const https = require('https');
 const { trace } = require('@opentelemetry/api');
 const { logger, spanAttrs } = require('../shared-lib');
 const { agentServiceUrl } = require('./agent-routing');
@@ -13,6 +11,8 @@ const {
   assembleAgentMetadata,
   readUpstreamBody,
   passthroughBody,
+  agentHttpAgent,
+  agentHttpsAgent,
   _internals: contractInternals
 } = require('./agent-run-contract');
 const { writeSSEFrame } = require('./sse-frame');
@@ -208,8 +208,8 @@ async function proxyAgentRun({
       responseType: 'stream',
       timeout: effectiveTimeoutMs,
       signal: controller.signal,
-      httpAgent: new http.Agent({ keepAlive: true }),
-      httpsAgent: new https.Agent({ keepAlive: true }),
+      httpAgent: agentHttpAgent,
+      httpsAgent: agentHttpsAgent,
       // The status is inspected here (429/503 passthrough) instead of thrown.
       validateStatus: () => true
     });
@@ -226,9 +226,17 @@ async function proxyAgentRun({
     return;
   }
 
+  // The wall-clock bound arms HERE — before the status ladder: the axios
+  // timeout covers time-to-headers only, and a trickling non-2xx body would
+  // otherwise hold the request (and its admission slot) forever. Each
+  // refusal path clears it after its body read; the success path re-arms
+  // below (fresh window for the stream).
+  armStreamDeadline();
+
   const status = response.status;
   if (status === 429) {
     const { parsed } = await readUpstreamBody(response.data, status);
+    clearStreamDeadline();
     // The lane hint passes through (the caller retries on it); a body that
     // did not parse (or is not an object) falls back to the documented error
     // name.
@@ -240,6 +248,7 @@ async function proxyAgentRun({
   }
   if (status === 503) {
     const { parsed } = await readUpstreamBody(response.data, status);
+    clearStreamDeadline();
     logger.warn('AgentFrameWriter.run_surface_unconfigured', { queryId, body: parsed });
     return res.status(503).json(passthroughBody(parsed) || { error: 'budget_configuration_missing' });
   }
@@ -248,11 +257,13 @@ async function proxyAgentRun({
     // upstream's validation answer passes through (the fallback names it as
     // the BFF's own invalid request).
     const { parsed } = await readUpstreamBody(response.data, status);
+    clearStreamDeadline();
     logger.warn('AgentFrameWriter.run_request_invalid', { queryId, body: parsed });
     return res.status(422).json(passthroughBody(parsed) || { error: 'invalid_run_request' });
   }
   if (status !== 200 || !response.data) {
     const { parsed } = await readUpstreamBody(response.data, status);
+    clearStreamDeadline();
     logger.error('AgentFrameWriter.upstream_status_error', { queryId, status });
     return res
       .status(502)
@@ -456,15 +467,14 @@ async function proxyAgentRun({
   stream.on('end', () => {
     if (streamFinished) return;
     // A trailing data line that never got its newline is still a frame —
-    // flush the remainder through the parser before the terminal. The buffer
-    // carries the raw `data: ` prefix (the chunk handler strips it before
-    // dispatch); passing it raw fed the parser a non-JSON line and the last
-    // frame was silently dropped.
+    // flush the remainder through the parser before the terminal. The chunk
+    // handler's guard applies: only a `data: ` line reaches the parser (a
+    // trailing SSE comment is dropped, never a spurious seam_parse_error).
     const remainder = buffer.trim();
-    if (remainder) {
-      handleSeamDataLine(remainder.startsWith('data: ') ? remainder.slice(6) : remainder);
-      buffer = '';
+    if (remainder.startsWith('data: ')) {
+      handleSeamDataLine(remainder.slice(6));
     }
+    buffer = '';
     doAgentTerminal();
   });
 }

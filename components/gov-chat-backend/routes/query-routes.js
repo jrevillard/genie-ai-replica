@@ -13,6 +13,7 @@ const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/
 const { translateWholeAnswer } = require('../services/translation/whole-answer');
 const { isAgentPathEnabled } = require('../services/agent-routing');
 const { proxyAgentRun } = require('../services/agent-frame-writer');
+const { AgentJsonTurnError } = require('../services/agent-json-result');
 const { emptyStreamMetadata } = require('../services/agent-run-contract');
 const {
   normalizeRequestedLanguage,
@@ -820,13 +821,14 @@ module.exports = (queryService) => {
       if (error.statusCode === 401) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
       }
-      // Story 2.4b — the agentic JSON errors are typed (statusCode + body +
-      // optional headers, AgentJsonTurnError): the passthrough statuses
-      // (429/503/422), the 504 upstream-timeout answer and the 502s carry
-      // their exact JSON error contract in `body` and are answered verbatim.
-      // Legacy errors carry no `body`, so this branch is additive — the
-      // flag-off 500 contract is untouched.
-      if (error.statusCode && error.body && typeof error.body === 'object') {
+      // Story 2.4b — the agentic JSON errors are typed (AgentJsonTurnError):
+      // the passthrough statuses (429/503/422), the 504 upstream-timeout
+      // answer and the 502s carry their exact JSON error contract in `body`
+      // and are answered verbatim. The CLASS gate, not a statusCode+body
+      // shape check: a future legacy typed error carrying statusCode+body
+      // (the VlUnavailableError pattern) must keep the legacy 500 shape, not
+      // be answered verbatim by accident.
+      if (error instanceof AgentJsonTurnError) {
         for (const [header, value] of Object.entries(error.headers || {})) {
           res.set(header, String(value));
         }

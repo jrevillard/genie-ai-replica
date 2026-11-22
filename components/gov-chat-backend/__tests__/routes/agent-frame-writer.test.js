@@ -445,7 +445,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(_internals.resolveUpstreamTimeoutMs()).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
     expect(_internals.deriveDeadlineMs(_internals.resolveUpstreamTimeoutMs())).toBe(3600000 - 30000 - 5000);
     expect(logger.warn).toHaveBeenCalledWith(
-      'AgentFrameWriter.upstream_timeout_below_reserves',
+      'AgentRunContract.upstream_timeout_below_reserves',
       expect.objectContaining({ knob: 'AGENT_UPSTREAM_TIMEOUT_MS', configured: 20000, applied: 3600000 })
     );
   });
@@ -548,7 +548,7 @@ describe('POST /api/queries/stream — pre-stream refusals (JSON, before any SSE
     // size that breached the cap.
     const { logger } = require('../mocks/shared-lib');
     expect(logger.warn).toHaveBeenCalledWith(
-      'AgentFrameWriter.upstream_body_truncated',
+      'AgentRunContract.upstream_body_truncated',
       expect.objectContaining({ status: 503, bytes: expect.any(Number) })
     );
   });

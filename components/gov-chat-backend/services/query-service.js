@@ -1214,7 +1214,10 @@ class QueryService {
           headers,
           targetLanguage: options.targetLanguage,
           translator: options.translator,
-          startTime
+          // The turn starts AFTER the doc mint — the same anchor the legacy
+          // branch's worker-leg responseTime reads, so the persisted
+          // responseTime means the same thing on both sides of the flag.
+          turnStartTime: opeaStartTime
         });
         opeaResponseContent = turn.response;
         opeaMetadata = turn.metadata;

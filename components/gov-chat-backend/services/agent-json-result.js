@@ -1,8 +1,6 @@
 'use strict';
 
 const axios = require('axios');
-const http = require('http');
-const https = require('https');
 const { logger } = require('../shared-lib');
 const { agentServiceUrl } = require('./agent-routing');
 const { parseAgentSeamLine } = require('./agent-seam-parser');
@@ -11,7 +9,9 @@ const {
   deriveDeadlineMs,
   assembleAgentMetadata,
   readUpstreamBody,
-  passthroughBody
+  passthroughBody,
+  agentHttpAgent,
+  agentHttpsAgent
 } = require('./agent-run-contract');
 const { wantsTranslation } = require('./translation/language-request');
 const { translateWholeAnswer } = require('./translation/whole-answer');
@@ -84,7 +84,12 @@ function applyAbstentionOverlay(metadata, verdict) {
     // does not run: the base nulls stay.
     return metadata;
   }
-  const required = insufficient.required === true;
+  if (typeof insufficient.required !== 'boolean') {
+    // Same rule one level deeper: an object with no boolean `required`
+    // reported no decision — never "answered, chose not to abstain".
+    return metadata;
+  }
+  const required = insufficient.required;
   metadata.abstained = required;
   if (required) {
     const reasons = Array.isArray(insufficient.reasons) ? insufficient.reasons : [];
@@ -120,7 +125,9 @@ const RUN_REFUSALS = {
  *   and the posture resolution.
  * @param {string} params.targetLanguage - The normalized requested language.
  * @param {Object|null} params.translator - The request-resolved translator.
- * @param {number} params.startTime - The createQuery entry timestamp (ms).
+ * @param {number} params.turnStartTime - The turn's start timestamp (ms) —
+ *   AFTER the doc mint, so the persisted responseTime means the same thing
+ *   as the legacy branch's worker-leg time.
  * @returns {Promise<{response: string, metadata: Object, responseTime: number,
  *   translationFailed?: true}>} `response` is the text the client receives —
  *   the translation when whole-answer translation succeeded, the English
@@ -130,7 +137,15 @@ const RUN_REFUSALS = {
  * @throws {AgentJsonTurnError} Every other genuine failure, typed with the
  *   status + body the route answers.
  */
-async function runAgentJsonTurn({ queryService, queryData, queryId, headers, targetLanguage, translator, startTime }) {
+async function runAgentJsonTurn({
+  queryService,
+  queryData,
+  queryId,
+  headers,
+  targetLanguage,
+  translator,
+  turnStartTime
+}) {
   // The EFFECTIVE timeout — resolved once, so the deadline derivation and the
   // wire-level timeout (and the wall-clock bound below) all read the SAME
   // value: an under-sized configuration is absorbed at this one point, never
@@ -182,8 +197,8 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       responseType: 'stream',
       timeout: effectiveTimeoutMs,
       signal: controller.signal,
-      httpAgent: new http.Agent({ keepAlive: true }),
-      httpsAgent: new https.Agent({ keepAlive: true }),
+      httpAgent: agentHttpAgent,
+      httpsAgent: agentHttpsAgent,
       // The status is inspected here (429/503/422 passthrough) instead of thrown.
       validateStatus: () => true
     });
@@ -198,6 +213,25 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
     throw new AgentJsonTurnError(502, { error: 'AGENT_SERVICE_UNAVAILABLE', message: error?.message });
   }
 
+  // The wall-clock bound arms HERE — before the status ladder: the axios
+  // timeout covers time-to-headers only, and a trickling non-2xx body would
+  // otherwise hold the request (and its admission slot) forever. Each
+  // refusal path clears it after its body read; a deadline fire aborts the
+  // leg, the stream settles, and the refusal answers with the fallback body
+  // — bounded and honest.
+  let deadline = null;
+  const clearDeadline = () => {
+    if (deadline !== null) {
+      clearTimeout(deadline);
+      deadline = null;
+    }
+  };
+  deadline = setTimeout(() => {
+    deadline = null;
+    logger.warn('AgentJsonResult.upstream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
+    controller.abort();
+  }, effectiveTimeoutMs);
+
   const status = response.status;
   // ── the upstream refusals (429 / 503 / 422): the upstream's JSON answer
   // passes through verbatim; a body that did not parse (or is not an object)
@@ -207,6 +241,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   const refusal = RUN_REFUSALS[status];
   if (refusal) {
     const { parsed } = await readUpstreamBody(response.data, status);
+    clearDeadline();
     logger.warn(refusal.event, { queryId, body: parsed });
     const headersOut = {};
     if (status === 429 && response.headers?.['retry-after'] !== undefined) {
@@ -216,6 +251,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   }
   if (status !== 200 || !response.data) {
     const { parsed } = await readUpstreamBody(response.data, status);
+    clearDeadline();
     logger.error('AgentJsonResult.upstream_status_error', { queryId, status });
     throw new AgentJsonTurnError(502, {
       error: 'AGENT_SERVICE_UNAVAILABLE',
@@ -234,25 +270,6 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   let capturedVerdict = null;
   let usageRecord = null;
   let failure = null;
-
-  // The wall-clock bound. Once the upstream response HEADERS have arrived,
-  // the axios timeout degenerates to an inactivity bound — a trickling
-  // upstream would hold the run (and its admission slot) forever. The bound
-  // is the SAME effective timeout the leg was dialed with; on fire the
-  // controller aborts and the stream's error path ends the turn with the
-  // typed 504.
-  let deadline = null;
-  const clearDeadline = () => {
-    if (deadline !== null) {
-      clearTimeout(deadline);
-      deadline = null;
-    }
-  };
-  deadline = setTimeout(() => {
-    deadline = null;
-    logger.warn('AgentJsonResult.upstream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
-    controller.abort();
-  }, effectiveTimeoutMs);
 
   stream.setEncoding('utf8');
 
@@ -357,10 +374,13 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
     // The trailing line that never got its newline is still a frame — flush
     // the remainder through the parser before the terminal (the frame
     // writer's same idiom): a lost usage_record or verdict must not be
-    // silent. The buffer carries the raw `data: ` prefix — the same
-    // trim-and-strip the chunk handler applies.
-    const trimmed = buffer.trim();
-    handleSeamDataLine(trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed);
+    // silent. The chunk handler's guard applies: only a `data: ` line
+    // reaches the parser — a trailing SSE comment is dropped, never a
+    // spurious seam_parse_error.
+    const remainder = buffer.trim();
+    if (remainder.startsWith('data: ')) {
+      handleSeamDataLine(remainder.slice(6));
+    }
     buffer = '';
   }
   if (failure) {
@@ -415,7 +435,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   const result = {
     response: deliveredText,
     metadata,
-    responseTime: Date.now() - startTime
+    responseTime: Date.now() - turnStartTime
   };
   if (translationFailed) {
     result.translationFailed = true;

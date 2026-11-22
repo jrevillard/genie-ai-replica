@@ -125,7 +125,7 @@ const { createValidToken } = require('../fixtures/tokens');
 const queryService = require('../../services/query-service');
 const axios = require('axios');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
-const { _internals } = require('../../services/agent-run-contract');
+const { _internals, agentHttpAgent, agentHttpsAgent } = require('../../services/agent-run-contract');
 const { applyAbstentionOverlay } = require('../../services/agent-json-result');
 
 const validToken = createValidToken();
@@ -326,6 +326,39 @@ describe('POST /api/queries — the agentic success contract', () => {
 
     await postQuery();
     expect(axios.post.mock.calls[1][1].language).toBeNull();
+  });
+
+  it('every turn dials the SAME shared keepAlive agent pair (no per-request allocation)', async () => {
+    axios.post.mockImplementation(() => Promise.resolve({ status: 200, headers: {}, data: answeredRunStream() }));
+
+    await postQuery();
+    await postQuery();
+
+    const [firstOpts, secondOpts] = axios.post.mock.calls.map((call) => call[2]);
+    expect(firstOpts.httpAgent).toBe(secondOpts.httpAgent);
+    expect(firstOpts.httpsAgent).toBe(secondOpts.httpsAgent);
+    // The instances ARE the contract module's shared pair — both consumers
+    // (streaming + JSON) require the same exports, so keepAlive pools in
+    // agents nothing ever destroys cannot pile up.
+    expect(firstOpts.httpAgent).toBe(agentHttpAgent);
+    expect(firstOpts.httpsAgent).toBe(agentHttpsAgent);
+  });
+
+  it('a stream ending with a bare SSE comment line completes without a parse error', async () => {
+    // The comment sits in the buffer without its newline — the remainder
+    // flush drops it (not a `data: ` line) instead of feeding the parser.
+    const mockStream = new Readable({ read() {} });
+    mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'an answer' }, { seq: 0 }))}\n\n`);
+    mockStream.push(': keepalive');
+    mockStream.push(null);
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const response = await postQuery();
+    const { logger } = require('../mocks/shared-lib');
+
+    expect(response.status).toBe(201);
+    expect(response.body.response).toBe('an answer');
+    expect(logger.warn).not.toHaveBeenCalledWith('AgentJsonResult.seam_parse_error', expect.anything());
   });
 
   it('a test-mode deployment stays deterministic whatever the flag says (mock outranks the agent)', async () => {
@@ -607,6 +640,37 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     }
   });
 
+  it('a trickling 429 body is bounded — the deadline fire settles the refusal read', async () => {
+    // The deadline arms BEFORE the status ladder: a non-2xx body that never
+    // ends cannot hold the request forever. The fire aborts the leg, the
+    // (real adapter's) destroyed stream settles the read, and the refusal
+    // answers with the documented fallback body.
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      const mockStream = new Readable({ read() {} });
+      axios.post.mockResolvedValue({ status: 429, headers: {}, data: mockStream });
+
+      const responsePromise = postQuery();
+      responsePromise.catch(() => {});
+      for (let i = 0; i < 200 && mockStream.listenerCount('data') === 0; i++) {
+        await new Promise(setImmediate);
+      }
+      expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+
+      jest.advanceTimersByTime(40000);
+      mockStream.emit('close');
+
+      const response = await responsePromise;
+      expect(response.status).toBe(429);
+      expect(response.body).toEqual({ error: 'admission_refused' });
+      expect(collections.update).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+    }
+  });
+
   it('a wall-clock abort whose stream ends via close alone answers 504 — never a truncated 201', async () => {
     const response = await driveWallClockAbort((stream) => stream.emit('close'));
 
@@ -757,6 +821,14 @@ describe('applyAbstentionOverlay — the V05 mapping pinned directly (a later st
     // "required" absent is not "not required": a missing/malformed decision
     // field is a decision never reported, so the overlay does not run.
     const metadata = applyAbstentionOverlay(base(), { grounding_status: 'unverified' });
+    expect(metadata.abstained).toBeNull();
+    expect(metadata.abstention_reason).toBeNull();
+  });
+
+  it('an insufficient_evidence OBJECT with no boolean required: no decision — the base nulls stay', () => {
+    // `{}` reported nothing: mapping it to abstained:false would claim
+    // "answered, chose not to abstain" for a never-reported decision.
+    const metadata = applyAbstentionOverlay(base(), { insufficient_evidence: {} });
     expect(metadata.abstained).toBeNull();
     expect(metadata.abstention_reason).toBeNull();
   });

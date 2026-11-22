@@ -18,11 +18,16 @@ from pathlib import Path
 import pytest
 from langdetect import DetectorFactory
 
-from agent.budget import RunBudget
+from agent.budget import RunBudget, RunBudgetMonitor
+from agent.cancellation import CancellationToken
+from agent.events import EventEmitter
+from agent.loop import AgentLoop, ModelTurn
 from agent.orchestrator import OrchestratorConfig
-from agent.probe import ProbeConfig
+from agent.probe import PROBE_OPERATION_BUDGET, ProbeConfig
+from agent.toolset import document_toolset
+from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
-from capabilities.contract import OperationBudget, ReadSourceResult, SearchKnowledgeResult
+from capabilities.contract import CallerContext, OperationBudget, ReadSourceResult, SearchKnowledgeResult
 
 
 class FakeTransport:
@@ -198,6 +203,45 @@ def verifier_config(**overrides) -> "ProbeConfig":
     copies before this promotion)."""
     values = {"VLLM_LLM_ENDPOINT": ENDPOINT, "VLLM_LLM_MODEL_ID": "served-model"}
     return ProbeConfig.load(env={**values, **overrides})
+
+
+GOVERNED_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
+"""The one caller context the governed-answer-path suites share."""
+
+
+def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=None):
+    """The governed answer path over fakes — one home for the suites that
+    drive the loop WITH the verification pipeline wired (the orchestrator's
+    own wiring shape): loop + verifier + monitor over ``document_toolset``,
+    a shared caller context and the smoke operation budget.
+
+    ``judge_model`` (a ``LoopModelClient`` double) defaults to the scripted
+    strict grounded reply; ``authorized_repos`` passes through to the
+    pipeline (the caller's repo set). Returns ``(loop, collector, monitor,
+    verifier)`` — the collector carries every seam event, the monitor the
+    run's counts, the verifier its ledger for finding assertions.
+    """
+    collector: list = []
+    monitor = RunBudgetMonitor(budget or run_budget())
+    verifier = VerificationPipeline(
+        policy="verdict-marked",
+        judge_timeout_ms=5000,
+        judge_model_client=judge_model
+        if judge_model is not None
+        else ScriptedLoopModel((ModelTurn(content='{"verdict": "grounded"}'),)),
+        monitor=monitor,
+        authorized_repos=authorized_repos,
+    )
+    loop = AgentLoop(
+        model=model,
+        registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
+        monitor=monitor,
+        token=CancellationToken(),
+        emitter=EventEmitter(run_id="run-1", sink=collector.append),
+        system_prompt="the production prompt",
+        verifier=verifier,
+    )
+    return loop, collector, monitor, verifier
 
 
 class AgentFakePort:

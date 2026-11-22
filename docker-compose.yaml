@@ -1496,6 +1496,42 @@ services:
       - AGENT_AUTHORIZED_GRAPHS=${AGENT_AUTHORIZED_GRAPHS:-}
       - AGENT_AUTHORIZED_REPOS=${AGENT_AUTHORIZED_REPOS:-}
       - AGENT_PROBE_BEARER=${AGENT_PROBE_BEARER:-}
+      # Query preparation (the preparation module's knobs, wired into the
+      # run surface): the same knobs the deployed query path reads,
+      # so one .env line tunes both worlds. Tolerant reads in the service —
+      # a degraded or timed-out translation falls back to a fallback_*
+      # status the run reports as an honest tool insufficiency (never an
+      # untranslated query). The shared vars' defaults match the chatqna
+      # block exactly; an override in .env moves BOTH worlds (chatqna
+      # reads them too).
+      #
+      # DEPLOYMENT DEPENDENCY: the default translation endpoint
+      # (http://vllm-translation-guardrail:9031) is served by the
+      # gpu-models profile ONLY — on a core-only stack every non-English
+      # query fails closed to the honest insufficiency answer (the run
+      # record's preparation_status carries the fallback reason; nothing
+      # crashes). Point VLLM_TRANSLATION_ENDPOINT at a reachable endpoint
+      # for the alternative.
+      #
+      # BEHAVIOR DELTAS on the agentic path (review-flagged): with a
+      # non-English request locale, EVERY search query rides the
+      # translation leg — one auxiliary fleet model call per search (the
+      # locale hint beats detection, per the preparation contract's own
+      # order; an English locale rides passthrough_english, no call); and
+      # a query
+      # whose detection fails with NO locale named is refused as an
+      # insufficiency, never searched raw.
+      - TRANSLATION_SERVICE_HOST_IP=${TRANSLATION_SERVICE_HOST_IP:-vllm-translation-guardrail}
+      - TRANSLATION_SERVICE_PORT=${TRANSLATION_SERVICE_PORT:-9031}
+      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      - TRANSLATION_SERVICE_TIMEOUT=${TRANSLATION_SERVICE_TIMEOUT:-180}
+      - MAX_TRANSLATION_CHARS=${MAX_TRANSLATION_CHARS:-}
+      - MODEL_DETECT_TTL=${MODEL_DETECT_TTL:-60}
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      - OPENAI_API_KEY=${VLLM_API_KEY:-}
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
     build:
       context: components/agent-service/
       dockerfile: Dockerfile

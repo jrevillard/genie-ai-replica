@@ -186,6 +186,50 @@ describe('ChatHistoryService', () => {
       expect(mockConversations.document).toHaveBeenCalledWith('conv-1');
       expect(result).toBeDefined();
     });
+
+    // The files read projects the okf stable ids the snapshot
+    // rows carry: without this projection the ids would be written and never
+    // served, and the restored sidebar would still build the dead download
+    // URL. (The projection is on the FOURTH query — the conversationFiles
+    // one in the Promise.all.)
+    it('the files query projects the okf stable-id fields', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      await chatHistoryService.getConversation('conv-1');
+      const filesQuery = mockDb.query.mock.calls[3][0];
+      const aqlText = filesQuery.strings.join('');
+      for (const field of ['source', 'concept_id', 'repo_id', 'bundle_version']) {
+        expect(aqlText).toContain(field);
+      }
+      // Null-safe on bundle_version (mirrors the write side): only "absent"
+      // becomes null — a pinned version 0 must survive the read.
+      expect(aqlText).toContain('doc.bundle_version == null');
+    });
+
+    // Rollback continuity: the legacy read path serves an agentic-era message
+    // verbatim — the metadata extras (grounding_status, agent_run) ride
+    // through untouched for any consumer, while the render keeps reading the
+    // legacy fields. No agentic-specific read exists on this path (ADR
+    // agentic-003).
+    it('serves an agentic-era message verbatim (extras ride, nothing agentic-specific read)', async () => {
+      const agenticMessage = {
+        _key: 'm-9',
+        sender: 'bot',
+        content: 'a',
+        metadata: {
+          grounding_status: 'grounded',
+          agent_run: { run_id: 'run-9' },
+          abstained: false,
+          source_documents: []
+        }
+      };
+      mockDb.query.mockResolvedValueOnce(createMockCursor([agenticMessage])).mockResolvedValue(createMockCursor([]));
+      const result = await chatHistoryService.getConversation('conv-1');
+      const msg = result.messages.find((m) => m._key === 'm-9');
+      expect(msg.metadata.grounding_status).toBe('grounded');
+      expect(msg.metadata.agent_run).toEqual({ run_id: 'run-9' });
+      expect(msg.metadata.abstained).toBe(false);
+      expect(msg.metadata.source_documents).toEqual([]);
+    });
   });
 
   describe('getUserConversations', () => {
@@ -213,6 +257,83 @@ describe('ChatHistoryService', () => {
 
     it('should throw when conversationId is missing', async () => {
       await expect(chatHistoryService.addMessage({ content: 'Hello', sender: 'user' })).rejects.toThrow();
+    });
+
+    // The snapshot row carries the okf-concept stable ids so a
+    // restored conversation's sidebar re-resolves the concept through the
+    // existing conventions instead of building a dead doc-repo download URL.
+    describe('okf snapshot-row identity (rollback continuity)', () => {
+      beforeEach(() => {
+        mockDb.query.mockResolvedValue(createMockCursor([{ sequence: 0 }]));
+      });
+
+      it('an okf-concept source row saves the stable ids under the names the frontend reads', async () => {
+        await chatHistoryService.addMessage({
+          conversationId: 'conv-1',
+          content: 'a',
+          sender: 'bot',
+          metadata: {
+            source_documents: [
+              {
+                document_id: 'kenya_tax_rules',
+                document_name: 'kenya tax rules',
+                url: '',
+                source: 'okf-concept',
+                concept_id: 'kenya_tax_rules',
+                repo_id: 'r-kenya',
+                bundle_version: 3,
+                score: 0.8
+              }
+            ]
+          }
+        });
+        expect(mockConversationFiles.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            conversationId: 'conv-1',
+            fileId: 'files/kenya_tax_rules',
+            source: 'okf-concept',
+            concept_id: 'kenya_tax_rules',
+            repo_id: 'r-kenya',
+            bundle_version: 3
+          })
+        );
+      });
+
+      it('a legacy document row saves none of the okf identity keys', async () => {
+        await chatHistoryService.addMessage({
+          conversationId: 'conv-1',
+          content: 'a',
+          sender: 'bot',
+          metadata: {
+            source_documents: [{ document_id: 'doc-9', document_name: 'Report.pdf', url: '/files/doc-9', score: 0.7 }]
+          }
+        });
+        const saved = mockConversationFiles.save.mock.calls[0][0];
+        expect(saved).toEqual(
+          expect.not.objectContaining({
+            source: expect.anything(),
+            concept_id: expect.anything(),
+            repo_id: expect.anything(),
+            bundle_version: expect.anything()
+          })
+        );
+      });
+
+      it('a missing bundle_version persists as null, never undefined (the field exists on the row)', async () => {
+        await chatHistoryService.addMessage({
+          conversationId: 'conv-1',
+          content: 'a',
+          sender: 'bot',
+          metadata: {
+            source_documents: [
+              { document_id: 'c_1', document_name: 'c 1', url: '', source: 'okf-concept', concept_id: 'c_1' }
+            ]
+          }
+        });
+        expect(mockConversationFiles.save).toHaveBeenCalledWith(
+          expect.objectContaining({ source: 'okf-concept', concept_id: 'c_1', repo_id: null, bundle_version: null })
+        );
+      });
     });
   });
 

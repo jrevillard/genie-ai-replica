@@ -12,7 +12,7 @@ and is verified before the next begins.
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | E-3 pair-level reporting + F7 steal accounting + F6 knob unification + the blank-principal fix | CODE COMPLETE — verification green |
-| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | pending — gated on the carrier-trust findings (F1/F2 below) |
+| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | pending — NOT gated (see the corrected phasing consequence below; the carrier-trust findings are their own epic) |
 | 3 | E-7 context-native generation + suite binding | pending |
 | 4 | E-4 attribution metrics + E-5 evidence-grade run records | pending |
 | 5 | E-6 offline harness parity + the tenant-segment decision | pending |
@@ -24,11 +24,14 @@ and is verified before the next begins.
    name the acting principal from Phase 1 onward.
 2. **Superadmin gate (Phase 2): both populations** — the `tools-admin`
    realm role OR a wildcard `okf:*:*:admin` scope.
-3. **Restricted scenario: after Phase 1.** The per-repo `acl.restricted` +
-   group scope grants are built once Phase 1's evidence exists. The global
-   scope mode stays `open`; only per-repo fencing is used. The group/user
-   structure for the local build is authored from the existing repository
-   inventory.
+3. **Restricted scenario: after Phase 1 — DONE (2026-11-22).** The per-repo
+   `acl.restricted` + group scope grants are built once Phase 1's evidence
+   exists. The global scope mode stays `open`; only per-repo fencing is used.
+   The group/user structure for the local build is authored from the existing
+   repository inventory. Built and verified in the local build by
+   `scripts/okf-testing-lab/lab-scoped-scenario.js` (MR !1039): two fenced
+   repositories, two groups, four principals, and the union measured at
+   12 / 13 / 13 / 14 traversable graphs.
 4. **`xlsx` npm-audit finding: RISK-ACCEPTED** with a backlog issue for
    migrating the converter to a maintained permissive-OSS parser. Reachability
    is `POST /convert-from-documents` (`tools-admin`-gated); no registry fix
@@ -300,8 +303,29 @@ a carrier-trust finding belongs with the carrier work:
   exclusion its `hybrid` sibling enforces (`query-service.js:769` vs `:785`).
   Unreachable today; it stops being unreachable when a second writer exists.
 
-**Consequence for the phasing:** Phase 2 (E-4 carrier substitution) MUST NOT
-land until F1 and F2 have a fix — the Testing Lab must be able to say "I am
-evaluating these graphs", and the retriever must be able to tell that from
-"I am authorized to read them". That is Phase 2's entry criterion, not an
-optional extra.
+**Consequence for the phasing — CORRECTED (2026-11-22).** This paragraph
+first read "Phase 2 (E-4 carrier substitution) MUST NOT land until F1 and F2
+have a fix". **That was wrong**, and it contradicted the epic's own EXPLICIT
+NON-GOAL: the BFF-as-trusted-side / carrier-as-enforcement-contract model
+stands, changing it is a SEPARATE security-model epic, and a scoped
+evaluation is faithful without it — "the carrier array *is* the membership
+emulation, consumed by the same routing code a citizen's query hits". E-4
+substitutes the context carrier into the EXISTING
+`context.authorized_graph_names` field, and the epic's own acceptance
+criterion for it is "No modification to chatqna/retriever required for scoped
+runs". The findings stay real, stay filed (**#2081**) and keep their
+severities — on their own timeline, as their own epic. They do NOT gate
+phase 2, and this artifact's earlier claim to the contrary is withdrawn.
+
+**What the local build then proved (2026-11-22).** The mechanism the
+Evaluation Context rides is the one that already exists: a group grant makes
+the scope-shaped role a group member's realm role, the okf-server middleware
+folds realm role names that are scope strings into the caller's effective
+scopes (`components/okf-server/middleware/auth.js:43-51`), and the per-repo
+gate reads those scopes
+(`components/okf-server/services/access-control-service.js:50-58`). The
+union of two group memberships is therefore two scope strings on one token —
+which is the shape E-1's `principal_refs[]` has to resolve to. The
+group-scoped fixture that proves it (`feat/okf-lab-scoped-scenario`, MR !1039)
+measured 12 / 13 / 13 / 14 traversable graphs for the control, the two group
+holders and the union, through the carrier's own read.

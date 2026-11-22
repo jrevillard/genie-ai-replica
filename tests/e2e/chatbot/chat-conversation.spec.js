@@ -9,6 +9,7 @@ const {
   sseBody,
   sseFulfill,
   ackFeedback,
+  ungroundedWarningOf,
   BOT_BUBBLE,
   NAV_STATUS,
   STREAM_ROUTE,
@@ -315,21 +316,7 @@ test.describe('Conversation — warning and error', () => {
       await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
       // The warning is itself the signal that the metadata frame has landed.
       await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', { timeout: 45000 });
-      const s = await page.evaluate(() => {
-        const cards = document.querySelectorAll('[data-testid="chat-message-bot"] [data-testid="answer-card"]');
-        const card = cards[cards.length - 1];
-        const warn = card.querySelector('[data-testid="answer-warning"]');
-        const probe = document.createElement('div');
-        probe.style.background = 'var(--warning-bg)';
-        document.body.appendChild(probe);
-        const token = getComputedStyle(probe).backgroundColor;
-        probe.remove();
-        return {
-          warnBg: warn ? getComputedStyle(warn).backgroundColor : null,
-          token,
-          sources: !!card.querySelector('[data-testid="answer-sources"]')
-        };
-      });
+      const s = await ungroundedWarningOf(page);
       expect(s.warnBg, 'the amber warning paints (the mocked frame ran)').not.toBeNull();
       expect(s.warnBg, 'the warning paints the warning token, not red').toBe(s.token);
       expect(s.sources, 'no empty sources section on an ungrounded answer').toBe(false);

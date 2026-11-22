@@ -72,6 +72,7 @@ one reads a missing directory as an accident.
 | `quick-help-scope.spec.js` | — | the Quick Help grid renders its declared scope and dead cards send nothing | core | `route`, `stream-route`, `welcome` |
 | `real-rag-citation.spec.js` | — | a real answer: the ingested fixture's fact in the answer text and the fixture cited in the sources | core | `auth`, `chatbot`, `documents`, `venue-profile` (+ `fixtures/` seed files) |
 | `send-message-and-stream.spec.js` | — | sending a message and the SSE stream rendering; the French answer with the UI locale pinned to `fr` | core | `chatbot`, `locale`, `venue-profile` |
+| `sse-contract.spec.js` | story 2.9 | the extended SSE envelope (agentic `agent_activity`/`agent_verdict` frames) rendered by the current client: degradation + warning path through declared handles | core | `welcome`, `chatbot` |
 
 ## `documents/` — document management
 
@@ -135,6 +136,7 @@ without a venue surface.
 | `helpers/chatbot.spec.js` | the chat login/stream helper | none |
 | `helpers/keycloak-admin.spec.js` | the Keycloak admin API helper | none |
 | `helpers/route.spec.js` | the route-mock wrapper | none |
+| `helpers/stream-route.spec.js` | the single-sourced SSE envelope: the legacy five-type dialect and the agentic extension (story 2.9) pinned frame by frame | none |
 | `helpers/venue-launch-args.spec.js` | the browser launch-args/venue-mapping helper | none |
 | `helpers/venue-profile.spec.js` | the venue-surface probe (every runtime skip's reason) | none |
 | `helpers/welcome.spec.js` | the welcome session's close verdict, its locale adoption pin, the banner gate's visibility condition and the session viewport's copy | none |

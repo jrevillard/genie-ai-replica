@@ -1458,14 +1458,12 @@ services:
         max_attempts: 10
 
   # GENIE.AI agent service (Epic 1) — internal-only FastAPI service. Ships
-  # DARK: AGENT_ENABLED=0 parks it (zero replicas), it declares no host port
-  # and no gateway route, so nothing agentic is reachable until the flag is
-  # on. The capability tools land in the following stories.
-  # The dark state rests on a profile + replicas PAIR (same shape as
-  # okf-server and certbot): the `agent` profile keeps the service out of a
-  # plain `docker compose up -d` on supported compose semantics, and
-  # AGENT_ENABLED decides the replica count (Swarm ignores profiles, so there
-  # the replicas gate is the activation).
+  # DARK (profile + replicas PAIR, the okf-server/certbot shape): the `agent`
+  # profile keeps it out of a plain `docker compose up -d`, AGENT_ENABLED
+  # decides the replica count, and it declares no host port and no gateway
+  # route, so nothing agentic is reachable until both gates are on (Swarm
+  # ignores profiles — there the replicas gate is the activation). The
+  # capability tools land in the following stories.
   agent-service:
     profiles: [agent]
     logging: *fluent-logging
@@ -1588,8 +1586,8 @@ services:
       - genieai_network
     deploy:
       # The activation gate: 0 (the default) parks the service, 1 runs it.
-      # (Swarm only — compose mode pairs the `agent` profile above; Compose v2
-      # also honors this value, so both gates must agree to run one replica.)
+      # (Compose v2 honors this too, so both gates must agree to run one
+      # replica.)
       replicas: ${AGENT_ENABLED:-0}
       placement:
         constraints:

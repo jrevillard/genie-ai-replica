@@ -3120,3 +3120,21 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/2-5-the-governed-answer-path-integration-slice.md`
   summary: Tool-name coupling duplicated — `taint.scan_tool_result` and `RetrievalLedger.record` each hardcode `search_knowledge`/`read_source` separately, no shared guard.
   evidence: blind B11 — a third retrieval-shaped tool registered later is silently unscanned and unledgered; no third tool exists today, so the shared guard (registry-derived names or a shared constant) is machinery without a current consumer.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
+  summary: The per-request keepAlive http/https agents and the upstream-call + status-mapping idiom are now duplicated across the two agent consumers (frame writer + JSON runner); extracting a shared run client that owns the agents and the call skeleton remains open.
+  evidence: Blind-hunter round G1 of story 2-12; the per-request agents are the deployed legacy idiom whose shared-agent refactor story 2.4's quality round already deferred (see its quality-round notes) — story 2.4b copied the idiom for the second consumer, so the duplication is now two sites wide and the shared run client is the follow-up that closes both.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
+  summary: The streaming terminal's catch (`doAgentTerminal` in agent-frame-writer.js) swallows a relay-flush/handleStreamDone throw with only a log line — no `done`/`error` frame follows and the socket dangles until the client times out.
+  evidence: Global review 1 (story 2-12) nit; streaming-side, shipped by story 2.4, outside 2.12's contract — the fix (attempt the error frame or `res.end()` in the catch) belongs to a streaming-contract story (2.9 owns SSE contract regression coverage).
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
+  summary: The story-2.10 translation leg and its residual-budget contract still have no production consumer while the compose backend block ships `AGENT_TRANSLATION_MAX_TOKENS`/`AGENT_TRANSLATION_MAX_CALLS` as if active — an operator setting them gets no bounding, and translation can pick the CPU backend the leg's GPU-only rule forbids.
+  evidence: Global review 1 (story 2-12) nit; the wiring deferral is 2.12's recorded scope line ("both modes move together later") — the consumer-wiring story (2.5 follow-through or the translation story) must either wire the leg or drop the two env entries until it lands.
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
+  summary: A legacy chatqna stream that ends with neither a `done` event nor any chunk text leaves the SSE response open forever (keepalive comment frames until the client gives up; the queries doc stays unanswered with no terminal state).
+  evidence: Global review 1 (story 2-12), severity pre_existing — unchanged from origin/main (base line 643); adjacent to the V05 inventory §9 gap 3 (swallowed upstream error events). Fix: on `end` with no text and no handled done, still run the terminal (finalize empty + done) or end the response.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
+  summary: Test-mode precedence is asymmetric across the two query entries — on AGENT_ENABLED=1 + CONTEXT_OPTION=test-mode, POST /api/queries serves the deterministic mock (2.12's gate) while /api/queries/stream still serves the agent leg (it gates on the flag only).
+  evidence: FIX review of the 2.12 correction chain (non-blocking finding 2); the streaming entry has no test-mode concept anywhere today — the symmetric gate (or an explicit "test-mode deployments keep AGENT_ENABLED=0 for streaming" rule) belongs to story 2.9's SSE contract regression coverage.

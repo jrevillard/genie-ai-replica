@@ -2,6 +2,11 @@
 
 require('../setup-env');
 
+const axios = require('axios');
+const { legacyPosture, envelope, seamStream, USAGE_RECORD } = require('../fixtures/agent-seam');
+
+jest.mock('axios', () => ({ post: jest.fn(), get: jest.fn() }));
+
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
 jest.mock(
@@ -768,6 +773,19 @@ describe('QueryService', () => {
       expect(result).toBeDefined();
       expect(result.queryId).toBe('q1');
       expect(result.response).toBeDefined();
+      // Story 2.4b — the ONE persist/analytics tail serves the legacy
+      // branches too: the minted doc is COMPLETED (isAnswered, the branch's
+      // metadata) and analytics records the completed document.
+      expect(mockQueriesCollection.update).toHaveBeenCalledWith(
+        'q1',
+        expect.objectContaining({
+          response: result.response,
+          responseTime: expect.any(Number),
+          isAnswered: true,
+          metadata: expect.objectContaining({ source_documents: expect.any(Array) })
+        })
+      );
+      expect(mockAnalyticsService.recordQuery).toHaveBeenCalledTimes(1);
       delete process.env.CONTEXT_OPTION;
     });
 
@@ -1156,6 +1174,31 @@ describe('QueryService', () => {
       mockAnalyticsService.recordQuery.mockRejectedValueOnce(new Error('analytics fail'));
       await queryService.finalizeStreamQuery('q1', 'text', 100, {});
       expect(mockQueriesCollection.update).toHaveBeenCalled();
+    });
+
+    it('an agentic answer leaves the session sticky set untouched (no okfRoutedGraphs on the update)', async () => {
+      // Story 2.4b — the agent citation envelope carries no graph_name by
+      // contract, so an agentic finalize cannot name routed graphs. The
+      // branch-driven skip (`{skipRoutedGraphs: true}`) is what leaves the
+      // sticky set untouched — the DEFAULT finalize now persists (story
+      // 3.2's rollback self-healing, pinned above), so the option is the
+      // pin's substance.
+      await queryService.finalizeStreamQuery(
+        'q1',
+        'answer',
+        100,
+        {
+          grounding_status: 'grounded',
+          source_documents: [{ document_id: 'doc_a', url: '' }],
+          agent_run: { run_id: 'run-abc' }
+        },
+        { skipRoutedGraphs: true }
+      );
+      expect(mockQueriesCollection.update).toHaveBeenCalledWith(
+        'q1',
+        expect.objectContaining({ response: 'answer', isAnswered: true })
+      );
+      expect(mockQueriesCollection.update.mock.calls[0][1]).not.toHaveProperty('okfRoutedGraphs');
     });
   });
 
@@ -1980,7 +2023,6 @@ describe('query routing — one flag, both entries', () => {
   });
 
   const LEGACY_URL = 'http://chatqna-xeon-backend-server:8888/v1/chatqna';
-  const REFUSAL = 'AGENTIC_PATH_NOT_SERVED';
 
   it('flag off: the streaming entry is branch-neutral and returns the legacy target', async () => {
     // The streaming entry does NOT read the flag itself — its agentic branch
@@ -2099,38 +2141,58 @@ describe('query routing — one flag, both entries', () => {
     expect(queryService.resolveQueryRoute()).toEqual({ agentic: false, url: LEGACY_URL });
   });
 
-  it('flag on: the non-stream entry refuses with the marker before any persistence or upstream call', async () => {
-    // The refusal rides the shared routing module's flag (the same single
-    // read the streaming entry's branch consumes — the two entries cannot
-    // disagree), fires before the query record is written, and carries the
-    // code/status the routes map to a 503.
+  it('flag on: the non-stream entry serves the agentic branch — the run leg, never the legacy worker', async () => {
+    // Story 2.4b IS the agentic serving path the 3.1 refusal once guarded the
+    // absence of: an activated flag now routes the JSON entry through the
+    // agentic branch (mint → runAgentJsonTurn → the ONE tail) — queryId
+    // continuity holds, the legacy worker never runs, and the run request
+    // targets the agent service the routing helper names.
     routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    routingFlag.agentServiceUrl.mockReturnValue('http://agent-service:8010');
     mockDb.query.mockResolvedValue(createMockCursor([]));
+    jest.spyOn(queryService, 'resolveFanoutPosture').mockResolvedValue(legacyPosture());
     const workerSpy = jest
       .spyOn(queryService, 'runOPEAWorker')
       .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
-    let refusal = null;
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q' }, { seq: 0 }),
+        envelope('text_message_content', { text: 'Hello world.' }, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
     try {
-      await queryService.createQuery(createMockQueryData());
-    } catch (error) {
-      refusal = error;
+      const result = await queryService.createQuery(createMockQueryData());
+      expect(workerSpy).not.toHaveBeenCalled();
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(axios.post.mock.calls[0][0]).toBe('http://agent-service:8010');
+      expect(result.response).toBe('Hello world.');
+      // The doc was minted first and completed through the ONE tail.
+      expect(mockQueriesCollection.save).toHaveBeenCalled();
+      expect(mockQueriesCollection.update).toHaveBeenCalledWith(
+        'query-1',
+        expect.objectContaining({ isAnswered: true, response: 'Hello world.' })
+      );
     } finally {
       workerSpy.mockRestore();
     }
-    expect(refusal).not.toBeNull();
-    expect(refusal.message).toContain(REFUSAL);
-    expect(refusal.code).toBe('AGENTIC_PATH_NOT_SERVED');
-    expect(refusal.statusCode).toBe(503);
-    expect(workerSpy).not.toHaveBeenCalled();
-    expect(mockQueriesCollection.save).not.toHaveBeenCalled();
   });
 
-  it('flag on: test-mode refuses too — the routing decision precedes the mock bypass', async () => {
+  it('flag on: test-mode serves the mock — the mock bypass outranks the flag on the JSON entry', async () => {
+    // Story 2.4b's precedence: the mock branch is the honest one under
+    // test-mode (the story's own gate), so a mocked answer never presents
+    // itself as an agent answer — it IS the mock branch, deterministically.
     routingFlag.isAgentPathEnabled.mockReturnValue(true);
     mockDb.query.mockResolvedValue(createMockCursor([]));
-    await expect(queryService.createQuery(createMockQueryData(), null)).rejects.toThrow(REFUSAL);
-    expect(mockQueriesCollection.save).not.toHaveBeenCalled();
-    expect(mockQueriesCollection.update).not.toHaveBeenCalled();
+    await withEnv({ CONTEXT_OPTION: 'test-mode' }, async () => {
+      const result = await queryService.createQuery(createMockQueryData(), null);
+      expect(result.response).toContain('mock response');
+      expect(axios.post).not.toHaveBeenCalled();
+    });
+    expect(mockQueriesCollection.update).toHaveBeenCalledWith('query-1', expect.objectContaining({ isAnswered: true }));
   });
 });
 // ============================================================

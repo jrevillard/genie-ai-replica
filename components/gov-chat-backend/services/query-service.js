@@ -5,6 +5,8 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const { normalizeRequestedLanguage } = require('./translation/language-request');
+const { isAgentPathEnabled, agentServiceUrl } = require('./agent-routing');
+const { runAgentJsonTurn } = require('./agent-json-result');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib');
 const retrievalConfigClient = require('./retrieval-config-client');
@@ -66,8 +68,6 @@ function opeaChatQnaUrl() {
 // path agentic and the other legacy. The agentic target is the agent
 // service — it can never be the chatqna/OPEA URL, a guarantee a test
 // carries behaviorally (no grep can see the BFF runtime call graph).
-const { isAgentPathEnabled, agentServiceUrl } = require('./agent-routing');
-
 function resolveQueryRoute() {
   if (isAgentPathEnabled()) {
     return { agentic: true, url: agentServiceUrl() };
@@ -75,37 +75,12 @@ function resolveQueryRoute() {
   return { agentic: false, url: opeaChatQnaUrl() };
 }
 
-// The refusal the non-streaming entry throws while the flag is on: its
-// agentic serving path (the JSON integration) does not exist yet. One
-// constant, one constructor — the entries cannot answer an activated flag
-// with different refusal texts. The 503 + code let the routes map an
-// intentional, configuration-driven refusal away from the 500 "unexpected
-// server fault" class (monitors and retry clients read those as crashes).
-const AGENTIC_REFUSAL_CODE = 'AGENTIC_PATH_NOT_SERVED';
-const AGENTIC_REFUSAL_MESSAGE =
-  'AGENTIC_PATH_NOT_SERVED: the agentic path is activated (AGENT_ENABLED=1) ' +
-  'but the non-streaming entry has no agentic serving path yet; the request ' +
-  'is refused before any upstream call';
-
-function agenticRefusalError() {
-  const error = new Error(AGENTIC_REFUSAL_MESSAGE);
-  error.code = AGENTIC_REFUSAL_CODE;
-  error.statusCode = 503;
-  return error;
-}
-
-// The legacy target the non-streaming entry consumes: the routing decision,
-// taken once, with the refusal attached to the agentic branch, before the
-// query record is written — a refused request persists nothing. (The
-// streaming entry's agentic branch is served by the frame writer in the
-// route handler; the entry itself stays branch-neutral.)
-function resolveLegacyQueryUrl() {
-  const route = resolveQueryRoute();
-  if (route.agentic) {
-    throw agenticRefusalError();
-  }
-  return route.url;
-}
+// The refusal story 3.1 attached to this adapter (503 AGENTIC_PATH_NOT_SERVED
+// while the JSON agentic path "did not exist yet") is gone: story 2.4b IS the
+// agentic serving path — createQuery's agentic branch below consumes the flag
+// decision before the legacy leg, so an activated flag is served, never
+// refused. (The streaming entry's agentic branch is served by the frame
+// writer in the route handler; the entry itself stays branch-neutral.)
 
 // The target language the client asked for. It travels to OPEA, which
 // validates it against its own language map before it is used, so only a
@@ -1075,11 +1050,30 @@ class QueryService {
    * helper for all three finalize paths). An EMPTY set is persisted too:
    * that is what lets _loadStickyGraphs reset a session's stickiness when
    * routing moves on (see the load-side note).
+   *
+   * Story 2.4b — the AGENTIC finalize paths pass `skipRoutedGraphs`: the
+   * agent citation envelope carries no `graph_name` by contract
+   * (capabilities/citations.py drops it deliberately), so an agentic answer
+   * cannot name routed graphs — it leaves the stickiness untouched instead
+   * of falsely resetting it (the `okfRoutedGraphs` key stays unset on the
+   * update payload). The skip is BRANCH-DRIVEN, never sniffed off the
+   * metadata: story 3.2's rollback self-healing finalizes a legacy turn
+   * over agentic-shaped metadata and MUST persist the empty set (the flag
+   * flipped off — stale stickiness must not glue the legacy path). Carrying
+   * graph_name through the envelope is an iteration-2 decision owned
+   * agent-side; until then the agentic entries pass the skip, everything
+   * else persists — including an empty set.
    * @param {Object} updateData - The update payload being assembled
    * @param {Object} metadata - Finalized metadata (source_documents)
    * @param {string} queryId - Correlation for logs
+   * @param {Object} [options] - `{skipRoutedGraphs}` — the agentic finalize
+   *   paths' explicit skip (see above).
    */
-  _persistRoutedGraphs(updateData, metadata, queryId) {
+  _persistRoutedGraphs(updateData, metadata, queryId, { skipRoutedGraphs = false } = {}) {
+    if (skipRoutedGraphs) {
+      logger.info('QueryService.sticky_routed_graphs_skipped_agentic', { queryId });
+      return;
+    }
     const routedGraphs = this._deriveRoutedGraphs(metadata);
     updateData.okfRoutedGraphs = routedGraphs;
     logger.info('QueryService.sticky_routed_graphs_persisted', { queryId, routedGraphs });
@@ -1091,8 +1085,11 @@ class QueryService {
    * @param {string} responseText - The full accumulated response text
    * @param {number} responseTime - Response time in milliseconds
    * @param {Object} metadata - Metadata object (source_documents, confidence_score)
+   * @param {Object} [options] - `{skipRoutedGraphs}` — the agentic terminal's
+   *   skip (see _persistRoutedGraphs); the legacy finalize never passes it,
+   *   so rollback-era legacy answers keep their self-healing empty-set reset.
    */
-  async finalizeStreamQuery(queryId, responseText, responseTime, metadata) {
+  async finalizeStreamQuery(queryId, responseText, responseTime, metadata, { skipRoutedGraphs = false } = {}) {
     logger.info('QueryService.finalize_stream_query_start', { queryId });
 
     const updateData = {
@@ -1102,7 +1099,7 @@ class QueryService {
       metadata
     };
     // Story 1.3 — persist the routed set (empty persists too: it RESETS stickiness).
-    this._persistRoutedGraphs(updateData, metadata, queryId);
+    this._persistRoutedGraphs(updateData, metadata, queryId, { skipRoutedGraphs });
     await this.queries.update(queryId, updateData);
 
     // Record analytics
@@ -1120,9 +1117,15 @@ class QueryService {
   /**
    * Create a new query
    * @param {Object} queryData - Query data
+   * @param {Object|null} headers - `{authorization}` for the OPEA call and
+   *   (agentic branch) the posture resolution.
+   * @param {Object} [options] - Story 2.4b: the agentic branch's translation
+   *   inputs `{targetLanguage, translator}` — the route resolves them (the
+   *   same resolution that refuses an unsupported language). The legacy
+   *   branch (chatqna translates server-side) passes none.
    * @returns {Promise<Object>} The created query
    */
-  async createQuery(queryData, headers = null) {
+  async createQuery(queryData, headers = null, options = {}) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
@@ -1183,11 +1186,13 @@ class QueryService {
 
       // The routing decision — the shared routing module's flag, read at
       // the same pre-record position the streaming entry's branch reads it
-      // (one flag source, two entries, no disagreement). The decision
-      // precedes the test-mode bypass: a mocked OPEA answer under an
-      // activated flag would present itself as an agentic answer, so the
-      // refusal is mode-independent.
-      const opeaUrl = resolveLegacyQueryUrl();
+      // (one flag source, two entries, no disagreement). Flag off: the
+      // value is the LEGACY chatqna target, consumed by the legacy branch
+      // below (test-mode outranks the flag — the mock branch is the honest
+      // one there). Flag on: resolveQueryRoute() answers the AGENT url at
+      // this line, so the value is DEAD — the agentic branch below serves
+      // the run before the legacy leg is ever reached.
+      const opeaUrl = resolveQueryRoute().url;
 
       // Derive text from the last message for backward compatibility and analytics
       const queryText = pickUserText(queryData.messages, queryData.userQuestion);
@@ -1224,9 +1229,50 @@ class QueryService {
       let opeaMetadata = null;
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
+      // Story 2.4b — the additive JSON latch: `translationFailed: true` rides
+      // the 201 body ONLY when the whole-answer translation failed (the
+      // sibling of the streaming `done.translationFailed` flag). Legacy
+      // branches never set it, so the flag-off return stays byte-identical.
+      let jsonTranslationFailed = false;
+      // Whether THIS request was served by the agentic branch (the tail's
+      // routed-graph skip is branch-driven, never sniffed off the metadata).
+      let agenticTurn = false;
 
       // *** START: TEST MODE LOGIC ***
-      if (backendMode === 'test-mode') {
+      // Story 2.4b — the guarded agentic branch sits FIRST (the routing
+      // helper is the only way the non-streaming entry is exposed, AD-9):
+      // the agent leg consumes the seam stream (posture resolved ONCE here —
+      // the fan-out carrier below stays inside the legacy OPEA branch, so it
+      // never runs twice), aggregates the answer and the result flows into
+      // the ONE persist/analytics/return tail below. A genuine failure is a
+      // thrown typed error — the tail never runs, the doc stays unanswered.
+      // TEST MODE outranks the flag: a test-mode deployment stays
+      // deterministic whatever AGENT_ENABLED says (the mock is the whole
+      // point of the mode), and the routing helper stays the only
+      // AGENT_ENABLED read.
+      if (isAgentPathEnabled() && backendMode !== 'test-mode') {
+        logger.info('QueryService.create_query_agentic_branch', { queryId });
+        const turn = await runAgentJsonTurn({
+          queryService: this,
+          queryData,
+          queryId,
+          headers,
+          targetLanguage: options.targetLanguage,
+          translator: options.translator,
+          // The turn starts AFTER the doc mint — the same anchor the legacy
+          // branch's worker-leg responseTime reads, so the persisted
+          // responseTime means the same thing on both sides of the flag.
+          turnStartTime: opeaStartTime
+        });
+        opeaResponseContent = turn.response;
+        opeaMetadata = turn.metadata;
+        opeaResponseTime = turn.responseTime;
+        jsonTranslationFailed = turn.translationFailed === true;
+        // This branch produced the answer: its finalize must not touch the
+        // sticky routed-graph set (branch-driven skip — see
+        // _persistRoutedGraphs; never sniffed off the metadata).
+        agenticTurn = true;
+      } else if (backendMode === 'test-mode') {
         logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
@@ -1236,20 +1282,10 @@ class QueryService {
         logger.info(`[DEBUG] Mock response generated in ${opeaResponseTime}ms.`);
         logger.info(`[DEBUG] Mock Response Content: ${opeaResponseContent}`);
         logger.info(`[DEBUG] Mock Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
-
-        const updateData = {
-          response: opeaResponseContent,
-          responseTime: opeaResponseTime,
-          isAnswered: true,
-          metadata: opeaMetadata
-        };
-        // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
-        this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
-        await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        // opeaUrl comes from the routing decision taken above (the legacy
-        // branch of resolveQueryRoute).
+        // opeaUrl comes from the routing decision taken above (this branch
+        // only runs when the flag is off or test-mode outranks it).
 
         let opeaPayload;
         if (backendMode === 'single-message') {
@@ -1308,17 +1344,29 @@ class QueryService {
         logger.info(`[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`);
         logger.info(`[DEBUG] OPEA Response Content: ${opeaResponseContent}`);
         logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
-
-        const updateData = {
-          response: opeaResponseContent,
-          responseTime: opeaResponseTime,
-          isAnswered: true,
-          metadata: opeaMetadata
-        };
-        // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
-        this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
-        await this.queries.update(queryId, updateData);
       }
+
+      // Story 2.4b — ONE persist/analytics/return tail for every branch
+      // (agentic, test-mode, legacy OPEA): the doc the mint above created is
+      // completed with the branch's answer + the assembled metadata (the
+      // `agent_run` block rides into the doc on the agentic branch), the
+      // sticky routed-graph set persists with it (story 1.3), analytics
+      // records the completed doc, and the SAME queryId is returned —
+      // continuity by construction, not by convention.
+      const updateData = {
+        response: opeaResponseContent,
+        responseTime: opeaResponseTime,
+        isAnswered: true,
+        metadata: opeaMetadata
+      };
+      // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
+      this._persistRoutedGraphs(
+        updateData,
+        opeaMetadata,
+        queryId,
+        agenticTurn ? { skipRoutedGraphs: true } : undefined
+      );
+      await this.queries.update(queryId, updateData);
 
       // Record the query in analytics
       if (this.analyticsService) {
@@ -1333,12 +1381,17 @@ class QueryService {
         totalDuration
       });
 
-      return {
+      const result = {
         queryId,
         response: opeaResponseContent,
         metadata: opeaMetadata,
         responseTime: opeaResponseTime
       };
+      if (jsonTranslationFailed) {
+        // Additive only: the legacy branches never carry the key.
+        result.translationFailed = true;
+      }
+      return result;
     } catch (error) {
       const totalDuration = Date.now() - startTime;
       logger.error('QueryService.create_query_failed', {
@@ -2448,5 +2501,3 @@ module.exports.pickUserText = pickUserText;
 // Pure helper, no instance state — the production branch points are the two
 // request entries, which read it internally.
 module.exports.resolveQueryRoute = resolveQueryRoute;
-// The refusal marker, exported for the routes' 503 mapping and the tests.
-module.exports.AGENTIC_REFUSAL_CODE = AGENTIC_REFUSAL_CODE;

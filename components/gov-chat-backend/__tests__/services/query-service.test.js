@@ -2022,10 +2022,10 @@ describe('query routing — one flag, both entries', () => {
 
   it('resolveQueryRoute: the flag on resolves the agent service, never the chatqna/OPEA URL', async () => {
     // The behavioral never-OPEA assertion (the CI dependency gate cannot see
-    // the BFF runtime call graph, so no grep enforces this). The adversarial
-    // configuration: the legacy leg's own host/port NAME the agent host —
-    // the agentic route still resolves to the agent service, never to the
-    // chatqna URL that configuration would produce.
+    // the BFF runtime call graph, so no grep enforces this). The agentic
+    // branch is structurally incapable of producing the chatqna URL: it
+    // returns only what the shared routing module names as the agent target,
+    // whatever the legacy leg's own OPEA_HOST/OPEA_PORT configuration says.
     routingFlag.isAgentPathEnabled.mockReturnValue(true);
     routingFlag.agentServiceUrl.mockReturnValue('http://agent.internal:9999');
     const route = queryService.resolveQueryRoute();

@@ -455,7 +455,7 @@ class _FixedWindowCache:
 
 
 def test_answer_translation_budget_counts_the_offset_outside_the_division():
-    # Regression (#2064): the +20 prompt-offset tokens land OUTSIDE the /4
+    # Regression: the +20 prompt-offset tokens land OUTSIDE the /4
     # chars-per-token division — 20 tokens, not the 5 an in-division offset
     # contributes. The room cap the endpoint receives is derived from the
     # prompt ACTUALLY sent, so the arithmetic is pinned at its one point of
@@ -475,6 +475,26 @@ def test_answer_translation_budget_counts_the_offset_outside_the_division():
     prompt = payload["messages"][0]["content"]
     estimated_tokens = math.ceil(len(prompt) / 4)
     assert payload["max_tokens"] == 1000 - (estimated_tokens + 20) - 128
+
+
+def test_answer_translation_need_bound_excludes_the_offset_tokens():
+    # With a window that leaves room to spare, the completion cap is the
+    # need bound (4× the estimated input + 256) — the offset tokens are
+    # scaffolding around the prompt, not input that produces output, so
+    # they do not multiply into the bound (which would add 80 phantom
+    # tokens of completion budget).
+    endpoint = "http://translation.internal"
+    transport = PreparationFakeTransport(
+        responses={endpoint: (200, {"choices": [{"message": {"content": "réponse"}, "finish_reason": "stop"}]})}
+    )
+    config = NoAgentConfig.load(env={"VLLM_TRANSLATION_ENDPOINT": endpoint, "VLLM_TRANSLATION_MODEL_ID": "test-model"})
+    registry = LanguageRegistry(VENDORED_REGISTRY_PATH)
+    translator = AnswerTranslator(config, registry, transport=transport, cache=_FixedWindowCache(1_000_000))
+    answer, status = asyncio.run(translator.translate("hello", "fr"))
+    assert status == "ok" and answer == "réponse"
+    payload = transport.calls[-1]["payload"]
+    prompt = payload["messages"][0]["content"]
+    assert payload["max_tokens"] == 4 * math.ceil(len(prompt) / 4) + 256
 
 
 # ---------------------------------------------------------------------

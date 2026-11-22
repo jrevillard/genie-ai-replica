@@ -408,7 +408,7 @@ class ProbeModelClient:
             window = await self._window_tokens()
             # The offset is added AFTER the estimate: the +20 prompt-offset
             # tokens are tokens, not characters — inside the division they
-            # would contribute only 5 (#2064).
+            # would contribute only 5.
             input_tokens = (
                 math.ceil(len(json.dumps(messages)) / MODEL_CHARS_PER_TOKEN_ESTIMATE) + MODEL_PROMPT_OFFSET_TOKENS
             )

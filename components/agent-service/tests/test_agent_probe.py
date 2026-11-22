@@ -330,8 +330,7 @@ def test_complete_caps_the_bound_to_the_window_room():
     payload = transport.calls[-1]["payload"]
     # The offset lands OUTSIDE the chars-per-token division: "[]" is 2 chars
     # = ceil(2/4) = 1 estimated token, + 20 offset tokens = 21, room 851.
-    # Inside the division the offset would contribute only 5 (room 866) —
-    # #2064 pins the documented +20.
+    # Inside the division the offset would contribute only 5 (room 866).
     expected_room = 1000 - (math.ceil(len("[]") / 4) + 20) - 128
     assert payload["max_tokens"] == expected_room
 

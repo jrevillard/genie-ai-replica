@@ -166,15 +166,16 @@ class AnswerTranslator:
         if window:
             # The offset mirrors the deployed gpu-translate-backend and is
             # added AFTER the estimate: offset tokens, not characters —
-            # inside the division it would contribute only 5 (#2064).
-            input_tokens = (
-                math.ceil(len(answer_prompt) / _TRANSLATION_CHARS_PER_TOKEN) + _TRANSLATION_PROMPT_OFFSET_TOKENS
-            )
+            # inside the division it would contribute only 5. It stays out
+            # of the need bound too: the scaffolding around the prompt
+            # produces no output, so it does not multiply into the cap.
+            estimated_tokens = math.ceil(len(answer_prompt) / _TRANSLATION_CHARS_PER_TOKEN)
+            input_tokens = estimated_tokens + _TRANSLATION_PROMPT_OFFSET_TOKENS
             room = window - input_tokens - _TRANSLATION_INPUT_SAFETY_TOKENS
             if room < _TRANSLATION_MIN_OUTPUT_BUDGET:
                 logger.warning(f"Answer translation refused: the prompt leaves {room} of {window} tokens.")
                 return text, "failed"
-            payload["max_tokens"] = min(room, 4 * input_tokens + 256)
+            payload["max_tokens"] = min(room, 4 * estimated_tokens + 256)
         try:
             status, body = await self._transport.post_json(
                 f"{self._config.translation_endpoint}/v1/chat/completions",

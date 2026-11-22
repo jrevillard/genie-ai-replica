@@ -84,7 +84,9 @@ PREPARATION_DEGRADED = "preparation_degraded"
 DEFAULT_CONFIDENCE_RANK_DECAY = 0.5
 
 # The answer-translation budget's constants (deployed gpu-translate-backend:
-# the safety margin, the refusal floor and the need bound).
+# the prompt-offset tokens, the safety margin, the refusal floor and the
+# need bound).
+_TRANSLATION_PROMPT_OFFSET_TOKENS = 20
 _TRANSLATION_INPUT_SAFETY_TOKENS = 128
 _TRANSLATION_MIN_OUTPUT_BUDGET = 256
 _TRANSLATION_CHARS_PER_TOKEN = 4
@@ -121,10 +123,10 @@ class AnswerTranslator:
     space); the answer targets the CALLER's language. The budget follows the
     deployed gpu-translate-backend: the input is estimated at 4 chars/token,
     the completion cap is the smaller of the window room (minus the 128
-    safety tokens) and the need bound (4× the input + 256), and a prompt
-    that leaves too little room fails the translation instead of asking for
-    an unusable budget. A cut-off completion is a FAILURE, never a short
-    answer.
+    safety tokens) and the need bound (4× the estimated input + 256), and a
+    prompt that leaves too little room fails the translation instead of
+    asking for an unusable budget. A cut-off completion is a FAILURE, never
+    a short answer.
 
     Outcomes: ``ok`` (the translated answer), ``refused`` (the requested
     language is not one the registry knows — the caller's mistake, the
@@ -162,12 +164,18 @@ class AnswerTranslator:
         }
         headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
         if window:
-            input_tokens = math.ceil((len(answer_prompt) + 20) / _TRANSLATION_CHARS_PER_TOKEN)
+            # The offset mirrors the deployed gpu-translate-backend and is
+            # added AFTER the estimate: offset tokens, not characters —
+            # inside the division it would contribute only 5. It stays out
+            # of the need bound too: the scaffolding around the prompt
+            # produces no output, so it does not multiply into the cap.
+            estimated_tokens = math.ceil(len(answer_prompt) / _TRANSLATION_CHARS_PER_TOKEN)
+            input_tokens = estimated_tokens + _TRANSLATION_PROMPT_OFFSET_TOKENS
             room = window - input_tokens - _TRANSLATION_INPUT_SAFETY_TOKENS
             if room < _TRANSLATION_MIN_OUTPUT_BUDGET:
                 logger.warning(f"Answer translation refused: the prompt leaves {room} of {window} tokens.")
                 return text, "failed"
-            payload["max_tokens"] = min(room, 4 * input_tokens + 256)
+            payload["max_tokens"] = min(room, 4 * estimated_tokens + 256)
         try:
             status, body = await self._transport.post_json(
                 f"{self._config.translation_endpoint}/v1/chat/completions",

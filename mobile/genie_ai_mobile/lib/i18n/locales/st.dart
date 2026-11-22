@@ -1090,8 +1090,8 @@ const Map<String, dynamic> stLocale = {
       "stepFailed": "Mohato o le mong o hlotsohetse.",
       "verificationUnavailable":
           "Ha e khonehe ho phethahatsa netefatso ea karabo.",
-      "verificationTranslated":
-          "Grounding was verified on the original-language answer — this translation is not covered by that check.",
+      "verificationTranslationScope":
+          "Netefatso e ne e sebetsa karabong ea puo ea pele — phetolelo ha ea hlahlojoa.",
       "operations": {
         "search_knowledge": {
           "running": "E batla tsebo…",

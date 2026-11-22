@@ -1097,8 +1097,8 @@ const Map<String, dynamic> frLocale = {
       "stepFailed": "Une étape a échoué.",
       "verificationUnavailable":
           "La vérification de la réponse n'a pas pu être effectuée.",
-      "verificationTranslated":
-          "La vérification de l'ancrage a été effectuée sur la réponse dans sa langue d'origine — cette traduction n'est pas couverte par cette vérification.",
+      "verificationTranslationScope":
+          "La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.",
       "operations": {
         "search_knowledge": {
           "running": "Recherche dans la base de connaissances…",

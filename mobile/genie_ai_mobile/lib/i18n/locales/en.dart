@@ -1085,8 +1085,8 @@ const Map<String, dynamic> enLocale = {
       "stepFailed": "A step failed.",
       "verificationUnavailable":
           "Response verification could not be completed.",
-      "verificationTranslated":
-          "Grounding was verified on the original-language answer — this translation is not covered by that check.",
+      "verificationTranslationScope":
+          "The verification covered the original-language answer — the translation was not verified.",
       "operations": {
         "search_knowledge": {
           "running": "Searching knowledge…",

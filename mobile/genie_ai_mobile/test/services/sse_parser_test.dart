@@ -210,9 +210,10 @@ void main() {
       final verdict = events[0] as SseAgentVerdictEvent;
       expect(verdict.groundingStatus, 'grounded');
       expect(verdict.isGrounded, isTrue);
-      // The projection keys beyond the normalized pair ride verbatim.
+      // The delivery mode the BFF annotates normalizes into its field.
+      expect(verdict.translationMode, 'none');
+      // The projection keys beyond the normalized set ride verbatim.
       expect(verdict.extra, {
-        'translation_mode': 'none',
         'policy': 'verdict-marked',
         'marking': {'required': false, 'reason': null},
       });

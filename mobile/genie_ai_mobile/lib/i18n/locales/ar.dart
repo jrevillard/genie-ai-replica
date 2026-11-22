@@ -1074,8 +1074,8 @@ const Map<String, dynamic> arLocale = {
       "stepCompleted": "اكتملت الخطوة.",
       "stepFailed": "فشلت إحدى الخطوات.",
       "verificationUnavailable": "تعذّر إكمال التحقق من صحة الإجابة.",
-      "verificationTranslated":
-          "تم التحقق من الاستناد إلى الإجابة بلغتها الأصلية — هذه الترجمة لا يشملها ذلك التحقق.",
+      "verificationTranslationScope":
+          "غطّى التحقق الإجابة بلغتها الأصلية — لم يتم التحقق من الترجمة.",
       "operations": {
         "search_knowledge": {
           "running": "جارٍ البحث في قاعدة المعرفة…",

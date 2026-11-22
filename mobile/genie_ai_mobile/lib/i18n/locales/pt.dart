@@ -1090,8 +1090,8 @@ const Map<String, dynamic> ptLocale = {
       "stepFailed": "Uma etapa falhou.",
       "verificationUnavailable":
           "Não foi possível concluir a verificação da resposta.",
-      "verificationTranslated":
-          "O fundamento foi verificado na resposta no idioma original — esta tradução não é abrangida por essa verificação.",
+      "verificationTranslationScope":
+          "A verificação cobriu a resposta no idioma original — a tradução não foi verificada.",
       "operations": {
         "search_knowledge": {
           "running": "A pesquisar na base de conhecimento…",

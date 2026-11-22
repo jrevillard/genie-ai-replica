@@ -1072,8 +1072,8 @@ const Map<String, dynamic> thLocale = {
       "stepCompleted": "ขั้นตอนเสร็จสมบูรณ์",
       "stepFailed": "ขั้นตอนหนึ่งล้มเหลว",
       "verificationUnavailable": "ไม่สามารถตรวจสอบความถูกต้องของคำตอบได้",
-      "verificationTranslated":
-          "การตรวจสอบความมีหลักฐานอ้างอิงทำบนคำตอบภาษาต้นฉบับ — คำแปลนี้ไม่อยู่ในขอบเขตของการตรวจสอบนั้น",
+      "verificationTranslationScope":
+          "การตรวจสอบครอบคลุมคำตอบในภาษาต้นฉบับ — คำแปลไม่ได้รับการตรวจสอบ",
       "operations": {
         "search_knowledge": {
           "running": "กำลังค้นหาในฐานความรู้…",

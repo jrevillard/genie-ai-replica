@@ -1088,8 +1088,8 @@ const Map<String, dynamic> esLocale = {
       "stepFailed": "Un paso ha fallado.",
       "verificationUnavailable":
           "No se pudo completar la verificación de la respuesta.",
-      "verificationTranslated":
-          "La verificación del fundamento se realizó sobre la respuesta en su idioma original; esta traducción no queda cubierta por esa comprobación.",
+      "verificationTranslationScope":
+          "La verificación cubrió la respuesta en el idioma original — la traducción no quedó verificada.",
       "operations": {
         "search_knowledge": {
           "running": "Buscando en la base de conocimientos…",

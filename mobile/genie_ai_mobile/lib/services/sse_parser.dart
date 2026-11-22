@@ -123,15 +123,23 @@ class SseAgentVerdictEvent extends SseEvent {
   final String? groundingStatus;
   final bool isGrounded;
 
-  /// Verdict-projection keys outside the normalized pair above
-  /// (`translation_mode`, `policy`, `judge`, `marking`, …), carried
-  /// verbatim so a new projection field survives the parser boundary
-  /// without a parser edit — the same contract as [SseMetadataEvent.extra].
+  /// The translation mode the BFF annotated onto the projection
+  /// (`streaming-units` when the relay delivered translated units and did
+  /// not fail; the finalize-time payload says 'none' — the agent service
+  /// cannot know the delivery). The translation-scope caption's live
+  /// signal; the `translation` frame carries the post-stream mode.
+  final String? translationMode;
+
+  /// Verdict-projection keys outside the normalized set above (`policy`,
+  /// `judge`, `marking`, …), carried verbatim so a new projection field
+  /// survives the parser boundary without a parser edit — the same
+  /// contract as [SseMetadataEvent.extra].
   final Map<String, dynamic> extra;
 
   const SseAgentVerdictEvent({
     this.groundingStatus,
     this.isGrounded = false,
+    this.translationMode,
     this.extra = const {},
   });
 }
@@ -223,6 +231,7 @@ class SseParser {
     return SseAgentVerdictEvent(
       groundingStatus: json['grounding_status'] as String?,
       isGrounded: json['is_grounded'] as bool? ?? false,
+      translationMode: json['translation_mode'] as String?,
       extra: _extraOf(json, _knownVerdictKeys),
     );
   }
@@ -250,6 +259,7 @@ class SseParser {
     'version',
     'grounding_status',
     'is_grounded',
+    'translation_mode',
   };
 
   SseEvent? _parseEvent(Map<String, dynamic> json) {

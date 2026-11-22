@@ -1074,8 +1074,8 @@ const Map<String, dynamic> manLocale = {
       "stepFailed": "A step failed.",
       "verificationUnavailable":
           "Response verification could not be completed.",
-      "verificationTranslated":
-          "Grounding was verified on the original-language answer — this translation is not covered by that check.",
+      "verificationTranslationScope":
+          "Hickyraghey dhen coyrlie ayns y chengey bunneydagh — cha nel y chyndaa shickyrit.",
       "operations": {
         "search_knowledge": {
           "running": "Searching knowledge…",

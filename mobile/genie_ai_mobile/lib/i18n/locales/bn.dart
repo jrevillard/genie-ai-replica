@@ -1088,8 +1088,8 @@ const Map<String, dynamic> bnLocale = {
       "stepCompleted": "ধাপ সম্পন্ন হয়েছে।",
       "stepFailed": "একটি ধাপ ব্যর্থ হয়েছে।",
       "verificationUnavailable": "উত্তরের যাচাই সম্পন্ন করা যায়নি।",
-      "verificationTranslated":
-          "মূল ভাষার উত্তরের ভিত্তি যাচাই করা হয়েছে — এই অনুবাদ সেই যাচাইয়ের আওতাভুক্ত নয়।",
+      "verificationTranslationScope":
+          "যাচাইটি মূল ভাষার উত্তরকে কভার করেছিল — অনুবাদটি যাচাই করা হয়েনি।",
       "operations": {
         "search_knowledge": {
           "running": "জ্ঞানভান্ডারে খোঁজ চলছে…",

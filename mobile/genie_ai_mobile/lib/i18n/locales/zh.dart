@@ -970,7 +970,7 @@ const Map<String, dynamic> zhLocale = {
       "stepCompleted": "步骤已完成。",
       "stepFailed": "一个步骤失败了。",
       "verificationUnavailable": "无法完成回复的核实。",
-      "verificationTranslated": "依据核实针对原始语言的回复进行 — 此翻译不在该核实的覆盖范围内。",
+      "verificationTranslationScope": "验证针对的是原文回答 — 译文未经核查。",
       "operations": {
         "search_knowledge": {
           "running": "正在检索知识库…",

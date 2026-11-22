@@ -1148,9 +1148,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// field) — or a future state this client does not know — falls back
   /// to `is_grounded` alone, so an unfamiliar verdict can never silently
   /// retire the answer-level warning. The translated-grounded caption:
-  /// the verdict certifies the source-language text, so a DELIVERED
-  /// translation is not covered by it; a failed translation left the
-  /// English original on screen — the verified text itself, no caption.
+  /// grounded AND a translation DELIVERED (the delivery mode), never on
+  /// an untranslated original.
   ({bool ungrounded, bool unverified, bool scopeCaption}) _verdictTruthTableOf(
     Map<String, dynamic> msg,
     bool isUser,
@@ -1167,10 +1166,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         groundingStatus == 'ungrounded' ||
         (!knownVerdict && msg['isGrounded'] == false);
     final unverified = groundingStatus == 'unverified';
+    // The translated-grounded caption, web parity (answerTranslationScoped):
+    // grounded AND a translation delivered — the delivery mode the verdict
+    // frame annotated ('streaming-units') or the translation frame marked
+    // ('post-stream'), folded into the saved metadata so a restored answer
+    // scopes exactly like a live one. 'none'/absent = the verified text
+    // was delivered untranslated; a failed translation never earns a mode.
     final scopeCaption =
         groundingStatus == 'grounded' &&
-        msg['translationFailed'] != true &&
-        I18nService().currentLocale.languageCode != 'en';
+        (msg['metadata']?['translation_mode'] ?? 'none') != 'none';
     return (
       ungrounded: ungrounded,
       unverified: unverified,
@@ -1303,6 +1307,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // agentic path (null on a legacy stream — the answer-level warning
     // then falls back to is_grounded alone).
     String? groundingStatus;
+    // The answer-translation delivery mode, the translation-scope
+    // caption's live signal (web parity): the verdict frame annotates
+    // 'streaming-units' when the relay delivered translated units; a
+    // `translation` frame is the post-stream whole-answer delivery.
+    // 'none'/absent = the verified text was delivered untranslated.
+    String? translationMode;
     // What the query-translation step fed the embedder for this answer (the
     // non-streaming path keeps the whole metadata map; this path rebuilds
     // it, so the field is carried here for the two to agree).
@@ -1397,13 +1407,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       });
                       _scrollToBottom();
                     }
-                  case SseAgentVerdictEvent():
+                  case SseAgentVerdictEvent(translationMode: final mode):
                     // The verdict is an answer-level statement, never a
                     // line state: the answer warning renders from the
                     // metadata frame (pinned to follow this one), which
                     // carries the same grounding_status a restored
-                    // conversation persists.
-                    break;
+                    // conversation persists. The delivery mode it
+                    // annotates feeds the translation-scope caption.
+                    translationMode = mode;
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
@@ -1421,8 +1432,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     // the answer phase just like a chunk, so the line can
                     // never render under delivered answer content (today
                     // the envelope puts translation after the last chunk;
-                    // the invariant does not lean on that order).
+                    // the invariant does not lean on that order). It is
+                    // also the post-stream delivery itself: the caption's
+                    // mode marker, exactly as the web store records it.
                     accumulatedContent = content;
+                    translationMode = 'post-stream';
                     setState(() {
                       msg['content'] = content;
                       _agentChunkSeen = true;
@@ -1466,8 +1480,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     // turn's end, where the line is already gone: accepted
                     // but unrendered, like any post-chunk frame.
                     break;
-                  case SseAgentVerdictEvent():
-                    break;
+                  case SseAgentVerdictEvent(translationMode: final mode):
+                    translationMode = mode;
                 }
               }
 
@@ -1498,6 +1512,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     'translation_status': answerTranslationFailed
                         ? 'failed'
                         : 'ok',
+                    // The delivery mode, folded when this turn learned it
+                    // (web's storableMetadata): the restored conversation's
+                    // scope caption reads it — a restored answer scopes its
+                    // verdict exactly like a live one.
+                    'translation_mode': ?translationMode,
                   }..removeWhere((key, value) => value == null);
                 });
               }
@@ -2807,7 +2826,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     Expanded(
                                       child: Text(
                                         tr(
-                                          'chatbot.agentActivity.verificationTranslated',
+                                          'chatbot.agentActivity.verificationTranslationScope',
                                         ),
                                         style: TextStyle(
                                           fontSize: tokens.textXs,

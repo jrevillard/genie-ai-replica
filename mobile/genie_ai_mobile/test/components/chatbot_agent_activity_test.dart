@@ -543,16 +543,25 @@ void main() {
   });
 
   testWidgets(
-    'the translated-grounded caption renders in a non-English UI and a failed translation suppresses it',
+    'the translated-grounded caption renders when a delivery mode rode the stream',
     (tester) async {
+      // Delivered translation (streaming units relayed, no failure): the
+      // verdict frame annotates the mode, the caption shows — the answer
+      // the user reads is the French translation, not the verified
+      // English text. The same words the web locale ships.
       await I18nService().changeLanguage('fr');
       final controller = await mountStreaming(tester);
 
-      // Delivered translation: the caption shows (the answer the user
-      // reads is the French translation, not the verified English text).
       controller.add(
         _frames([
           {'type': 'chunk', 'content': 'Réponse'},
+          {
+            'type': 'agent_verdict',
+            'version': 1,
+            'grounding_status': 'grounded',
+            'is_grounded': true,
+            'translation_mode': 'streaming-units',
+          },
           {
             'type': 'metadata',
             'source_documents': <dynamic>[],
@@ -568,12 +577,53 @@ void main() {
 
       expect(
         find.text(
-          "La vérification de l'ancrage a été effectuée sur la réponse dans sa langue d'origine — cette traduction n'est pas couverte par cette vérification.",
+          'La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.',
         ),
         findsOneWidget,
       );
     },
   );
+
+  testWidgets('a post-stream translation frame marks the delivery too', (
+    tester,
+  ) async {
+    // Streaming translation off: the whole answer arrives untranslated,
+    // then ONE translation frame delivers it — the mode marker of the
+    // second carrier.
+    await I18nService().changeLanguage('fr');
+    final controller = await mountStreaming(tester);
+
+    controller.add(
+      _frames([
+        {'type': 'chunk', 'content': 'The verified English answer'},
+        {
+          'type': 'agent_verdict',
+          'version': 1,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+          'translation_mode': 'none',
+        },
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+        },
+        {'type': 'translation', 'content': 'La réponse vérifiée'},
+        {'type': 'done', 'queryId': 'q1'},
+      ]),
+    );
+    await controller.close();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.',
+      ),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'a failed translation leaves the verified English original on screen — no caption',
@@ -599,7 +649,7 @@ void main() {
 
       expect(
         find.text(
-          "La vérification de l'ancrage a été effectuée sur la réponse dans sa langue d'origine — cette traduction n'est pas couverte par cette vérification.",
+          'La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.',
         ),
         findsNothing,
       );
@@ -700,7 +750,7 @@ void main() {
       );
       expect(
         find.text(
-          "La vérification de l'ancrage a été effectuée sur la réponse dans sa langue d'origine — cette traduction n'est pas couverte par cette vérification.",
+          'La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.',
         ),
         findsNothing,
       );
@@ -756,6 +806,38 @@ void main() {
 
       expect(
         find.text('AI-generated — not based on library documents'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'a restored grounded answer with a persisted delivery mode shows the scope caption',
+    (tester) async {
+      // The web folds the delivery mode into the saved metadata
+      // (storableMetadata); the restore scopes the verdict exactly like
+      // a live turn — the English UI shows it too (the mode, not the UI
+      // language, is the signal).
+      mockChatbotConfigAsset(tester, config);
+      final mock = _RestoredVerdictMockClient(
+        tree,
+        messageMetadata: {
+          'sources': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+          'translation_mode': 'streaming-units',
+        },
+      );
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      await pumpChatBot(tester, mock, chatKey: chatKey);
+      await chatKey.currentState!.loadConversation('conv-1');
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'The verification covered the original-language answer — the translation was not verified.',
+        ),
         findsOneWidget,
       );
     },
@@ -870,10 +952,11 @@ void main() {
         ),
         findsOneWidget,
       );
-      // And the scope caption cannot claim a translation that never was.
+      // And the scope caption cannot claim a translation that never was
+      // (the JSON path carries no delivery mode).
       expect(
         find.text(
-          "La vérification de l'ancrage a été effectuée sur la réponse dans sa langue d'origine — cette traduction n'est pas couverte par cette vérification.",
+          'La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.',
         ),
         findsNothing,
       );

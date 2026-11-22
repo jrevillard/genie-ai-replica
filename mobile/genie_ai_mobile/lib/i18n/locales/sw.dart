@@ -1088,8 +1088,8 @@ const Map<String, dynamic> swLocale = {
       "stepCompleted": "Hatua imekamilika.",
       "stepFailed": "Hatua moja imeshindikana.",
       "verificationUnavailable": "Uthibitisho wa jibu haukukamilika.",
-      "verificationTranslated":
-          "Uthibitisho ulifanyika kwa jibu katika lugha yake ya asili — tafsiri hii haijashughulikiwa na uthibitisho huo.",
+      "verificationTranslationScope":
+          "Uthibitisho ulihusu jibu katika lugha yake ya asili — tafsiri haikuhakikiwa.",
       "operations": {
         "search_knowledge": {
           "running": "Inatafuta kwenye hazina ya maarifa…",

@@ -1081,8 +1081,8 @@ const Map<String, dynamic> idLocale = {
       "stepCompleted": "Langkah selesai.",
       "stepFailed": "Satu langkah gagal.",
       "verificationUnavailable": "Verifikasi respons tidak dapat diselesaikan.",
-      "verificationTranslated":
-          "Validasi dilakukan pada jawaban dalam bahasa aslinya — terjemahan ini tidak tercakup oleh pemeriksaan tersebut.",
+      "verificationTranslationScope":
+          "Verifikasi mencakup jawaban dalam bahasa aslinya — terjemahan tidak diverifikasi.",
       "operations": {
         "search_knowledge": {
           "running": "Mencari di basis pengetahuan…",

@@ -72,7 +72,7 @@ const List<String> agentActivityKeys = [
   'stepCompleted',
   'stepFailed',
   'verificationUnavailable',
-  'verificationTranslated',
+  'verificationTranslationScope',
   'operations.search_knowledge.running',
   'operations.search_knowledge.completed',
   'operations.search_knowledge.failed',

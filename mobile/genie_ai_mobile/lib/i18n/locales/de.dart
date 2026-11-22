@@ -1098,8 +1098,8 @@ const Map<String, dynamic> deLocale = {
       "stepFailed": "Ein Schritt ist fehlgeschlagen.",
       "verificationUnavailable":
           "Die Überprüfung der Antwort konnte nicht abgeschlossen werden.",
-      "verificationTranslated":
-          "Die Fundierung wurde anhand der Antwort in der Originalsprache geprüft — diese Übersetzung ist von dieser Prüfung nicht abgedeckt.",
+      "verificationTranslationScope":
+          "Die Überprüfung galt der Antwort in der Originalsprache — die Übersetzung wurde nicht geprüft.",
       "operations": {
         "search_knowledge": {
           "running": "Durchsuche die Wissensbasis…",

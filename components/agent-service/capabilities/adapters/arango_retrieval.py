@@ -265,18 +265,34 @@ class ArangoRetrievalAdapter:
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
             return []
-        results = [
-            {
-                "doc": RetrievedChunk(
-                    key=row["key"],
-                    text=row.get("text") or "",
-                    score=float(row["score"]),
-                    embedding=row.get("embedding"),
-                ),
-                "score": float(row["score"]),
-            }
-            for row in rows
-        ]
+        # A chunk without an embedding (partially indexed collection) makes
+        # COSINE_SIMILARITY return null — the row cannot be scored, so it is
+        # not a dense candidate: skip it and let the remaining rows (or the
+        # BM25 leg) carry the result. Skipping is safe AFTER the LIMIT
+        # because null sorts LAST under SORT score DESC: a null row only
+        # enters the top-k when fewer than k scored rows exist, so the skip
+        # can never evict a scored candidate.
+        results = []
+        for row in rows:
+            raw_score = row.get("score")
+            if raw_score is None:
+                continue
+            score = float(raw_score)
+            results.append(
+                {
+                    "doc": RetrievedChunk(
+                        key=row["key"],
+                        text=row.get("text") or "",
+                        score=score,
+                        embedding=row.get("embedding"),
+                    ),
+                    "score": score,
+                }
+            )
+        if skipped := len(rows) - len(results):
+            logger.warning(
+                f"dense_search skipped {skipped} unscoreable row(s) (null embedding) on '{self.collection_name}'"
+            )
         # The recorded wrapper applies score_threshold AFTER the top-k cut.
         results = [r for r in results if r["score"] >= self._config.score_threshold]
         # Defense-in-depth label filter on the DENSE results. The recorded

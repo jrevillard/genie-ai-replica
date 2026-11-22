@@ -108,6 +108,16 @@ context:
 
 <!-- Append-only. Populated by step-04 during review loops. -->
 
+### G2 (2026-11-22, global review #2 on the whole diff, correction commit 5a8bbe6dd)
+
+| Finding | Disposition |
+|---|---|
+| F1 (important): a MOBILE-SAVED turn loses the translation outcome — the G1-F2 restore reader reads `translation_status`, the streamed metadata rebuild never wrote it, and the save uploads exactly that map; a restored failed translation showed the scope caption | FIXED on both send paths: the streamed rebuild stamps `translation_status` (ok/failed) and the JSON path reads the 2.4b root latch + stamps the response metadata when the lane did not. Writer-side of the same gap #2080 files for the server. Two tests cover the writer (messages-post capture) and the JSON reader (warning + untranslated caption + no scope caption). |
+| F2 (pre-existing): the JSON path never set `msg['isGrounded']` — the legacy fallback could not fire there | FIXED: the assistant message carries `isGrounded` from `metadata.is_grounded`; covered by the new JSON test. |
+| F3 (nit): the story named the folded-away parity test file in tasks + Verification | FIXED: lines name `locale_consistency_test.dart`. |
+| F4 (nit): a `translation` frame did not mark the answer phase | FIXED: the translation case sets `_agentChunkSeen` — the collapse invariant no longer leans on the envelope's frame order. |
+
+FIX review (fresh context, correction diff): all confirmed-fixed, red-checks re-verified, no new issues.
 ### G1 (2026-11-22, global review, correction commit 6cadaa42a)
 
 | Finding | Disposition |
@@ -128,6 +138,10 @@ context:
 ### Global review G1 (2026-11-22, whole branch vs origin/feat/agentic-foundations/prd)
 
 6 findings: 2 important (F1, F2 — both real, both fixed with tests), 1 pre_existing (F3 — fixed in passing), 3 nits (F4 kept+flagged, F5 named, F6 fixed with test). Verified non-defects: `tr(key) == key` catalogue fallback, `grounding_status` persistence path, all terminal resets, parser cast tolerance, harness import/params.
+
+### Global review G2 (2026-11-22, whole branch vs origin/feat/agentic-foundations/prd)
+
+4 findings: 1 important (F1 — real, fixed with two tests), 1 pre_existing (F2 — fixed, covered), 2 nits (F3 fixed, F4 fixed). Verified non-defects: full-suite green at 894, backend latch contract cross-checked.
 
 ## Design Notes
 

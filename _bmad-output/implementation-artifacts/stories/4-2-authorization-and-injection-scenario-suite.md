@@ -154,6 +154,21 @@ checks, no test-only production seams, the one private-function test is the sole
 branches (retention bar holds). Final: 170 protocol+capture + 186 eval green, ruff check +
 format clean, py_compile clean.
 
+**Global review 2 (C2, on `402c4a29b`) — 1 important + 4 nit, all fixed in `08cde788a` + `900716f41`:**
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | important | narrowed_scope mechanical check inert on the shipped envelope (citations.py `_legacy_entry`/`_okf_entry` hardcode both label lists empty — verified against the production builder) — label-free rows silently claimed "the mechanical checks held" | **Fixed**: label-free rows get the judge-handoff reason (`NARROWED_SCOPE_INERT_REASON`); rows with labels keep the check; docstring + instructions state the conditional honestly |
+| 2 | nit | failure/cancellation classes mechanically failed on their honest terminals | **Fixed**: `cancelled`+`expect_cancelled` and typed-failure+`expect_typed_failure` are judge handoffs; without the expectation the fail stands |
+| 3 | nit | the denial branch short-circuited the disclosure check (a denial case that leaked lost its finding) | **Fixed**: scenario findings computed before all branching; denial terminal merges them (leak → fail) |
+| 4 | nit | string-shaped context lists iterated per character | **Fixed**: list/tuple guards like `authorized_repos` |
+| 5 | nit | verdicts CLI re-judge stamped `created_utc=now()` unpinnable — digests never comparable | **Fixed**: `--created-utc` pin |
+
+Fix review f=0 on the C2 diff: **CLEAN** except one test nit (the digest-equality pin was
+vacuously green — two same-second unpinned runs match); the reviewer's one-line direct
+timestamp assertion applied in `900716f41` (7/7 mutations killed, verified by the reviewer).
+Final gates: 179 protocol+capture + 186 eval green, ruff check + format clean.
+
 ## Spec Change Log
 
 ## Review Triage Log

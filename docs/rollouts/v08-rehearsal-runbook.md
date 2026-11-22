@@ -45,8 +45,10 @@ not a rehearsal failure, and never silently turned into a requirement (FR-26).
 - The rehearsal backend pod carries `genieai.io/component=backend` (the
   component NetworkPolicy that admits chatqna ingress selects sources by that
   label). The agent pod carries `genieai.io/component=agent` — no NetworkPolicy
-  selects that label, so its 8010 ingress from the rehearsal backend stays
-  open and its egress (GPU node, ArangoDB, doc-repo) is unrestricted.
+  selects that label, so its ingress is unrestricted and its egress (GPU node,
+  ArangoDB, doc-repo) is unrestricted. The hop backend→agent is bounded by the
+  BACKEND's egress rules, not by the agent pod's label — see Phase 2's two
+  wire facts.
 - Every artifact of the rehearsal is dedicated and cleaned: a dedicated
   Keycloak user, a dedicated conversation (`queries` docs under a rehearsal
   sessionId), the ROPC grant temporarily enabled and REVERTED, the two
@@ -71,7 +73,9 @@ branch pipelines and both build jobs are `when: never` on web.)
 
 ```bash
 STAGE_BRANCH=<branch>            # the stage's delivery branch
-SHORT_SHA=$(git rev-parse --short HEAD)
+# CI_COMMIT_SHORT_SHA is EIGHT chars — `git rev-parse --short` on this repo
+# yields nine, and the tag must name the SAME short sha the pipeline stamps:
+SHORT_SHA=$(git rev-parse --short=8 HEAD)
 git push origin "$STAGE_BRANCH"
 git tag "v08-rehearsal-$SHORT_SHA" "$SHORT_SHA" && git push origin "v08-rehearsal-$SHORT_SHA"
 PIPELINE_ID=$(glab api "projects/90/pipelines?ref=v08-rehearsal-$SHORT_SHA&per_page=1" \
@@ -119,6 +123,24 @@ the venue's exact ArangoDB/Keycloak/translation wiring; the agentic knobs are
 added on top. The image is the stage build; the identity (labels, selector,
 name) is the rehearsal's own — never the Helm release's.
 
+**Two wire facts this topology forces (both discovered live, story 3.3):**
+
+1. **The BFF dials the bare `AGENT_SERVICE_URL`** (`agent-frame-writer.js`
+   POSTs the URL as configured — the agent route is `POST /v1/runs`, so the
+   shipped compose default `http://agent-service:8010` answers 404 on a real
+   deployment; the unit suites pin both sides with a mocked axios and never
+   joined them). Until the code-side fix lands, the rehearsal deployment
+   carries the run path IN the env value
+   (`http://...:8080/v1/runs` — axios posts the full URL verbatim).
+2. **The component NetworkPolicy's egress list does not include the agent
+   port.** The rehearsal backend carries `genieai.io/component=backend`
+   (required for chatqna ingress/egress), whose egress rules admit specific
+   ports — 8010 is not among them, and this k3s REJECTS denied flows. The
+   agent pod therefore binds **8080** (in the egress allow-list; a deployment
+   -level command override — the image's shipped port stays 8010), exposed
+   through a HEADLESS Service: this venue's netpol rejects pod→ClusterIP
+   egress too, and a headless Service resolves DNS straight to the pod IP.
+
 ```bash
 kubectl -n genieai get deploy genieai-genieai-umbrella-backend -o json | jq '
   {
@@ -135,7 +157,7 @@ kubectl -n genieai get deploy genieai-genieai-umbrella-backend -o json | jq '
           | .image = $img
           | .env = (.env + [
               {name: "AGENT_ENABLED", value: "1"},
-              {name: "AGENT_SERVICE_URL", value: "http://v08-rehearsal-agent:8010"},
+              {name: "AGENT_SERVICE_URL", value: "http://v08-rehearsal-agent-hl:8080/v1/runs"},
               {name: "AGENT_UPSTREAM_TIMEOUT_MS", value: "3600000"},
               {name: "AGENT_TRANSLATION_MAX_TOKENS", value: "4096"},
               {name: "AGENT_TRANSLATION_MAX_CALLS", value: "8"}
@@ -145,42 +167,49 @@ kubectl -n genieai get deploy genieai-genieai-umbrella-backend -o json | jq '
   }' --arg img "$BACKEND_IMAGE" > /tmp/v08-rehearsal/backend-deployment.yaml
 kubectl apply -f /tmp/v08-rehearsal/backend-deployment.yaml
 
-kubectl apply -f - <<'EOF'
+# AGENT_IMAGE_HERE is substituted with $AGENT_IMAGE before applying
+cat > /tmp/v08-rehearsal/agent-stack.yaml <<EOF
 apiVersion: v1
 kind: Service
 metadata:
-  name: v08-rehearsal-agent
+  name: v08-rehearsal-agent-hl
   namespace: genieai
   labels: {v08-rehearsal: "true"}
 spec:
+  clusterIP: None
   selector: {v08-rehearsal: "true", app: v08-rehearsal-agent}
   ports:
-    - port: 8010
-      targetPort: 8010
+    - name: http
+      port: 8080
+      targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: v08-rehearsal-agent
   namespace: genieai
-  labels: {v08-rehearsal: "true", genieai.io/component: agent}
+  labels: {v08-rehearsal: "true", "genieai.io/component": agent}
 spec:
   replicas: 1
   selector: {matchLabels: {v08-rehearsal: "true", app: v08-rehearsal-agent}}
   template:
     metadata:
-      labels: {v08-rehearsal: "true", app: v08-rehearsal-agent, genieai.io/component: agent}
+      labels: {v08-rehearsal: "true", app: v08-rehearsal-agent, "genieai.io/component": agent}
     spec:
       containers:
         - name: agent
           image: AGENT_IMAGE_HERE
           imagePullPolicy: IfNotPresent
-          ports: [{containerPort: 8010, name: http}]
+          # Deployment-level port override: 8080 sits in the component netpol's
+          # egress allow-list (8010 does not). The shipped image default (8010)
+          # is unchanged; real deployments on a flat compose network keep it.
+          command: ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8080"]
+          ports: [{containerPort: 8080, name: http}]
           readinessProbe:
-            httpGet: {path: /ready, port: 8010}
+            httpGet: {path: /ready, port: 8080}
             initialDelaySeconds: 10
             periodSeconds: 10
-            failureThreshold: 6
+            failureThreshold: 12
           env:
             - {name: AGENT_ENABLED, value: "1"}
             - {name: LOG_LEVEL, value: "INFO"}
@@ -219,10 +248,22 @@ spec:
             - name: ARANGO_PASSWORD
               valueFrom: {secretKeyRef: {name: arango-root-secret, key: password}}
 EOF
-# (substitute AGENT_IMAGE_HERE with $AGENT_IMAGE before applying)
-kubectl -n genieai set image deploy/v08-rehearsal-agent agent="$AGENT_IMAGE"
+sed -i "s|AGENT_IMAGE_HERE|$AGENT_IMAGE|" /tmp/v08-rehearsal/agent-stack.yaml
+kubectl apply -f /tmp/v08-rehearsal/agent-stack.yaml
 kubectl -n genieai rollout status deploy/v08-rehearsal-backend deploy/v08-rehearsal-agent --timeout=300s
+# seam reachability proof BEFORE any turn (both wire facts above verified):
+kubectl -n genieai exec deploy/v08-rehearsal-backend -- \
+  sh -c 'wget -q -O /tmp/seam -T 3 --post-data="{\"question\":\"probe\",\"deadline_ms\":5000,\"context\":{}}" --header="Content-Type: application/json" http://v08-rehearsal-agent-hl:8080/v1/runs; echo "seam-exit:$?"'
+# expected: exit 0 with a 422 validation answer (the probe body carries no
+# CallerContext) — the hop BFF→agent is proven reachable end to end
 ```
+
+**Rehearsal turn protocol:** a flag change is a pod replacement; the
+port-forward targets a POD NAME, so every switch needs the forward re-armed
+against the CURRENT pod — and `kubectl get pod -l app=... -o
+jsonpath='{.items[0]...}'` can pick the TERMINATING surge pod mid-rollout.
+Wait for `rollout status` AND a single Ready pod before resolving the name,
+and verify the pod's `AGENT_ENABLED` value before arming the forward.
 
 ## Phase 3 — pair validation (from the DEPLOYED pods)
 

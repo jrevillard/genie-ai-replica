@@ -2,7 +2,7 @@
 title: 'Story 3.3 — Rehearsed rollback and rollout record (V08)'
 type: 'feature'
 created: '2026-11-22'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'c411b5f085f0aaba779da00fa404a6f2f4c54448'
@@ -74,13 +74,13 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `docs/rollouts/README.md` — canonical home: index, one-record-per-stage rule, record template (every FR-16 field), FR-21 as an explicit stage-gate review item, V08 re-run rule
-- [ ] `docs/rollouts/v08-rehearsal-runbook.md` — the deterministic, re-runnable rehearsal procedure with exact commands (preflight, pair validation from deployed env, agentic direction, rollback direction, re-activation, in-flight switch, evidence capture, cleanup + revert verification)
-- [ ] Rehearsal execution — fresh images built from this branch (`FORCE_IMAGE_REBUILD=true` pipeline), dedicated `v08-rehearsal-backend`/`v08-rehearsal-agent` deployments in `genieai`, dedicated Keycloak user + temporary ROPC (reverted + verified), the five rehearsal phases run and their output captured
-- [ ] FR-21 gate check executed — `tests/config-validator` OPEA-free gate green on this tree, audit scope named, explicit FR-21 item added to the stage-gate instrument (`docs/baselines/s3-exit-checklist.md` gains the explicit review-check row; future gates inherit it from the canonical home)
-- [ ] `docs/rollouts/<stage>-rollout.md` — the filled record: consumers and capabilities, artifact/config versions (image digests, model ids, flag values, knob values), activation and rollback procedures (the exact commands), in-flight treatment (observed), rollback triggers with the named responsible operator, rehearsal evidence (transcript excerpts + verdicts + the #2052 venue note)
-- [ ] `CHANGELOG.md` — `[Unreleased]` entry
-- [ ] `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md` + `sprint-status.yaml` — story to `in-review`/row `review` per the sync rule — BMAD bookkeeping
+- [x] `docs/rollouts/README.md` — canonical home: index, one-record-per-stage rule, record template (every FR-16 field), FR-21 as an explicit stage-gate review item, V08 re-run rule
+- [x] `docs/rollouts/v08-rehearsal-runbook.md` — the deterministic, re-runnable rehearsal procedure with exact commands (preflight, pair validation from deployed env, agentic direction, rollback direction, re-activation, in-flight switch, evidence capture, cleanup + revert verification)
+- [x] Rehearsal execution — fresh images built from this branch (tag pipeline 18964 after the FORCE pipeline proved unable to build the agent image — see Implementation Notes), dedicated `v08-rehearsal-backend`/`v08-rehearsal-agent` deployments in `genieai`, dedicated Keycloak user + temporary ROPC (reverted + verified), the five rehearsal phases run and their output captured
+- [x] FR-21 gate check executed — `tests/config-validator` OPEA-free gate green on this tree (674 passed, 0 failed), audit scope named, explicit FR-21 item added to the stage-gate instrument (`docs/baselines/s3-exit-checklist.md` gains the explicit review-check row; future gates inherit it from the canonical home)
+- [x] `docs/rollouts/v08-rollout.md` — the filled record: consumers and capabilities, artifact/config versions (image digests, model ids, flag values, knob values), activation and rollback procedures (the exact commands), in-flight treatment (observed), rollback triggers with the named responsible operator, rehearsal evidence (transcript excerpts + verdicts + the #2052 venue note)
+- [x] `CHANGELOG.md` — `[Unreleased]` entry
+- [x] `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md` + `sprint-status.yaml` — story to `in-review`/row `review` per the sync rule — BMAD bookkeeping
 
 **Acceptance Criteria:**
 - Given the canonical home and template, when a stage rolls out, then its record carries every FR-16 field including the named responsible operator and rehearsal evidence — the record structure is in the repo, one record per stage.
@@ -97,6 +97,10 @@ context:
 - 2026-11-22 (execution, deviation): the planning note's FORCE pipeline does NOT build the agent image — `build:agent-service` (Epic 1 job) carries only tag/MR/default/release rules, no `FORCE_IMAGE_REBUILD` rule, so pipeline 18961/18962 built `build:backend` and never `build:agent-service`. The workflow also blocks plain-branch and API-sourced pipelines (workflow:rules), and both build jobs are `when: never` on `web`. Resolution: a rehearsal TAG on the branch HEAD (`v08-rehearsal-2b7f72aef`) — both jobs carry `if: $CI_COMMIT_TAG`, so one pipeline (18963) builds BOTH images under the same `pending-2b7f72aef` content tag; no code change, no CI file change. The transient pipeline schedule used to attempt the API trigger was created and deleted; both dud pipelines canceled. Runbook Phase 0 records the tag-pipeline mechanism.
 - 2026-11-22 (execution, venue correction): the agent pod is labeled `genieai.io/component=agent` — NO NetworkPolicy selects that label (all 14 policies select other component values), so its 8010 ingress from the rehearsal backend stays open and its egress (GPU 444, Arango 8529, doc-repo) is unrestricted. The planning note's concern (a `component=backend` label would close 8010 ingress — the backend netpol admits ingress only on port 3000) is why the agent pod takes a different label.
 - 2026-11-22 (execution, venue correction): Keycloak on this venue serves plain HTTP on 8080 under the `/auth` context path (the runbook's first-draft `https://localhost:18080/realms/...` shape 404s); SERVER-TESTING's master-token recipe works with `http://localhost:18080/auth/...`. The runbook carries the corrected shape.
+- 2026-11-22 (execution, outcome): the five rehearsal phases all ran and their evidence is recorded in `docs/rollouts/v08-rollout.md`. Pair invariant HOLDS with equality from the deployed values (3600000 = 3565000 + 30000 + 5000; agent ceiling `min(240, 3565)` = 240 s). Agentic↔legacy proven BOTH directions on the same session; re-activation routes back; the in-flight stream under a mid-stream `rollout restart` COMPLETED inside the shutdown window (89 chunks + metadata + done, doc `isAnswered:true`, no `answer_interrupted`) — ADR agentic-003's rolling-restart variant, observed with timestamps. The model-leg 400 (#2052) is recorded as venue evidence per FR-26; answer quality stays #2052's acceptance.
+- 2026-11-22 (execution, FINDING — needs a follow-up story): the shipped BFF→agent wire contract is broken on a real deployment. `agentServiceUrl()` returns the bare configured URL and `agent-frame-writer.js` POSTs it bare (pinned by `agent-frame-writer.test.js` with a mocked axios), while the agent service serves `POST /v1/runs` (pinned by its own suite) — both suites green, the hop never joined live until now; the deployed pair 404'd at `POST /`. Rehearsal worked around it at deployment level (path in the env value). A code fix (helper appends the run path, or agent root alias) is REQUIRED before any real k8s/compose activation of the flag — it is a production-code change, out of this story's no-code boundary.
+- 2026-11-22 (execution, FINDING — operator item for the chart): the component NetworkPolicy egress list has no agent-port row (8010 absent) and this k3s REJECTS denied flows; the venue's netpol also rejects pod→ClusterIP egress. The rehearsal ran with a deployment-level workaround (agent on 8080 + headless Service); flat compose topologies are unaffected. Chart adoption (`feat/k8s-migration` is read-only) must add the agent egress row.
+- 2026-11-22 (execution, cleanup): everything of the rehearsal is verified gone — deployments/services deleted, Keycloak user deleted (0 remaining), ROPC `false` verified, 9 rehearsal docs deleted to 0, port-forwards killed, transient pipeline schedule deleted. The two rehearsal TAGS remain on the remote (pre-receive hook declines tag deletion — protected patterns), recorded in the record's cleanup section; their registry `pending-*` tags age out under the registry cleanup policy.
 
 ## Spec Change Log
 

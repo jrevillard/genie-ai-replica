@@ -299,6 +299,21 @@ describe('POST /stream', () => {
     expect(response.body.error).toBe('STREAM_ERROR');
   });
 
+  it('maps a typed error through its own statusCode and code', async () => {
+    // The general typed-error passthrough: an error that declares its own
+    // status and machine-readable code renders as that status — a named,
+    // intentional state, never the 500 unexpected-fault class below.
+    const typed = new Error('the named condition');
+    typed.code = 'NAMED_CONDITION';
+    typed.statusCode = 503;
+    queryService.initStreamQuery.mockRejectedValue(typed);
+
+    const response = await authPost('/api/queries/stream', { sessionId: 's1' });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe('NAMED_CONDITION');
+  });
+
   it('should return 504 on timeout/abort', async () => {
     const abortError = new Error('Timeout');
     abortError.code = 'ECONNABORTED';
@@ -1256,6 +1271,20 @@ describe('POST /', () => {
 
     expect(response.status).toBe(500);
     expect(response.body.message).toBe('Create failed');
+  });
+
+  it('maps the intentional agentic refusal to 503 with the marker as the code', async () => {
+    // The same mapping the streaming path applies: the refusal is a named,
+    // configuration-driven state, never the 500 unexpected-fault class.
+    const refusal = new Error('AGENTIC_PATH_NOT_SERVED: the agentic path is activated');
+    refusal.code = 'AGENTIC_PATH_NOT_SERVED';
+    refusal.statusCode = 503;
+    queryService.createQuery.mockRejectedValue(refusal);
+
+    const response = await authPost('/api/queries', { sessionId: 's1' });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
   });
 
   // Review 2026-10-29 round 3: a bearer failure caught during OKF fan-out

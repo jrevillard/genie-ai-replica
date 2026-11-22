@@ -5,7 +5,7 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const { normalizeRequestedLanguage } = require('./translation/language-request');
-const { isAgentPathEnabled } = require('./agent-routing');
+const { isAgentPathEnabled, agentServiceUrl } = require('./agent-routing');
 const { runAgentJsonTurn } = require('./agent-json-result');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib');
@@ -60,6 +60,27 @@ const DEFAULT_OPEA_PORT = '8888';
 function opeaChatQnaUrl() {
   return `http://${process.env.OPEA_HOST || DEFAULT_OPEA_HOST}:${process.env.OPEA_PORT || DEFAULT_OPEA_PORT}/v1/chatqna`;
 }
+
+// The agentic branch's flag and target come from the shared routing module —
+// the ONLY place in the component that reads AGENT_ENABLED (its own suite
+// pins the single-read invariant). This adapter is the decision shape both
+// entries consume: a deployment that flips the flag cannot end up with one
+// path agentic and the other legacy. The agentic target is the agent
+// service — it can never be the chatqna/OPEA URL, a guarantee a test
+// carries behaviorally (no grep can see the BFF runtime call graph).
+function resolveQueryRoute() {
+  if (isAgentPathEnabled()) {
+    return { agentic: true, url: agentServiceUrl() };
+  }
+  return { agentic: false, url: opeaChatQnaUrl() };
+}
+
+// The refusal story 3.1 attached to this adapter (503 AGENTIC_PATH_NOT_SERVED
+// while the JSON agentic path "did not exist yet") is gone: story 2.4b IS the
+// agentic serving path — createQuery's agentic branch below consumes the flag
+// decision before the legacy leg, so an activated flag is served, never
+// refused. (The streaming entry's agentic branch is served by the frame
+// writer in the route handler; the entry itself stays branch-neutral.)
 
 // The target language the client asked for. It travels to OPEA, which
 // validates it against its own language map before it is used, so only a
@@ -621,9 +642,11 @@ class QueryService {
     const queryId = query._key;
     logger.info('QueryService.stream_query_created', { queryId });
 
-    // Build OPEA payload with stream: true
+    // Build OPEA payload with stream: true. The URL is the legacy chatqna
+    // target: the streaming entry's agentic branch is served by the frame
+    // writer in the route handler and never consumes it, while the legacy
+    // branch relays through it unchanged.
     const opeaUrl = opeaChatQnaUrl();
-
     let opeaPayload;
     if (backendMode === 'single-message') {
       opeaPayload = { messages: queryText, stream: true };
@@ -1152,6 +1175,15 @@ class QueryService {
       }
       logger.info('[DEBUG] All validations passed successfully.');
 
+      // The routing decision — the shared routing module's flag, read at
+      // the same pre-record position the streaming entry's branch reads it
+      // (one flag source, two entries, no disagreement). The value is the
+      // LEGACY leg's target: the agentic branch below consumes the same
+      // flag first and serves the agent leg, so this URL is only reached
+      // when the flag is off (and under test-mode, which outranks the flag
+      // on this entry — the mock branch is the honest one there).
+      const opeaUrl = resolveQueryRoute().url;
+
       // Derive text from the last message for backward compatibility and analytics
       const queryText = pickUserText(queryData.messages, queryData.userQuestion);
       if (!queryText) {
@@ -1235,7 +1267,8 @@ class QueryService {
         logger.info(`[DEBUG] Mock Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        const opeaUrl = opeaChatQnaUrl();
+        // opeaUrl comes from the routing decision taken above (this branch
+        // only runs when the flag is off or test-mode outranks it).
 
         let opeaPayload;
         if (backendMode === 'single-message') {
@@ -2442,3 +2475,7 @@ module.exports = instance;
 // on the singleton object; do not refactor into a class method without also
 // updating the unit tests (query-service.test.js: pickUserText suite).
 module.exports.pickUserText = pickUserText;
+// Attached for unit-test access (query-service.test.js: the routing suite).
+// Pure helper, no instance state — the production branch points are the two
+// request entries, which read it internally.
+module.exports.resolveQueryRoute = resolveQueryRoute;

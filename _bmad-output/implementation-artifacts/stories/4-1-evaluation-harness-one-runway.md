@@ -187,6 +187,16 @@ baseline commit before any protocol file existed; NOT touched — recorded, not 
 `CallerContext` fields verified against `capabilities/contract.py` (user_id /
 authorized_graph_names / requested_labels; `authorized_repos` defaults).
 
+Scoped fix review, round 1 (`1fb17e055..681f979fc`, f=0, fresh context, correction diff only) — NOT clean: 3 findings (1 low CI comment, 1 medium-low missing-test, 1 low behavior), every claim re-verified against the tree; behavior-preservation checklist traced per path (answer surface, cancellation point, outcome-None guards, usage_record, `_split_by_bytes` math, reuse double-fire, validation-before-gate ordering, deepcopy pins, scope):
+
+| Finding | Severity | Verdict | Disposition |
+|---|---|---|---|
+| CI comment claimed `capabilities/__init__` pulls adapters (requests, httpx) and the search capability (numpy, kneed) — FALSE: `__init__` imports only `.contract` + `.executor` → adapters.chunks/docrepo/okf → adapters/http (requests); httpx/numpy/kneed ride only `search_knowledge`, imported solely inside the in-container driver assembly the test never runs | low | confirmed (import graph traced) | **Fixed**: comment names the real closure; pip line trimmed to `pytest openpyxl pydantic requests` |
+| Fix 8 (B status-based failure counting in the assess summary) had NO regression test — reverting the expression leaves all 114 tests green | medium-low | confirmed (grep + mutation-check by the reviewer) | **Fixed**: the E01 B wiring test now carries a `status: "failure"` row and asserts `1 non-answered outcome(s)` (diverges under the reverted expression — verified by the round-2 reviewer) |
+| The unconditional driver-script ship broke the converged-resume semantic: zero pending now required a container round-trip (old flow did zero execs) | low | confirmed (old `range(0, len(pending), batch)` did nothing on zero pending) | **Fixed**: the ship is `if pending:`-gated; the resume test pins `converged.cmds == []` |
+
+Scoped fix review, round 2 (`681f979fc..24b9e7889`, f=1, fresh context, correction diff only) — **CLEAN**: all three corrections verified (closure traced import-by-import; the pin diverges under the reverted expression; the `if pending:` gate preserves the pending-case ship and zeroes the converged case; scope exact). 114 passed. One minor doc-only finding filed and applied directly (bounded, non-behavioral): the `run_config_b` docstring's "ships ONCE per invocation" contradicted the new converged-resume behavior — reworded "at most once per invocation (zero times on a converged resume)". No further review needed for a doc-only delta.
+
 ## Spec Change Log
 
 ## Review Triage Log

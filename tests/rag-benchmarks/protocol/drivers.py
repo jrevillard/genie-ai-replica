@@ -205,7 +205,7 @@ def run_config_b(
 ) -> dict:
     """Run the assessment set through config B inside the agent-service container.
 
-    The flow: the driver script ships ONCE per invocation; each sub-batch of
+    The flow: the driver script ships at most once per invocation (zero times on a converged resume); each sub-batch of
     pending cases ships its payload in its OWN exec call (base64 through
     ``printf | base64 -d`` — no stdin, no docker cp) with the driver run in
     the same call, and the rows file read back (base64). Sub-batches are

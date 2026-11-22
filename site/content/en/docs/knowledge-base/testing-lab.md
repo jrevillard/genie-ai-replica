@@ -30,8 +30,9 @@ fresh head vector (one embed call per tag field).
 
 ## The Test tab
 
-Type a query a user would ask and run it. The Lab scores every published
-repository head exactly as the real fan-out would, and shows:
+Type a query a user would ask and run it. The Lab scores **every repository
+head in this deployment** — not the caller's authorized fan-out — so you can
+see how the heads compete, and shows:
 
 - the **score table** — each repository with its state, head score, rank, and
   whether its head *claims* the query or is *suppressed*;
@@ -96,15 +97,34 @@ with progress per query (*"7 of 40 queries (17%)"*) and two phases —
 | Metric | Meaning |
 |---|---|
 | **Pass rate** | share of the suite that routed correctly this run |
+| **Universe** | how many competing heads the score was measured over — a pass rate without its denominator is not a measurement |
 | **Positives / Negatives** | how many should-select and should-NOT-select rows the suite carries |
-| **Avg margin** | how far ahead the winner was, on average — a low margin means routing is one near-miss away from flipping |
-| **Steal pairs** | "*kenya stole 3 of 8*" — a named competitor keeps winning another repository's rows, so you know exactly which pair of heads to tune |
+| **Avg margin** | how far ahead the winner was, on average, and over how many measured margins — a low margin means routing is one near-miss away from flipping |
+| **Steal pairs** | "*Sibling 0 stole 3 queries*" — a named competitor keeps winning another repository's rows, so you know exactly which pair of heads to tune |
+| **Lost with no winner** | queries no head claimed — the answer went nowhere, which no pass rate can show |
+| **Taken by another repository** | negatives this repository correctly refused that a *sibling* answered anyway — the wrong repository served the answer |
 | **not evaluatable** | rows with no competing head to lose to — there is nothing to pass against yet |
 
-**Run history** keeps every run with its pass rate and the head version it
-ran against, so you can see whether a tag change helped. A note flags a suite
-whose stored tags have drifted since it was generated (*"Tags changed since
-this suite was generated — regenerate for fresh forbidden rows"*).
+**When the run does not stand for production**, the Lab says so above the
+numbers and names the reason. The Lab replays the head gate; a deployment
+that turns routing off, lets the chunk competition decide instead of the
+head claim, or weights the head differently, is not decided by that gate —
+and a Lab verdict read as a production verdict would be a lie the Lab can
+refuse to tell.
+
+**Where the answers came from** is the pair-level view beside the pass rate:
+rows are the repository each query was *meant for*, columns are the repository
+that actually answered it, and each cell carries its count and its share of
+that row. The aggregate pass rate hides the pairs, and a near-tie between two
+repositories is invisible in it — the matrix names the pair, which is the thing
+to tune. Its **claim accuracy** is the share of queries answered by the
+repository they were meant for.
+
+**Run history** keeps every run with its pass rate, the universe it was
+measured over, and the head version it ran against, so you can see whether a
+tag change helped. A note flags a suite whose stored tags have drifted since
+it was generated (*"Tags changed since this suite was generated — regenerate
+for fresh forbidden rows"*).
 
 ### Probing a single query against the corpus
 

@@ -134,6 +134,13 @@ Two deliberate consequences, stated plainly:
   which repositories exist and serve. Repositories' *content* stays behind
   the query pipeline (answers only surface chunks relevant to a query); only
   the names/ids/domains are exposed.
+- **The Testing Lab's universe is the deployment's, not yours.** The Lab is
+  admin-gated — a scopeless caller cannot open it — but inside it, the Lab
+  scores *every* repository head in the deployment, including repositories
+  whose scopes your own token does not carry. It is a curator's instrument
+  over the whole installation, not a preview of one caller's authorized
+  fan-out: read its numbers as "how these heads compete here", not "what
+  this caller would be served".
 
 ## Conversation continuity (sticky routing)
 

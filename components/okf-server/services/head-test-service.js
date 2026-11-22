@@ -79,36 +79,38 @@ function queryInstructionFor(modelId) {
   return '';
 }
 
-// ---------- route knobs (defaults = production retriever config.py) ----------
-
-const ROUTE_TOP_K = parseInt(process.env.RETRIEVER_ROUTE_TOP_K || '40', 10);
-const ROUTE_MIN_CHUNKS = parseInt(process.env.RETRIEVER_ROUTE_MIN_CHUNKS || '3', 10);
-const ROUTE_PROBE_TIMEOUT_MS = parseInt(process.env.RETRIEVER_ROUTE_PROBE_TIMEOUT_MS || '2000', 10);
-const ROUTE_RETRY = parseInt(process.env.RETRIEVER_ROUTE_RETRY || '1', 10);
-// Story 1-8a (David 2026-10-08: "under no circumstances should 'fun in
-// Indonesia' be routed to the NCD Information repo"): a head only CLAIMS a
-// query when its score clears the forbidden centroid by this margin —
-// forbidden-dominant and noise-floor queries are structurally suppressed
-// regardless of universe size. Calibrated on NCD (2026-10-08): suppressed
-// set spans avg−forbidden ∈ [−0.062, −0.008] (mental-health, nutrition,
-// exercise, "fun in Indonesia"); selected set ≥ +0.024 ("genetic risk
-// factors for cancer" — David: "probably in, given the tags"; on-topic
-// positives +0.106..+0.122). Default 0.01 sits centered in the gap.
-const ROUTE_HEAD_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
-// Story 1-8b (David 2026-10-09: "forbidden is forbidden — that is a hard
-// contract, it should immediately score zero") — the gate hardens from one
-// margin rule to a three-condition claim. Calibrated on NCD 2026-10-09
-// (19-query probe, gate-probe-inner.js):
-//   FLOOR: unrelated queries score 0.32-0.48 on ANY head ("capital of
-//   France" 0.321, "forbidden noise gate" 0.407, "weather today" 0.484)
-//   and the margin rule cannot see them (France claimed at +0.012). Legit
-//   claims start at 0.614 → 0.55 sits mid-gap.
-const ROUTE_HEAD_FLOOR = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_FLOOR || '0.55');
-//   VETO: a mixed-subject query (genetics+cancer 0.617, epidemiology+lung
-//   0.619, exercise+asthma 0.638, incidence-trends 0.567) slips past the
-//   averaged forbidden centroid but not its single dominant forbidden tag.
-//   Legit claims never exceed 0.529 on any forbidden tag → 0.55 separates.
-const ROUTE_FORBIDDEN_TAG_MAX = parseFloat(process.env.RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX || '0.55');
+// ---------- route knobs ----------
+//
+// #2061 phase 1b: the knobs are read PER RUN through the ONE shared loader
+// (services/route-knobs.js), not captured at module load. The retriever's
+// config.py is the authority; the loader mirrors it and the config-validator
+// suite fails loud when the two drift apart.
+//
+// The calibration story for each knob (unchanged by the move):
+//   ROUTE_HEAD_MARGIN - Story 1-8a (David 2026-10-08: "under no circumstances
+//     should 'fun in Indonesia' be routed to the NCD Information repo"): a head
+//     only CLAIMS a query when its score clears the forbidden centroid by
+//     this margin - forbidden-dominant and noise-floor queries are
+//     structurally suppressed regardless of universe size. Calibrated on NCD
+//     (2026-10-08): suppressed set spans avg-forbidden in [-0.062, -0.008]
+//     (mental-health, nutrition, exercise, "fun in Indonesia"); selected set
+//     >= +0.024 ("genetic risk factors for cancer" - David: "probably in,
+//     given the tags"; on-topic positives +0.106..+0.122). Default 0.01 sits
+//     centered in the gap.
+//   ROUTE_HEAD_FLOOR - Story 1-8b (David 2026-10-09: "forbidden is forbidden
+//     - that is a hard contract, it should immediately score zero"): the gate
+//     hardens from one margin rule to a three-condition claim. Calibrated on
+//     NCD 2026-10-09 (19-query probe, gate-probe-inner.js):
+//       FLOOR: unrelated queries score 0.32-0.48 on ANY head ("capital of
+//              France" 0.321, "forbidden noise gate" 0.407, "weather today"
+//              0.484) and the margin rule cannot see them (France claimed at
+//              +0.012). Legit claims start at 0.614 -> 0.55 sits mid-gap.
+//       VETO: a mixed-subject query (genetics+cancer 0.617, epidemiology+lung
+//              0.619, exercise+asthma 0.638, incidence-trends 0.567) slips past
+//              the averaged forbidden centroid but not its single dominant
+//              forbidden tag. Legit claims never exceed 0.529 on any forbidden
+//              tag -> 0.55 separates.
+const { routeKnobs } = require('./route-knobs');
 const SIBLING_LIMIT = parseInt(process.env.OKF_HEAD_TEST_SIBLING_LIMIT || '20', 10);
 
 // ---------- math helpers ----------
@@ -232,8 +234,12 @@ async function embedQueryBatch(queries) {
  * ROUTE_RETRY; a per-probe timeout never fails the whole test — the
  * repo is marked errored and the aggregate may become 'degraded'
  * (production semantics).
+ *
+ * The knobs arrive per call (#2061 phase 1b): the loader resolves them at
+ * the start of the run, so every probe in one run uses ONE consistent set.
+ * The top-k comes from the knobs too — there is no second source for it.
  */
-async function probeGraph(db, graphName, queryVec, k) {
+async function probeGraph(db, graphName, queryVec, knobs) {
   const aql =
     'FOR doc IN `' +
     graphName +
@@ -241,11 +247,11 @@ async function probeGraph(db, graphName, queryVec, k) {
     'LET s = APPROX_NEAR_COSINE(doc.embedding, @emb) ' +
     'SORT s DESC LIMIT @k RETURN s';
   let lastErr = null;
-  for (let attempt = 0; attempt <= ROUTE_RETRY; attempt += 1) {
+  for (let attempt = 0; attempt <= knobs.ROUTE_RETRY; attempt += 1) {
     try {
       const cursor = await Promise.race([
-        db.query(aql, { emb: queryVec, k }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('probe timeout')), ROUTE_PROBE_TIMEOUT_MS))
+        db.query(aql, { emb: queryVec, k: knobs.ROUTE_TOP_K }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('probe timeout')), knobs.ROUTE_PROBE_TIMEOUT_MS))
       ]);
       const rows = await cursor.all();
       return { top_scores: rows.map((r) => (typeof r === 'number' ? r : Number(r)) || 0), error: null };
@@ -266,15 +272,19 @@ async function probeGraph(db, graphName, queryVec, k) {
  * global top-k by score; count per graph; qualified iff count >=
  * ROUTE_MIN_CHUNKS; floor = single best-count graph when nothing
  * qualifies (routing NEVER selects zero — retriever :1771-1774).
+ *
+ * The knobs default to the shared loader's CURRENT values (#2061 phase 1b) —
+ * resolved per call, never captured at import — so a caller that forgets to
+ * thread them still scores under the thresholds in force right now.
  */
-function qualifyProbes(scored /* [{graph, repo_id, top_scores}] */) {
+function qualifyProbes(scored /* [{graph, repo_id, top_scores}] */, knobs = routeKnobs()) {
   const rows = [];
   for (const g of scored) {
     if (!g.top_scores) continue;
     for (const s of g.top_scores) rows.push({ repo_id: g.repo_id, score: s });
   }
   rows.sort((a, b) => b.score - a.score);
-  const top = rows.slice(0, ROUTE_TOP_K);
+  const top = rows.slice(0, knobs.ROUTE_TOP_K);
   const counts = {};
   for (const r of top) counts[r.repo_id] = (counts[r.repo_id] || 0) + 1;
   const perRepo = {};
@@ -285,7 +295,7 @@ function qualifyProbes(scored /* [{graph, repo_id, top_scores}] */) {
       chunks_in_top: counts[g.repo_id] || 0
     };
   }
-  const qualified = Object.keys(counts).filter((rid) => counts[rid] >= ROUTE_MIN_CHUNKS);
+  const qualified = Object.keys(counts).filter((rid) => counts[rid] >= knobs.ROUTE_MIN_CHUNKS);
   let floor = null;
   if (!qualified.length) {
     let best = -1;
@@ -393,6 +403,16 @@ async function routingTest(repoId, payload = {}, opts = {}) {
       1,
       Math.min(parseInt(payload.sibling_limit || SIBLING_LIMIT, 10) || SIBLING_LIMIT, 50)
     );
+    // #2061 phase 1b: the knobs are resolved ONCE PER RUN, here. Every leg
+    // below (the head gate, the chunk probe, the qualification) uses THIS
+    // set, and the run record carries it — so a stored run can say which
+    // thresholds produced it. Reading them at module load meant a retune
+    // needed a restart, and the values never reached the record at all.
+    // A caller that runs MANY legs (the suite runner) passes the run's own
+    // set in `opts.knobs`, so every leg of one run is scored under ONE set
+    // and the recorded set is the scoring set — not merely a set that
+    // happened to be in force while the run went on.
+    const knobs = opts.knobs || routeKnobs();
 
     // 1. The repo under test (authz pre-gate like every admin action).
     // Review !622 round 9, #78665: batch callers (head-suite runSuite)
@@ -466,9 +486,9 @@ async function routingTest(repoId, payload = {}, opts = {}) {
       // veto) so margin-killed positives carry their attribution into run
       // rows and the improvement advice.
       r.max_tag = worst ? worst.tag : null;
-      r.tag_veto = worst && worst.cosine >= ROUTE_FORBIDDEN_TAG_MAX ? worst.tag : null;
-      r.floor_pass = r.score >= ROUTE_HEAD_FLOOR;
-      const marginPass = r.forbidden_cosine === null || r.head_margin > ROUTE_HEAD_MARGIN;
+      r.tag_veto = worst && worst.cosine >= knobs.ROUTE_FORBIDDEN_TAG_MAX ? worst.tag : null;
+      r.floor_pass = r.score >= knobs.ROUTE_HEAD_FLOOR;
+      const marginPass = r.forbidden_cosine === null || r.head_margin > knobs.ROUTE_HEAD_MARGIN;
       r.head_claimed = r.floor_pass && !r.tag_veto && marginPass;
       r.head_claim = !r.floor_pass ? 'floor' : r.tag_veto ? 'veto' : !marginPass ? 'margin' : 'claim';
     }
@@ -494,11 +514,11 @@ async function routingTest(repoId, payload = {}, opts = {}) {
     if (includeProbes && probeTargets.length) {
       const probed = await Promise.all(
         probeTargets.map(async (t) => {
-          const p = await probeGraph(db, t.graph, emb.vector, ROUTE_TOP_K);
+          const p = await probeGraph(db, t.graph, emb.vector, knobs);
           return { repo_id: t.repo_id, graph: t.graph, top_scores: p.top_scores, error: p.error };
         })
       );
-      probeOutcome = qualifyProbes(probed);
+      probeOutcome = qualifyProbes(probed, knobs);
       currentWinner =
         probeOutcome.degraded && probeOutcome.selected.length
           ? probeOutcome.selected[0]
@@ -601,15 +621,9 @@ async function routingTest(repoId, payload = {}, opts = {}) {
       },
       fidelity: {
         algorithm: 'story-1.3-replay+v2',
-        knobs: {
-          ROUTE_TOP_K,
-          ROUTE_MIN_CHUNKS,
-          ROUTE_PROBE_TIMEOUT_MS,
-          ROUTE_RETRY,
-          ROUTE_HEAD_MARGIN,
-          ROUTE_HEAD_FLOOR,
-          ROUTE_FORBIDDEN_TAG_MAX
-        }
+        // The EFFECTIVE values this run was scored under (#2061 phase 1b) —
+        // resolved per run, so the record says which thresholds produced it.
+        knobs
       }
     };
     span.setAttribute('okf.headtest.head_winner', result.verdict.head_routing_winner || '');
@@ -740,6 +754,9 @@ const GUARD_DUPLICATE_FORBIDDEN = parseFloat(process.env.OKF_GUARD_DUPLICATE_FOR
  */
 async function guardSuggestions(repoId, candidates, opts = {}) {
   const list = (Array.isArray(candidates) ? candidates : []).filter((t) => typeof t === 'string' && t.trim());
+  // The veto threshold is resolved per call (#2061 phase 1b) - the guard
+  // must score a candidate tag under the SAME thresholds the run used.
+  const knobs = opts.knobs || routeKnobs();
   if (!list.length) return { accepted: [], rejected: [] };
   const repositoryService = require('./repository-service');
   const repo = await repositoryService.getById(repoId, { authz: opts.authz });
@@ -805,7 +822,8 @@ async function guardSuggestions(repoId, candidates, opts = {}) {
       const killed = [];
       positiveVectors.forEach((qv, qi) => {
         const c = cosine(v, qv);
-        if (c !== null && c >= ROUTE_FORBIDDEN_TAG_MAX) killed.push(positiveQueries[qi].query || positiveQueries[qi]);
+        if (c !== null && c >= knobs.ROUTE_FORBIDDEN_TAG_MAX)
+          killed.push(positiveQueries[qi].query || positiveQueries[qi]);
       });
       if (killed.length) {
         rejected.push({

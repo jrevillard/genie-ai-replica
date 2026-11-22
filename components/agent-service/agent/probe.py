@@ -279,8 +279,7 @@ class ProbeConfig:
         return cls(
             generation_endpoint=noagent.generation_endpoint,
             model_id_override=noagent.model_id_override,
-            # The generation bearer IS NoAgentConfig's (the probe client's
-            # OPENAI_API_KEY-or-VLLM_API_KEY rule, #2065): an in-process run
+            # The generation bearer IS NoAgentConfig's: an in-process run
             # inherits the operator's shell, not the compose mapping that
             # fills OPENAI_API_KEY from VLLM_API_KEY — the canonical venue
             # carries only the GPU-node key.

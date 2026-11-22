@@ -148,6 +148,21 @@ def test_dense_leg_failure_returns_empty_and_never_raises():
     assert run(adapter.dense_search([0.1], [], "OR")) == []
 
 
+def test_dense_row_with_null_score_is_skipped_not_raised():
+    """A partially indexed collection carries chunks without an embedding:
+    COSINE_SIMILARITY returns null for them, and a null score reaching the
+    float() coercion raises OUTSIDE the execute try — the whole run fails
+    where the dense leg must degrade to the remaining scored rows."""
+    rows = [
+        {"key": "c1", "text": "a", "score": None},
+        {"key": "c2", "text": "b", "score": 0.9},
+    ]
+    adapter = make_adapter({"COSINE_SIMILARITY": rows})
+    results = run(adapter.dense_search([0.1] * 4, [], "OR"))
+    assert [r["doc"].key for r in results] == ["c2"]
+    assert [r["doc"].score for r in results] == [0.9]
+
+
 # ---------------------------------------------------------------------
 # BM25 leg (V02 §4.2)
 # ---------------------------------------------------------------------

@@ -1489,10 +1489,11 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # to the honest insufficiency answer (the run record's preparation_status
 # carries the fallback reason; nothing crashes). An explicit
 # VLLM_TRANSLATION_ENDPOINT to a reachable endpoint is the alternative.
-# BEHAVIOR DELTAS on the agentic path (review-flagged): with a request
-# locale set, EVERY search query rides the translation leg — one auxiliary
-# fleet model call per search (the locale hint beats detection, per the
-# preparation contract's own order); a query whose detection fails with no
+# BEHAVIOR DELTAS on the agentic path (review-flagged): with a non-English
+# request locale, EVERY search query rides the translation leg — one
+# auxiliary fleet model call per search (the locale hint beats detection,
+# per the preparation contract's own order; an English locale rides
+# passthrough_english, no call); a query whose detection fails with no
 # locale named is refused as an insufficiency, never searched raw.
 # TRANSLATION_SERVICE_HOST_IP=
 # TRANSLATION_SERVICE_PORT=

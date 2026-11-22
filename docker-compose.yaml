@@ -1514,9 +1514,11 @@ services:
       # for the alternative.
       #
       # BEHAVIOR DELTAS on the agentic path (review-flagged): with a
-      # request locale set, EVERY search query rides the translation leg —
-      # one auxiliary fleet model call per search (the locale hint beats
-      # detection, per the preparation contract's own order); and a query
+      # non-English request locale, EVERY search query rides the
+      # translation leg — one auxiliary fleet model call per search (the
+      # locale hint beats detection, per the preparation contract's own
+      # order; an English locale rides passthrough_english, no call); and
+      # a query
       # whose detection fails with NO locale named is refused as an
       # insufficiency, never searched raw.
       - TRANSLATION_SERVICE_HOST_IP=${TRANSLATION_SERVICE_HOST_IP:-vllm-translation-guardrail}

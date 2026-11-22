@@ -46,14 +46,15 @@ def make_adapter(rows_per_query=None, views=(), config_env=None):
     row_map = rows_per_query or {}
 
     class FakeCursor:
-        def __init__(self, rows):
+        def __init__(self, rows, query=""):
             self._rows = rows
+            self._query = query
 
         def __iter__(self):
-            # Records the thread that drains the cursor: the retrieval legs
-            # must materialize it inside their worker thread — a drain on
-            # the event-loop thread is the recorded defect.
-            iterated_on.append(threading.current_thread())
+            # Records the query and the thread that drains the cursor: the
+            # retrieval legs must materialize it inside their worker thread —
+            # a drain on the event-loop thread is the recorded defect.
+            iterated_on.append((self._query, threading.current_thread()))
             return iter(self._rows)
 
     class FakeAql:
@@ -61,8 +62,8 @@ def make_adapter(rows_per_query=None, views=(), config_env=None):
             executed.append((query, bind_vars))
             for marker, rows in row_map.items():
                 if marker in query:
-                    return FakeCursor(rows)
-            return FakeCursor([])
+                    return FakeCursor(rows, query)
+            return FakeCursor([], query)
 
     class FakeDb:
         aql = FakeAql()
@@ -542,15 +543,23 @@ def test_the_modules_aql_doubles_track_the_real_driver_signature():
 # ---------------------------------------------------------------------
 
 
-def _assert_drained_off_the_event_loop(adapter):
+def _assert_drained_off_the_event_loop(adapter, query_marker=None):
     """Every cursor the adapter executed must have been drained inside the
     ``asyncio.to_thread`` worker — python-arango answers with a lazy Cursor,
     so a drain on the event-loop thread is a blocking network call on the
-    loop once the result set exceeds one server batch."""
-    assert adapter.iterated_on, "the fake cursor was never drained"
-    assert all(thread is not threading.main_thread() for thread in adapter.iterated_on), (
-        f"cursors drained on the event loop: {adapter.iterated_on}"
+    loop once the result set exceeds one server batch. Pass a
+    ``query_marker`` to isolate one leg's cursor."""
+    drains = [(query, thread) for query, thread in adapter.iterated_on if query_marker is None or query_marker in query]
+    assert drains, "no cursor was drained"
+    assert all(thread is not threading.main_thread() for _, thread in drains), (
+        f"cursors drained on the event loop: {drains}"
     )
+
+
+def test_dense_rows_are_materialized_off_the_event_loop():
+    adapter = make_adapter({"COSINE_SIMILARITY": [{"key": "c1", "text": "a", "score": 0.9}]})
+    run(adapter.dense_search([0.1] * 4, [], "OR"))
+    _assert_drained_off_the_event_loop(adapter)
 
 
 def test_bm25_rows_are_materialized_off_the_event_loop():
@@ -562,10 +571,10 @@ def test_bm25_rows_are_materialized_off_the_event_loop():
 def test_file_id_enrichment_rows_are_materialized_off_the_event_loop():
     adapter = _enrichment_adapter()
     run(adapter.enrich([{"doc": _chunk("c1", "a"), "score": 0.9}]))
-    _assert_drained_off_the_event_loop(adapter)
+    _assert_drained_off_the_event_loop(adapter, "file_id: doc.file_id")
 
 
 def test_cap1_identity_rows_are_materialized_off_the_event_loop():
     adapter = _enrichment_adapter()
     run(adapter.enrich([{"doc": _chunk("c1", "a"), "score": 0.9}]))
-    _assert_drained_off_the_event_loop(adapter)
+    _assert_drained_off_the_event_loop(adapter, "okf_concepts_meta")

@@ -261,7 +261,8 @@ class ArangoRetrievalAdapter:
             "k": self._config.k,
         }
         try:
-            rows = list(await asyncio.to_thread(self._db.aql.execute, aql, bind_vars=bind_vars))
+            # Materialize inside the worker thread (see bm25_search).
+            rows = await asyncio.to_thread(lambda: list(self._db.aql.execute(aql, bind_vars=bind_vars)))
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
             return []

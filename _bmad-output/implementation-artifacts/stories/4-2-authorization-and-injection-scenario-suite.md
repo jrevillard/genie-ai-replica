@@ -130,6 +130,30 @@ in the corrections commit:**
 Post-fix verification: 170 protocol+capture tests green (14 new), 186 eval green + 1 skipped,
 ruff clean, py_compile clean.
 
+**Fix-review chain.** Round 1 (f=0, `0453ea091..6ad0fb635` diff): NOT clean — 3 minor + 1 nit,
+all doc/metadata (module-docstring denial bullet lagged the corrected rule; VERDICTS_VERSION
+unbumped so pre/post reports indistinguishable; sample `_doc` sentence false for 4/7 restricted
+cases; indent). All four applied; the indent settled by running `ruff format` itself (canonical).
+Round 2 (f=1, `6ad0fb635..db1c347ec` diff): **CLEAN** — corrections 1-3 fully verified
+(docstring/instructions/code consistency traced, version unpinned repo-wide, `_doc` truth
+re-counted), one low cosmetic note folded into the format commit. Chain clean at f=1.
+
+**Quality phase (commits `db1c347ec` + `77e885b10`).** /simplify over the full story diff
+(four angles — reuse, simplification, efficiency, altitude; 18 raw findings, deduplicated):
+8 applied — the verdict ladder twins unified into one `_case_record` (single-turn delegates,
+the paths can no longer drift); `_entry_is_okf` single predicate; cross-user divergence
+re-derived through `_verdict_for_findings` (no more reason-line clobbering); `cmd_verdicts`
+reusing `_validated_entries`; `run_config_a` taking the already-loaded entries (one set load);
+top-level `turn_entries` import; per-file `_turn_field` helpers; the findings difference
+reason deriving from the drivers' skip-reason constant. 6 skipped with reasons in the commit
+message (standalone-driver constraint, stored-rows compatibility, artifact honesty,
+twice-reviewed 4.1 validator, deliberate resume contract, below-bar micro-items).
+/test-audit over the story 4.2 test surface (test_protocol_security.py + the evalset/drivers
+additions): zero deletions, zero additions — every suite survived the fix rounds' mutation
+checks, no test-only production seams, the one private-function test is the sole owner of its
+branches (retention bar holds). Final: 170 protocol+capture + 186 eval green, ruff check +
+format clean, py_compile clean.
+
 ## Spec Change Log
 
 ## Review Triage Log

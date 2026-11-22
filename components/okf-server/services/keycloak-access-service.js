@@ -216,6 +216,23 @@ async function ensureRole(scope) {
   return jsonOrThrow(await adminApi('GET', `/roles/${scope}`), 'role fetch');
 }
 
+/**
+ * The REALM roles a group carries. This is the group → scope direction: a
+ * group grant is a realm role whose NAME is a scope string, and a member of
+ * the group carries that role in `realm_access.roles` — the reduction the
+ * Evaluation Context resolves through (a multi-group token's scope list).
+ *
+ * @param {string} groupId - the group's Keycloak id
+ * @returns {Promise<Array<{id: string, name: string}>>} the realm role mappings
+ */
+async function groupRealmRoles(groupId) {
+  const roles = await jsonOrThrow(
+    await adminApi('GET', `/groups/${groupId}/role-mappings/realm`),
+    'group role mappings'
+  );
+  return Array.isArray(roles) ? roles : [];
+}
+
 /** Find a top-level group by exact name (search is substring; match client-side). */
 async function findGroupByName(name) {
   const groups = await jsonOrThrow(
@@ -297,6 +314,7 @@ module.exports = {
   usersMatching,
   usersWithAttribute,
   ensureRole,
+  groupRealmRoles,
   ensureGroup,
   findGroupByName,
   setGroupRole,

@@ -23,7 +23,6 @@ from protocol.manifest import manifest_digest
 from protocol.run_protocol import cmd_assess, cmd_reference
 
 CORPUS = "c" * 64
-SET_SHA = "a" * 64
 EVALUATOR_INSTRUCTIONS = str(Path(__file__).resolve().parent / "protocol" / "evaluator-instructions.md")
 
 
@@ -127,21 +126,49 @@ class FakeBTransport:
         return ""
 
 
+def _case(id_, query, case_class, access="public", **extra):
+    return {
+        "id": id_,
+        "query": query,
+        "categoryLabels": [],
+        "serviceLabels": [],
+        "language": "en",
+        "reference_answer": "",
+        "expected_chunks": [],
+        "case_class": case_class,
+        "access_scenario": access,
+        "provenance": "assessment",
+        **extra,
+    }
+
+
 def _b_set(tmp_path, ids):
-    entries = [
-        {
-            "id": i,
-            "query": f"q {i}",
-            "language": "en",
-            "case_class": "answerable",
-            "access_scenario": "public",
-            "provenance": "assessment",
-        }
-        for i in ids
-    ]
+    """A composition-VALID assessment set: the requested ids are the
+    answerable public cases; `_`-prefixed filler cases carry every other
+    required class (the drivers enforce the floor on the data path, so a
+    driver-test set must be a real one). The enumerating assertions filter
+    the `_` fillers out."""
+    entries = [_case(i, f"q {i}", "answerable") for i in ids]
+    entries.append(_case("_ans-restricted", "restricted q", "answerable", access="restricted"))
+    while sum(1 for e in entries if e["case_class"] == "answerable") < 2:
+        entries.append(_case("_ans-pad", "padding q", "answerable"))
+    entries.append(
+        _case("_unans", "the unanswerable question", "unanswerable", expectations={"expect_abstained": True})
+    )
+    entries.append(_case("_cite", "the citation question", "citation_check", expectations={"require_citation": True}))
+    entries.append(_case("_lang-ru", "Как подать заявление?", "representative_language", script="non-latin"))
+    entries.append(_case("_lang-es", "¿Dónde se presenta?", "representative_language"))
+    entries.append(_case("_fail", "the failure question", "failure"))
+    entries.append(_case("_cancel", "the cancellation question", "cancellation"))
     path = tmp_path / "set.json"
     path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
     return path
+
+
+def _main_ids(cases_seen):
+    """The non-filler case ids a transport observed (fillers carry `_`),
+    filler-only batches dropped."""
+    return [batch for batch in ([i for i in one_batch if not i.startswith("_")] for one_batch in cases_seen) if batch]
 
 
 def test_config_b_ships_the_driver_and_consumes_rows(tmp_path):
@@ -152,7 +179,7 @@ def test_config_b_ships_the_driver_and_consumes_rows(tmp_path):
     # script, not a re-implementation.
     driver_source = (Path(drivers.__file__).parent / "config_b_driver.py").read_bytes()
     assert transport.shipped_driver == driver_source
-    assert transport.cases_seen == [["c1", "c2"]]
+    assert _main_ids(transport.cases_seen) == [["c1", "c2"]]
     # The rows are recorded atomically with the NoAgentResult fields verbatim.
     assert result["rows"]["c1"]["answer"] == "answer-c1"
     assert "abstention_reason" in result["rows"]["c1"]
@@ -230,7 +257,7 @@ def test_config_b_resume_reruns_only_unfinished_ids(tmp_path):
     set_path = _b_set(tmp_path, ("c1", "c2", "c3"))
     transport = FakeBTransport()
     first = drivers.run_config_b(set_path, tmp_path / "out", transport=transport)
-    assert sorted(first["rows"]) == ["c1", "c2", "c3"]
+    assert [i for i in sorted(first["rows"]) if not i.startswith("_")] == ["c1", "c2", "c3"]
     # Second invocation: every case has a recorded row (failure rows count as
     # finished outcomes) — nothing is re-run and NO container round-trip happens.
     converged = FakeBTransport()
@@ -244,17 +271,19 @@ def test_config_b_resume_reruns_only_unfinished_ids(tmp_path):
         json.dumps({"cases": {"c1": {"case_id": "c1", "status": "ok"}}}), encoding="utf-8"
     )
     drivers.run_config_b(set_path, tmp_path / "out2", transport=transport2)
-    assert transport2.cases_seen == [["c2", "c3"]]
+    assert _main_ids(transport2.cases_seen) == [["c2", "c3"]]
 
 
 def test_config_b_batches_container_invocations(tmp_path):
     set_path = _b_set(tmp_path, ("c1", "c2", "c3"))
     transport = FakeBTransport()
     drivers.run_config_b(set_path, tmp_path / "out", transport=transport, batch=2)
-    assert transport.cases_seen == [["c1", "c2"], ["c3"]]
-    # The driver script ships ONCE; each sub-batch ships its own cases exec.
+    assert _main_ids(transport.cases_seen) == [["c1", "c2"], ["c3"]]
+    # The driver script ships ONCE; each sub-batch ships its own cases exec —
+    # one python3 exec per batch (the set's 10 cases at a 2-case ceiling = 5).
+    n_entries = len(json.loads(set_path.read_text(encoding="utf-8"))["entries"])
     assert sum(1 for cmd in transport.cmds if cmd.startswith("mkdir")) == 1
-    assert sum(1 for cmd in transport.cmds if "python3" in cmd) == 2
+    assert sum(1 for cmd in transport.cmds if "python3" in cmd) == -(-n_entries // 2)
 
 
 def test_config_b_splits_the_payload_by_bytes_before_the_argv_cap(tmp_path):
@@ -262,24 +291,18 @@ def test_config_b_splits_the_payload_by_bytes_before_the_argv_cap(tmp_path):
     MAX_ARG_STRLEN (128 KiB), so payloads are byte-bounded: fat cases split
     even below the case-count ceiling."""
     fat = ("c1", "c2", "c3")
-    set_path = tmp_path / "fat-set.json"
-    entries = [
-        {
-            "id": i,
-            "query": "x" * 200,
-            "language": "en",
-            "case_class": "answerable",
-            "access_scenario": "public",
-            "provenance": "assessment",
-        }
-        for i in fat
-    ]
-    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    set_path = _b_set(tmp_path, fat)
+    data = json.loads(set_path.read_text(encoding="utf-8"))
+    for entry in data["entries"]:
+        if entry["id"] in fat:
+            entry["query"] = "x" * 200
+    set_path.write_text(json.dumps(data), encoding="utf-8")
     transport = FakeBTransport()
     result = drivers.run_config_b(set_path, tmp_path / "out", transport=transport, payload_bound=300)
-    # Each case's payload exceeds the bound alone → one case per exec.
-    assert transport.cases_seen == [["c1"], ["c2"], ["c3"]]
-    assert sorted(result["rows"]) == ["c1", "c2", "c3"]
+    # Each fat case's payload exceeds the bound alone → one case per exec
+    # (the filler cases are small and batch among themselves).
+    assert _main_ids(transport.cases_seen) == [["c1"], ["c2"], ["c3"]]
+    assert [i for i in sorted(result["rows"]) if not i.startswith("_")] == ["c1", "c2", "c3"]
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +451,7 @@ def test_config_c_venue_down_is_a_typed_row_and_the_run_continues(tmp_path):
     set_path = _b_set(tmp_path, ("c1", "c2"))
     transport = VenueDownTransport()
     result = drivers.run_config_c(set_path, tmp_path / "out", base_url="http://agent:8000", transport=transport)
-    assert transport.open_attempts == 2
+    assert transport.open_attempts == len(json.loads(set_path.read_text(encoding="utf-8"))["entries"])
     assert result["rows"]["c1"]["outcome"] == "stream_error"
     assert result["rows"]["c2"]["outcome"] == "stream_error"
     assert "venue down" in result["rows"]["c1"]["error_text"]
@@ -449,7 +472,9 @@ def test_config_c_run_resumes_by_case_id(tmp_path):
     done.write_text(json.dumps({"cases": {"c1": {"case_id": "c1", "outcome": "answered"}}}), encoding="utf-8")
     transport = FakeCTransport(FakeRunStream(events=_answered_events()))
     result = drivers.run_config_c(set_path, tmp_path / "out", base_url="http://agent:8000", transport=transport)
-    assert [r["payload"]["question"] for r in transport.requests] == ["q c2"]
+    assert [r["payload"]["question"] for r in transport.requests if r["payload"]["question"].startswith("q ")] == [
+        "q c2"
+    ]
     assert result["rows"]["c1"]["outcome"] == "answered"
     assert result["rows"]["c2"]["outcome"] == "answered"
 
@@ -517,7 +542,15 @@ def _composed_set(tmp_path) -> Path:
 def test_assess_refuses_an_under_composed_set_before_the_gate(tmp_path, monkeypatch, capsys):
     """The composition floor is enforced where runs happen: an under-composed
     set refuses with the typed errors BEFORE the gate is even consulted."""
-    _b_set(tmp_path, ("c1",))  # one answerable case — missing every other class
+    (tmp_path / "set.json").write_text(
+        json.dumps(
+            {
+                "_meta": {"provenance": "assessment"},
+                "entries": [_case("c1", "q", "answerable")],
+            }
+        ),
+        encoding="utf-8",
+    )
     (tmp_path / "out").mkdir()
     import protocol.run_protocol as rp
 

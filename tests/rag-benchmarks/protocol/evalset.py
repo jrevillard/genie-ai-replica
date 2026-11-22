@@ -172,6 +172,7 @@ def _validate_composition(
     """The ASSESSMENT composition floor + the tuning/assessment separation."""
     class_minimums = dict(DEFAULT_COMPOSITION_MINIMUMS)
     access_minimums = dict(DEFAULT_ACCESS_MINIMUMS)
+    non_latin_minimum = DEFAULT_NON_LATIN_MINIMUM
     for key, value in (minimums_override or {}).items():
         try:
             numeric = max(1, int(value))
@@ -183,7 +184,7 @@ def _validate_composition(
         elif key in access_minimums:
             access_minimums[key] = numeric
         elif key == "non_latin":
-            class_minimums["non_latin"] = numeric
+            non_latin_minimum = numeric
         else:
             errors.append(f"_meta.minimums: unknown composition key {key!r}")
 
@@ -199,8 +200,6 @@ def _validate_composition(
             access_counts[case["access_scenario"]] += 1
 
     for case_class, minimum in class_minimums.items():
-        if case_class == "non_latin":
-            continue
         if counts.get(case_class, 0) < minimum:
             errors.append(
                 f"composition: class {case_class!r} is missing or under-counted"
@@ -212,7 +211,6 @@ def _validate_composition(
         for c in entries
         if isinstance(c, dict) and c.get("case_class") == "representative_language" and case_is_non_latin(c)
     )
-    non_latin_minimum = class_minimums.get("non_latin", DEFAULT_NON_LATIN_MINIMUM)
     if non_latin < non_latin_minimum:
         errors.append(
             "composition: representative_language must include at least"
@@ -225,12 +223,6 @@ def _validate_composition(
                 f"composition: access scenario {scenario!r} is missing or under-counted"
                 f" ({access_counts.get(scenario, 0)} present, {minimum} required)"
             )
-
-    # The separation (FR-24), by provenance: an assessment set refuses a
-    # tuning-provenance case even when the file sits in sets/assessment/.
-    # (The symmetric check for tuning sets lives in validate_set — the
-    # mismatch is a schema-level offense, not a composition one.)
-    _validate_separation(entries, set_provenance, errors)
 
 
 def _validate_separation(entries: list[dict], set_provenance: str, errors: list[str]) -> None:
@@ -283,7 +275,10 @@ def validate_set(data: dict, kind: str | None = None) -> list[str]:
 
     if set_provenance == "assessment":
         _validate_composition(entries, set_provenance, meta.get("minimums"), errors)
-    elif set_provenance:
+    if set_provenance:
+        # The separation (FR-24), by provenance — ONE call site for both
+        # provenances: the mismatch is a schema-level offense, never a
+        # composition one, and no composition refactor can lose the check.
         _validate_separation(entries, set_provenance, errors)
 
     return errors

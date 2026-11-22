@@ -109,14 +109,21 @@ def check_gated_run(
     """
     run_dir = Path(run_dir)
     candidates: list[dict] = []
+    thresholds_files: list[dict] = []
+    # ONE scan of the out-dir: every JSON file read and parsed once, routed by
+    # its artifact kind (the reference scan and the thresholds scan share it).
     for path in sorted(run_dir.glob("*.json")):
         data = load_json_file(path)
-        if data and is_reference_manifest(data):
+        if not data:
+            continue
+        if is_reference_manifest(data):
             corpus = data.get("corpus") or {}
             sets = data.get("sets") or {}
             assessment = sets.get("assessment") or {}
             if corpus.get("fingerprint") == corpus_fingerprint and assessment.get("sha256") == assessment_set_sha256:
                 candidates.append(data)
+        elif is_thresholds_file(data):
+            thresholds_files.append(data)
 
     if not candidates:
         raise GateRefusal(
@@ -136,10 +143,7 @@ def check_gated_run(
     matching_thresholds = []
     seen_unsigned = False
     seen_other_lineage = False
-    for path in sorted(run_dir.glob("*.json")):
-        data = load_json_file(path)
-        if not data or not is_thresholds_file(data):
-            continue
+    for data in thresholds_files:
         if not data.get("signed"):
             seen_unsigned = True
             continue

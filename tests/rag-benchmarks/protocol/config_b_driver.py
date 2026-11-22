@@ -59,18 +59,17 @@ _ERROR_PREVIEW_CHARS = 300
 
 
 def atomic_write_json(path: str, obj) -> None:
-    """tmp + ``os.replace`` — a crash never leaves a half-written rows file."""
+    """tmp + ``os.replace`` — ``path`` only ever sees a complete file (a crash
+    mid-write leaves the tmp behind, which the next write overwrites).
+
+    Deliberately NOT ``eval/harness.write_json`` (whose contract this
+    duplicates): the driver ships STANDALONE into the agent-service container,
+    where the eval tree is absent — the duplication is recorded here so the
+    next reader does not "fix" one side only."""
     tmp = f"{path}.tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(obj, fh, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        finally:
-            raise
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(obj, fh, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
 
 
 def build_context(case: dict):

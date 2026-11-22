@@ -26,8 +26,6 @@ from __future__ import annotations
 
 import copy
 
-PAIR_IDS = ("E01", "E02")
-
 PAIR_CONDITIONS: dict[str, dict] = {
     "E01": {
         "pair": "E01",
@@ -56,6 +54,10 @@ PAIR_CONDITIONS: dict[str, dict] = {
 # Which pair a configuration's run belongs to. A is E01's reference leg; the
 # gated B run completes E01; C runs under E02.
 CONFIG_PAIR = {"A": "E01", "B": "E01", "C": "E02"}
+
+# Derivable: the known pair ids ARE the conditions' keys — a new pair added to
+# PAIR_CONDITIONS is known everywhere at once.
+PAIR_IDS = tuple(PAIR_CONDITIONS)
 
 
 class PairError(ValueError):

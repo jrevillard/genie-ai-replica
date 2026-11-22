@@ -68,10 +68,15 @@ def _error_preview(failed: BaseException) -> str:
 
 
 def _load_entries(set_path: str | Path) -> list[dict]:
-    data = json.loads(Path(set_path).read_text(encoding="utf-8"))
-    entries = data.get("entries")
-    if not isinstance(entries, list):
-        raise DriverError(f"{set_path} carries no entries list — run `validate-set` first")
+    """The set's entries, loaded through the evalset validator — the
+    composition/provenance floor rides the data path, so a driver invoked
+    outside the CLI enforces the same contract the run commands do."""
+    from .evalset import SetValidationError, load_set
+
+    try:
+        _, entries = load_set(set_path, kind="assessment")
+    except SetValidationError as failed:
+        raise DriverError(f"{set_path} is not a valid assessment set: {failed}") from failed
     return entries
 
 
@@ -262,7 +267,6 @@ def run_config_b(
         "resolved": resolved,
         "rows_path": str(rows_path),
         "pending_ids": [c["id"] for c in pending],
-        "done_ids": sorted(done),
     }
 
 
@@ -281,10 +285,6 @@ OUTCOME_HTTP_ERROR = "http_error"
 OUTCOME_CANCELLED = "cancelled"
 OUTCOME_STREAM_ERROR = "stream_error"
 
-# The default cancellation point for a cancellation case: after the first
-# stream event (run_started) — mid-run by construction on a real venue.
-DEFAULT_CANCEL_AFTER_EVENTS = 1
-
 # The 503 error codes the seam's fail-closed assembly answers with
 # (app.py: budget_configuration_missing / run_surface_unconfigured).
 CONFIGURATION_ERROR_CODES = ("budget_configuration_missing", "run_surface_unconfigured")
@@ -299,14 +299,16 @@ class UrllibRunStream:
     response mid-run is the client disconnect that cancels the run server-side.
     """
 
-    def __init__(self, url: str, payload: dict, timeout: float, verify_tls: bool = False):
+    def __init__(self, url: str, payload: dict, timeout: float):
         self.status = 0
         self.error_body: dict | None = None
         self._response = None
         self._url = url
         self._payload = payload
         self._timeout = timeout
-        self._ctx = None if verify_tls else ssl._create_unverified_context()
+        # Eval venues are self-signed by default; the context is deliberately
+        # unverified (no knob — a verifying venue can wrap the transport).
+        self._ctx = ssl._create_unverified_context()
         self._open()
 
     def _open(self) -> None:
@@ -356,8 +358,8 @@ class UrllibRunStream:
 class UrllibCTransport:
     """The stdlib transport: one ``UrllibRunStream`` per run request."""
 
-    def open_run(self, url: str, payload: dict, timeout: float, verify_tls: bool = False) -> UrllibRunStream:
-        return UrllibRunStream(url, payload, timeout, verify_tls=verify_tls)
+    def open_run(self, url: str, payload: dict, timeout: float) -> UrllibRunStream:
+        return UrllibRunStream(url, payload, timeout)
 
 
 def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
@@ -400,27 +402,24 @@ def run_one_case_c(
     base_url: str,
     transport=None,
     deadline_ms: int = 600_000,
-    timeout_margin_s: float = 60.0,
-    cancel_after_events: int | None = None,
 ) -> dict:
     """One case through the ``/v1/runs`` seam; the row records the honest terminal state.
 
     A cancellation case (``case_class == "cancellation"``) closes the stream
-    after ``cancel_after_events`` events: the row records ``cancelled`` with
-    NO answer — a cancelled run has no honest terminal answer to fabricate
-    (the seam itself emits no terminal event on cancellation). A 429/503/422
-    refusal records the typed error the seam returned. The usage record, when
-    the run reached its terminal, rides the row (the counter-metric input).
+    after the first stream event (``run_started``): the row records
+    ``cancelled`` with NO answer — a cancelled run has no honest terminal
+    answer to fabricate (the seam itself emits no terminal event on
+    cancellation). A 429/503/422 refusal records the typed error the seam
+    returned. The usage record, when the run reached its terminal, rides the
+    row (the counter-metric input).
     """
     transport = transport or UrllibCTransport()
     is_cancellation = case.get("case_class") == "cancellation"
-    if cancel_after_events is None:
-        cancel_after_events = DEFAULT_CANCEL_AFTER_EVENTS
 
     url = f"{base_url.rstrip('/')}/v1/runs"
-    timeout_s = deadline_ms / 1000.0 + timeout_margin_s
+    timeout_s = deadline_ms / 1000.0 + 60  # the margin over the run's own deadline
     started = time.monotonic()
-    row: dict[str, Any] = {"case_id": case["id"], "status": "ok"}
+    row: dict[str, Any] = {"case_id": case["id"]}
     answer_parts: list[str] = []
     run_id: str | None = None
     usage_record: dict | None = None
@@ -457,9 +456,9 @@ def run_one_case_c(
                         error_text = f"{error_text}: {payload['message']}"
                 elif "usage_record" in event:
                     usage_record = event["usage_record"]
-                if is_cancellation and events_seen >= cancel_after_events:
+                if is_cancellation and events_seen >= 1:
                     break
-            if is_cancellation and events_seen >= cancel_after_events and outcome is None:
+            if is_cancellation and events_seen >= 1 and outcome is None:
                 outcome = OUTCOME_CANCELLED
             if outcome is None:
                 # The stream closed without a terminal event and without the
@@ -528,7 +527,6 @@ def run_config_c(
         "rows": prior.get("cases") or {},
         "rows_path": str(rows_path),
         "pending_ids": [c["id"] for c in pending],
-        "done_ids": sorted(done),
     }
 
 
@@ -538,7 +536,7 @@ def run_config_c(
 # ---------------------------------------------------------------------------
 
 
-def discover_model_ids(endpoint: str, *, fetch=None, timeout: float = 30.0, verify_tls: bool = False) -> dict:
+def discover_model_ids(endpoint: str, *, fetch=None, timeout: float = 30.0) -> dict:
     """Read the serving endpoint's model id (OpenAI-compatible ``/v1/models``).
 
     The same discovery shape the probe's client and the v06 harness use
@@ -548,7 +546,7 @@ def discover_model_ids(endpoint: str, *, fetch=None, timeout: float = 30.0, veri
     url = f"{endpoint.rstrip('/')}/v1/models"
 
     def _fetch(url: str, timeout: float) -> dict:
-        ctx = None if verify_tls else ssl._create_unverified_context()
+        ctx = ssl._create_unverified_context()
         with urllib.request.urlopen(url, timeout=timeout, context=ctx) as response:
             return json.loads(response.read().decode("utf-8"))
 

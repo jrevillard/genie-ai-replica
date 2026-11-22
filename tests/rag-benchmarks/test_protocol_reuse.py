@@ -10,8 +10,6 @@ the refusal report; there is no override.
 import json
 from pathlib import Path
 
-import pytest
-
 from protocol import reuse
 from protocol.run_protocol import cmd_check_reuse
 
@@ -86,13 +84,6 @@ def test_every_mismatch_is_reported_at_once():
     )
     assert report["suitable"] is False
     assert {m["field"] for m in report["mismatches"]} == {"harness_sha", "runs.gold_sha256", "stack.name"}
-
-
-def test_require_suitable_raises_with_the_report():
-    with pytest.raises(reuse.ReuseRefusal) as failed:
-        reuse.require_suitable(_artifact(harness_sha="00" * 32), harness_sha=HARNESS_SHA, gold_sha256=GOLD_SHA)
-    assert failed.value.report["suitable"] is False
-    assert "no override" in str(failed.value)
 
 
 def test_current_harness_sha_is_the_capture_machinerys_identity():

@@ -148,16 +148,3 @@ class ReuseRefusal(RuntimeError):
             f"reuse refused — the capture artifact is not current evidence "
             f"(mismatched: {names or 'no fields?'}); re-capture the baseline, there is no override"
         )
-
-
-def require_suitable(artifact: dict, **checks) -> dict:
-    """Check and raise :class:`ReuseRefusal` with the report when unsuitable.
-
-    This is the only consumption path the harness offers: check, then reuse.
-    There is no parameter that skips the check — suitability is a property of
-    the artifact against the current code and set, not a knob.
-    """
-    report = check_capture_artifact(artifact, **checks)
-    if not report["suitable"]:
-        raise ReuseRefusal(report)
-    return report

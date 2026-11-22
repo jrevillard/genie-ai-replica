@@ -13,7 +13,7 @@ reuse check REFUSE, they never warn)::
     reference --set <set_path> --out-dir <dir> [--corpus-collection NAME]
         [--corpus-graph NAME] [--corpus-fingerprint HEX | --compute-fingerprint]
         [--models-endpoint URL] [--stack-prefix PREFIX] [--resolved-env PATH]
-        [--seed N] [--pair E01]
+        [--seed N]
         The A-ONLY reference run (never gated): anchor eval over the set,
         then the reference manifest with the full version record.
 
@@ -91,12 +91,17 @@ def _corpus_fingerprint(args: argparse.Namespace) -> str:
     return fingerprint_corpus(args.corpus_collection, hashes)
 
 
-def _resolved_configuration(args: argparse.Namespace, config: str) -> dict:
-    """The per-config resolved snapshot for the manifest: a pinned JSON file
-    (--resolved-env) or the live container snapshot (config A, --stack-prefix).
-    """
+def _resolved_configuration(args: argparse.Namespace, config: str, driver_resolved: dict | None = None) -> dict:
+    """The per-config resolved snapshot for the manifest, with an EXPLICIT
+    precedence: the operator's pinned file (--resolved-env) wins; config B's
+    in-container record (the serving container's own env) comes next; the
+    config A live container snapshot (--stack-prefix) after. The recorded
+    source is declared by the precedence, never by which value happened to be
+    non-empty."""
     if args.resolved_env:
         snapshot = json.loads(Path(args.resolved_env).read_text(encoding="utf-8"))
+    elif config == "B" and isinstance((driver_resolved or {}).get("env"), dict) and driver_resolved["env"]:
+        snapshot = driver_resolved["env"]
     elif config == "A" and args.stack_prefix is not None:
         import capture_baseline  # local import: the live snapshot machinery
 
@@ -124,15 +129,37 @@ def _write_manifest(out_dir: Path, name: str, manifest: dict) -> Path:
 
 
 def _validated_entries(args: argparse.Namespace) -> int | None:
-    """Validate the set where the RUN happens (not only in validate-set): the
-    composition floor is enforced before hashing/running. Returns the exit
-    code when the set is invalid, None when it passes."""
+    """Validate the set where the RUN happens (not only in validate-set), as
+    an ASSESSMENT set: the composition floor AND the provenance separation are
+    enforced before hashing/running — a tuning set never produces reference or
+    gated evidence. Returns the exit code when the set is invalid, None when
+    it passes."""
     try:
-        load_set(args.set_path)
+        load_set(args.set_path, kind="assessment")
     except SetValidationError as failed:
         print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
         for error in failed.errors:
             print(f"  - {error}", file=sys.stderr)
+        return 1
+    return None
+
+
+def _corpus_record(args: argparse.Namespace, fingerprint: str) -> dict:
+    """The corpus record both commands stamp into their manifests."""
+    return {
+        "source_collection": args.corpus_collection,
+        "arango_graph_name": args.corpus_graph,
+        "fingerprint": fingerprint,
+    }
+
+
+def _check_pair_or_fail(manifest: dict) -> int | None:
+    """The manifest stamp verification against the shipped pair conditions;
+    the exit code on a failure, None when the stamp verifies."""
+    errors = check_run_against_pair(manifest)
+    if errors:
+        for error in errors:
+            print(f"pair check failed: {error}", file=sys.stderr)
         return 1
     return None
 
@@ -149,11 +176,7 @@ def cmd_reference(args: argparse.Namespace) -> int:
     manifest = build_manifest(
         kind="reference",
         config="A",
-        corpus={
-            "source_collection": args.corpus_collection,
-            "arango_graph_name": args.corpus_graph,
-            "fingerprint": fingerprint,
-        },
+        corpus=_corpus_record(args, fingerprint),
         sets={
             "assessment": {
                 "path": str(args.set_path),
@@ -162,13 +185,11 @@ def cmd_reference(args: argparse.Namespace) -> int:
         },
         configuration={"A": configuration},
         evaluator_instructions_path=args.evaluator_instructions,
-        pair=args.pair,
+        pair=CONFIG_PAIR["A"],
     )
-    pair_errors = check_run_against_pair(manifest)
-    if pair_errors:
-        for error in pair_errors:
-            print(f"pair check failed: {error}", file=sys.stderr)
-        return 1
+    pair_failed = _check_pair_or_fail(manifest)
+    if pair_failed is not None:
+        return pair_failed
     path = _write_manifest(Path(args.out_dir), "reference.manifest.json", manifest)
     print(f"reference run: report {result['report_path']}")
     print(f"reference manifest: {path}")
@@ -208,25 +229,16 @@ def cmd_assess(args: argparse.Namespace) -> int:
             return 2
         result = run_config_c(args.set_path, args.out_dir, base_url=args.base_url, deadline_ms=args.deadline_ms)
         rows = result["rows"]
-    configuration = _resolved_configuration(args, config)
+    configuration = _resolved_configuration(args, config, result.get("resolved"))
     model_ids = _model_ids(args)
     resolved = result.get("resolved") or {}
-    if config == "B":
-        # The driver's in-container resolved record IS the serving container's
-        # resolved env — prefer it over any host-side snapshot.
-        if isinstance(resolved.get("env"), dict) and resolved["env"]:
-            configuration["resolved_env"] = resolved["env"]
-        if not model_ids and isinstance(resolved.get("model_id"), str):
-            model_ids = {"llm": resolved["model_id"]}
+    if not model_ids and isinstance(resolved.get("model_id"), str):
+        model_ids = {"llm": resolved["model_id"]}
     configuration["model_ids"] = model_ids
     manifest = build_manifest(
         kind="gated",
         config=config,
-        corpus={
-            "source_collection": args.corpus_collection,
-            "arango_graph_name": args.corpus_graph,
-            "fingerprint": fingerprint,
-        },
+        corpus=_corpus_record(args, fingerprint),
         sets={
             "assessment": {"path": str(args.set_path), "sha256": set_sha256},
         },
@@ -235,11 +247,9 @@ def cmd_assess(args: argparse.Namespace) -> int:
         lineage=lineage,
         pair=CONFIG_PAIR[config],
     )
-    pair_errors = check_run_against_pair(manifest)
-    if pair_errors:
-        for error in pair_errors:
-            print(f"pair check failed: {error}", file=sys.stderr)
-        return 1
+    pair_failed = _check_pair_or_fail(manifest)
+    if pair_failed is not None:
+        return pair_failed
     path = _write_manifest(Path(args.out_dir), f"config-{config.lower()}.manifest.json", manifest)
     # Config C rows carry `outcome`, config B rows carry `status` (ok|failure) —
     # read whichever the row has, so a B failure never prints as 0 non-answered.
@@ -307,7 +317,6 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--out-dir", required=True)
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--stack-prefix", default=None, help="live resolved-env snapshot prefix (config A)")
-    r.add_argument("--pair", default="E01", choices=("E01", "E02"))
     _add_common_manifest_args(r)
     r.set_defaults(func=cmd_reference)
 

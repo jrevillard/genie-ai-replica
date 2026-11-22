@@ -59,8 +59,12 @@ def sha256_text(text: str) -> str:
 
 def sha256_file(path: str | Path) -> str:
     """sha256 of a file's bytes — the digest set files, prompt surfaces and
-    evaluator-instructions files record."""
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    evaluator-instructions files record. The identity function IS the capture
+    machinery's (``capture_baseline.file_sha256``) — one spelling in the tree,
+    never a second implementation that could drift."""
+    import capture_baseline  # local import: the sibling capture module
+
+    return capture_baseline.file_sha256(Path(path))
 
 
 def sha256_json(obj) -> str:

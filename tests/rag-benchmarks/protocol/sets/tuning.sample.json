@@ -1,0 +1,33 @@
+{
+  "_doc": "Tuning-set SAMPLE — a CI fixture for the tuning/assessment separation (FR-24, story 4.1), NOT deployment case content. A tuning set is composition-free (it exists to tune against, never to assess) but every case carries provenance: 'tuning'. A case copied into an assessment set is refused BY THAT FIELD, not by its directory.",
+  "_meta": {
+    "provenance": "tuning"
+  },
+  "entries": [
+    {
+      "id": "sample-tune-1",
+      "query": "Which chunk text should the reranker keep for a subsidy deadline query?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "The chunk carrying the deadline sentence outranks the generic programme description.",
+      "expected_chunks": [],
+      "case_class": "answerable",
+      "access_scenario": "public",
+      "provenance": "tuning"
+    },
+    {
+      "id": "sample-tune-2",
+      "query": "What does the corpus say about a service that does not exist in it?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "",
+      "expected_chunks": [],
+      "case_class": "unanswerable",
+      "access_scenario": "public",
+      "provenance": "tuning",
+      "expectations": {"expect_abstained": true}
+    }
+  ]
+}

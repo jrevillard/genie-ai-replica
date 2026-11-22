@@ -13,11 +13,13 @@ cancellation propagating with its slot released, and the metadata shape.
 
 import asyncio
 import atexit
+import math
 import os
 import shutil
 import tempfile
 
 import pytest
+from conftest import VENDORED_REGISTRY_PATH, PreparationFakeTransport
 
 from capabilities.contract import (
     CallerContext,
@@ -35,12 +37,14 @@ from noagent.generation import GenerationTransientError
 from noagent.lane import AdmissionLane, LaneBusyError
 from noagent.pipeline import (
     PREPARATION_DEGRADED,
+    AnswerTranslator,
     NoAgentPipeline,
     NoAgentResult,
     source_document_envelope,
 )
 from noagent.prompt import DEFAULT_ABSTENTION_INSTRUCTIONS, RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT
 from preparation.prepare import PreparationResult
+from preparation.registry import LanguageRegistry
 
 BUDGET = OperationBudget(timeout_ms=5000, max_results=5, max_result_bytes=1_000_000)
 
@@ -435,6 +439,42 @@ def test_no_translation_for_english_auto_or_nothing_even_when_gated():
         assert result.answer == "The generated answer."
         assert "translation_status" not in result.metadata
     assert translator.calls == []
+
+
+class _FixedWindowCache:
+    """A model-endpoint cache double with a pinned window (no endpoint)."""
+
+    def __init__(self, window):
+        self.window = window
+
+    async def model_id(self, config):
+        return "served-model"
+
+    async def max_model_len(self, config):
+        return self.window
+
+
+def test_answer_translation_budget_counts_the_offset_outside_the_division():
+    # Regression (#2064): the +20 prompt-offset tokens land OUTSIDE the /4
+    # chars-per-token division — 20 tokens, not the 5 an in-division offset
+    # contributes. The room cap the endpoint receives is derived from the
+    # prompt ACTUALLY sent, so the arithmetic is pinned at its one point of
+    # divergence: window 1000 − (est + 20 offset) − 128 safety. The need
+    # bound (4×input + 256) exceeds the room at this prompt size, so the
+    # room is what rides the payload.
+    endpoint = "http://translation.internal"
+    transport = PreparationFakeTransport(
+        responses={endpoint: (200, {"choices": [{"message": {"content": "réponse"}, "finish_reason": "stop"}]})}
+    )
+    config = NoAgentConfig.load(env={"VLLM_TRANSLATION_ENDPOINT": endpoint, "VLLM_TRANSLATION_MODEL_ID": "test-model"})
+    registry = LanguageRegistry(VENDORED_REGISTRY_PATH)
+    translator = AnswerTranslator(config, registry, transport=transport, cache=_FixedWindowCache(1000))
+    answer, status = asyncio.run(translator.translate("x" * 1000, "fr"))
+    assert status == "ok" and answer == "réponse"
+    payload = transport.calls[-1]["payload"]
+    prompt = payload["messages"][0]["content"]
+    estimated_tokens = math.ceil(len(prompt) / 4)
+    assert payload["max_tokens"] == 1000 - (estimated_tokens + 20) - 128
 
 
 # ---------------------------------------------------------------------

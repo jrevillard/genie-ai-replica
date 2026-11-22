@@ -84,7 +84,9 @@ PREPARATION_DEGRADED = "preparation_degraded"
 DEFAULT_CONFIDENCE_RANK_DECAY = 0.5
 
 # The answer-translation budget's constants (deployed gpu-translate-backend:
-# the safety margin, the refusal floor and the need bound).
+# the prompt-offset tokens, the safety margin, the refusal floor and the
+# need bound).
+_TRANSLATION_PROMPT_OFFSET_TOKENS = 20
 _TRANSLATION_INPUT_SAFETY_TOKENS = 128
 _TRANSLATION_MIN_OUTPUT_BUDGET = 256
 _TRANSLATION_CHARS_PER_TOKEN = 4
@@ -162,7 +164,12 @@ class AnswerTranslator:
         }
         headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
         if window:
-            input_tokens = math.ceil((len(answer_prompt) + 20) / _TRANSLATION_CHARS_PER_TOKEN)
+            # The offset mirrors the deployed gpu-translate-backend and is
+            # added AFTER the estimate: offset tokens, not characters —
+            # inside the division it would contribute only 5 (#2064).
+            input_tokens = (
+                math.ceil(len(answer_prompt) / _TRANSLATION_CHARS_PER_TOKEN) + _TRANSLATION_PROMPT_OFFSET_TOKENS
+            )
             room = window - input_tokens - _TRANSLATION_INPUT_SAFETY_TOKENS
             if room < _TRANSLATION_MIN_OUTPUT_BUDGET:
                 logger.warning(f"Answer translation refused: the prompt leaves {room} of {window} tokens.")

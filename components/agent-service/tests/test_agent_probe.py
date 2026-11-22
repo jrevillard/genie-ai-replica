@@ -328,7 +328,11 @@ def test_complete_caps_the_bound_to_the_window_room():
     config = verifier_config(AGENT_WINDOW_OVERRIDE_TOKENS="1000")
     asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
     payload = transport.calls[-1]["payload"]
-    expected_room = 1000 - math.ceil((len("[]") + 20) / 4) - 128
+    # The offset lands OUTSIDE the chars-per-token division: "[]" is 2 chars
+    # = ceil(2/4) = 1 estimated token, + 20 offset tokens = 21, room 851.
+    # Inside the division the offset would contribute only 5 (room 866) —
+    # #2064 pins the documented +20.
+    expected_room = 1000 - (math.ceil(len("[]") / 4) + 20) - 128
     assert payload["max_tokens"] == expected_room
 
 

@@ -406,8 +406,11 @@ class ProbeModelClient:
             payload["tool_choice"] = "auto"
         if max_output_tokens is not None:
             window = await self._window_tokens()
-            input_tokens = math.ceil(
-                (len(json.dumps(messages)) + MODEL_PROMPT_OFFSET_TOKENS) / MODEL_CHARS_PER_TOKEN_ESTIMATE
+            # The offset is added AFTER the estimate: the +20 prompt-offset
+            # tokens are tokens, not characters — inside the division they
+            # would contribute only 5 (#2064).
+            input_tokens = (
+                math.ceil(len(json.dumps(messages)) / MODEL_CHARS_PER_TOKEN_ESTIMATE) + MODEL_PROMPT_OFFSET_TOKENS
             )
             room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
             if room > 0:

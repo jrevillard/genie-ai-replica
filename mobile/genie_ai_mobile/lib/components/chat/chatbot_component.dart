@@ -1417,9 +1417,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     groundingStatus = status;
                     streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
+                    // A translation frame carries ANSWER text: it marks
+                    // the answer phase just like a chunk, so the line can
+                    // never render under delivered answer content (today
+                    // the envelope puts translation after the last chunk;
+                    // the invariant does not lean on that order).
                     accumulatedContent = content;
                     setState(() {
                       msg['content'] = content;
+                      _agentChunkSeen = true;
                     });
                     _scrollToBottom();
                   case SseDoneEvent(:final queryId, :final translationFailed):
@@ -1482,6 +1488,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     'is_grounded': isGrounded,
                     'grounding_status': groundingStatus,
                     'query_translation_status': streamQueryTranslationStatus,
+                    // The answer-translation outcome, in the vocabulary the
+                    // restore reads (isTranslationFailed): the mobile save
+                    // uploads THIS map (messages-post metadata), so the
+                    // record it stores must carry what the live turn knew
+                    // — the agent lane's server-side doc does not (issue
+                    // #2080), and a restored failed translation would
+                    // otherwise read as a delivered one.
+                    'translation_status': answerTranslationFailed
+                        ? 'failed'
+                        : 'ok',
                   }..removeWhere((key, value) => value == null);
                 });
               }
@@ -1605,10 +1621,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final response = jsonDecode(res.body) as Map<String, dynamic>;
       final Map<String, dynamic>? metadata = response['metadata'];
 
-      // What happened to the language of the answer: chatqna reports whether
-      // it translated it. An answer that was not translated is flagged, so
+      // What happened to the language of the answer: the metadata's
+      // translation_status (the lanes that persist it) or the body's root
+      // latch (story 2.4b — the agent lane's metadata does not carry the
+      // field, #2080). An answer that was not translated is flagged, so
       // the English original is never read as a translation of it.
-      final bool translationFailed = isTranslationFailed(metadata);
+      final bool translationFailed =
+          isTranslationFailed(metadata) ||
+          response['translationFailed'] == true;
+      // The record the save uploads must carry what this turn knew: stamp
+      // the outcome into the metadata when the lane did not, so a restored
+      // conversation derives the same fact the live one showed.
+      if (metadata != null && !metadata.containsKey('translation_status')) {
+        metadata['translation_status'] = translationFailed ? 'failed' : 'ok';
+      }
 
       final assistantMessage = {
         // The bubble handle's discriminator: the queryId when the answer
@@ -1627,6 +1653,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'sources': metadata?['sources'] ?? [],
         'confidence': metadata?['confidence_score'],
         'metadata': metadata,
+        // Whatever the live path sets, this path sets too — the truth
+        // table's legacy fallback (is_grounded alone) works on the JSON
+        // path the same as on the stream and a restore.
+        'isGrounded': metadata?['is_grounded'],
         'translationFailed': translationFailed,
         'isSaved': false,
       };

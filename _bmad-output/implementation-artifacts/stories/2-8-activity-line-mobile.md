@@ -81,7 +81,7 @@ context:
 - [x] `mobile/genie_ai_mobile/test/helpers/chatbot_harness.dart` -- optional streaming params on the mount -- constructor args live in one home
 - [x] `mobile/genie_ai_mobile/test/services/sse_parser_test.dart` -- the new events, metadata field, unknown-type tolerance -- the parser contract
 - [x] `mobile/genie_ai_mobile/test/components/chatbot_agent_activity_test.dart` -- NEW: line lifecycle (appears, replaces, failed, collapse, post-chunk ignore, legacy unchanged), truth table live + restored, a11y/reduced-motion, locale-parity delivery assertion -- the ACs as executable checks
-- [x] `mobile/genie_ai_mobile/test/services/agent_activity_locale_parity_test.dart` -- NEW: the delivery checklist as an executable assertion (11 keys × 14 shipped locales, plus the on-disk coverage guard) -- the review-enforced parity made checkable
+- [x] `mobile/genie_ai_mobile/test/services/locale_consistency_test.dart` -- the delivery checklist as an executable assertion folded into the existing suite (11 keys × 14 shipped locales over its one shippedLocales registry, plus its on-disk coverage guard) -- the review-enforced parity made checkable; the separate parity file this task first created was folded here in the simplify pass (one registry, one guard)
 
 **Acceptance Criteria:**
 - Given a streaming turn whose SSE body carries `agent_activity` frames, when they arrive before the first chunk, then the line renders in the trailing slot with the localized label and the DS marker, and the legacy indicator is absent for the whole turn.
@@ -143,6 +143,6 @@ context:
 
 **Commands:**
 - `cd mobile/genie_ai_mobile && flutter test` -- expected: whole suite green
-- `cd mobile/genie_ai_mobile && flutter test test/components/chatbot_agent_activity_test.dart test/services/sse_parser_test.dart test/services/agent_activity_locale_parity_test.dart` -- expected: the new suites pass
+- `cd mobile/genie_ai_mobile && flutter test test/components/chatbot_agent_activity_test.dart test/services/sse_parser_test.dart test/services/locale_consistency_test.dart` -- expected: the new suites pass
 - `cd mobile/genie_ai_mobile && dart analyze` -- expected: clean
 - Break check: comment out the collapse branch / a locale key -- expected: the matching test goes red, then revert

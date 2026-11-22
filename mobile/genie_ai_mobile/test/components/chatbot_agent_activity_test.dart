@@ -10,6 +10,7 @@ import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_spinner.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:http/http.dart' as http;
+import 'package:openapi/api.dart';
 
 import '../helpers/chatbot_harness.dart';
 import '../helpers/test_app.dart';
@@ -26,9 +27,14 @@ import '../helpers/test_app.dart';
 /// visible only while the turn is still running), every other request
 /// through the harness tree client.
 class _AgentStreamMockClient extends QuickHelpTreeMockClient {
-  _AgentStreamMockClient(super.tree, this.controller);
+  _AgentStreamMockClient(
+    super.tree, [
+    StreamController<Uint8List>? withController,
+  ]) : controller = withController ?? StreamController<Uint8List>();
 
-  final StreamController<Uint8List> controller;
+  /// The open stream the test drives; mountStreaming re-points a mock
+  /// built before its mount onto the mount's own controller.
+  StreamController<Uint8List> controller;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -76,9 +82,61 @@ class _RestoredVerdictMockClient extends ChatbotMockClient {
   }
 }
 
+/// The non-streaming JSON client: answers POST /api/queries with a
+/// legacy-shaped metadata (is_grounded, NO grounding_status) plus the
+/// root translationFailed latch — the two inputs the JSON path's truth
+/// table and caption must read.
+class _QueriesJsonMockClient extends QuickHelpTreeMockClient {
+  _QueriesJsonMockClient(super.tree);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.url.path.endsWith('/api/queries')) {
+      return httpResponseJson(<String, dynamic>{
+        'queryId': 'q-json',
+        'response': 'Answer text',
+        'translationFailed': true,
+        'metadata': <String, dynamic>{
+          'sources': <dynamic>[],
+          'confidence_score': 0.9,
+          'is_grounded': false,
+        },
+      }, 201);
+    }
+    return super.send(request);
+  }
+}
+
 Uint8List _frames(List<Map<String, dynamic>> frames) => Uint8List.fromList(
   utf8.encode(frames.map((f) => 'data: ${jsonEncode(f)}\n\n').join()),
 );
+
+/// The streaming mock that also plays the SAVE side: the conversation
+/// create answers with a key, and every messages-post body is captured —
+/// the wire the save uploads each message's metadata on.
+class _SavingStreamMockClient extends _AgentStreamMockClient {
+  _SavingStreamMockClient(super.tree);
+
+  final List<Map<String, dynamic>> savedMessageBodies = [];
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.method == 'POST' &&
+        request.url.path.endsWith('/api/chat/conversations')) {
+      return httpResponseJson(<String, dynamic>{'_key': 'conv-save'}, 200);
+    }
+    if (request.method == 'POST' &&
+        request.url.path.contains('/api/chat/conversations/') &&
+        request.url.path.endsWith('/messages')) {
+      savedMessageBodies.add(
+        jsonDecode(utf8.decode((request as http.Request).bodyBytes))
+            as Map<String, dynamic>,
+      );
+      return httpResponseJson(<String, dynamic>{'_id': 'm-saved'}, 200);
+    }
+    return super.send(request);
+  }
+}
 
 void main() {
   final tree = quickHelpTreeFixture();
@@ -100,10 +158,13 @@ void main() {
   /// Mounts the chatbot on an open stream and returns the controller the
   /// test feeds frames into.
   Future<StreamController<Uint8List>> mountStreaming(
-    WidgetTester tester,
-  ) async {
+    WidgetTester tester, {
+    _AgentStreamMockClient? mock,
+    GlobalKey<ChatBotComponentState>? chatKey,
+  }) async {
     final controller = StreamController<Uint8List>();
-    final mock = _AgentStreamMockClient(tree, controller);
+    final client = mock ?? _AgentStreamMockClient(tree, controller);
+    if (mock != null) mock.controller = controller;
     // The phone surface: the composer's send control is tappable at the
     // phone-sized viewport the Quick Help suites use (the default test
     // surface obscures it).
@@ -111,8 +172,9 @@ void main() {
     mockChatbotConfigAsset(tester, config);
     await pumpChatBot(
       tester,
-      mock,
-      httpClient: mock,
+      client,
+      chatKey: chatKey,
+      httpClient: client,
       streamBaseUrl: 'http://mock',
     );
     // The scoped-card tap first (the pattern the Quick Help suites use):
@@ -552,6 +614,61 @@ void main() {
   );
 
   testWidgets(
+    'the save uploads the answer-translation outcome the restore reads',
+    (tester) async {
+      await I18nService().changeLanguage('fr');
+      // The saving mock serves the same stream route and captures the
+      // messages-post bodies the save uploads: the record the save
+      // carries must hold the outcome the restore reads — the agent
+      // lane's server-side doc does not persist it (#2080).
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      final saving = _SavingStreamMockClient(tree);
+      final controller = await mountStreaming(
+        tester,
+        mock: saving,
+        chatKey: chatKey,
+      );
+
+      controller.add(
+        _frames([
+          {'type': 'chunk', 'content': 'Answer'},
+          {
+            'type': 'metadata',
+            'source_documents': <dynamic>[],
+            'confidence_score': 0.9,
+            'grounding_status': 'grounded',
+            'is_grounded': true,
+          },
+          {'type': 'done', 'queryId': 'q2', 'translationFailed': true},
+        ]),
+      );
+      await controller.close();
+      await tester.pumpAndSettle();
+      // The reader half: the live turn shows the untranslated caption.
+      expect(
+        find.text(
+          'Traduction indisponible — cette réponse peut contenir du texte non traduit.',
+        ),
+        findsOneWidget,
+      );
+
+      // The save flow itself (the dialog is not this story's surface):
+      // the established state-key call the restored suites use.
+      await chatKey.currentState!.saveConversation();
+      await tester.pumpAndSettle();
+
+      final assistantBodies = saving.savedMessageBodies
+          .where((body) => body['metadata'] != null)
+          .toList();
+      expect(assistantBodies, hasLength(1));
+      expect(
+        assistantBodies.single['metadata']['translation_status'],
+        'failed',
+      );
+    },
+  );
+
+  testWidgets(
     'a restored failed translation renders the untranslated caption, never the scope caption',
     (tester) async {
       // The persisted record says the translation broke (status != 'ok'):
@@ -711,6 +828,55 @@ void main() {
       // settle would never return.
       await tester.pump();
       expect(tester.widget<Text>(find.text('Reading source…')).maxLines, 1);
+    },
+  );
+
+  testWidgets(
+    'the non-streaming path sets isGrounded and reads the 2.4b translation latch',
+    (tester) async {
+      await I18nService().changeLanguage('fr');
+      // No httpClient: the non-streaming JSON path. The response carries
+      // the legacy is_grounded fallback input (no grounding_status) and
+      // the agent lane's root translationFailed latch (#2080: its
+      // metadata does not carry translation_status).
+      usePhoneSurface(tester);
+      mockChatbotConfigAsset(tester, config);
+      final jsonMock = _QueriesJsonMockClient(tree);
+      await pumpChatBot(
+        tester,
+        jsonMock,
+        queriesApi: QueriesApi(ApiClient()..client = jsonMock),
+      );
+      // The scoped-card tap first: it shifts the composer up so the send
+      // control is tappable (the pattern mountStreaming uses).
+      await tester.tap(find.text('Births Card'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'question');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      // The is_grounded fallback fires on the JSON path too (the FR
+      // wording — the UI under test is French).
+      expect(
+        find.text(
+          'Généré par IA — non basé sur les documents de la bibliothèque',
+        ),
+        findsOneWidget,
+      );
+      // The root latch is read: the untranslated caption shows.
+      expect(
+        find.text(
+          'Traduction indisponible — cette réponse peut contenir du texte non traduit.',
+        ),
+        findsOneWidget,
+      );
+      // And the scope caption cannot claim a translation that never was.
+      expect(
+        find.text(
+          "La vérification de l'ancrage a été effectuée sur la réponse dans sa langue d'origine — cette traduction n'est pas couverte par cette vérification.",
+        ),
+        findsNothing,
+      );
     },
   );
 }

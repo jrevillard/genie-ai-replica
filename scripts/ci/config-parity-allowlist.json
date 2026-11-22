@@ -67,6 +67,9 @@
         }
       },
       "composeOnly": {
+        "AGENT_ENABLED": "the chart does not deploy the agent-service tier yet (the compose-side agentic branch, story 2.4): the backend's routing helper reads the flag once and parks the branch unless it is exactly '1', so its absence on the chart IS the dark state, not a gap. The entry moves to mayDiffer/both surfaces when the tier lands on the chart.",
+        "AGENT_SERVICE_URL": "the chart does not deploy the agent-service tier yet — there is no in-cluster endpoint to name; the Compose value is the compose service name. Same re-entry as AGENT_ENABLED when the tier lands.",
+        "AGENT_UPSTREAM_TIMEOUT_MS": "sizes the agent leg (POST /v1/runs) that the chart does not run yet — the pair rule lives in docs/agent-budget-deadline-pairs.md and the knob becomes a chart value when the tier is deployed by the chart.",
         "AGENT_TRANSLATION_MAX_TOKENS": "the agentic-path translation-leg allowances: read fail-closed by the BFF's agentic translation leg (story 2.10, AD-14), and no deployed surface serves that leg yet — the chart does not install the agentic request path (the agent service itself is unpaired for the same reason). Wiring the knobs into the chart backend is the deployment story's surface (the deferral is filed in _bmad-output deferred-work), and a knob wired before its consumer would be configuration theatre on the chart surface.",
         "AGENT_TRANSLATION_MAX_CALLS": "the agentic-path translation-leg allowances: read fail-closed by the BFF's agentic translation leg (story 2.10, AD-14), and no deployed surface serves that leg yet — the chart does not install the agentic request path (the agent service itself is unpaired for the same reason). Wiring the knobs into the chart backend is the deployment story's surface (the deferral is filed in _bmad-output deferred-work), and a knob wired before its consumer would be configuration theatre on the chart surface."
       }

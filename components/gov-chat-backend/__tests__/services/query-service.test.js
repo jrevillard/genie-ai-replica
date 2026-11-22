@@ -1962,3 +1962,103 @@ describe('QueryService', () => {
     });
   });
 });
+
+// ============================================================
+// Story 2.4 — the agent CallerContext builder: the REAL method (the graph-set
+// rule is one home shared with the fan-out carrier; the repos mapping
+// enforces the contract's own invariant — a repo may never name a graph
+// outside the authorized set, and may appear once).
+// ============================================================
+describe('buildAgentCallerContext (story 2.4)', () => {
+  const queryData = {
+    userId: 'user-1',
+    context: { serviceLabels: ['taxes', 'taxes', '', 42, 'health'] }
+  };
+
+  it('a null posture (no bearer / failed resolution) yields the empty-authorization context', () => {
+    expect(queryService.buildAgentCallerContext(queryData, null)).toEqual({
+      user_id: 'user-1',
+      authorized_graph_names: [],
+      authorized_repos: [],
+      requested_labels: ['taxes', 'health']
+    });
+  });
+
+  it('hybrid engaged: the legacy graph is prepended first, the OKF graphs after', () => {
+    const posture = {
+      available: true,
+      mode: 'hybrid',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1', 'OKF_b_v2'],
+      legacyGraph: 'GRAPH',
+      authz: { repos: [{ repo_id: 'r1', graph_name: 'OKF_a_v1' }] }
+    };
+    const context = queryService.buildAgentCallerContext(queryData, posture);
+    expect(context.authorized_graph_names).toEqual(['GRAPH', 'OKF_a_v1', 'OKF_b_v2']);
+    expect(context.authorized_repos).toEqual([{ repo_id: 'r1', graph_name: 'OKF_a_v1' }]);
+  });
+
+  it('okf_only engaged: the legacy graph is never in the set', () => {
+    const posture = {
+      available: true,
+      mode: 'okf_only',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1'],
+      legacyGraph: 'GRAPH',
+      authz: { repos: [] }
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_graph_names).toEqual(['OKF_a_v1']);
+  });
+
+  it('a repo row naming a graph outside the authorized set is dropped', () => {
+    const posture = {
+      available: true,
+      mode: 'okf_only',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1'],
+      legacyGraph: 'GRAPH',
+      authz: {
+        repos: [
+          { repo_id: 'r-in', graph_name: 'OKF_a_v1' },
+          { repo_id: 'r-out', graph_name: 'OKF_not_authorized' }
+        ]
+      }
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_repos).toEqual([
+      { repo_id: 'r-in', graph_name: 'OKF_a_v1' }
+    ]);
+  });
+
+  it('a duplicate repo_id appears once (the first row wins)', () => {
+    const posture = {
+      available: true,
+      mode: 'okf_only',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1'],
+      legacyGraph: 'GRAPH',
+      authz: {
+        repos: [
+          { repo_id: 'r-in', graph_name: 'OKF_a_v1' },
+          { repo_id: 'r-in', graph_name: 'OKF_a_v1' }
+        ]
+      }
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_repos).toEqual([
+      { repo_id: 'r-in', graph_name: 'OKF_a_v1' }
+    ]);
+  });
+
+  it('an unengaged posture yields the empty set (the legacy corpus answers a hybrid caller)', () => {
+    const posture = {
+      available: true,
+      mode: 'hybrid',
+      engaged: false,
+      authorizedGraphs: [],
+      legacyGraph: 'GRAPH',
+      authz: null
+    };
+    const context = queryService.buildAgentCallerContext(queryData, posture);
+    expect(context.authorized_graph_names).toEqual([]);
+    expect(context.authorized_repos).toEqual([]);
+  });
+});

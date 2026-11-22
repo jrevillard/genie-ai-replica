@@ -13,7 +13,7 @@ delivered stage). The rehearsal proves three things against a REAL deployment:
    ends like a hard stop — whichever occurs is recorded with timestamps.
 3. **The BFF-upstream-timeout / agent-deadline pair**, validated from the
    DEPLOYED values against the derivation constants
-   (`docs/agent-budget-deadline-pairs.md`, `agent-frame-writer.js`).
+   (`docs/agent-budget-deadline-pairs.md`, `components/gov-chat-backend/services/agent-run-contract.js`).
 
 A full agent ANSWER is deliberately not part of the rehearsal's acceptance:
 the venue's GPU endpoint has no tool-calling flags pinned (issue #2052,

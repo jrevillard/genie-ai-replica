@@ -2,7 +2,7 @@
 title: 'Story 3.2 — Rollback continuity'
 type: 'feature'
 created: '2026-11-22'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '96cea8779d0aae71e1d6a34166fb827878c3a9f3'
@@ -74,7 +74,7 @@ context:
 - [x] Frontend tests -- restore of an agentic-shaped message (grounding_status/agent_run/okf rows) builds sources via the existing paths, sidebar resolves okf rows without dead URLs, extras ignored -- the AC's render + re-resolution half
 - [x] `docs/adr/agentic-003-in-flight-treatment-and-rollback-continuity.md` -- the documented policy (status Proposed, binds FR-16/AD-9/AD-11/AD-12, story #1973)
 - [x] `CHANGELOG.md` -- `[Unreleased]` / Fixed: interrupted partial-saves carry an honest marker; okf-concept citations resolve in restored conversations; agentic turns record legacy abstention vocabulary
-- [ ] `_bmad-output/implementation-artifacts/stories/3-2-rollback-continuity.md` + `sprint-status.yaml` -- story to `in-review`, row `3-2-rollback-continuity` per the sync rule -- BMAD bookkeeping
+- [x] `_bmad-output/implementation-artifacts/stories/3-2-rollback-continuity.md` + `sprint-status.yaml` -- story to `in-review`, row `3-2-rollback-continuity` per the sync rule -- BMAD bookkeeping
 
 **Acceptance Criteria:**
 - Given an agentic conversation created under the flag (queries doc with agent metadata, saved message with okf-concept citations), when the flag is off and the conversation is loaded and continued, then the legacy GET serves the history (extras verbatim, render intact), the citations re-resolve through the stable-id conventions (sidebar included), and the new turn answers via the legacy pipeline with the same-shaped queries doc.
@@ -101,6 +101,10 @@ context:
   4. *"No client change" was one notch too strong* — on the end-without-completion-frame path the additive key rides the existing `metadata` frame to the connected client. CHANGELOG + ADR §2 reworded.
 - 2026-11-22 (known pre-existing limitation, noted by the FIX review, out of this story's scope): on the truncation path, a client disconnect landing between the `end` event and the finalize (the translation-flush window) is dropped twice — close is disarmed by `handled`, and the terminal's `res.destroyed` guard skips the finalize — so that truncated answer persists nowhere (the doc stays honestly unanswered). Same shape before this change; the marker work did not touch it.
 - 2026-11-22 (fix chain exhausted at F=3): the third FIX review verified both corrections accurate and found ONE remaining residual of the same doc-wording class — the Consequences "byte-identical" bullet lacked the anomaly-path carve-out. The reviewer's prescribed remedy was applied verbatim AFTER the cap, unreviewed (the no-further-review rule); the review_policy gate returned `park` (`fix_cap_without_clean`). Story parked with `status::awaiting-operator`; all suites green at park (backend 370+59, frontend 309, lint, prettier).
+- 2026-11-22 (operator ruling: chain closed at cap with waiver; resumed): quality pass over the parked tree.
+  - *Simplify (4 lenses).* Applied: a module-local `interruptedMetadata(captured)` helper collapses the twice-written marker composition in `query-routes.js` (one composition, three partial-save consumers read it); the snapshot-row `bundle_version` write uses `?? null` (the change-set's established idiom, replacing the hand-rolled ternary); `assembleAgentMetadata` states its ONE deliberate override in the single base-building expression. Skipped (noted, not argued): the cross-file marker-key constant (after the helper, two production literals remain, each pinned by its own suite's literal assertion — the anti-drift net exists; wiring a constant through the DI graph + test scaffolds costs more than the drift it closes) and the finalize-options-flag restructure (moves the stamp from three call sites into two mechanisms — the finalize flag plus handleStreamDone threading needed to preserve the client-frame ride on the end path — redistributing rather than consolidating; "when to declare interrupted" is per-caller knowledge either way). Efficiency lens: clean. Altitude lens: okf identity, `abstained` normalization, the `doneState.handled` guard, and the no-fabrication pin all confirmed at the right depth.
+  - *Test-audit (this MR's tests).* Every added test survives the authoring gate against the junk patterns: the AQL-projection test is the cheapest independent guard for a string-literal contract (fails when the projected keys or the null-safe read change, survives identifier-only refactors); the marker tests each own a distinct site (agentic disconnect, legacy close, legacy end-without-done, the relay-mode guard leak, the no-fabrication guard); expected values are literals throughout; `finalizeStreamQuery` stays mocked at the route boundary with the persisted shape owned by the query-service suite. One hygiene defect found and fixed: the relay-mode test's env scrub ran only on success — moved to a describe-level `afterEach` so a red test cannot flip its siblings' translation mode.
+  - Final tree: backend 2601 passed (full suite unmodified-green, the D02 pin), frontend 309 passed, lint + prettier clean.
 
 ## Spec Change Log
 

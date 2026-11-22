@@ -3,9 +3,10 @@
 // Story 2.11 — the two attribution writes on the `queries` doc: the
 // run-start block (metadata.agent_run = {run_id, execution_versions,
 // started_at}) and the honest-outcome patch (outcome + finished_at). The
-// contract under test: MERGE, never clobber — the doc may carry other
-// metadata, the block may already carry the start write, and a patch
-// replaces only the keys it names.
+// contract under test: the merge runs SERVER-SIDE (one AQL UPDATE over the
+// doc's current state) — a fire-and-forget patch must never write back a
+// stale pre-finalize metadata over the assembled answer, and a patch
+// replaces only the keys it names, never the siblings.
 
 require('../setup-env');
 
@@ -37,115 +38,80 @@ const EXECUTION_VERSIONS = {
   configuration: { sha256: '0123456789ab', values: { max_steps: 6 } }
 };
 
-let collections;
+let dbQuery;
+
+const queryArg = () => {
+  expect(dbQuery).toHaveBeenCalledTimes(1);
+  const arg = dbQuery.mock.calls[0][0];
+  expect(arg._aql).toBe(true);
+  return arg;
+};
+
+// The merged statement: agent_run MERGES into the doc's current metadata —
+// the siblings survive, the patch replaces only the keys it names.
+const expectServerSideMerge = (arg) => {
+  const statement = arg.strings.join('');
+  expect(statement).toContain('MERGE(doc.metadata || {}');
+  expect(statement).toContain('MERGE(doc.metadata.agent_run || {}');
+  // The bound values carry the target key and the patch (in template order).
+  expect(arg.values[0]).toBe('q1');
+  return arg.values[1];
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
-  collections = {
-    document: jest.fn().mockResolvedValue({ _key: 'q1', isAnswered: false }),
-    update: jest.fn().mockResolvedValue({})
-  };
-  queryService.queries = collections;
+  dbQuery = jest.fn().mockResolvedValue({ forEach: jest.fn().mockResolvedValue(undefined) });
+  queryService.db = { query: dbQuery };
 });
 
 describe('persistAgentRunStart (story 2.11)', () => {
-  it('creates the agent_run block on a doc that carries no metadata yet', async () => {
+  it('merges the run-start block server-side: the patch carries the keys it names', async () => {
     await queryService.persistAgentRunStart('q1', 'run-abc', EXECUTION_VERSIONS);
 
-    expect(collections.update).toHaveBeenCalledTimes(1);
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: {
-        agent_run: {
-          run_id: 'run-abc',
-          execution_versions: EXECUTION_VERSIONS,
-          started_at: expect.any(String)
-        }
-      }
-    });
-    // UTC ISO timestamps everywhere persisted.
-    expect(collections.update.mock.calls[0][1].metadata.agent_run.started_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-  });
-
-  it('merges into existing metadata and an existing agent_run block without clobbering siblings', async () => {
-    collections.document.mockResolvedValue({
-      _key: 'q1',
-      isAnswered: false,
-      metadata: {
-        filter_labels: ['Taxes'],
-        agent_run: { outcome: 'stale-from-an-earlier-attempt' }
-      }
-    });
-
-    await queryService.persistAgentRunStart('q1', 'run-abc', EXECUTION_VERSIONS);
-
-    const written = collections.update.mock.calls[0][1].metadata;
-    // MERGE semantics: the sibling metadata key survives, the block's
-    // existing keys survive unless the patch names them — the patch
-    // replaces only what it carries, never the siblings.
-    expect(written.filter_labels).toEqual(['Taxes']);
-    expect(written.agent_run).toEqual({
+    const patch = expectServerSideMerge(queryArg());
+    expect(patch).toEqual({
       run_id: 'run-abc',
       execution_versions: EXECUTION_VERSIONS,
-      started_at: expect.any(String),
-      outcome: 'stale-from-an-earlier-attempt'
+      started_at: expect.any(String)
     });
+    // UTC ISO timestamps everywhere persisted.
+    expect(patch.started_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it('records run_id + started_at when the payload carried no execution_versions (older agent service)', async () => {
     await queryService.persistAgentRunStart('q1', 'run-abc', null);
 
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: { agent_run: { run_id: 'run-abc', started_at: expect.any(String) } }
-    });
+    const patch = expectServerSideMerge(queryArg());
+    expect(patch).toEqual({ run_id: 'run-abc', started_at: expect.any(String) });
+  });
+
+  it('rejects a non-object execution_versions payload (never persisted)', async () => {
+    await queryService.persistAgentRunStart('q1', 'run-abc', 'garbage');
+
+    const patch = expectServerSideMerge(queryArg());
+    expect(patch).toEqual({ run_id: 'run-abc', started_at: expect.any(String) });
   });
 });
 
 describe('persistAgentRunOutcome (story 2.11)', () => {
-  it('patches outcome + finished_at into the block the start write created', async () => {
-    collections.document.mockResolvedValue({
-      _key: 'q1',
-      isAnswered: false,
-      metadata: {
-        agent_run: { run_id: 'run-abc', execution_versions: EXECUTION_VERSIONS, started_at: '2026-11-22T00:00:00.000Z' }
-      }
-    });
-
+  it('merges outcome + finished_at server-side into the block the start write created', async () => {
     await queryService.persistAgentRunOutcome('q1', 'timed_out');
 
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: {
-        agent_run: {
-          run_id: 'run-abc',
-          execution_versions: EXECUTION_VERSIONS,
-          started_at: '2026-11-22T00:00:00.000Z',
-          outcome: 'timed_out',
-          finished_at: expect.any(String)
-        }
-      }
-    });
+    const patch = expectServerSideMerge(queryArg());
+    expect(patch).toEqual({ outcome: 'timed_out', finished_at: expect.any(String) });
   });
 
   it('writes the outcome vocabulary verbatim (cancelled / interrupted / budget_exhausted)', async () => {
     for (const outcome of ['cancelled', 'interrupted', 'budget_exhausted', 'error', 'timed_out']) {
       jest.clearAllMocks();
-      collections.document.mockResolvedValue({ _key: 'q1', metadata: {} });
-      collections.update.mockResolvedValue({});
+      dbQuery = jest.fn().mockResolvedValue({ forEach: jest.fn().mockResolvedValue(undefined) });
+      queryService.db = { query: dbQuery };
 
       await queryService.persistAgentRunOutcome('q1', outcome);
 
-      const block = collections.update.mock.calls[0][1].metadata.agent_run;
-      expect(block.outcome).toBe(outcome);
-      expect(block.finished_at).toEqual(expect.any(String));
+      const patch = expectServerSideMerge(queryArg());
+      expect(patch.outcome).toBe(outcome);
+      expect(patch.finished_at).toEqual(expect.any(String));
     }
-  });
-
-  it('creates the block when even the start write never arrived (no run_started seen)', async () => {
-    collections.document.mockResolvedValue({ _key: 'q1', isAnswered: false });
-
-    await queryService.persistAgentRunOutcome('q1', 'interrupted');
-
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: { agent_run: { outcome: 'interrupted', finished_at: expect.any(String) } }
-    });
   });
 });

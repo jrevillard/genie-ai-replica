@@ -165,6 +165,16 @@ function answeredRunStream({ verdict = GROUNDED_VERDICT, answer = 'Hello world.'
 // ── the service under test: the real singleton with mock DB touchpoints ────
 
 let collections;
+
+// The attribution writes go through the server-side AQL merge (story 2.11 —
+// the real arangojs aql template binds the patch as the query's second bind
+// var); the wholesale tail update stays on the collection mock.
+const attributionPatch = (callIndex = 0) => {
+  const arg = queryService.db.query.mock.calls[callIndex][0];
+  expect(arg.query).toContain('MERGE(doc.metadata.agent_run || {}');
+  expect(arg.bindVars.value0).toBe('q1');
+  return arg.bindVars.value1;
+};
 let analytics;
 
 beforeEach(() => {
@@ -524,9 +534,13 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     // outcome patch (story 2.11 — the agent's own verdict, verbatim) — no
     // answer, no analytics; the trailing usage record is ignored.
     expect(collections.save).toHaveBeenCalledTimes(1);
-    expect(collections.update).toHaveBeenCalledTimes(1);
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: { agent_run: { outcome: 'budget_exhausted', finished_at: expect.any(String) } }
+    // The ONE write is the server-side outcome patch (story 2.11) — the
+    // tail update never runs, no analytics.
+    expect(collections.update).not.toHaveBeenCalled();
+    expect(queryService.db.query).toHaveBeenCalledTimes(1);
+    expect(attributionPatch()).toEqual({
+      outcome: 'budget_exhausted',
+      finished_at: expect.any(String)
     });
     expect(analytics.recordQuery).not.toHaveBeenCalled();
   });
@@ -646,11 +660,10 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     expect(response.body.error).toBe('AGENT_SERVICE_UNAVAILABLE');
     // Story 2.11 — the ONE honest outcome is the deadline's: the abort's
     // stream teardown reports interrupted, but the deadline fired first and
-    // the latch keeps the fact that actually ended the run.
-    expect(collections.update).toHaveBeenCalledTimes(1);
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: { agent_run: { outcome: 'timed_out', finished_at: expect.any(String) } }
-    });
+    // the latch keeps the fact that actually ended the run (the write is
+    // the server-side patch — the tail update never runs).
+    expect(collections.update).not.toHaveBeenCalled();
+    expect(attributionPatch()).toEqual({ outcome: 'timed_out', finished_at: expect.any(String) });
   });
 
   it('unparsable 429/503/422 bodies degrade to the documented error names, never raw passthrough', async () => {
@@ -714,11 +727,9 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       message: 'Agent service unavailable or timed out'
     });
     // The truncated text never became a complete answer — the doc keeps the
-    // deadline's honest outcome only (story 2.11).
-    expect(collections.update).toHaveBeenCalledTimes(1);
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: { agent_run: { outcome: 'timed_out', finished_at: expect.any(String) } }
-    });
+    // deadline's honest outcome only (story 2.11, the server-side patch).
+    expect(collections.update).not.toHaveBeenCalled();
+    expect(attributionPatch()).toEqual({ outcome: 'timed_out', finished_at: expect.any(String) });
   });
 
   it('a posture 401 propagates as 401 UNAUTHENTICATED — no run starts', async () => {
@@ -748,12 +759,14 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       requested_labels: []
     });
     expect(response.status).toBe(201);
-    // Story 2.11: TWO writes — the run-start attribution write, then the
-    // tail that completes the doc.
-    expect(collections.update).toHaveBeenCalledTimes(2);
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: { agent_run: { run_id: 'run-abc', started_at: expect.any(String) } }
+    // Story 2.11: TWO writes — the run-start attribution patch (server-side
+    // merge), then the tail update that completes the doc.
+    expect(queryService.db.query).toHaveBeenCalledTimes(1);
+    expect(attributionPatch()).toEqual({
+      run_id: 'run-abc',
+      started_at: expect.any(String)
     });
+    expect(collections.update).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -924,11 +937,13 @@ describe('POST /api/queries — story 2.11, the run-start handshake', () => {
     const response = await postQuery();
 
     expect(response.status).toBe(201);
-    // AT START: the versions persisted the moment run_started arrived.
-    expect(collections.update).toHaveBeenCalledWith('q1', {
-      metadata: {
-        agent_run: { run_id: 'run-abc', execution_versions: EXECUTION_VERSIONS, started_at: expect.any(String) }
-      }
+    // AT START: the versions persisted the moment run_started arrived (the
+    // server-side merge patch).
+    expect(queryService.db.query).toHaveBeenCalledTimes(1);
+    expect(attributionPatch()).toEqual({
+      run_id: 'run-abc',
+      execution_versions: EXECUTION_VERSIONS,
+      started_at: expect.any(String)
     });
     // The assembled metadata the tail writes completes the block: the same
     // versions + the answered outcome, never a clobber.

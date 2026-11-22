@@ -1160,16 +1160,23 @@ class QueryService {
    * The read-merge-write home both attribution writes share: the doc may
    * already carry other metadata, and the block itself may already carry
    * the start write — a patch replaces only the keys it names, never the
-   * siblings.
+   * siblings. The merge runs SERVER-SIDE (one AQL UPDATE over the doc's
+   * current state): a fire-and-forget patch whose network round-trip
+   * stalls past the success finalize must not write back a stale
+   * pre-finalize metadata over the assembled answer (the client-side
+   * read-merge-write had exactly that window).
    * @param {string} queryId - The `queries` doc key.
    * @param {Object} patch - The `agent_run` keys to merge.
    * @returns {Promise<void>}
    */
   async _mergeAgentRunMetadata(queryId, patch) {
-    const doc = await this.queries.document(queryId);
-    const metadata = { ...((doc && doc.metadata) || {}) };
-    metadata.agent_run = { ...(metadata.agent_run || {}), ...patch };
-    await this.queries.update(queryId, { metadata });
+    await this.db.query(aql`
+      FOR doc IN queries
+        FILTER doc._key == ${queryId}
+        UPDATE doc WITH {
+          metadata: MERGE(doc.metadata || {}, { agent_run: MERGE(doc.metadata.agent_run || {}, ${patch}) })
+        } IN queries
+    `);
   }
 
   /**

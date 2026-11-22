@@ -34,7 +34,6 @@ from agent.version_record import (
 )
 from noagent.lane import AdmissionLane
 
-
 # ---------------------------------------------------------------------
 # The builder: fields, hash stability, the no-secrets invariant
 # ---------------------------------------------------------------------
@@ -167,9 +166,7 @@ def test_a_discovered_identity_names_the_served_model():
 def test_the_loop_emits_the_record_on_run_started_when_it_carries_one():
     record = _record_for()
     model = ScriptedLoopModel((ModelTurn(content="done"),))
-    loop, collector, _monitor, _verifier = _governed_loop(
-        model, fake_port(), execution_versions=record
-    )
+    loop, collector, _monitor, _verifier = _governed_loop(model, fake_port(), execution_versions=record)
 
     asyncio.run(loop.run("the question"))
 

@@ -77,8 +77,12 @@ STAGE_BRANCH=<branch>            # the stage's delivery branch
 # yields nine, and the tag must name the SAME short sha the pipeline stamps:
 SHORT_SHA=$(git rev-parse --short=8 HEAD)
 git push origin "$STAGE_BRANCH"
-git tag "v08-rehearsal-$SHORT_SHA" "$SHORT_SHA" && git push origin "v08-rehearsal-$SHORT_SHA"
-PIPELINE_ID=$(glab api "projects/90/pipelines?ref=v08-rehearsal-$SHORT_SHA&per_page=1" \
+# NO `v` prefix: the remote's protected tag patterns guard `v*` (release
+# tags) and the pre-receive hook DECLINES deleting protected tags — the
+# recorded working shape (story 3.3) is `rehearsal-v08-<sha>`, and the tag
+# STAYS on the remote (see the note after the pipeline watch).
+git tag "rehearsal-v08-$SHORT_SHA" "$SHORT_SHA" && git push origin "rehearsal-v08-$SHORT_SHA"
+PIPELINE_ID=$(glab api "projects/90/pipelines?ref=rehearsal-v08-$SHORT_SHA&per_page=1" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 # The two jobs this rehearsal needs:
 glab api "projects/90/pipelines/$PIPELINE_ID/jobs?per_page=100" \
@@ -99,16 +103,20 @@ tag updates `latest`) and DELETE the `tmp/...:pending-*` source tags the
 rehearsal deployments reference. Canceling after the build stage prevents
 both. The rehearsal tag is a build marker, not a release: it carries no
 changelog entry (the tag pipeline's `config:changelog` gate failing on it is
-expected and harmless once the pipeline is canceled), and it is deleted after
-the rehearsal's images are superseded.
+expected and harmless once the pipeline is canceled). It is NOT deleted
+afterwards: the remote's pre-receive hook declines tag deletion for the
+protected patterns, so the tag stays (story 3.3's record names the two tags
+that remain) — harmless, with the registry-side `pending-*` tags aging out
+under the registry cleanup policy.
 
 ## Phase 1 — preflight
 
 ```bash
 mkdir -p /tmp/v08-rehearsal
-# Shared stack healthy, headroom within budget (abort if CPU or mem > 70%):
-kubectl -n genieai get pods --no-headers | grep -cv -E "Completed|Running" || true
-kubectl top nodes
+# Shared stack healthy, headroom within budget — ABORT on either check:
+kubectl top nodes --no-headers | awk '{ if ($3+0 > 70 || $5+0 > 70) { print "ABORT: node headroom exhausted (" $0 ")"; exit 1 } }' || exit 1
+UNHEALTHY=$(kubectl -n genieai get pods --no-headers | grep -cv -E "Completed|Running" || true)
+[ "$UNHEALTHY" = "0" ] || { echo "ABORT: $UNHEALTHY non-Running/Completed pods in the stack"; exit 1; }
 # Secrets present:
 kubectl -n genieai get secret vllm-api-key arango-root-secret keycloak-admin-credentials -o name
 # No leftover rehearsal objects from a previous run:
@@ -249,7 +257,8 @@ spec:
 EOF
 sed -i "s|AGENT_IMAGE_HERE|$AGENT_IMAGE|" /tmp/v08-rehearsal/agent-stack.yaml
 kubectl apply -f /tmp/v08-rehearsal/agent-stack.yaml
-kubectl -n genieai rollout status deploy/v08-rehearsal-backend deploy/v08-rehearsal-agent --timeout=300s
+kubectl -n genieai rollout status deploy/v08-rehearsal-backend --timeout=300s
+kubectl -n genieai rollout status deploy/v08-rehearsal-agent --timeout=300s
 # seam reachability proof BEFORE any turn (both wire facts above verified):
 kubectl -n genieai exec deploy/v08-rehearsal-backend -- \
   sh -c 'wget -q -O /tmp/seam -T 3 --post-data="{\"question\":\"probe\",\"deadline_ms\":5000,\"context\":{}}" --header="Content-Type: application/json" http://v08-rehearsal-agent-hl:8080/v1/runs; echo "seam-exit:$?"'
@@ -275,7 +284,7 @@ kubectl -n genieai exec deploy/v08-rehearsal-agent -- \
   sh -c 'echo WALLCLOCK=$AGENT_RUN_MAX_WALL_CLOCK_SECONDS'
 ```
 
-The invariant (the derivation constants live in
+The derivation (the constants live in
 `components/gov-chat-backend/services/agent-frame-writer.js`:
 `TRANSLATION_RESERVE_MS=30000`, `FINALIZATION_MARGIN_MS=5000`,
 `DEADLINE_FLOOR_MS=1000`; `DEFAULT_UPSTREAM_TIMEOUT_MS=3600000`):
@@ -283,11 +292,31 @@ The invariant (the derivation constants live in
 ```
 deadline_ms            = AGENT_UPSTREAM_TIMEOUT_MS − 30000 − 5000     (floor 1000)
 effective_wall_clock   = min(AGENT_RUN_MAX_WALL_CLOCK_SECONDS, deadline_ms/1000)
-pair rule              = AGENT_UPSTREAM_TIMEOUT_MS ≥ deadline_ms + 30000 + 5000
 ```
 
-A mismatch ABORTS the rehearsal — a broken pair is a stage-gate blocker, not a
-footnote. Record both pods' values and the arithmetic in the record.
+The `deadline_ms` identity holds by construction — the BFF COMMUNICATES
+timeout-minus-reserves — so the pair validation is the three checks that can
+actually FAIL on a deployed pair:
+
+1. **No reserve absorption fired.** A configured `AGENT_UPSTREAM_TIMEOUT_MS`
+   at or below `30000 + 5000 + 1000` is silently replaced by the default
+   (`resolveUpstreamTimeoutMs()` warns `AgentFrameWriter.upstream_timeout_below_reserves`
+   in the backend log). Check the BFF pod's log for that warning; if it
+   fired, the configured value never reached the wire — ABORT and fix the
+   deployment's knob.
+2. **The ceiling binds inside the deadline.** If
+   `AGENT_RUN_MAX_WALL_CLOCK_SECONDS > deadline_ms/1000`, the deployment's
+   intended ceiling is dead — every run is bounded only by the deadline
+   arithmetic, not the configured ceiling. That is a configuration defect:
+   ABORT and size the ceiling against the pair doc.
+3. **The deployed values match the code constants.** The reserves are
+   module constants, not knobs — if a future branch drifts them, the
+   arithmetic above must be re-derived from the code, not assumed. Compare
+   the constants read from the serving branch against this runbook's block.
+
+A failure of any check ABORTS the rehearsal — a broken pair is a stage-gate
+blocker, not a footnote. Record both pods' values and the arithmetic in the
+record.
 
 ## Phase 4 — the rehearsal token (temporary ROPC, reverted immediately)
 
@@ -437,8 +466,19 @@ wait $CURL_PID; date -u +%FT%TZ   # stream-end timestamp
 ```
 
 Then read the newest `queries` doc for the session and record which treatment
-occurred: `answer_interrupted: true` (completed + partial-saved inside the
-shutdown window) or `isAnswered: false` (hard-stop, honest unanswered doc).
+occurred — the three outcomes the in-flight policy defines:
+
+1. **Completed inside the shutdown window** — full chunk sequence + terminal
+   frames, doc `isAnswered: true` with NO `answer_interrupted` marker (ADR
+   agentic-003's rolling-restart variant; the common case for short turns,
+   and what story 3.3's rehearsal observed).
+2. **Partial save** — the stream ended mid-answer with text already flowing
+   and the process still alive: doc carries `answer_interrupted: true` with
+   the partial response (the disconnect treatment's honest partial state).
+3. **Hard stop, nothing fabricated** — the stream ended before any text or
+   outside the window with no finalize: doc stays `isAnswered: false` (the
+   honest unanswered state).
+
 Whichever variant occurs is the evidence — with timestamps.
 
 The port-forward targets a POD NAME: the restart replaces the pod and the
@@ -464,13 +504,13 @@ Nothing of the rehearsal remains; every removal is verified.
 
 ```bash
 # workloads
-kubectl -n genieai delete deploy/v08-rehearsal-backend deploy/v08-rehearsal-agent svc/v08-rehearsal-agent
+kubectl -n genieai delete deploy/v08-rehearsal-backend deploy/v08-rehearsal-agent svc/v08-rehearsal-agent-hl
 kubectl -n genieai get deploy,svc | grep v08-rehearsal   # expected: empty
 
 # rehearsal user
-curl -sk "http://localhost:18080/auth/admin/realms/genie/users?username=v08-rehearsal" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.[0].id'   # capture id
-curl -sk -X DELETE "http://localhost:18080/auth/admin/realms/genie/users/$UID" -H "Authorization: Bearer $ADMIN_TOKEN"
+REHEARSAL_USER_ID=$(curl -sk "http://localhost:18080/auth/admin/realms/genie/users?username=v08-rehearsal" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+curl -sk -X DELETE "http://localhost:18080/auth/admin/realms/genie/users/$REHEARSAL_USER_ID" -H "Authorization: Bearer $ADMIN_TOKEN"
 curl -sk "http://localhost:18080/auth/admin/realms/genie/users?username=v08-rehearsal" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq 'length'     # expected: 0
 

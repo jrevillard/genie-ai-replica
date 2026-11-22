@@ -126,6 +126,16 @@ context:
 - R1-6 (sprint-status.yaml MM-DD-YYYY dates vs ISO everywhere else) — real, nit, pre-existing — defer.
 - R1-7 (admin-logs archival commit cc4238fcc landed on the feature branch, violating POST-PRD-ARCHIVAL's "archive on main") — real, nit, pre-existing history — defer; operator/orchestrator remedy (cherry-pick to main), surfaced in the worker report.
 
+- R2 (global round 2, /code-review medium on the MR !1023 diff — the correctly-targeted round): 8 findings on the runbook/record, all verified real against the files.
+- R2-1 (runbook:467 cleanup deletes svc/v08-rehearsal-agent but Phase 2 creates v08-rehearsal-agent-hl) — verified real (grep: 174 vs 467) — important — patch (delete the -hl name).
+- R2-2 (runbook:473 cleanup DELETEs users/$UID — read-only shell builtin, never assigned; user survives, the length check then fails every re-run) — verified real — important — patch (REHEARSAL_USER_ID assignment + use).
+- R2-3 (runbook:252 kubectl rollout status with TWO resources errors — kubectl takes exactly one) — verified real — important — patch (two sequential invocations).
+- R2-4 (runbook:80 tag shape v08-rehearsal-* is the protected v* class AND contradicts the record: the working tag was rehearsal-v08-2b7f72aef, deletion declined by the pre-receive hook, promise "deleted after superseded" false) — verified real (record §2 + cleanup section) — important — patch (recorded shape rehearsal-v08-*, deletion promise replaced by the recorded hook reality).
+- R2-5 (runbook:440 phase 5e lists only two outcomes; the observed rehearsal is the third — completed in-window, isAnswered true, no marker) — verified real — nit — patch (third variant added).
+- R2-6 (runbook:286 the printed pair rule is an identity; the abort can never fire) — verified real — nit — patch (state the checks that can fail: absorption warning, ceiling-vs-deadline binding, constants match).
+- R2-7 (runbook:109 preflight abort threshold not enforced; pod-health count unconsumed) — verified real — nit — patch (explicit awk threshold + abort on unhealthy count).
+- R2-8 (sprint-status last_updated rewritten in the legacy MM-DD-YYYY format; migrate to ISO while touching) — real, nit, convention already deferred as R1-6 — reject the migration here (a one-field half-migration of a file-wide convention adds inconsistency, fixes nothing this story owns; R1-6's defer owns the convention change).
+
 ## Verification
 
 **Commands:**

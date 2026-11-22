@@ -34,6 +34,7 @@ import fastapi
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent.cancellation import cancel_and_join
 from agent.events import AgentEvent, EventKind
 from agent.orchestrator import (
     AdmissionRefused,
@@ -235,8 +236,11 @@ async def _run_stream(orchestrator: RequestOrchestrator, request: AgentRunReques
         record = await run_task
         yield _usage_frame(record)
     finally:
-        if not run_task.done():
-            run_task.cancel()
+        # The admission claim covers the run's whole teardown: the slot is
+        # released only once the cancelled run has finished unwinding —
+        # freeing it earlier would admit the successor run while the dying
+        # run's work is still in flight.
+        await cancel_and_join(run_task)
         # The getter future: cancelled here too, or a client disconnect
         # mid-stream (GeneratorExit at the yield while a re-armed getter
         # still awaits the queue) leaves the pending task on the loop

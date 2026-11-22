@@ -11,15 +11,19 @@ Two primitives, one discipline:
   reaches into the in-flight model call (or tool call), not just the loop's
   dispatch sites.
 
-``asyncio.CancelledError`` propagates untouched, everywhere: it is a
-``BaseException``, nothing here catches it, and a cancelled run is never
-mapped to a failure or an insufficiency. The terminal event is withheld on
-the cancelled path too — there is no honest terminal state to emit for a
-run whose outcome is "stopped".
+``asyncio.CancelledError`` is never mapped to a result, a failure or an
+insufficiency: it is a ``BaseException`` and a cancelled run's outcome is
+"stopped". The one sanctioned swallow is the reap in :func:`cancel_and_join`
+— a cancelled task is joined there and its OWN death absorbed, so a caller
+that ends on a cancellation path ends only when its in-flight work has truly
+stopped; the CALLER's own cancellation propagates untouched. The terminal
+event is withheld on the cancelled path too — there is no honest terminal
+state to emit for a run whose outcome is "stopped".
 """
 
 import asyncio
 from collections.abc import Coroutine
+from contextlib import suppress
 from typing import Any, TypeVar
 
 T = TypeVar("T")
@@ -55,6 +59,26 @@ class CancellationToken:
             raise asyncio.CancelledError()
 
 
+async def cancel_and_join(task: asyncio.Task) -> None:
+    """Cancel ``task`` and hold until its unwinding COMPLETES.
+
+    Cancelling only schedules; a caller that ends beside a cancelled task
+    that is still unwinding ends beside work that is still in flight. The
+    join is what turns "cancelled" into "terminated": this coroutine
+    returns only when the task has finished unwinding, and the task's own
+    ``CancelledError`` is absorbed there — it is the task's death being
+    reaped, never the caller's cancellation being handled. The caller's
+    cancellation, when one is already unwinding through the caller's
+    frame, keeps propagating after this returns; a cancellation DELIVERED
+    while suspended inside the join is absorbed too.
+    """
+    if task.done():
+        return
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
 async def run_cancellable(token: CancellationToken, work: Coroutine[Any, Any, T]) -> T:
     """Run ``work`` cancellably: the token racing it cancels the work itself.
 
@@ -65,8 +89,9 @@ async def run_cancellable(token: CancellationToken, work: Coroutine[Any, Any, T]
     A work that finishes first wins: its result (or its own exception)
     answers, and the caller's next pre-dispatch check bounds what comes
     after. On every other exit path — including the caller of this
-    coroutine itself being cancelled — the in-flight task is cancelled too,
-    so no model call outlives the run that asked for it.
+    coroutine itself being cancelled — the in-flight task is cancelled and
+    joined (:func:`cancel_and_join`), so no model call outlives the run
+    that asked for it.
     """
     if token.cancelled:
         # Refuse BEFORE any resolution — and close the coroutine that will
@@ -88,5 +113,8 @@ async def run_cancellable(token: CancellationToken, work: Coroutine[Any, Any, T]
         return await task
     finally:
         fired.cancel()
-        if not task.done():
-            task.cancel()
+        # The join covers the in-flight call's whole teardown: this exit
+        # path runs while the caller's cancellation is already unwinding,
+        # and the CancelledError may propagate only once the cancelled
+        # work has truly stopped.
+        await cancel_and_join(task)

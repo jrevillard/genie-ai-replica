@@ -415,6 +415,26 @@ describe('#2061 E-1/E-2: the carrier is narrowed to what the CALLER may traverse
     ).rejects.toThrow(/may traverse/i);
   });
 
+  test('a WILDCARD-scope holder keeps the whole carrier (they are already unrestricted)', async () => {
+    // The operator decision names BOTH privileged populations: the
+    // `tools-admin` realm role and a wildcard `okf:*:*:admin` scope. A
+    // wildcard scope is ALREADY unrestricted in deriveScopeAuthz, so the
+    // narrowing is a no-op for them — the feature does not shrink.
+    seedServing([
+      servingRow({ repo_id: 'r-public', name: 'public' }),
+      servingRow({ repo_id: 'r-fence-a', name: 'fencea', acl: { restricted: true } })
+    ]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: ['g-fence-a'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    const asWildcard = await evalCtx.carrierFor(ctx._key, {
+      okfScopes: ['okf:*:*:admin'],
+      isSuperAdmin: false
+    });
+    expect(asWildcard.repo_ids).toEqual(expect.arrayContaining(['r-fence-a']));
+  });
+
   test('the carrier carries the MEASURED set hash beside the context hash', async () => {
     // The context hash is over its FULL frozen set; the measured hash is
     // over the repositories this caller may actually measure. After a

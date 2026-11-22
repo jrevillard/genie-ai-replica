@@ -493,6 +493,13 @@ async function carrierOf(contextId) {
  *
  * A repository that no longer serves at all (retracted) is stale too.
  *
+ * Two honest caveats. The serving set is memoized for 30s, so the check can
+ * lag a publish by up to that long — the refusal is fail-closed, never
+ * fail-open. And the version is bumped at MINT while the rename happens at
+ * SETTLE, so a publish in progress also reads as stale; the message names
+ * the live name so the operator can tell the two apart, and it does NOT
+ * claim that a refresh is the only remedy.
+ *
  * @param {{context: object, repos: Array}} carrier
  */
 async function assertCarrierCurrent(carrier) {
@@ -520,7 +527,8 @@ async function assertCarrierCurrent(carrier) {
     `the evaluation context "${carrier.context.name}" (version ${carrier.context.version}) names serving ` +
       `graphs that are no longer current:\n${lines.join('\n')}\n` +
       'Refresh the evaluation context (POST /api/okf/eval-contexts/' +
-      `${carrier.context.id}/refresh) to measure the current corpus — ask a superadmin to refresh it.`,
+      `${carrier.context.id}/refresh) to measure the current corpus — ask a superadmin to refresh it. ` +
+      'A publish in progress also reads this way.',
     409
   );
 }

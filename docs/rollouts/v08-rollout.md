@@ -14,17 +14,17 @@
 
 ## 2. Artifact and configuration versions
 
-| Artifact | Value |
-|---|---|
-| Source branch / commit | `feat/agentic-foundations/3-3-rehearsed-rollback-and-rollout-record-v08` @ `2b7f72aef` (docs-only follow-up commits after the rehearsal carry the same `components/` content) |
-| Backend image | `registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-backend:pending-2b7f72ae` — manifest `sha256:f4308a9f6f03faa8f934aa568c66bee5001cc4d46b8d3614e1055b04ce15c7eb` (tag pipeline 18964, job `build:backend`) |
-| Agent image | `registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-agent-server:pending-2b7f72ae` — manifest `sha256:20f8d402faa4a8f8aa5c067ea0c21475b579a87df788fb956762c0a9051680f9` (pipeline 18964, job `build:agent-service`) |
-| Build pipeline | tag `rehearsal-v08-2b7f72aef` → pipeline 18964 — CANCELED after both build jobs went green, before the promote stage (a non-prerelease tag's promote would retag `latest` and delete the `pending-*` source tags) |
-| Models served (venue GPU) | LLM `ibm-granite/granite-4.1-8b` (vLLM 0.29.0, `max_model_len 65536`, NO tool-calling flags — #2052), translation `google/gemma-3-4b-it` |
-| Flags | `AGENT_ENABLED=1` (activation) / `0` (rollback); BFF `AGENT_UPSTREAM_TIMEOUT_MS=3600000`, `AGENT_SERVICE_URL=http://v08-rehearsal-agent-hl:8080/v1/runs` (see §7, wire fact 1), `AGENT_TRANSLATION_MAX_TOKENS=4096`, `AGENT_TRANSLATION_MAX_CALLS=8` (rehearsal pins; the leg was never exercised — English requests) |
-| Agent budget knobs (REQUIRED, fail-closed) | `AGENT_RUN_MAX_STEPS=8`, `AGENT_RUN_MAX_MODEL_CALLS=12`, `AGENT_RUN_MAX_TOOL_CALLS=12`, `AGENT_RUN_MAX_TOTAL_TOKENS=50000`, `AGENT_RUN_MAX_EVIDENCE_BYTES=200000`, `AGENT_RUN_MAX_WALL_CLOCK_SECONDS=240`, `AGENT_TOOL_TIMEOUT_MS=30000`, `AGENT_TOOL_MAX_RESULTS=10`, `AGENT_TOOL_MAX_RESULT_BYTES=50000`, `AGENT_VERDICT_JUDGE_TIMEOUT_MS=30000` |
-| Agent port assembly | `AGENT_DOCREPO_URL=http://document-repository.genieai.svc.cluster.local`, `AGENT_OKF_URL=http://okf-server:3002` (nominal — OKF off on this venue), `AGENT_AUTHORIZED_GRAPHS=GRAPH`, `TEI_EMBEDDING_ENDPOINT=…:444/embed`, `TEI_RERANKING_ENDPOINT=…:444/rerank`, `VLLM_ENDPOINT=…:444/llm`, `OPEA_SSL_SKIP_VERIFY=1`, `ARANGO_*` = the venue's deployed values (`_system` / `GRAPH` / root) |
-| Container port override (rehearsal-only) | agent bound to **8080** via a deployment-level command override (`uvicorn app:app --port 8080`); the shipped image default stays 8010 (see §7, wire fact 2) |
+| Artifact                                   | Value                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source branch / commit                     | `feat/agentic-foundations/3-3-rehearsed-rollback-and-rollout-record-v08` @ `2b7f72aef` (docs-only follow-up commits after the rehearsal carry the same `components/` content)                                                                                                                                                                                                                |
+| Backend image                              | `registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-backend:pending-2b7f72ae` — manifest `sha256:f4308a9f6f03faa8f934aa568c66bee5001cc4d46b8d3614e1055b04ce15c7eb` (tag pipeline 18964, job `build:backend`)                                                                                                                                                                         |
+| Agent image                                | `registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-agent-server:pending-2b7f72ae` — manifest `sha256:20f8d402faa4a8f8aa5c067ea0c21475b579a87df788fb956762c0a9051680f9` (pipeline 18964, job `build:agent-service`)                                                                                                                                                                  |
+| Build pipeline                             | tag `rehearsal-v08-2b7f72aef` → pipeline 18964 — CANCELED after both build jobs went green, before the promote stage (a non-prerelease tag's promote would retag `latest` and delete the `pending-*` source tags)                                                                                                                                                                            |
+| Models served (venue GPU)                  | LLM `ibm-granite/granite-4.1-8b` (vLLM 0.29.0, `max_model_len 65536`, NO tool-calling flags — #2052), translation `google/gemma-3-4b-it`                                                                                                                                                                                                                                                     |
+| Flags                                      | `AGENT_ENABLED=1` (activation) / `0` (rollback); BFF `AGENT_UPSTREAM_TIMEOUT_MS=3600000`, `AGENT_SERVICE_URL=http://v08-rehearsal-agent-hl:8080/v1/runs` (see §7, wire fact 1), `AGENT_TRANSLATION_MAX_TOKENS=4096`, `AGENT_TRANSLATION_MAX_CALLS=8` (rehearsal pins; the leg was never exercised — English requests)                                                                        |
+| Agent budget knobs (REQUIRED, fail-closed) | `AGENT_RUN_MAX_STEPS=8`, `AGENT_RUN_MAX_MODEL_CALLS=12`, `AGENT_RUN_MAX_TOOL_CALLS=12`, `AGENT_RUN_MAX_TOTAL_TOKENS=50000`, `AGENT_RUN_MAX_EVIDENCE_BYTES=200000`, `AGENT_RUN_MAX_WALL_CLOCK_SECONDS=240`, `AGENT_TOOL_TIMEOUT_MS=30000`, `AGENT_TOOL_MAX_RESULTS=10`, `AGENT_TOOL_MAX_RESULT_BYTES=50000`, `AGENT_VERDICT_JUDGE_TIMEOUT_MS=30000`                                           |
+| Agent port assembly                        | `AGENT_DOCREPO_URL=http://document-repository.genieai.svc.cluster.local`, `AGENT_OKF_URL=http://okf-server:3002` (nominal — OKF off on this venue), `AGENT_AUTHORIZED_GRAPHS=GRAPH`, `TEI_EMBEDDING_ENDPOINT=…:444/embed`, `TEI_RERANKING_ENDPOINT=…:444/rerank`, `VLLM_ENDPOINT=…:444/llm`, `OPEA_SSL_SKIP_VERIFY=1`, `ARANGO_*` = the venue's deployed values (`_system` / `GRAPH` / root) |
+| Container port override (rehearsal-only)   | agent bound to **8080** via a deployment-level command override (`uvicorn app:app --port 8080`); the shipped image default stays 8010 (see §7, wire fact 2)                                                                                                                                                                                                                                  |
 
 ## 3. Activation procedure
 
@@ -71,12 +71,12 @@ was evidenced by every failed agentic attempt: each left its at-start doc
 
 ## 6. Rollback triggers and the named responsible operator
 
-| Trigger | Response | Who |
-|---|---|---|
-| The agentic path answers unacceptably in production (wrong, ungrounded, degraded vs legacy) | Execute §4 (flag off + restart) — the legacy path serves the very next request | **jrevillard** |
-| The pair invariant (§7 pair validation) stops holding after a configuration change | Treat as a stage-gate BLOCKER: restore the timeout/deadline pair, or roll back per §4 until it holds | **jrevillard** |
-| Agent-service outage (5xx / unreachable) | The agentic branch surfaces an honest error to the client; no silent legacy fallback exists by contract — roll back per §4 until the service recovers | **jrevillard** |
-| Any incident where attribution of a long run matters (CM-3) | The pair rule keeps long runs surfacing as the agent's own honest `budget_exhausted`/`run_error`, never a BFF timeout — if a BFF timeout is observed, that is a broken pair: roll back per §4 | **jrevillard** |
+| Trigger                                                                                     | Response                                                                                                                                                                                      | Who            |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| The agentic path answers unacceptably in production (wrong, ungrounded, degraded vs legacy) | Execute §4 (flag off + restart) — the legacy path serves the very next request                                                                                                                | **jrevillard** |
+| The pair invariant (§7 pair validation) stops holding after a configuration change          | Treat as a stage-gate BLOCKER: restore the timeout/deadline pair, or roll back per §4 until it holds                                                                                          | **jrevillard** |
+| Agent-service outage (5xx / unreachable)                                                    | The agentic branch surfaces an honest error to the client; no silent legacy fallback exists by contract — roll back per §4 until the service recovers                                         | **jrevillard** |
+| Any incident where attribution of a long run matters (CM-3)                                 | The pair rule keeps long runs surfacing as the agent's own honest `budget_exhausted`/`run_error`, never a BFF timeout — if a BFF timeout is observed, that is a broken pair: roll back per §4 | **jrevillard** |
 
 ## 7. Rehearsal evidence
 
@@ -119,12 +119,12 @@ GENIE.AI?"):
 
 - Answered via LEGACY chatqna: real streamed chunks, the full terminal
   contract (`metadata` with `source_documents:[], confidence_score, is_grounded,
-  query_translation_status: passthrough_english` → `done` with `queryId
-  4000064`, `translationFailed: false`), 13 s wall clock.
+query_translation_status: passthrough_english` → `done` with `queryId
+4000064`, `translationFailed: false`), 13 s wall clock.
 - The persisted doc `4000064` reads `isAnswered: true` with the standard
   legacy field set (`okfRoutedGraphs, text, contextOption, userId, timestamp,
-  response, sessionId, …, metadata, isAnswered, messages, responseTime,
-  context`) — same shape, no migration (the 3.2 contracts live).
+response, sessionId, …, metadata, isAnswered, messages, responseTime,
+context`) — same shape, no migration (the 3.2 contracts live).
 - History reads through the legacy path: `GET /api/queries?sessionId=…`
   (authorized to the rehearsal user) returned the whole session, 200.
 

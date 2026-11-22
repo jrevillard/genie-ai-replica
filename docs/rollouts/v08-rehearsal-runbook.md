@@ -23,18 +23,18 @@ not a rehearsal failure, and never silently turned into a requirement (FR-26).
 
 ## Venue facts (verify at preflight, never assume)
 
-| Fact | Value |
-|---|---|
-| Cluster / namespace | the shared k3s dev cluster, namespace `genieai` |
-| Shared backend image | `genie-ai-backend:main` — PRE-agentic; cannot rehearse routing (dedicated deployments required) |
-| GPU LLM endpoint | `https://ai.assembly.govstack.global:444/llm`, model `ibm-granite/granite-4.1-8b` |
-| GPU embed / rerank / translation | `https://ai.assembly.govstack.global:444/{embed,rerank,translation}` |
-| Keycloak internal | `http://keycloak-service.genieai.svc.cluster.local:8080/auth`, realm `genie`, client `genie-app` |
-| ArangoDB | `http://arangodb-single.genieai.svc.cluster.local:8529`, db `_system`, user `root` |
-| doc-repo service | `http://document-repository.genieai.svc.cluster.local` |
-| Secrets | `vllm-api-key` (`VLLM_API_KEY`), `arango-root-secret` (`password`), `keycloak-admin-credentials` (`password` + `username`) |
-| NetworkPolicies | select `genieai.io/component` labels; chatqna ingress admits only `component=backend` sources on 8888 |
-| Budget | node headroom checked before the two Deployments are created |
+| Fact                             | Value                                                                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Cluster / namespace              | the shared k3s dev cluster, namespace `genieai`                                                                            |
+| Shared backend image             | `genie-ai-backend:main` — PRE-agentic; cannot rehearse routing (dedicated deployments required)                            |
+| GPU LLM endpoint                 | `https://ai.assembly.govstack.global:444/llm`, model `ibm-granite/granite-4.1-8b`                                          |
+| GPU embed / rerank / translation | `https://ai.assembly.govstack.global:444/{embed,rerank,translation}`                                                       |
+| Keycloak internal                | `http://keycloak-service.genieai.svc.cluster.local:8080/auth`, realm `genie`, client `genie-app`                           |
+| ArangoDB                         | `http://arangodb-single.genieai.svc.cluster.local:8529`, db `_system`, user `root`                                         |
+| doc-repo service                 | `http://document-repository.genieai.svc.cluster.local`                                                                     |
+| Secrets                          | `vllm-api-key` (`VLLM_API_KEY`), `arango-root-secret` (`password`), `keycloak-admin-credentials` (`password` + `username`) |
+| NetworkPolicies                  | select `genieai.io/component` labels; chatqna ingress admits only `component=backend` sources on 8888                      |
+| Budget                           | node headroom checked before the two Deployments are created                                                               |
 
 ## Ground rules
 
@@ -101,7 +101,6 @@ both. The rehearsal tag is a build marker, not a release: it carries no
 changelog entry (the tag pipeline's `config:changelog` gate failing on it is
 expected and harmless once the pipeline is canceled), and it is deleted after
 the rehearsal's images are superseded.
-
 
 ## Phase 1 — preflight
 

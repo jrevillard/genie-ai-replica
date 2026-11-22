@@ -98,6 +98,6 @@ page and from the checklist's example.
 
 ## Records
 
-| Stage | Record | Rehearsal |
-|---|---|---|
-| V08 | [`v08-rollout.md`](v08-rollout.md) | [`v08-rehearsal-runbook.md`](v08-rehearsal-runbook.md) evidence, §7 of the record |
+| Stage | Record                             | Rehearsal                                                                         |
+| ----- | ---------------------------------- | --------------------------------------------------------------------------------- |
+| V08   | [`v08-rollout.md`](v08-rollout.md) | [`v08-rehearsal-runbook.md`](v08-rehearsal-runbook.md) evidence, §7 of the record |

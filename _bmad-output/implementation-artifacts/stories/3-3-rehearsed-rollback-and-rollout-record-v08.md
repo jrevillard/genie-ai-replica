@@ -21,6 +21,7 @@ context:
 **Approach:** Establish the rollout-record canonical home in the repo (`docs/rollouts/`): an index defining the one-record-per-stage rule and carrying the record template; the V08 rehearsal runbook as a re-runnable procedure; and the FIRST filled record for the stage rehearsed here. Execute the V08 rehearsal against the shared k3s dev stack with dedicated rehearsal deployments (own backend + agent-service pods carrying the current umbrella code, wired to the stack's shared legacy services), covering: routing agentic↔legacy in both directions, in-flight treatment at switch time, and the BFF-upstream-timeout/agent-deadline pair validated from the DEPLOYED values. Record the rehearsal evidence in the rollout record. Make the FR-21 check an explicit item of the stage-gate instrument (and run it now for this stage). The venue's known model-leg gap (#2052: no tool-calling flags on the GPU endpoint) is recorded in the evidence per FR-26 — the rehearsal proves ROUTING, pair and rollback mechanics; agent answer quality is #2052's acceptance, not this story's.
 
 **Acceptance criteria (issue #1974, the contract):**
+
 - Given a delivered stage, when it rolls out, then the rollout record names: selected consumers and capabilities, artifact/config versions, activation and rollback procedures, in-flight treatment, rollback triggers with a named responsible operator, and rehearsal evidence.
 - And the V08 rehearsal covers routing rollback agentic↔legacy including the BFF-upstream-timeout/agent-deadline pair validation.
 - And each stage-gate review explicitly checks FR-21: no new OPEA coupling was added that makes the deferred exit harder.
@@ -29,6 +30,7 @@ context:
 ## Boundaries & Constraints
 
 **Always:**
+
 - The record structure follows FR-16 verbatim: every record names selected consumers and capabilities, artifact/configuration versions, activation and rollback procedures, in-flight treatment, rollback triggers with a named responsible operator, and rehearsal evidence.
 - The named responsible operator is the initiative owner (`jrevillard`, the PRD's `owner` field) — recorded, not defaulted silently; the record states the name explicitly.
 - The rehearsal runs against the shared k3s dev stack with DEDICATED rehearsal deployments: own pod names (`v08-rehearsal-*`), images built from this branch's HEAD (`pending-{sha}` tags via a `FORCE_IMAGE_REBUILD=true` pipeline), wired to the stack's shared legacy services (chatqna, retriever, embedding, reranker, translation, ArangoDB, Keycloak). The shared stack's own workloads, env and Flux baseline are NEVER mutated; the rehearsal backend carries the `genieai.io/component=backend` label so the component NetworkPolicies admit its traffic.
@@ -39,6 +41,7 @@ context:
 - The FR-21 check is explicit in the stage-gate instrument and is EXECUTED for this stage against the current tree (the `tests/config-validator` OPEA-free gate green + the audit scope named in the evidence).
 
 **Never:**
+
 - No production code changes: no backend/agent-service/frontend source edits, no chart changes, no compose changes, no CI changes. The story's product is records, runbook, gate instrument and executed rehearsal evidence.
 - No mutation of the shared stack's declared baseline: no edits to shared Deployments/env, no chart value changes, no Flux state changes; cleanup restores the pre-rehearsal state exactly (nothing of the rehearsal remains).
 - No multi-GB image pulls or new cluster namespaces; two Deployments + one Service in the existing `genieai` namespace, within the node's measured headroom (41% CPU / 33% mem at investigation).
@@ -46,14 +49,14 @@ context:
 
 ## I/O & Edge-Case Matrix
 
-| Scenario | Input / State | Expected Output / Behavior | Error Handling |
-|----------|--------------|---------------------------|----------------|
-| Agentic direction (flag on) | `AGENT_ENABLED=1` on the rehearsal backend; question via `POST /api/queries/stream` | request routes to the rehearsal agent service (real orchestrator, real seam stream); queries doc minted with agent metadata; the run's honest outcome recorded (answer, insufficiency or run_error at the model leg per #2052) | model-leg failure is recorded as venue evidence, not a rehearsal failure |
-| Rollback direction (flag off) | `AGENT_ENABLED=0` rollout restart (the documented switch semantic: a rollback is a process restart); SAME conversation continued | new turn answered via legacy chatqna; history renders via the legacy read path; queries docs same shape (3.2 contracts live) | N/A |
-| Re-activation direction | `AGENT_ENABLED=1` restart again; next turn | routes to the agent leg again (agentic↔legacy proven both directions) | N/A |
-| In-flight at switch | stream started, backend pod restarted mid-stream | documented treatment observed and recorded: rolling restart → in-flight completes on its resolved path inside the shutdown window; hard stop → connection close → the 3.2 disconnect treatment (partial-save marker or honest unanswered doc) | whichever variant occurs is recorded with timestamps |
-| Pair validation | deployed pod env of BOTH rehearsal pods | `AGENT_UPSTREAM_TIMEOUT_MS` (effective, reserve-absorbed) ≥ communicated `deadline_ms` + translation reserve + finalization margin; `deadline_ms = timeout − reserves` by the derivation; agent ceiling `min(AGENT_RUN_MAX_WALL_CLOCK_SECONDS, deadline_ms/1000)` stated with values | mismatch aborts the rehearsal (a broken pair is a stage-gate blocker, not a footnote) |
-| FR-21 gate check | current tree + `tests/config-validator` OPEA-free gate | gate green; the audit scope (agent-path packages) named in the record; the stage-gate instrument carries the explicit FR-21 item | any new OPEA coupling blocks the gate |
+| Scenario                      | Input / State                                                                                                                    | Expected Output / Behavior                                                                                                                                                                                                                                                           | Error Handling                                                                        |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Agentic direction (flag on)   | `AGENT_ENABLED=1` on the rehearsal backend; question via `POST /api/queries/stream`                                              | request routes to the rehearsal agent service (real orchestrator, real seam stream); queries doc minted with agent metadata; the run's honest outcome recorded (answer, insufficiency or run_error at the model leg per #2052)                                                       | model-leg failure is recorded as venue evidence, not a rehearsal failure              |
+| Rollback direction (flag off) | `AGENT_ENABLED=0` rollout restart (the documented switch semantic: a rollback is a process restart); SAME conversation continued | new turn answered via legacy chatqna; history renders via the legacy read path; queries docs same shape (3.2 contracts live)                                                                                                                                                         | N/A                                                                                   |
+| Re-activation direction       | `AGENT_ENABLED=1` restart again; next turn                                                                                       | routes to the agent leg again (agentic↔legacy proven both directions)                                                                                                                                                                                                                | N/A                                                                                   |
+| In-flight at switch           | stream started, backend pod restarted mid-stream                                                                                 | documented treatment observed and recorded: rolling restart → in-flight completes on its resolved path inside the shutdown window; hard stop → connection close → the 3.2 disconnect treatment (partial-save marker or honest unanswered doc)                                        | whichever variant occurs is recorded with timestamps                                  |
+| Pair validation               | deployed pod env of BOTH rehearsal pods                                                                                          | `AGENT_UPSTREAM_TIMEOUT_MS` (effective, reserve-absorbed) ≥ communicated `deadline_ms` + translation reserve + finalization margin; `deadline_ms = timeout − reserves` by the derivation; agent ceiling `min(AGENT_RUN_MAX_WALL_CLOCK_SECONDS, deadline_ms/1000)` stated with values | mismatch aborts the rehearsal (a broken pair is a stage-gate blocker, not a footnote) |
+| FR-21 gate check              | current tree + `tests/config-validator` OPEA-free gate                                                                           | gate green; the audit scope (agent-path packages) named in the record; the stage-gate instrument carries the explicit FR-21 item                                                                                                                                                     | any new OPEA coupling blocks the gate                                                 |
 
 ## Code Map
 
@@ -74,6 +77,7 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
+
 - [x] `docs/rollouts/README.md` — canonical home: index, one-record-per-stage rule, record template (every FR-16 field), FR-21 as an explicit stage-gate review item, V08 re-run rule
 - [x] `docs/rollouts/v08-rehearsal-runbook.md` — the deterministic, re-runnable rehearsal procedure with exact commands (preflight, pair validation from deployed env, agentic direction, rollback direction, re-activation, in-flight switch, evidence capture, cleanup + revert verification)
 - [x] Rehearsal execution — fresh images built from this branch (tag pipeline 18964 after the FORCE pipeline proved unable to build the agent image — see Implementation Notes), dedicated `v08-rehearsal-backend`/`v08-rehearsal-agent` deployments in `genieai`, dedicated Keycloak user + temporary ROPC (reverted + verified), the five rehearsal phases run and their output captured
@@ -83,6 +87,7 @@ context:
 - [x] `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md` + `sprint-status.yaml` — story to `in-review`/row `review` per the sync rule — BMAD bookkeeping
 
 **Acceptance Criteria:**
+
 - Given the canonical home and template, when a stage rolls out, then its record carries every FR-16 field including the named responsible operator and rehearsal evidence — the record structure is in the repo, one record per stage.
 - Given the executed V08 rehearsal, when its evidence is read, then routing rollback agentic↔legacy is demonstrated on a real deployment and the BFF-upstream-timeout/agent-deadline pair is validated from the deployed values — with the venue's model-leg gap recorded, not hidden.
 - Given the stage-gate instrument, when any stage-gate review runs, then FR-21 is an explicit check item, executed for this stage against the current tree.
@@ -113,6 +118,7 @@ context:
 ## Verification
 
 **Commands:**
+
 - The rehearsal phases (runbook) — expected: pair invariant holds on deployed values; agentic direction routes to the agent service; rollback direction serves the continuation via chatqna; re-activation routes back; in-flight switch matches the documented treatment; all captured in the record.
 - `cd tests/config-validator && npm test` — expected: green (the OPEA-free gate over the agent-path packages, FR-21's audit scope)
 - `ls docs/rollouts/` — expected: README (home+template), the runbook, one filled record

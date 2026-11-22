@@ -273,12 +273,11 @@ class ArangoRetrievalAdapter:
         # enters the top-k when fewer than k scored rows exist, so the skip
         # can never evict a scored candidate.
         results = []
-        skipped_unscoreable = 0
         for row in rows:
-            if row.get("score") is None:
-                skipped_unscoreable += 1
+            raw_score = row.get("score")
+            if raw_score is None:
                 continue
-            score = float(row["score"])
+            score = float(raw_score)
             results.append(
                 {
                     "doc": RetrievedChunk(
@@ -290,10 +289,9 @@ class ArangoRetrievalAdapter:
                     "score": score,
                 }
             )
-        if skipped_unscoreable:
+        if skipped := len(rows) - len(results):
             logger.warning(
-                f"dense_search skipped {skipped_unscoreable} unscoreable row(s) "
-                f"(null embedding) on '{self.collection_name}'"
+                f"dense_search skipped {skipped} unscoreable row(s) (null embedding) on '{self.collection_name}'"
             )
         # The recorded wrapper applies score_threshold AFTER the top-k cut.
         results = [r for r in results if r["score"] >= self._config.score_threshold]

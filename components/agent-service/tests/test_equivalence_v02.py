@@ -300,7 +300,8 @@ def test_dense_null_score_rows_are_skipped_not_crashed(caplog):
         results = asyncio.run(adapter.dense_search([0.1] * 4, [], "OR"))
     assert [r["doc"].key for r in results] == ["c2"]
     skipped = [r for r in caplog.records if "unscoreable" in r.getMessage()]
-    assert len(skipped) == 1 and skipped[0].levelno == logging.WARNING
+    assert len(skipped) == 1
+    assert skipped[0].levelno == logging.WARNING
     assert "1 unscoreable row(s)" in skipped[0].getMessage()
 
 

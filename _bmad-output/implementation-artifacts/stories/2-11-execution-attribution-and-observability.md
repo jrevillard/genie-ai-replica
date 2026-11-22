@@ -2,7 +2,7 @@
 title: 'Story 2.11 — Execution attribution and observability'
 type: 'feature'
 created: '2026-11-22'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '7e59deae7dd90413edb5a347175532db13656204'
@@ -208,3 +208,18 @@ Note: the reviewer scoped the branch's full stacked chain (~60k lines), so four 
   when there is no partial text, and as the save's failure fallback — one
   write per run on every path. Regression pins: patch not called on a
   successful partial save; patch called exactly once when the save fails.
+- **Quality pass (2026-11-22, heads 7e91ae164 + 7e17cf20f).** The four-angle
+  simplify review ran (reuse/simplification/efficiency/altitude): applied —
+  the attribution helpers into one home (agent-run-contract.js:
+  captureRunStart / seamRunOutcome / createAgentRunAttribution), the block
+  persisted verbatim (one started_at mint), span attributes read off the
+  results, the total degraded record builder, the single note clamp, the
+  model-source constants, the run_started payload helper, the fixture and
+  test-twin dedups; skipped with reasons (negative probe cache: retry
+  semantics; finalize-through-merge: V05 finalize semantics; protocol
+  declaration: identity optional by contract). The test-audit retained
+  every contract test and dropped one redundant span-activation anchor
+  (owned more strongly by the span-tree test). Full validation over the
+  merged live head (umbrella +6 commits, zero file intersection):
+  agent-service 864 pytest, backend 101 suites / 2662 tests,
+  config-validator 678, eslint+prettier+ruff clean.

@@ -219,7 +219,7 @@ class ChatHistoryService {
                       source: 'okf-concept',
                       concept_id: doc.concept_id || null,
                       repo_id: doc.repo_id || null,
-                      bundle_version: doc.bundle_version === undefined ? null : doc.bundle_version
+                      bundle_version: doc.bundle_version ?? null
                     }
                   : {};
               // FIX: Save as standard fields since this is a Document collection

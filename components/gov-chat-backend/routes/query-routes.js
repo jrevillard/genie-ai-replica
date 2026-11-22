@@ -161,6 +161,12 @@ const emptyStreamMetadata = () => ({
   filter_labels: null
 });
 
+// The partial-save metadata: the captured fields (or the empty-stream base
+// when nothing arrived) plus the interrupted marker — one composition, both
+// close paths and the end-without-completion-frame branch read it (ADR
+// agentic-003).
+const interruptedMetadata = (captured) => ({ ...(captured || emptyStreamMetadata()), answer_interrupted: true });
+
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
   router.use(keycloakAuthMiddleware.authenticate);
@@ -402,9 +408,13 @@ module.exports = (queryService) => {
             // marker (ADR agentic-003) — the same marker the agentic
             // disconnect path writes: one finalize, one honesty contract,
             // both paths.
-            const partialMetadata = { ...(capturedMetadata || emptyStreamMetadata()), answer_interrupted: true };
             queryService
-              .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, partialMetadata)
+              .finalizeStreamQuery(
+                queryId,
+                fullResponseText,
+                Date.now() - streamStartTime,
+                interruptedMetadata(capturedMetadata)
+              )
               .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }
         }
@@ -589,7 +599,7 @@ module.exports = (queryService) => {
           // leaves the metadata untouched — the marker must never leak into
           // a normally completed answer.
           if (!doneState.handled) {
-            capturedMetadata = { ...(capturedMetadata || emptyStreamMetadata()), answer_interrupted: true };
+            capturedMetadata = interruptedMetadata(capturedMetadata);
           }
           doHandleStreamDone();
         }

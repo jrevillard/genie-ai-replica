@@ -157,9 +157,9 @@ function citationToSourceDocument(citation) {
  * @returns {Object}
  */
 function assembleAgentMetadata({ emptyStreamMetadata, verdict, runId, usageRecord }) {
-  const metadata = emptyStreamMetadata();
-  // Analytics vocabulary parity with the legacy answered path.
-  metadata.abstained = false;
+  // ONE deliberate override on the legacy empty-stream base: analytics
+  // vocabulary parity with the legacy answered path.
+  const metadata = { ...emptyStreamMetadata(), abstained: false };
   if (verdict) {
     metadata.grounding_status = verdict.grounding_status;
     metadata.is_grounded = verdict.is_grounded === true;

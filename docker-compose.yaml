@@ -1989,7 +1989,9 @@ services:
     # overriding VLLM_LLM_MODEL_ID outside Granite 4.x (env.strixhalo's
     # granite-3.1-2b does) must set VLLM_TOOL_CALL_PARSER to its model's
     # documented parser (e.g. granite for Granite 3.x) — the default would
-    # misparse that model's tool output silently.
+    # misparse that model's tool output silently. Some model families also
+    # need a --chat-template for tool output to parse at all (see the GPU
+    # template note); setting the parser alone does not complete tool calling.
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}

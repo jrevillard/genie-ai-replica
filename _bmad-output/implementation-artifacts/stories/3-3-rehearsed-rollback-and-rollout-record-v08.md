@@ -58,6 +58,8 @@ context:
 | Pair validation               | deployed pod env of BOTH rehearsal pods                                                                                          | `AGENT_UPSTREAM_TIMEOUT_MS` (effective, reserve-absorbed) ≥ communicated `deadline_ms` + translation reserve + finalization margin; `deadline_ms = timeout − reserves` by the derivation; agent ceiling `min(AGENT_RUN_MAX_WALL_CLOCK_SECONDS, deadline_ms/1000)` stated with values | mismatch aborts the rehearsal (a broken pair is a stage-gate blocker, not a footnote) |
 | FR-21 gate check              | current tree + `tests/config-validator` OPEA-free gate                                                                           | gate green; the audit scope (agent-path packages) named in the record; the stage-gate instrument carries the explicit FR-21 item                                                                                                                                                     | any new OPEA coupling blocks the gate                                                 |
 
+</frozen-after-approval>
+
 ## Code Map
 
 - `components/gov-chat-backend/services/agent-routing.js` — the flag (`AGENT_ENABLED`, module-load frozen, single-read invariant :20; `agentServiceUrl()` :44) — the switch semantic the rehearsal exercises (flag change = pod restart).
@@ -115,7 +117,7 @@ context:
 
 <!-- Append-only. Populated by step-04 on every review pass. -->
 
-- R1 (global round 1, /code-review medium — MIS-TARGETED DIFF, recorded as-is): the reviewer diffed the umbrella branch against main (the whole program's planning artifacts) instead of this branch against its base c411b5f08. All seven findings verified REAL (spot-checked: `epics.md:130` vs the Epic 2 covered list, `FR-19a`/`FR-19b` at `epics.md:649/669`, `prd.md:10` sources_of_truth, `sprint-status.yaml` NOKEY + MM-DD-YYYY dates) but PRE-EXISTING umbrella-branch items outside this MR's diff — none touches the seven files this story changed. Route: defer (all seven, deferred-work.md). The finding about the archival-commit rule (R1-7) is surfaced to the orchestrator in the worker report. A correctly-targeted global (the MR !1023 diff) follows as round 2.
+- R1 (global round 1, /code-review medium — MIS-TARGETED DIFF, recorded as-is): the reviewer diffed the umbrella branch against main (the whole program's planning artifacts) instead of this branch against its base c411b5f08. All seven findings verified REAL (spot-checked: `epics.md:130` vs the Epic 2 covered list, `FR-19a`/`FR-19b` at `epics.md:649/669`, `prd.md:10` sources_of_truth, `sprint-status.yaml` NOKEY + MM-DD-YYYY dates) but PRE-EXISTING umbrella-branch items — none is introduced by this MR's diff: R1-5/R1-6 sit in sprint-status.yaml (one of the seven changed files) on template lines that predate it (the MR rewrote only `last_updated`'s VALUE, preserving the pre-existing MM-DD-YYYY format), and the other five target files this story never touched. Route: defer (all seven, deferred-work.md). The finding about the archival-commit rule (R1-7) is surfaced to the orchestrator in the worker report. A correctly-targeted global (the MR !1023 diff) follows as round 2.
 - R1-1 (epics.md:158 Epic 2 covered list omits FR-19 vs the coverage map) — real, nit, pre-existing — defer.
 - R1-2 (epics.md:649/669 invents FR-19a/FR-19b sub-ids undefined anywhere) — real, nit, pre-existing — defer.
 - R1-3 (routing prd.md sources_of_truth lacks epics/sprint_status pointers) — real, nit, pre-existing — defer.

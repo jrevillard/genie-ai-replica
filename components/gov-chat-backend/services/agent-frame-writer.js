@@ -354,6 +354,17 @@ async function proxyAgentRun({
         const verdictProjection = { ...capturedVerdict };
         delete verdictProjection.type;
         delete verdictProjection.version;
+        // The verdict certifies the SOURCE-LANGUAGE text; the client marks the
+        // distinction on the answer. The agent service cannot know whether a
+        // translation was delivered — the finalize-time payload always says
+        // 'none' — so the frame writer, which owns the delivery, annotates the
+        // one mode it can know here: translated units relayed on the wire.
+        // The post-stream whole-answer mode (streaming translation off) is
+        // unknowable at this point — its translation frame lands after this
+        // frame, and the client reads the delivery from that frame itself.
+        if (streamRelay && !alreadyFailedTranslation && fullResponseText) {
+          verdictProjection.translation_mode = 'streaming-units';
+        }
         writeSSEFrame(res, { type: 'agent_verdict', version: 1, ...verdictProjection });
       }
       // CROSS-MODE ABSTENTION PARITY: the completed terminal derives the

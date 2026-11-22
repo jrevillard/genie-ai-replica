@@ -995,6 +995,10 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     expect(frames[0]).toEqual({ type: 'chunk', content: 'Première phrase. ' });
     expect(frames[1]).toEqual({ type: 'chunk', content: 'Deuxième.' });
     expect(frames[frames.length - 1].translationFailed).toBe(false);
+    // Delivered units are the one translation mode the frame writer KNOWS at
+    // verdict time — the frame annotates it so the client can scope the
+    // verdict's claim to the source-language text.
+    expect(frames[2]).toMatchObject({ type: 'agent_verdict', translation_mode: 'streaming-units' });
 
     // The persisted answer is the EN source text (the wire carried the
     // translation; the doc keeps the original).
@@ -1036,6 +1040,36 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     expect(frames[frames.length - 1].type).toBe('done');
     expect(frames[frames.length - 1].translationFailed).toBe(true);
     expect(frames.filter((f) => f.type === 'chunk').map((f) => f.content)).toContain('Hello world. ');
+  });
+
+  it('a failed relay never annotates the verdict as delivered', async () => {
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    setupAgentQuery();
+    translationService.init.mockResolvedValue(undefined);
+    translationService.translateMarkdown.mockRejectedValue(new Error('translator down'));
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('text_message_content', { text: 'Hello world. ' }, { seq: 0 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'DE' }
+    });
+
+    const frames = parseSSEEvents(response.text);
+    // The relay failed: the English original is all that was delivered, so
+    // the verdict keeps the source-text claim at its full scope ('none' —
+    // the payload's own finalize-time value).
+    const verdict = frames.find((f) => f.type === 'agent_verdict');
+    expect(verdict.translation_mode).toBe('none');
   });
 });
 

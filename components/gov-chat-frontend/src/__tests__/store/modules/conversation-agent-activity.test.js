@@ -209,6 +209,18 @@ describe('conversation store — agent activity (story 2.7)', () => {
       const last = store.state.conversation.conversations[store.state.conversation.openId].messages.at(-1);
       expect(last.translationMode).toBeUndefined();
     });
+
+    it('a translation frame marks the post-stream delivery on the bot message', async () => {
+      const store = createStoreWithConversation();
+      const callbacks = await startStream(store);
+      callbacks.onTranslation('Réponse traduite');
+      const last = store.state.conversation.conversations[store.state.conversation.openId].messages.at(-1);
+      // The caption's second carrier: the whole-answer delivery is the one
+      // mode the client can read off the wire itself (a streamed-unit
+      // delivery never sends a translation frame — the verdict frame names it).
+      expect(last.translationMode).toBe('post-stream');
+      expect(last.content).toBe('Réponse traduite');
+    });
   });
 
   describe('the reset paths', () => {

@@ -92,14 +92,29 @@ context:
 - **Mutation proofs run:** dropping the unverified guard turned the truth-table suite red (1 failed; restored: 13 passed); removing `visible=false` from the latch turned 3 specs red (restored: 31 passed); deleting one locale key turned the deep-key-set gate red (restored: 10 passed).
 - **Verification:** frontend `npm test` 157 suites / 4608 tests green (localeConsistency's 11×14 gate included); `eslint src/` clean (one pre-existing `vue/no-v-html` warning, untouched file); frontend + e2e Prettier clean; e2e tree ESLint clean; config-validator 674 passed / 0 failed; offline e2e specs (stream-route 11, chatbot helpers 25) green. `npx playwright test tests/e2e/chatbot/sse-contract.spec.js` NOT run — no stack is available in this environment; per the spec's own verification note, the unit suites carry the contract here, and the staged spec's determinism rests on the helper unit specs plus the venue run being required before merge.
 - **Incident, self-inflicted and repaired:** a mutation-proof revert used `git checkout --` on ChatBotComponent.vue and wiped the story's component edits; they were re-applied in full from the working notes and re-verified (full suite + lint + prettier green). A locale repair in the same session briefly deleted two pre-existing `okf.*.working` keys in zh.js (a `str.replace` matching three occurrences); both restored, `git diff` re-read story-only, locale gate green.
+- **Review fix — the caption's delivery signal (G1 finding F2).** The review proved the caption could never render on the live path: `verification.py` emits `translation_mode` as the constant `'none'` and no BFF code overwrote it. The fix closes the signal end-to-end: the BFF annotates the one mode it can know at verdict time (`streaming-units` when the relay flushed delivered units before the verdict frame; a failed relay keeps `'none'`), and the client reads the second mode off the wire itself (`onTranslation` marks `translationMode: 'post-stream'` — a whole-answer delivery is the one mode that sends a translation frame). Pinned by frame-writer tests (delivered → `streaming-units`, failed relay → `'none'`) and a store wiring test. Backend suite green after the change (100 suites / 2656 tests incl. the node-test verifier); frontend 157 / 4609.
+- **En copy aligned to EXPERIENCE (planning fix before G1).** The i18n values are the UX contract's (`EXPERIENCE.md` pins the `en` column); the initial implementation paraphrased several (`Step failed — trying to continue`, `Searching the knowledge base…`, `Could not read the source document`). `en.js` now carries the contract values verbatim (`Working…`, `Step completed.`, `A step failed.`, `Response verification could not be completed.`, `Searching knowledge…`, `Searched the knowledge base.`, `Reading source…`, `Read the source.`, `Reading the source failed.`). The other 13 locales translate the same meaning; the Manx/Sesotho strings remain best-effort under the recorded native-reviewer caveat.
 
 ## Spec Change Log
 
 <!-- Append-only. Populated by step-04 during review loops. -->
 
+- **G1 finding F2 amended the frozen boundary "No change to the BFF frame writer".** The amendment is driven by the frozen intent itself: the AC "with the translation-scope caption when a translation was delivered" states a fact about DELIVERY, and the web cannot know delivery without the wire carrying it. With the BFF never annotating `translation_mode`, the caption was dead code on the live path (fireable only by mocks) — implementing the web half alone would have shipped the criterion unmet. The amendment is the smallest closing fix (one annotation in `doAgentTerminal` + the client's own post-stream carrier), keeps the five legacy event semantics untouched, and the remaining BFF scope (frame writer structure, positions, envelope) stays out of bounds as before.
+
 ## Review Triage Log
 
 <!-- Append-only. Populated by step-04 on every review pass. -->
+
+### Global review G1 (2026-11-22, xhigh effort, whole branch vs origin/HEAD)
+
+| Finding | Verdict | Disposition |
+|---|---|---|
+| docker-compose agent-service env block forwards none of the TEI/Arango/vLLM knobs its port assembly requires — `AGENT_ENABLED=1` serves `503 run_surface_unconfigured` on every run | important — verified real (`search_knowledge.py:133-135` raises without the TEI endpoints; no pass-through in the compose block) | PRE-EXISTING (deployment pass-through from earlier stories, untouched by this diff) — filed as issue #2074 (`type::bug`, `area::deploy`, `status::backlog`). |
+| `translation_mode` is never overwritten by the BFF — the translation-scope caption can never render on the live path | important — verified real (`verification.py:452` constant `'none'`; no overwrite anywhere) | FIXED in this story (see Spec Change Log — the frozen boundary amended with the AC's own authority): BFF annotates `streaming-units` on delivered relay flush; client reads `post-stream` off the translation frame. Tests pin both. |
+| The story-2.10 agentic translation leg has no production consumer — AD-14 residual budget enforced nowhere on the served path | important — real (both agentic entries use the legacy request-resolved translator) | PRE-EXISTING (story-2.10 output, untouched by this diff) — filed as issue #2075 (`type::bug`, `area::backend`, `status::backlog`). |
+| The verdict frame ships every citation's full passage text to the client — unread wire weight | nit — real | PRE-EXISTING (2.6 payload relayed verbatim) — filed as issue #2076 (`type::bug`, `area::backend`, `status::backlog`). |
+| Pre-stream JSON refusals log a client disconnect that did not happen | nit — real | PRE-EXISTING — filed as issue #2077 (`type::bug`, `area::backend`, `status::backlog`). |
+| `initStreamQuery` `@returns` JSDoc omits `authHeaders` | pre_existing nit — real | PRE-EXISTING — filed as issue #2078 (`type::bug`, `area::backend`, `status::backlog`). |
 
 ## Design Notes
 

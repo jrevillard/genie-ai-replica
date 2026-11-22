@@ -416,7 +416,14 @@ const actions = {
         // frontmatter title, asynchronously, never blocking the render.
         dispatch('resolveOkfSourceTitles').catch(() => {});
       },
-      onTranslation: (text) => commit('setTranslation', text),
+      // A `translation` frame is the post-stream whole-answer delivery (the
+      // streaming-unit mode never sends one): marking the mode here gives the
+      // translation-scope caption its second carrier. Legacy turns carry no
+      // grounding_status, so the marker is inert there.
+      onTranslation: (text) => {
+        commit('setLastBotProperty', ['translationMode', 'post-stream']);
+        commit('setTranslation', text);
+      },
       // The agent_activity frames drive the line (the state machine above);
       // the verdict frame's translation_mode lands on the bot msg BEFORE the
       // metadata frame replaces msg.metadata — the caption signal cannot ride

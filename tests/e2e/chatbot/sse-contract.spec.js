@@ -238,8 +238,8 @@ test.describe('SSE contract — the agent activity line (story 2.7)', () => {
       await mockChatStream(
         page,
         ['GENIE.AI answers from the library documents.'],
-        { ...GROUNDED_METADATA_CARRYING, translation_mode: 'streamed' },
-        { verdict: { ...GROUNDED_VERDICT, translation_mode: 'streamed' } }
+        { ...GROUNDED_METADATA_CARRYING, translation_mode: 'streaming-units' },
+        { verdict: { ...GROUNDED_VERDICT, translation_mode: 'streaming-units' } }
       );
       await page.locator('[data-testid="welcome-composer"] textarea').fill('How do I apply for a national ID?');
       await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');

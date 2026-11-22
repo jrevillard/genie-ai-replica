@@ -190,15 +190,15 @@ describe('conversation store — agent activity (story 2.7)', () => {
         type: 'agent_verdict',
         version: 1,
         grounding_status: 'grounded',
-        translation_mode: 'streamed'
+        translation_mode: 'streaming-units'
       });
       const last = store.state.conversation.conversations[store.state.conversation.openId].messages.at(-1);
-      expect(last.translationMode).toBe('streamed');
+      expect(last.translationMode).toBe('streaming-units');
       // A later metadata frame REPLACES msg.metadata — the property written
       // here must survive that replacement (it lives on the message, not
       // inside metadata).
       callbacks.onMetadata({ confidence_score: 0.9, source_documents: [] });
-      expect(last.translationMode).toBe('streamed');
+      expect(last.translationMode).toBe('streaming-units');
       expect(last.metadata.grounding_status).toBeUndefined();
     });
 

@@ -6691,7 +6691,7 @@ describe('W9 browse affordance (answer cards)', () => {
       it('grounded with a delivered translation: the scope caption only', async () => {
         const wrapper = await mountSettledAnswer();
         // The verdict frame wrote translationMode ahead of the metadata frame.
-        wrapper.vm.$store.commit('conversation/setLastBotProperty', ['translationMode', 'streamed']);
+        wrapper.vm.$store.commit('conversation/setLastBotProperty', ['translationMode', 'streaming-units']);
         await mountAnswerWithMetadata(wrapper, {
           grounding_status: 'grounded',
           is_grounded: true,

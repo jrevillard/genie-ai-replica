@@ -362,7 +362,7 @@ async function proxyAgentRun({
         // The post-stream whole-answer mode (streaming translation off) is
         // unknowable at this point — its translation frame lands after this
         // frame, and the client reads the delivery from that frame itself.
-        if (streamRelay && !alreadyFailedTranslation && fullResponseText) {
+        if (streamRelay && !alreadyFailedTranslation && /\S/.test(fullResponseText)) {
           verdictProjection.translation_mode = 'streaming-units';
         }
         writeSSEFrame(res, { type: 'agent_verdict', version: 1, ...verdictProjection });

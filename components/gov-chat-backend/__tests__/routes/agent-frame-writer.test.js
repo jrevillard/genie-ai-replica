@@ -1071,6 +1071,35 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     const verdict = frames.find((f) => f.type === 'agent_verdict');
     expect(verdict.translation_mode).toBe('none');
   });
+
+  it('streaming translation OFF: a translation-requested run keeps the verdict at none (the post-stream frame carries the delivery)', async () => {
+    // Streaming translation disabled — no relay exists, so the verdict frame
+    // CANNOT know a translation at all; the annotation must stay out even
+    // though the run asked for one (its whole-answer translation lands in the
+    // later translation frame, the client's own delivery carrier).
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'DE' }
+    });
+
+    const frames = parseSSEEvents(response.text);
+    const verdict = frames.find((f) => f.type === 'agent_verdict');
+    expect(verdict.translation_mode).toBe('none');
+  });
 });
 
 // ── disconnect detection (the direct-call view: full control over res) ──────

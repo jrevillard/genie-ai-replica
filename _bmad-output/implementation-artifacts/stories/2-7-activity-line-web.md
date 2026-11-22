@@ -116,6 +116,19 @@ context:
 | Pre-stream JSON refusals log a client disconnect that did not happen | nit — real | PRE-EXISTING — filed as issue #2077 (`type::bug`, `area::backend`, `status::backlog`). |
 | `initStreamQuery` `@returns` JSDoc omits `authHeaders` | pre_existing nit — real | PRE-EXISTING — filed as issue #2078 (`type::bug`, `area::backend`, `status::backlog`). |
 
+### FIX review F0 (2026-11-22, fresh context, correction diff d4a0a9cf1..ea05a2a31 only)
+
+Verdict: no important findings; four nits — three applied, one filed.
+
+| Finding | Disposition |
+|---|---|
+| Test gap: nothing pins that streaming-OFF + translation-requested keeps the verdict at `'none'` (a guard regression would mislabel a failed post-stream run) | APPLIED: new frame-writer test (streaming off + `language: 'DE'` + verdict → `'none'`). |
+| Whitespace-only answer edge: the annotation fires on a truthy-but-blank `fullResponseText` with a healthy relay | APPLIED: the guard now reads `/\S/.test(fullResponseText)` — no units delivered, no annotation. |
+| The e2e fixture staged `translation_mode:'streamed'`, a value the wire can never send | APPLIED: fixtures aligned to the pinned vocabulary (`'streaming-units'`) in the e2e spec and the frontend suites. |
+| The non-streaming JSON path never records `translation_mode` — caption dead on that surface | PRE-EXISTING (story-2.4b surface) — filed as issue #2079 (`type::bug`, `area::backend`, `status::backlog`). |
+
+Backend 100 suites / 2649 tests green (one new), frontend 157 / 4609 green after the fixes.
+
 ## Design Notes
 
 **State machine (turn-scoped, store root — not under `conversations`, stripped from persistence).** `{visible, operation, status, collapsed}`: `agent_activity` frame → if `collapsed`, ignore; else `visible=true` + set op/status (`started`→running, `completed`→completed, `failed`→failed, anything else → running). First `chunk` → `collapsed=true, visible=false`. Reset on new send, `finishStream`, `failStream`, `markInterrupted`. The msg object never carries activity state (nothing persisted, nothing replayed).

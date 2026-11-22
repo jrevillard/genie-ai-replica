@@ -55,6 +55,7 @@ const svc = require('../services/head-suite-service');
 const frontmatterService = require('../services/frontmatter-service');
 const repositoryService = require('../services/repository-service');
 const headTestService = require('../services/head-test-service');
+const { actorFrom } = require('../controllers/actor-from');
 const { __mockDb } = require('../shared-lib/db-connection-service');
 
 const FM = {
@@ -155,6 +156,25 @@ describe('generateSuite', () => {
     } finally {
       randSpy.mockRestore();
     }
+  });
+
+  // #2061 (phase 1) — the acting principal reaches the record.
+  //
+  // The suite/run docs write `created_by: (opts.actor && opts.actor.user_id)
+  // || 'system'`. The controller's actor (controllers/actor-from.js) carries
+  // { sub, name, source_ip } — no `user_id` — so EVERY production run was
+  // attributed to the literal string 'system'. The pre-existing tests miss
+  // it because they call the service with a hand-built { actor: { user_id:
+  // 'u1' } } — the FIXTURE shape, which production never sends. This test
+  // builds the actor the way production does (through actorFrom) so the
+  // fixture shape cannot hide the defect again.
+  it('#2061: the suite record names the acting principal (the production actor shape, not a fixture)', async () => {
+    __mockDb.query.mockResolvedValue({ all: async () => [] });
+    frontmatterService.vllmChatCompletions.mockResolvedValue(llmResponse({ positive: [], negative: [] }));
+    const actor = actorFrom({ user: { sub: 'steward-1', name: 'Stew' }, ip: '10.0.0.1' });
+    const suite = await svc.generateSuite('me', {}, { actor });
+    expect(suite.created_by).toBe('steward-1');
+    expect(suite.created_by).not.toBe('system');
   });
 
   it('still builds a full fallback suite when the LLM call fails (honest degradation, classes never empty)', async () => {

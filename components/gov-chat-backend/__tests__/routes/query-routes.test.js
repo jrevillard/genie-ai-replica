@@ -38,7 +38,9 @@ jest.mock('../../services/query-service', () => ({
   searchQueries: jest.fn(),
   getConversationsForQuery: jest.fn(),
   createConversationFromQuery: jest.fn(),
-  linkQueryToMessage: jest.fn()
+  linkQueryToMessage: jest.fn(),
+  // The refusal marker the routes' SSE branch compares against.
+  AGENTIC_REFUSAL_CODE: 'AGENTIC_PATH_NOT_SERVED'
 }));
 
 // Mock axios (used directly by query-routes for streaming)
@@ -307,13 +309,11 @@ describe('POST /stream', () => {
     refusal.code = 'AGENTIC_PATH_NOT_SERVED';
     refusal.statusCode = 503;
     queryService.initStreamQuery.mockRejectedValue(refusal);
-    queryService.AGENTIC_REFUSAL_CODE = 'AGENTIC_PATH_NOT_SERVED';
 
     const response = await authPost('/api/queries/stream', { sessionId: 's1' });
 
     expect(response.status).toBe(503);
     expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
-    delete queryService.AGENTIC_REFUSAL_CODE;
   });
 
   it('should return 504 on timeout/abort', async () => {
@@ -1282,13 +1282,11 @@ describe('POST /', () => {
     refusal.code = 'AGENTIC_PATH_NOT_SERVED';
     refusal.statusCode = 503;
     queryService.createQuery.mockRejectedValue(refusal);
-    queryService.AGENTIC_REFUSAL_CODE = 'AGENTIC_PATH_NOT_SERVED';
 
     const response = await authPost('/api/queries', { sessionId: 's1' });
 
     expect(response.status).toBe(503);
     expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
-    delete queryService.AGENTIC_REFUSAL_CODE;
   });
 
   // Review 2026-10-29 round 3: a bearer failure caught during OKF fan-out

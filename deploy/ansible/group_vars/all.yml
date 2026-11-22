@@ -81,6 +81,9 @@ okf_enabled: "0"
 # host port, no gateway route) — the agentic path stays unreachable. A
 # deployment that wants the service running overrides this to "1".
 agent_enabled: "0"
+# The BFF's agentic routing target (read when agent_enabled is "1"); default
+# matches the compose service name on the documented port.
+agent_service_url: "http://agent-service:8010"
 grafana_admin_user: "admin"
 victoriametrics_retention: "30d"
 victorialogs_retention: "30d"

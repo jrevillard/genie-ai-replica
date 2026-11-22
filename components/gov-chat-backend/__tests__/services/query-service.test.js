@@ -2089,7 +2089,6 @@ describe('query routing — one flag, both entries', () => {
         const route = queryService.resolveQueryRoute();
         expect(route.agentic).toBe(true);
         expect(route.url).toBe('http://agent.internal:9999');
-        expect(route.url).not.toBe('http://agent.internal:9999/v1/chatqna');
         expect(route.url.includes('/v1/chatqna')).toBe(false);
       }
     );

@@ -102,6 +102,18 @@ function agenticRefusalError() {
   return error;
 }
 
+// The legacy target both entries consume: the routing decision, taken once,
+// with the refusal attached to the agentic branch. The entries call this at
+// the same lifecycle position — after validation, before the query record
+// is written — so a request on the agentic branch persists nothing.
+function resolveLegacyQueryUrl() {
+  const route = resolveQueryRoute();
+  if (route.agentic) {
+    throw agenticRefusalError();
+  }
+  return route.url;
+}
+
 // The target language the client asked for. It travels to OPEA, which
 // validates it against its own language map before it is used, so only a
 // string is forwarded: anything else is dropped rather than handed to the
@@ -628,10 +640,7 @@ class QueryService {
     // activated deployment honest; silently serving legacy under
     // AGENT_ENABLED=1 would be the half-activated deployment the shared
     // helper exists to prevent.
-    const route = resolveQueryRoute();
-    if (route.agentic) {
-      throw agenticRefusalError();
-    }
+    const opeaUrl = resolveLegacyQueryUrl();
 
     const queryText = pickUserText(queryData.messages, queryData.userQuestion);
     if (!queryText) {
@@ -669,10 +678,7 @@ class QueryService {
     const queryId = query._key;
     logger.info('QueryService.stream_query_created', { queryId });
 
-    // Build OPEA payload with stream: true. The URL comes from the routing
-    // decision taken above (the legacy branch of resolveQueryRoute).
-    const opeaUrl = route.url;
-
+    // Build OPEA payload with stream: true.
     let opeaPayload;
     if (backendMode === 'single-message') {
       opeaPayload = { messages: queryText, stream: true };
@@ -1038,10 +1044,7 @@ class QueryService {
       // precedes the test-mode bypass: a mocked OPEA answer under an
       // activated flag would present itself as an agentic answer, so the
       // refusal is mode-independent.
-      const route = resolveQueryRoute();
-      if (route.agentic) {
-        throw agenticRefusalError();
-      }
+      const opeaUrl = resolveLegacyQueryUrl();
 
       // Derive text from the last message for backward compatibility and analytics
       const queryText = pickUserText(queryData.messages, queryData.userQuestion);
@@ -1102,9 +1105,8 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
-        // The URL comes from the routing decision taken above (the legacy
+        // opeaUrl comes from the routing decision taken above (the legacy
         // branch of resolveQueryRoute).
-        const opeaUrl = route.url;
 
         let opeaPayload;
         if (backendMode === 'single-message') {

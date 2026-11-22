@@ -857,12 +857,8 @@ services:
       - AGENT_TRANSLATION_MAX_CALLS=${AGENT_TRANSLATION_MAX_CALLS:-}
       # Agentic activation + routing target, read by the BFF's shared query
       # routing helper: the flag decides which upstream BOTH chat query
-      # entries take; the URL retargets the agentic branch (default = the
-      # agent-service compose name on the documented port). Both MUST stay
-      # wired here — a variable absent from a service's environment block is
-      # unreachable by that container (!1073), and an unwired flag would
-      # leave the BFF serving legacy while the agent service runs: the
-      # half-activated deployment the routing helper exists to prevent.
+      # entries take. Both MUST stay wired here — a variable absent from a
+      # service's environment block is unreachable by that container (!1073).
       - AGENT_ENABLED=${AGENT_ENABLED:-0}
       - AGENT_SERVICE_URL=${AGENT_SERVICE_URL:-http://agent-service:8010}
       # OPEA runtime patches for remote GPU node (SSL bypass)

@@ -129,13 +129,21 @@ void resetChatbotTestState() {
 
 /// The chatbot widget the harness mounts. Its constructor's arguments
 /// live HERE, so a change to [ChatBotComponent]'s constructor lands
-/// once, not once per test file.
-Widget chatBotUnderTest(GlobalKey<ChatBotComponentState>? key) =>
+/// once, not once per test file. The optional streaming pair turns the
+/// send path to the production streaming shape (the test's mock answers
+/// both the generated API calls and the streaming sends).
+Widget chatBotUnderTest(
+  GlobalKey<ChatBotComponentState>? key, {
+  http.Client? httpClient,
+  String? streamBaseUrl,
+}) =>
     ChatBotComponent(
       key: key,
       userId: 'user-1',
       onRefreshSidebar: () {},
       onRelatedDocumentsUpdate: (_) {},
+      httpClient: httpClient,
+      streamBaseUrl: streamBaseUrl,
     );
 
 /// The mocked API overrides every widget-test mount shares: both
@@ -167,6 +175,8 @@ Future<void> pumpChatBot(
   ThemeData? theme,
   QueriesApi? queriesApi,
   bool settle = true,
+  http.Client? httpClient,
+  String? streamBaseUrl,
 }) async {
   final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
@@ -177,7 +187,13 @@ Future<void> pumpChatBot(
           queriesApiProvider.overrideWithValue(queriesApi),
       ],
       child: testAppShell(
-        () => homeWith(chatBotUnderTest(chatKey)),
+        () => homeWith(
+          chatBotUnderTest(
+            chatKey,
+            httpClient: httpClient,
+            streamBaseUrl: streamBaseUrl,
+          ),
+        ),
         supportedLocales: supportedLocales,
         theme: theme,
       ),

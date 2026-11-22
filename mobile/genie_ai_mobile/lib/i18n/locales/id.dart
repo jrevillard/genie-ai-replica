@@ -1076,6 +1076,26 @@ const Map<String, dynamic> idLocale = {
     "exportError": "Gagal mengekspor obrolan. Silakan coba lagi.",
     "thinking": "Genie sedang berpikir...",
     "generating": "Menghasilkan respons...",
+    "agentActivity": {
+      "working": "Sedang bekerja…",
+      "stepCompleted": "Langkah selesai.",
+      "stepFailed": "Satu langkah gagal.",
+      "verificationUnavailable": "Verifikasi respons tidak dapat diselesaikan.",
+      "verificationTranslated":
+          "Validasi dilakukan pada jawaban dalam bahasa aslinya — terjemahan ini tidak tercakup oleh pemeriksaan tersebut.",
+      "operations": {
+        "search_knowledge": {
+          "running": "Mencari di basis pengetahuan…",
+          "completed": "Pencarian di basis pengetahuan selesai.",
+          "failed": "Pencarian di basis pengetahuan gagal.",
+        },
+        "read_source": {
+          "running": "Membaca sumber…",
+          "completed": "Sumber dibaca.",
+          "failed": "Gagal membaca sumber.",
+        },
+      },
+    },
     "contextPrefix": "Konteks:",
     "removeContext": "Hapus Konteks",
     "dialogs": {

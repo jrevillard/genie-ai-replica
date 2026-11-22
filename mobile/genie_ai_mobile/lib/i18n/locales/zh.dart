@@ -965,6 +965,26 @@ const Map<String, dynamic> zhLocale = {
     "exportError": "导出聊天失败。请重试。",
     "thinking": "Genie 正在思考...",
     "generating": "正在生成回复...",
+    "agentActivity": {
+      "working": "处理中…",
+      "stepCompleted": "步骤已完成。",
+      "stepFailed": "一个步骤失败了。",
+      "verificationUnavailable": "无法完成回复的核实。",
+      "verificationTranslated":
+          "依据核实针对原始语言的回复进行 — 此翻译不在该核实的覆盖范围内。",
+      "operations": {
+        "search_knowledge": {
+          "running": "正在检索知识库…",
+          "completed": "已完成知识库检索。",
+          "failed": "知识库检索失败。",
+        },
+        "read_source": {
+          "running": "正在读取来源…",
+          "completed": "已读取来源。",
+          "failed": "读取来源失败。",
+        },
+      },
+    },
     "contextPrefix": "上下文：",
     "removeContext": "移除上下文",
     "dialogs": {

@@ -1083,6 +1083,26 @@ const Map<String, dynamic> swLocale = {
     "exportError": "Imeshindwa kuhamisha gumzo. Tafadhali jaribu tena.",
     "thinking": "Genie anafikiria...",
     "generating": "Inatengeneza jibu...",
+    "agentActivity": {
+      "working": "Inafanya kazi…",
+      "stepCompleted": "Hatua imekamilika.",
+      "stepFailed": "Hatua moja imeshindikana.",
+      "verificationUnavailable": "Uthibitisho wa jibu haukukamilika.",
+      "verificationTranslated":
+          "Uthibitisho ulifanyika kwa jibu katika lugha yake ya asili — tafsiri hii haijashughulikiwa na uthibitisho huo.",
+      "operations": {
+        "search_knowledge": {
+          "running": "Inatafuta kwenye hazina ya maarifa…",
+          "completed": "Utafutaji kwenye hazina ya maarifa umekamilika.",
+          "failed": "Utafutaji kwenye hazina ya maarifa umeshindikana.",
+        },
+        "read_source": {
+          "running": "Inasoma chanzo…",
+          "completed": "Chanzo kimesomwa.",
+          "failed": "Kusoma chanzo kulishindikana.",
+        },
+      },
+    },
     "contextPrefix": "Muktadha:",
     "removeContext": "Ondoa Muktadha",
     "dialogs": {

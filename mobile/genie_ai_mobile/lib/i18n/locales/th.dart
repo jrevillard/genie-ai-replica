@@ -1067,6 +1067,26 @@ const Map<String, dynamic> thLocale = {
     "exportError": "ส่งออกแชทล้มเหลว โปรดลองอีกครั้ง",
     "thinking": "Genie กำลังคิด...",
     "generating": "กำลังสร้างคำตอบ...",
+    "agentActivity": {
+      "working": "กำลังทำงาน…",
+      "stepCompleted": "ขั้นตอนเสร็จสมบูรณ์",
+      "stepFailed": "ขั้นตอนหนึ่งล้มเหลว",
+      "verificationUnavailable": "ไม่สามารถตรวจสอบความถูกต้องของคำตอบได้",
+      "verificationTranslated":
+          "การตรวจสอบความมีหลักฐานอ้างอิงทำบนคำตอบภาษาต้นฉบับ — คำแปลนี้ไม่อยู่ในขอบเขตของการตรวจสอบนั้น",
+      "operations": {
+        "search_knowledge": {
+          "running": "กำลังค้นหาในฐานความรู้…",
+          "completed": "ค้นหาในฐานความรู้แล้ว",
+          "failed": "การค้นหาในฐานความรู้ล้มเหลว",
+        },
+        "read_source": {
+          "running": "กำลังอ่านแหล่งข้อมูล…",
+          "completed": "อ่านแหล่งข้อมูลแล้ว",
+          "failed": "การอ่านแหล่งข้อมูลล้มเหลว",
+        },
+      },
+    },
     "contextPrefix": "บริบท:",
     "removeContext": "นำบริบทออก",
     "dialogs": {

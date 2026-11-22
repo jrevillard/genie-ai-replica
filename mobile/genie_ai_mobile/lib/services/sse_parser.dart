@@ -8,6 +8,11 @@ import 'dart:convert';
 /// - translation: Translated response replacing streamed content
 /// - done: Stream complete, carries queryId and the translation failure flag
 /// - error: Stream-level error from the backend
+/// - agent_activity: One agent tool call's lifecycle (additive, versioned
+///   frame; the BFF writes it between the chunks)
+/// - agent_verdict: The grounding verdict of the finished answer (additive,
+///   versioned frame; the BFF writes it after the last chunk, before
+///   metadata)
 sealed class SseEvent {
   const SseEvent();
 }
@@ -34,6 +39,12 @@ class SseMetadataEvent extends SseEvent {
   /// report the same thing.
   final String? queryTranslationStatus;
 
+  /// The grounding verdict of the finished answer, tri-state (`grounded` |
+  /// `ungrounded` | `unverified`). Present only on the agentic path — its
+  /// absence is how a legacy turn is told apart, and the legacy
+  /// `is_grounded` fallback then decides the answer-level warning alone.
+  final String? groundingStatus;
+
   /// Chatqna metadata keys outside the known set above, carried verbatim on
   /// the parsed event so a new diagnostic field survives the parser boundary
   /// without a parser edit. The backend parser (query-service.js) passes
@@ -50,6 +61,7 @@ class SseMetadataEvent extends SseEvent {
     required this.isGrounded,
     this.responseTime,
     this.queryTranslationStatus,
+    this.groundingStatus,
     this.extra = const {},
   });
 }
@@ -77,6 +89,51 @@ class SseErrorEvent extends SseEvent {
   final String message;
   final String? code;
   const SseErrorEvent(this.message, {this.code});
+}
+
+/// One agent tool call's lifecycle (`agent_activity` frame, version 1).
+///
+/// The BFF writes one frame per tool-call event, interleaved with the
+/// chunks; [status] is the raw wire value (`started` | `completed` |
+/// `failed`) and the renderer maps it — an unknown status degrades to a
+/// running row rather than dropping the frame.
+class SseAgentActivityEvent extends SseEvent {
+  final String? operation;
+
+  /// Raw wire status: `started`, `completed` or `failed`.
+  final String status;
+  final String? callId;
+
+  const SseAgentActivityEvent({
+    required this.status,
+    this.operation,
+    this.callId,
+  });
+}
+
+/// The grounding verdict of the finished answer (`agent_verdict` frame,
+/// version 1), written after the last chunk and before metadata.
+///
+/// The answer-level warning renders from the METADATA frame, which carries
+/// the same `grounding_status`/`is_grounded` pair and is what a restored
+/// conversation persists — the verdict frame itself is typed here so the
+/// envelope is pinned, its projection keys beyond the two normalized ones
+/// ride [extra] verbatim.
+class SseAgentVerdictEvent extends SseEvent {
+  final String? groundingStatus;
+  final bool isGrounded;
+
+  /// Verdict-projection keys outside the normalized pair above
+  /// (`translation_mode`, `policy`, `judge`, `marking`, …), carried
+  /// verbatim so a new projection field survives the parser boundary
+  /// without a parser edit — the same contract as [SseMetadataEvent.extra].
+  final Map<String, dynamic> extra;
+
+  const SseAgentVerdictEvent({
+    this.groundingStatus,
+    this.isGrounded = false,
+    this.extra = const {},
+  });
 }
 
 /// Parses an SSE text stream from the backend into typed [SseEvent] objects.
@@ -145,6 +202,7 @@ class SseParser {
     'is_grounded',
     'responseTime',
     'query_translation_status',
+    'grounding_status',
   };
 
   SseMetadataEvent _parseMetadata(Map<String, dynamic> json) {
@@ -162,9 +220,19 @@ class SseParser {
       // must degrade this one field, not throw and drop the whole event.
       responseTime: (json['responseTime'] as num?)?.toInt(),
       queryTranslationStatus: json['query_translation_status'] as String?,
+      groundingStatus: json['grounding_status'] as String?,
       extra: extra,
     );
   }
+
+  /// The `agent_verdict` keys the parser normalizes into typed fields;
+  /// the rest of the projection rides [SseAgentVerdictEvent.extra].
+  static const _knownVerdictKeys = {
+    'type',
+    'version',
+    'grounding_status',
+    'is_grounded',
+  };
 
   SseEvent? _parseEvent(Map<String, dynamic> json) {
     final type = json['type'] as String?;
@@ -180,6 +248,24 @@ class SseParser {
         json['message'] as String? ?? 'Unknown error',
         code: json['code'] as String?,
       ),
+      'agent_activity' => SseAgentActivityEvent(
+        status: json['status'] as String? ?? 'started',
+        operation: json['operation'] as String?,
+        callId: json['callId'] as String?,
+      ),
+      'agent_verdict' => () {
+        final extra = <String, dynamic>{};
+        json.forEach((key, value) {
+          if (!_knownVerdictKeys.contains(key)) {
+            extra[key] = value;
+          }
+        });
+        return SseAgentVerdictEvent(
+          groundingStatus: json['grounding_status'] as String?,
+          isGrounded: json['is_grounded'] as bool? ?? false,
+          extra: extra,
+        );
+      }(),
       _ => null,
     };
   }

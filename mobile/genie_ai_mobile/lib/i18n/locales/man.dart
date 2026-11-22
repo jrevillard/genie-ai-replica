@@ -1068,6 +1068,27 @@ const Map<String, dynamic> manLocale = {
     "exportError": "Kumoo kii bongo manta. A nyoofa tukung.",
     "thinking": "Genie be mirila...",
     "generating": "Generating response...",
+    "agentActivity": {
+      "working": "Working…",
+      "stepCompleted": "Step completed.",
+      "stepFailed": "A step failed.",
+      "verificationUnavailable":
+          "Response verification could not be completed.",
+      "verificationTranslated":
+          "Grounding was verified on the original-language answer — this translation is not covered by that check.",
+      "operations": {
+        "search_knowledge": {
+          "running": "Searching knowledge…",
+          "completed": "Searched the knowledge base.",
+          "failed": "Searching the knowledge base failed.",
+        },
+        "read_source": {
+          "running": "Reading source…",
+          "completed": "Read the source.",
+          "failed": "Reading the source failed.",
+        },
+      },
+    },
     "contextPrefix": "Kumo:",
     "removeContext": "Kumo wulu",
     "dialogs": {

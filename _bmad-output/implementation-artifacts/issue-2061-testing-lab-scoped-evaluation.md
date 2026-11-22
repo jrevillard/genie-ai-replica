@@ -434,3 +434,106 @@ work issue, all related to the epic:
 | 4 | **#2103** | E-5 — evidence-grade run records + the attribution metrics | `status::backlog` |
 | 5 | **#2104** | E-6 + the tenant decision | `status::backlog` |
 
+
+### The review round (2026-11-22) — what the reviews found and what changed
+
+A `/security-review` and a `/code-review` (high) of the phase-2 diff found
+real defects. Every finding is FIXED, each with a regression test proven RED
+against the pre-fix code. okf-server: **2501 tests green** (16 new in the
+branch).
+
+**The carrier was a side-door around the superadmin-gated catalogue.** The
+catalogue is gated because "a context names the repositories a PRINCIPAL
+traverses" — but `carrierOf` was a second, UNGATED read of the same
+document, and any caller of the run routes (repo-scoped-admin, with
+read-scoped run records) could name any context id: a foreign, possibly
+restricted, repository set was measured and persisted into a record that
+caller could read. **FIXED:** the carrier is now filtered through the
+CALLER's own authority, resolved the same way a live caller's is
+(`resolveGraphSet` — mode + scope + acl, one rule); an empty intersection is
+REFUSED (403 `CARRIER_NOT_TRAVERSABLE`); `carrierOf` is no longer exported,
+so the carrier boundary is the only way in.
+
+**An unreadable principal must not widen.** A group Keycloak could not answer
+for resolved to an EMPTY scope list, which in the default OPEN mode resolves
+to the WHOLE public corpus — so a context that could not measure the group
+measured the deployment, silently, and the run was scored as if it had
+measured the group. **FIXED:** such a principal is REFUSED (422
+`PRINCIPAL_UNREADABLE`) at create AND at refresh, and the stored snapshot
+stands when a refresh fails. A group that resolves but carries no scope says
+so ON THE WIRE; a scope string that is not a scope is reported rather than
+dropped in silence.
+
+**An empty carrier is not the deployment.** An empty carrier used to drop the
+universe filter — the head race widened to every repository in the deployment
+while the record claimed a zero-repo universe — and the RAGAS serve fell
+back to the suite's repositories while the record said the carrier was used.
+**FIXED:** both now mean what they say (nothing); the serve refuses with
+`EMPTY_CARRIER`.
+
+**A principal reference must not reach a path.** The group id is now encoded
+in the Keycloak admin-API path, and a reference that is neither a resolvable
+name nor a uuid-shaped id never becomes a path segment at all.
+
+**A stale carrier is refused (design-panel ruling).** The snapshot froze the
+serving graph NAMES, and a re-publish renames the serving graph
+(`OKF_alpha_v1` → `OKF_alpha_v2`), so a frozen name names a corpus that no
+longer exists — and the retriever answers a missing graph with an empty
+result. The failure is silent and TOTAL in the worst case: with 13 of 14
+carrier repositories re-published, the run completes, is scored, and the
+record lists 14 graph names while 13 corpora were measured. **FIXED:** the
+carrier is refused (409 `EVAL_CONTEXT_STALE`) with the context, the version,
+every stale repository, BOTH names and the remedy. The live name comes from
+`servingRepos()` — the same derivation the snapshot was built from — and the
+comparison is per REPOSITORY, never per name (a graph name is slug-derived,
+so a freed name can be re-minted by another repository). A repository that no
+longer serves at all is stale too. Serving the LIVE names instead was
+considered and rejected: the context hash is over the (repo_id, graph_name)
+pairs on purpose — "two evaluations are comparable only if they saw the same
+set" — so following the content would make two runs with the SAME hash
+measure DIFFERENT corpora.
+
+**The record says which set it measured.** The carrier carries the context's
+own hash (over its FULL frozen set — it identifies the version) AND the
+measured set's own hash (over the repositories the run actually raced, after
+the narrowing). After a narrowing those are different populations; all three
+record writers carry the same shape.
+
+**One pre-existing defect the new mock exposed.** The graph teardown's orphan
+sweep had TWO independent reasons never to run: its AQL took its bind
+variable from the second argument of an `aql` template — which the engine
+never reads, so ArangoDB refused the query ("no value specified for declared
+bind parameter '@collections'") and the error was swallowed — and `slugFor`
+was destructured from a module that does not export it, so the slug was
+always empty. **FIXED:** the sweep lists the GRAPHS through the driver's own
+listing (the same route the teardown drops through) and finds the draft
+graphs a mid-drain retract leaves behind.
+
+### The license-compliance gate (2026-11-22) — a comparison artifact, not a new dependency
+
+The MR's "License Compliance" panel reported **17 licenses and policy
+violations for the source branch only**. Measured, not assumed:
+
+- The source pipeline's dependency set and main's are **IDENTICAL** — 2018
+  components on both sides, zero difference (the SBOMs of the gemnasium
+  job, compared component by component). Neither phase 1 nor phase 2
+  touched a single manifest or lockfile, so the branch introduces NO new
+  dependency and NO new license.
+- The project's own documented rule explains the rest
+  (`docs/security/cve-triage-2026q3.md:819-835`, measured 2026-11-16): the
+  two MR approval policies (`scan_finding` `new_needs_triage`,
+  `license_finding` `newly_detected`, each `role_approvers: [maintainer]`)
+  compare against the **TARGET branch's latest pipeline** — and when the
+  target side is empty, EVERY source finding counts as newly introduced.
+- The target of !1043 was the phase-1 branch, which has **no pipeline of
+  its own** (the workflow rule suppresses branch pipelines for a branch with
+  an open MR) → the target side was empty → all 17 licenses counted as new.
+- !1037 merged into `main` (2026-11-22 17:27), GitLab auto-retargeted
+  !1043 to `main`, and main's pipeline 19098 (green, carrying the SBOM)
+  gives the comparison a real target side. The branch was rebased onto
+  main, so the MR diff is phase 2 only.
+
+**What David may still have to do:** if GitLab still asks for a maintainer
+approval on the license policy, it is Jérôme's to give — the MR author
+cannot approve their own MR (author-approval-prevention), which is the
+second half of the same documented rule.

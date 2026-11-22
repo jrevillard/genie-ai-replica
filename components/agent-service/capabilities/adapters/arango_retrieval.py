@@ -265,6 +265,10 @@ class ArangoRetrievalAdapter:
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
             return []
+        # A chunk without an embedding (partially indexed collection) makes
+        # COSINE_SIMILARITY return null — the row cannot be scored, so it is
+        # not a dense candidate: skip it and let the remaining rows (or the
+        # BM25 leg) carry the result.
         results = [
             {
                 "doc": RetrievedChunk(
@@ -276,6 +280,7 @@ class ArangoRetrievalAdapter:
                 "score": float(row["score"]),
             }
             for row in rows
+            if row.get("score") is not None
         ]
         # The recorded wrapper applies score_threshold AFTER the top-k cut.
         results = [r for r in results if r["score"] >= self._config.score_threshold]

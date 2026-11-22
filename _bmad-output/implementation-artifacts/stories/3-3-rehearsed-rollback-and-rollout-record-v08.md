@@ -136,6 +136,18 @@ context:
 - R2-7 (runbook:109 preflight abort threshold not enforced; pod-health count unconsumed) — verified real — nit — patch (explicit awk threshold + abort on unhealthy count).
 - R2-8 (sprint-status last_updated rewritten in the legacy MM-DD-YYYY format; migrate to ISO while touching) — real, nit, convention already deferred as R1-6 — reject the migration here (a one-field half-migration of a file-wide convention adds inconsistency, fixes nothing this story owns; R1-6's defer owns the convention change).
 
+- Quality pass (orchestrator-ordered completion: simplify + test-audit, both fresh-context on the full diff):
+- S1 (README states the FR-21 verdict twice on one page — template §8 and the dedicated section; drift risk) — real — patch (template §8 points at the dedicated section for the wording).
+- S2 (#2052 rationale near-verbatim in record §1 and §7) — real — patch (§7 shrinks to the concrete serving-config observation + pointer).
+- S3 (empty 5a heading, dead on a cold read) — real — patch (heading deleted; Phase 3 owns the procedure).
+- S4 (one run's observation embedded in the re-runnable rule) — real — patch (clause dropped; the record §5 carries the observation).
+- S5 (turn protocol stated twice in the runbook) — real — patch (5e keeps its own observation, points at the Phase 2 protocol).
+- S6 (runbook wire facts name no issue; the record does) — real — patch (#2072/#2073 refs added).
+- F1 (runbook names the wrong log-warning string `AgentFrameWriter.*` — the code logs `AgentRunContract.upstream_timeout_below_reserves`; pair check 1 could never be seen to fail) — real, important — patch (string corrected). Root cause: story 2.4b moved the pair constants + warning into the shared `agent-run-contract.js` (entry-neutral naming), and the round-2 patch was written against the pre-rebase code.
+- F2 (constants attributed to agent-frame-writer.js in runbook Phase 3 + record §7; they live in agent-run-contract.js since 2.4b) — real — patch (both corrected).
+- F3 (record §8 names one test where the POST-target coverage is two — routing-helper + frame-writer suites) — real — patch (both named).
+- F4 (the re-run rule's staleness predicate implicit) — real — patch (one sentence: §2 commit ≠ stage delivered HEAD = stale evidence, re-run).
+
 ## Verification
 
 **Commands:**

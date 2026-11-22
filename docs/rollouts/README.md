@@ -16,7 +16,9 @@ the record is what makes the claim auditable.
 - **The rehearsal is re-run per stage** (V08, Epic 3 story 3.3): the procedure
   in [`v08-rehearsal-runbook.md`](v08-rehearsal-runbook.md) is re-executed for
   every later delivered stage, and its fresh evidence lands in that stage's
-  record. A stage whose rehearsal has not run is not a delivered stage.
+  record. A stage whose rehearsal has not run is not a delivered stage. A
+  record whose §2 source commit is not the stage's delivered HEAD is stale
+  evidence — re-run the rehearsal, do not reuse the section.
 - **The named responsible operator** in every record is the initiative owner —
   recorded by name, never defaulted silently.
 
@@ -78,10 +80,9 @@ never silently turned into requirements (FR-26).
 
 ## 8. Stage-gate FR-21 check (executed)
 
-The OPEA-free gate run on the tree this stage delivers, with its result, and
-the explicit review verdict: no new OPEA coupling was added that makes the
-deferred OPEA exit harder (FR-21). A stage gate that cannot show this check
-green does not exit.
+The OPEA-free gate run on the tree this stage delivers, with its result, the
+explicit FR-21 review verdict and the named audit scope — wording per
+"The stage-gate FR-21 item" below.
 ```
 
 ## The stage-gate FR-21 item (FR-20 / FR-21, AD-1)

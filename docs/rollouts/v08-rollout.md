@@ -85,7 +85,7 @@ was evidenced by every failed agentic attempt: each left its at-start doc
 ```
 BFF pod:    AGENT_UPSTREAM_TIMEOUT_MS = 3600000   (≥ reserves + floor → no absorption)
 Agent pod:  AGENT_RUN_MAX_WALL_CLOCK_SECONDS = 240
-constants (agent-frame-writer.js): TRANSLATION_RESERVE_MS=30000, FINALIZATION_MARGIN_MS=5000, DEADLINE_FLOOR_MS=1000
+constants (agent-run-contract.js): TRANSLATION_RESERVE_MS=30000, FINALIZATION_MARGIN_MS=5000, DEADLINE_FLOOR_MS=1000
 
 deadline_ms          = 3600000 − 30000 − 5000 = 3565000      (floor 1000 not binding)
 effective_wall_clock = min(240, 3565000/1000) = 240 s
@@ -137,9 +137,8 @@ window, timestamps and doc evidence above.
 
 **The #2052 venue note (FR-26):** the GPU endpoint's serving config carries
 no `--enable-auto-tool-choice` / `--tool-call-parser` flags, so no tool call
-can be observed on this venue (V06's headline finding, unchanged). The
-rehearsal proves ROUTING, PAIR and ROLLBACK mechanics; agent answer quality
-stays #2052's acceptance.
+can be observed on this venue (V06's headline finding, unchanged — scope
+rationale in §1).
 
 ### Deployment findings the rehearsal surfaced (honest defects, recorded)
 
@@ -178,7 +177,7 @@ stays #2052's acceptance.
   `agentPathPackages = [components/agent-service]` ("the agent service is the
   agentic path's own execution surface"). `components/gov-chat-backend` sits in
   `otherPackages` until story 3.1's manifest move; the BFF's agentic-branch
-  leg is covered by the routing-helper test, not the grep gate (AD-1, as
+  leg is covered by the routing-helper + frame-writer tests, not the grep gate (AD-1, as
   recorded in the gate's own scope note).
 - **Review verdict (FR-21):** **no new OPEA coupling was added that makes the
   deferred OPEA exit harder.** This stage's diff is records, runbook, gate

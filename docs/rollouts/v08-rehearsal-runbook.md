@@ -138,8 +138,8 @@ name) is the rehearsal's own — never the Helm release's.
    POSTs the URL as configured — the agent route is `POST /v1/runs`, so the
    shipped compose default `http://agent-service:8010` answers 404 on a real
    deployment; the unit suites pin both sides with a mocked axios and never
-   joined them). Until the code-side fix lands, the rehearsal deployment
-   carries the run path IN the env value
+   joined them). Until the code-side fix lands (#2072), the rehearsal
+   deployment carries the run path IN the env value
    (`http://...:8080/v1/runs` — axios posts the full URL verbatim).
 2. **The component NetworkPolicy's egress list does not include the agent
    port.** The rehearsal backend carries `genieai.io/component=backend`
@@ -149,6 +149,7 @@ name) is the rehearsal's own — never the Helm release's.
    -level command override — the image's shipped port stays 8010), exposed
    through a HEADLESS Service: this venue's netpol rejects pod→ClusterIP
    egress too, and a headless Service resolves DNS straight to the pod IP.
+   The chart-side egress row is tracked as #2073.
 
 ```bash
 kubectl -n genieai get deploy genieai-genieai-umbrella-backend -o json | jq '
@@ -287,7 +288,7 @@ kubectl -n genieai exec deploy/v08-rehearsal-agent -- \
 ```
 
 The derivation (the constants live in
-`components/gov-chat-backend/services/agent-frame-writer.js`:
+`components/gov-chat-backend/services/agent-run-contract.js`:
 `TRANSLATION_RESERVE_MS=30000`, `FINALIZATION_MARGIN_MS=5000`,
 `DEADLINE_FLOOR_MS=1000`; `DEFAULT_UPSTREAM_TIMEOUT_MS=3600000`):
 
@@ -302,7 +303,7 @@ actually FAIL on a deployed pair:
 
 1. **No reserve absorption fired.** A configured `AGENT_UPSTREAM_TIMEOUT_MS`
    at or below `30000 + 5000 + 1000` is silently replaced by the default
-   (`resolveUpstreamTimeoutMs()` warns `AgentFrameWriter.upstream_timeout_below_reserves`
+   (`resolveUpstreamTimeoutMs()` warns `AgentRunContract.upstream_timeout_below_reserves`
    in the backend log). Check the BFF pod's log for that warning; if it
    fired, the configured value never reached the wire — ABORT and fix the
    deployment's knob.
@@ -397,8 +398,6 @@ kubectl -n genieai port-forward "pod/$BP" 19000:3000 &   # KPF=backend
 SESSION="v08-rehearsal-$(date +%Y%m%d-%H%M%S)"
 ```
 
-### 5a. Pair validation — before any turn (Phase 3 numbers go in the record)
-
 ### 5b. Agentic direction (flag on)
 
 ```bash
@@ -472,8 +471,7 @@ occurred — the three outcomes the in-flight policy defines:
 
 1. **Completed inside the shutdown window** — full chunk sequence + terminal
    frames, doc `isAnswered: true` with NO `answer_interrupted` marker (ADR
-   agentic-003's rolling-restart variant; the common case for short turns,
-   and what story 3.3's rehearsal observed).
+   agentic-003's rolling-restart variant; the common case for short turns).
 2. **Partial save** — the stream ended mid-answer with text already flowing
    and the process still alive: doc carries `answer_interrupted: true` with
    the partial response (the disconnect treatment's honest partial state).
@@ -483,10 +481,10 @@ occurred — the three outcomes the in-flight policy defines:
 
 Whichever variant occurs is the evidence — with timestamps.
 
-The port-forward targets a POD NAME: the restart replaces the pod and the
-forwarded connection dies with it — which is exactly the client-side
-observation wanted (the stream ending). For the NEXT turn, re-resolve `$BP`
-and re-arm the port-forward.
+The restart replaces the pod and the forwarded connection dies with it —
+which is exactly the client-side observation wanted (the stream ending).
+For the NEXT turn, apply the turn protocol (Phase 2): re-resolve `$BP` and
+re-arm the port-forward.
 
 ## Phase 6 — evidence capture
 

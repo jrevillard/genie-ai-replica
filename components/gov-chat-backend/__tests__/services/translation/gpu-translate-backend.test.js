@@ -297,6 +297,9 @@ describe('GpuTranslateBackend startup probe', () => {
       else process.env[envKey] = value;
     }
     jest.clearAllMocks();
+    // `clearAllMocks` keeps installed implementations: without the reset, the
+    // last request mock of the block leaks into any later `http`-based test.
+    http.request.mockReset();
   });
 
   const backendWithEnv = (env) => {
@@ -367,10 +370,14 @@ describe('GpuTranslateBackend startup probe', () => {
         const res = new EventEmitter();
         res.statusCode = statusCode;
         res.setEncoding = () => {};
+        // The refusal path drains the response (`resume`), which a real
+        // IncomingMessage carries; the double models that interface piece.
+        res.resume = () => {};
         process.nextTick(() => {
           cb(res);
-          // `healthCheck` reads only `statusCode`; `fetchModelInfo` reads
-          // data and waits for 'end', so the response finishes itself.
+          // `healthCheck` reads only `statusCode` and registers no response
+          // listeners, so this emission is inert for it — finishing the
+          // response models a completed one for any body-reading caller.
           res.emit('end');
         });
       };

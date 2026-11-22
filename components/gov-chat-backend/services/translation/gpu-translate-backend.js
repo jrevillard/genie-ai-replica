@@ -177,6 +177,9 @@ class GpuTranslateBackend {
             // A non-2xx is the endpoint reporting itself not ready (vLLM
             // serves 503 while loading). The gate refuses: resolving here
             // would let `init` mark an unready service as initialized.
+            // The refusal consumes nothing else — drain the response so the
+            // keep-alive socket is not parked on a paused stream.
+            res.resume();
             reject(new Error(`vLLM service unhealthy: status ${res.statusCode}`));
           }
         });

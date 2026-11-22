@@ -111,7 +111,7 @@ only host-published port (80/443); everything else stays on the internal network
 
 ## Profiles at a glance
 
-Four compose profiles control which optional services start. The **core stack**
+Five compose profiles control which optional services start. The **core stack**
 is always on (no profile needed); profile services add optional capabilities
 on top of it.
 
@@ -123,6 +123,7 @@ on top of it.
 | **GPU models** (`gpu-models`) | `--profile gpu-models` | Adds vLLM, vLLM translation guardrail, TEI embedding, TEI reranker — the GPU-heavy containers. Pair with `--profile opea` for a local RAG stack. |
 | **Observability** (`observability`) | `--profile observability` | Adds VictoriaMetrics, VictoriaTraces, tempo-proxy, Grafana — optional metrics/traces storage and dashboards on top of the always-on log substrate. |
 | **Let's Encrypt** (`letsencrypt`) | `--profile letsencrypt` | Adds certbot for automatic TLS certificate provisioning and renewal on a public FQDN. |
+| **Agent** (`agent`) | `--profile agent` | Adds the agent-service (the Epic 1 agentic run path — internal only, no gateway route). Pair with `AGENT_ENABLED=1`: the profile starts the container in compose mode, the flag sets its replica count (and is the only gate on Swarm, which ignores profiles). |
 
 The OPEA orchestrators and the GPU models are split into two profiles so you
 can run the orchestrators locally and point them at a remote GPU node (see

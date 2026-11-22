@@ -81,9 +81,9 @@ describe('agent service (story 1.3)', () => {
     const contract = contracts.find((entry) => entry.service === 'agent-service');
 
     expect(contract).toBeDefined();
-    // No compose profile: the flag alone decides whether the service runs
-    // (one deployment-level flag for the whole agentic stack).
-    expect(contract.profiles).toEqual([]);
+    // Profile + replicas pair — the okf-server/certbot shape (#2053); the
+    // rationale lives on the compose block itself.
+    expect(contract.profiles).toEqual(['agent']);
     expect(contract.replicas).toBe('${AGENT_ENABLED:-0}');
     expect(contract.envVars).toContain('AGENT_ENABLED');
   });

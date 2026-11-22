@@ -67,9 +67,10 @@ async def cancel_and_join(task: asyncio.Task) -> None:
     join is what turns "cancelled" into "terminated": this coroutine
     returns only when the task has finished unwinding, and the task's own
     ``CancelledError`` is absorbed there — it is the task's death being
-    reaped, never the caller's cancellation being handled (the caller's
+    reaped, never the caller's cancellation being handled. The caller's
     cancellation, when one is already unwinding through the caller's
-    frame, keeps propagating after this returns).
+    frame, keeps propagating after this returns; a cancellation DELIVERED
+    while suspended inside the join is absorbed too.
     """
     if task.done():
         return

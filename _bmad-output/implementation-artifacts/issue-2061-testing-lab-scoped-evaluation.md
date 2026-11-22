@@ -12,7 +12,7 @@ and is verified before the next begins.
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | E-3 pair-level reporting + F7 steal accounting + F6 knob unification + the blank-principal fix | CODE COMPLETE — verification green |
-| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | pending — NOT gated (see the corrected phasing consequence below; the carrier-trust findings are their own epic) |
+| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | CODE COMPLETE on `feat/okf-lab-eval-context` — E-1 + E-2 + E-4 (the serve carrier and the source attribution). E-4's remaining half (the suite-side binding and the generation pool) is E-7's, Phase 3 |
 | 3 | E-7 context-native generation + suite binding | pending |
 | 4 | E-4 attribution metrics + E-5 evidence-grade run records | pending |
 | 5 | E-6 offline harness parity + the tenant-segment decision | pending |
@@ -329,3 +329,43 @@ which is the shape E-1's `principal_refs[]` has to resolve to. The
 group-scoped fixture that proves it (`feat/okf-lab-scoped-scenario`, MR !1039)
 measured 12 / 13 / 13 / 14 traversable graphs for the control, the two group
 holders and the union, through the carrier's own read.
+
+## Phase 2 — E-1 + E-2 + E-4 (2026-11-22, branch `feat/okf-lab-eval-context`)
+
+**Status: code complete, verification green.** Stacked on the phase-1 branch;
+okf-server **98 suites / 2485 tests green** (27 new).
+
+### What landed
+
+| Epic item | What it does | Where |
+|---|---|---|
+| **E-1** | The Evaluation Context: a named, versioned, snapshot-resolved authorization principal. Resolution goes through the ONE authority (`resolveGraphSet`) with the UNION of the groups' scope lists — byte-identical to the authority's answer for the same list, asserted by a test. The inputs are scopes and group references ONLY; there is no way to hand a context a graph list. The OPEN context (no scopes, no groups) resolves as the deployment's default posture, and in closed mode it is an EMPTY carrier WITH a loud warning. A refresh re-resolves, BUMPS the version and audits. | `services/evaluation-context-service.js`, `controllers/evaluation-context-controller.js`, `routes/okf-routes.js` (`/api/okf/eval-contexts`), `db/collections.js` |
+| **E-2** | The carrier-scoped head test: a request may name a context; the Lab races the CONTEXT's repositories instead of the deployment's. The narrowing happens BEFORE the race (the prefetched sibling list IS the universe), it is a SUBSET, and without a carrier the query is byte-identical to what it always was. The verdict says which carrier it was measured over; the run record carries the carrier with its resolved set. | `services/head-test-service.js` (`loadSiblings`, `routingTest`), `services/head-suite-service.js` (`runSuite`), `controllers/repository-controller.js` |
+| **E-4** | The scoped RAGAS serve: the served retrieval set is the carrier's, and the array rides the EXISTING `context.authorized_graph_names` field — chatqna and the retriever are UNCHANGED, so the served pipeline is the production one measured over the group the benchmark asks about. The per-source provenance chatqna already emits (`graph_name` / `repo_id` / `bundle_version`) is carried through instead of stopping at the text and the document id, which makes two new numbers possible: WHICH repository answered (the histogram) and how often an answer was grounded OUTSIDE the carrier (the wrong-source rate). "Not measured" is null throughout. | `services/ragas-suite-service.js` (`serveGraphNames`, `serveAnswer`, the row and the run roll-up), `controllers/repository-controller.js` |
+
+### The gate that was withdrawn, and why it was wrong
+
+The phase-1 artifact said phase 2 must not land until the carrier-trust
+findings F1/F2 have a fix. **That was wrong** — it contradicted the epic's
+own EXPLICIT NON-GOAL, which says the BFF-as-trusted-side /
+carrier-as-enforcement-contract model stands, that changing it is a separate
+security-model epic, and that a scoped evaluation is faithful without it
+because the carrier array *is* the membership emulation. E-4's own
+acceptance criterion is "no modification to chatqna/retriever required for
+scoped runs" — and that is what shipped. The findings stay real and stay
+filed (**#2081**), on their own timeline.
+
+### What Phase 2 does NOT do
+
+- **E-7 is Phase 3**: the context-native GENERATION (the prompt pool becomes
+  the carrier's rivals, the rows carry `intended_carrier: in|out`, the suite
+  binds a context snapshot, the cross-context pairing gate) is not here.
+- **E-5 is Phase 4**: the evidence-grade run records (schema v2, the
+  principal digest, the repo-set hash, the retention change, the read-time
+  redaction) are not here. What phase 2 adds is the carrier ON the record —
+  the first of the evidence fields.
+- The supersede modelling (`ROUTE_HEADS_SUPERSEDE` in the verdict) is
+  measured but not yet modelled: the retriever skips the chunk probe when a
+  head claims (`genieai_retriever_arangodb.py:2644`), and the Lab still runs
+  its probe leg. That is a real fidelity gap and it is the first thing
+  phase 3 should close.

@@ -9,6 +9,9 @@ const {
   resolveUpstreamTimeoutMs,
   deriveDeadlineMs,
   assembleAgentMetadata,
+  captureRunStart,
+  seamRunOutcome,
+  createAgentRunAttribution,
   readUpstreamBody,
   passthroughBody,
   agentHttpAgent,
@@ -108,16 +111,19 @@ async function proxyAgentRun({
   let usageRecord = null;
   // Story 2.11 — the attribution state. `runStart` is what the
   // `run_started` payload carried (persisted AT START, so a run whose final
-  // frame never arrives keeps its versions); `pendingSeamOutcome` is the
-  // `run_error` event's outcome code, which the terminal writes when the
-  // usage record has not arrived (the loop emits code == record outcome, so
-  // the write is the usage-record outcome verbatim either way).
-  // `outcomePersisted` is the one-honest-outcome latch: the first terminal
-  // fact wins (a deadline fire keeps `timed_out` even when the abort's
-  // stream teardown then reports an error).
+  // frame never arrives keeps its versions); the writer pair below owns the
+  // fire-and-forget discipline and the one-honest-outcome latch (the first
+  // terminal fact wins — a deadline fire keeps `timed_out` even when the
+  // abort's stream teardown then reports an error). The shared home is
+  // createAgentRunAttribution in agent-run-contract.js.
   let runStart = null;
-  let pendingSeamOutcome = null;
-  let outcomePersisted = false;
+  const attribution = createAgentRunAttribution({
+    queryService,
+    queryId,
+    logPrefix: 'AgentFrameWriter',
+    gate: () => res.headersSent
+  });
+  const persistRunOutcome = attribution.persistRunOutcome;
   // The stream is finished from the BFF's perspective (completed, errored or
   // disconnected): no further frames, no partial save. One flag owns the
   // terminal state — every terminal path sets it, every guard reads it.
@@ -161,22 +167,6 @@ async function proxyAgentRun({
 
   const assembleMetadata = (outcome) =>
     assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome });
-
-  // The honest-outcome write (story 2.11): one patch per run, first fact
-  // wins. Gated on the SSE phase — the pre-stream refusals (429/503/422)
-  // and a disconnect during the upstream wait never wrote the doc and still
-  // don't: no admitted run, nothing to attribute (the at-start doc stays
-  // honestly unanswered).
-  const persistRunOutcome = (outcome) => {
-    if (outcomePersisted || !outcome || !res.headersSent) return;
-    outcomePersisted = true;
-    // Promise.resolve: the injected service's return is not depended on to
-    // be a promise — a synchronous throw or a plain value must land in the
-    // same logged catch, never break the stream.
-    Promise.resolve(queryService.persistAgentRunOutcome(queryId, outcome)).catch((err) =>
-      logger.error('AgentFrameWriter.run_outcome_persist_failed', { queryId, outcome, error: err.message })
-    );
-  };
 
   // The disconnect signal: `res.on('close')`. Registered before any await, so
   // a client that leaves during the posture resolution or the agent-leg wait
@@ -462,18 +452,10 @@ async function proxyAgentRun({
         // 2.11, AD-11): the execution-version record is persisted AT START,
         // so a run whose final frame never arrives keeps its versions.
         // Fire-and-forget: an attribution write failure must never break
-        // the answer path.
-        runStart = {
-          run_id: event.run_id,
-          execution_versions:
-            event.payload?.execution_versions && typeof event.payload.execution_versions === 'object'
-              ? event.payload.execution_versions
-              : null,
-          started_at: new Date().toISOString()
-        };
-        Promise.resolve(queryService.persistAgentRunStart(queryId, runStart.run_id, runStart.execution_versions)).catch(
-          (err) => logger.error('AgentFrameWriter.run_start_persist_failed', { queryId, error: err.message })
-        );
+        // the answer path. (captureRunStart is the ONE shape home — the
+        // success finalize later completes the same bytes.)
+        runStart = captureRunStart(event);
+        attribution.persistRunStart(runStart);
         break;
       }
       case 'text_message_started':
@@ -535,13 +517,12 @@ async function proxyAgentRun({
         // doc reads `error` / `budget_exhausted` verbatim. The usage record
         // itself is not persisted here (the run failed; the doc stays
         // unanswered — today's contract).
-        pendingSeamOutcome = typeof event.payload?.code === 'string' && event.payload.code ? event.payload.code : null;
         finishWithErrorFrame(
           typeof event.payload?.message === 'string' && event.payload.message
             ? event.payload.message
             : 'the agent run failed',
           'AGENT_RUN_ERROR',
-          usageRecord?.outcome ?? pendingSeamOutcome ?? 'error'
+          seamRunOutcome(event, usageRecord)
         );
         break;
       }

@@ -71,6 +71,11 @@ from .loop import (
 # lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
 # name stays importable from here for the probe harness and its suites.
 from .toolset import document_toolset
+from .version_record import (
+    MODEL_SOURCE_DISCOVERED,
+    MODEL_SOURCE_OVERRIDE,
+    MODEL_SOURCE_UNRESOLVED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -353,11 +358,13 @@ class ProbeModelClient:
         assembly and the run proceeds).
         """
         if self._config.model_id_override:
-            return self._config.model_id_override, "override", None
+            return self._config.model_id_override, MODEL_SOURCE_OVERRIDE, None
         try:
-            return await self._resolve_model_id(), "discovered", None
+            return await self._resolve_model_id(), MODEL_SOURCE_DISCOVERED, None
         except ProbeTransientError as failed:
-            return None, "unresolved", str(failed)[:200]
+            # The note rides raw — build_execution_version_record is the
+            # single clamp home (_NOTE_LIMIT).
+            return None, MODEL_SOURCE_UNRESOLVED, str(failed)
 
     async def _window_tokens(self) -> int:
         """The window one call must fit — the deployed three tiers of

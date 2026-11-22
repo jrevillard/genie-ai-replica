@@ -8,6 +8,9 @@ const {
   resolveUpstreamTimeoutMs,
   deriveDeadlineMs,
   assembleAgentMetadata,
+  captureRunStart,
+  seamRunOutcome,
+  createAgentRunAttribution,
   readUpstreamBody,
   passthroughBody,
   agentHttpAgent,
@@ -159,27 +162,22 @@ async function runAgentJsonTurn({
   const controller = new AbortController();
   const bearer = headers?.authorization || null;
   // Story 2.11 — the attribution state: the run-start block persisted AT
-  // START (the same writes the streaming consumer makes), and the
-  // one-honest-outcome latch for the BFF-terminal paths (a deadline fire's
-  // `timed_out` is never overwritten by the teardown it caused). The
-  // writes are fire-and-forget: an attribution failure must never change
-  // the JSON answer contract, and nothing throws inside a stream handler.
+  // START (the same writes the streaming consumer makes) through the shared
+  // writer pair (agent-run-contract.js — one home for the fire-and-forget
+  // discipline and the one-honest-outcome latch: a deadline fire's
+  // `timed_out` is never overwritten by the teardown it caused).
   let runStart = null;
-  let outcomePersisted = false;
   // The run actually started (the 200 seam stream is being consumed): the
   // gate that keeps a slow refusal body's deadline fire from writing a
   // `timed_out` the run never earned.
   let legEstablished = false;
-  const persistRunOutcome = (outcome) => {
-    if (outcomePersisted || !outcome || !legEstablished) return;
-    outcomePersisted = true;
-    // Promise.resolve: the injected service's return is not depended on to
-    // be a promise — a synchronous throw or a plain value must land in the
-    // same logged catch, never break the stream handler.
-    Promise.resolve(queryService.persistAgentRunOutcome(queryId, outcome)).catch((err) =>
-      logger.error('AgentJsonResult.run_outcome_persist_failed', { queryId, outcome, error: err.message })
-    );
-  };
+  const attribution = createAgentRunAttribution({
+    queryService,
+    queryId,
+    logPrefix: 'AgentJsonResult',
+    gate: () => legEstablished
+  });
+  const persistRunOutcome = attribution.persistRunOutcome;
 
   // The shared posture resolution (one home with the fan-out carrier — no
   // double upstream calls, no drift). Fail-closed, DELIBERATELY stricter
@@ -324,18 +322,10 @@ async function runAgentJsonTurn({
           // Run lifecycle is seam-internal; the payload IS the run-start
           // handshake (story 2.11, AD-11): persisted AT START, fire-and-
           // forget — a run that later fails keeps its versions (the tail
-          // that would write them never runs on a throw).
-          runStart = {
-            run_id: event.run_id,
-            execution_versions:
-              event.payload?.execution_versions && typeof event.payload.execution_versions === 'object'
-                ? event.payload.execution_versions
-                : null,
-            started_at: new Date().toISOString()
-          };
-          Promise.resolve(
-            queryService.persistAgentRunStart(queryId, runStart.run_id, runStart.execution_versions)
-          ).catch((err) => logger.error('AgentJsonResult.run_start_persist_failed', { queryId, error: err.message }));
+          // that would write them never runs on a throw). captureRunStart
+          // is the ONE shape home (the streaming consumer shares it).
+          runStart = captureRunStart(event);
+          attribution.persistRunStart(runStart);
           break;
         }
         case 'text_message_started':
@@ -365,11 +355,11 @@ async function runAgentJsonTurn({
               : 'the agent run failed';
           failure = new AgentJsonTurnError(502, { error: 'AGENT_RUN_ERROR', message });
           // The agent's own verdict lands on the doc (story 2.11): the
-          // event's code — identical to the usage record's outcome that
-          // follows (the post-failure frames are ignored below, so the
-          // record is not consulted).
-          const outcome = typeof event.payload?.code === 'string' && event.payload.code ? event.payload.code : 'error';
-          persistRunOutcome(outcome);
+          // shared mapping — the usage record's outcome when it already
+          // arrived, else the event's code verbatim (the post-failure
+          // frames are ignored below, so the record is not consulted
+          // here).
+          persistRunOutcome(seamRunOutcome(event, usageRecord));
           clearDeadline();
           // Idempotent: the leg must not keep working behind a dead consumer.
           controller.abort();

@@ -9,6 +9,7 @@
 // replaces only the keys it names, never the siblings.
 
 require('../setup-env');
+const { EXECUTION_VERSIONS } = require('../fixtures/agent-run-attribution');
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
@@ -30,13 +31,6 @@ jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-li
 jest.mock('arangojs', () => ({ aql: (strings, ...values) => ({ _aql: true, strings, values }) }));
 
 const queryService = require('../../services/query-service');
-
-const EXECUTION_VERSIONS = {
-  implementation: { version: '0.1.0' },
-  model: { id: 'test-model', source: 'discovered' },
-  prompt: { version: 'prod-1', sha256: 'abc123def456' },
-  configuration: { sha256: '0123456789ab', values: { max_steps: 6 } }
-};
 
 let dbQuery;
 
@@ -65,31 +59,39 @@ beforeEach(() => {
 });
 
 describe('persistAgentRunStart (story 2.11)', () => {
-  it('merges the run-start block server-side: the patch carries the keys it names', async () => {
-    await queryService.persistAgentRunStart('q1', 'run-abc', EXECUTION_VERSIONS);
+  it('persists the consumer-minted block verbatim: the patch carries exactly its keys', async () => {
+    await queryService.persistAgentRunStart('q1', {
+      run_id: 'run-abc',
+      execution_versions: EXECUTION_VERSIONS,
+      started_at: '2026-11-22T00:00:00.000Z'
+    });
 
     const patch = expectServerSideMerge(queryArg());
+    // The block's own timestamp — minted ONCE at the consumer, the same
+    // bytes the success finalize later completes.
     expect(patch).toEqual({
       run_id: 'run-abc',
       execution_versions: EXECUTION_VERSIONS,
-      started_at: expect.any(String)
+      started_at: '2026-11-22T00:00:00.000Z'
     });
-    // UTC ISO timestamps everywhere persisted.
-    expect(patch.started_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it('records run_id + started_at when the payload carried no execution_versions (older agent service)', async () => {
-    await queryService.persistAgentRunStart('q1', 'run-abc', null);
+    await queryService.persistAgentRunStart('q1', {
+      run_id: 'run-abc',
+      execution_versions: null,
+      started_at: '2026-11-22T00:00:00.000Z'
+    });
 
     const patch = expectServerSideMerge(queryArg());
-    expect(patch).toEqual({ run_id: 'run-abc', started_at: expect.any(String) });
+    expect(patch).toEqual({ run_id: 'run-abc', started_at: '2026-11-22T00:00:00.000Z' });
   });
 
-  it('rejects a non-object execution_versions payload (never persisted)', async () => {
-    await queryService.persistAgentRunStart('q1', 'run-abc', 'garbage');
+  it('degrades a garbage block to the null-run_id fallback, never a thrown write', async () => {
+    await queryService.persistAgentRunStart('q1', 'garbage');
 
     const patch = expectServerSideMerge(queryArg());
-    expect(patch).toEqual({ run_id: 'run-abc', started_at: expect.any(String) });
+    expect(patch).toEqual({ run_id: null, started_at: expect.any(String) });
   });
 });
 

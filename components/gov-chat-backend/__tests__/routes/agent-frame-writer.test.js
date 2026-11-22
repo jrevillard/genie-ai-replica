@@ -8,6 +8,7 @@
 // off) pins the byte-identical legacy path.
 
 require('../setup-env');
+const { EXECUTION_VERSIONS } = require('../fixtures/agent-run-attribution');
 
 process.env.AGENT_ENABLED = '1';
 process.env.OPEA_STREAMING = 'true';
@@ -1437,15 +1438,6 @@ describe('proxyAgentRun — posture failures (401 propagates, others fail closed
 // carries ids/fingerprints only.
 
 describe('proxyAgentRun — story 2.11, the run-start handshake and the honest outcomes', () => {
-  // The FR-17 record shape the agent service emits (fixture-faithful: ids,
-  // fingerprints, resolved knob values — never text).
-  const EXECUTION_VERSIONS = {
-    implementation: { version: '0.1.0' },
-    model: { id: 'test-model', source: 'discovered' },
-    prompt: { version: 'prod-1', sha256: 'abc123def456' },
-    configuration: { sha256: '0123456789ab', values: { max_steps: 6, verdict_policy: 'verdict-marked' } }
-  };
-
   const postureContext = () => ({
     user_id: 'user-123',
     authorized_graph_names: [],
@@ -1482,7 +1474,16 @@ describe('proxyAgentRun — story 2.11, the run-start handshake and the honest o
     // AT START: the versions are persisted the moment run_started arrives —
     // a run whose final frame never arrives keeps them.
     expect(queryService.persistAgentRunStart).toHaveBeenCalledTimes(1);
-    expect(queryService.persistAgentRunStart).toHaveBeenCalledWith('q1', 'run-abc', EXECUTION_VERSIONS);
+    // The BLOCK is persisted verbatim (one mint at the consumer — the same
+    // bytes the success finalize completes).
+    expect(queryService.persistAgentRunStart).toHaveBeenCalledWith(
+      'q1',
+      expect.objectContaining({
+        run_id: 'run-abc',
+        execution_versions: EXECUTION_VERSIONS,
+        started_at: expect.any(String)
+      })
+    );
     // The finalize COMPLETES the start write (never clobbers it): the
     // assembled block merges the versions + the answered outcome.
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
@@ -1514,8 +1515,15 @@ describe('proxyAgentRun — story 2.11, the run-start handshake and the honest o
     res.emit('close');
     await runPromise;
 
-    // The versions are on the doc (the AT START write).
-    expect(queryService.persistAgentRunStart).toHaveBeenCalledWith('q1', 'run-abc', EXECUTION_VERSIONS);
+    // The versions are on the doc (the AT START write, the block verbatim).
+    expect(queryService.persistAgentRunStart).toHaveBeenCalledWith(
+      'q1',
+      expect.objectContaining({
+        run_id: 'run-abc',
+        execution_versions: EXECUTION_VERSIONS,
+        started_at: expect.any(String)
+      })
+    );
     // The honest BFF-terminal outcome, and nothing fabricated: no finalize,
     // no partial save, no chunk ever written.
     expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);

@@ -158,7 +158,19 @@ context:
 
 ## Review Triage Log
 
-<!-- Append-only. Populated by step-04 on every review pass. -->
+
+### Global review C1 (2026-11-22, head 87cb4aca2)
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | compose agent-service block lacks `ARANGO_GRAPH_NAME` → silent `GRAPH` default vs the BFF posture's real graph | real, PRE-EXISTING (story 1.3 block; this diff only added OTel env lines) | linked issue, `status::backlog` — adjacent deployment-config gap, not this story's contract |
+| 2 | `_mergeAgentRunMetadata` client-side read-merge-write races the finalize's wholesale metadata write | CONFIRMED, this story's code | FIXED (6b8123ec7): merge runs server-side in one AQL UPDATE over the doc's current state; suite assertions moved to the patch shape |
+| 3 | ansible env.j2/group_vars carry none of the agentic run-surface knobs — activation path dead on ansible deployments | real, PRE-EXISTING (stories 1.3/2.3/2.10 never extended the ansible layer) | linked issue, `status::backlog` |
+| 4 | `agentic-translation-leg.js` / `agent-residual-budget.js` have no production consumer; header claims one | real, PRE-EXISTING (story 2.10 landed the leg; the wiring story deferred) | linked issue, `status::backlog` |
+| 5 | `docs/rollouts/v08-rollout.md` names a real username | real, PRE-EXISTING (story 3.3 artifact; no-real-names hygiene) | linked issue, `status::backlog` |
+
+Note: the reviewer scoped the branch's full stacked chain (~60k lines), so four of five findings sit outside this story's diff; only finding 2 is 2.11 code. The disconnect-path instance of finding 2's race class was already fixed during step-03 verification; the run-start/success-path instance is the 6b8123ec7 fix.
+
 
 ## Design Notes
 

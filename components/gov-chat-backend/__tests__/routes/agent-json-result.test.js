@@ -12,6 +12,7 @@
 // (agent-frame-writer.test.js) pins the other entry of the same contract.
 
 require('../setup-env');
+const { EXECUTION_VERSIONS } = require('../fixtures/agent-run-attribution');
 
 process.env.AGENT_ENABLED = '1';
 delete process.env.AGENT_SERVICE_URL;
@@ -914,14 +915,6 @@ describe('POST /api/queries — the agentic language refusal (same map, same bod
 
 // ── story 2.11 — execution attribution on the JSON entry ────────────────────
 describe('POST /api/queries — story 2.11, the run-start handshake', () => {
-  // The FR-17 record shape the agent service emits (ids/fingerprints only).
-  const EXECUTION_VERSIONS = {
-    implementation: { version: '0.1.0' },
-    model: { id: 'test-model', source: 'discovered' },
-    prompt: { version: 'prod-1', sha256: 'abc123def456' },
-    configuration: { sha256: '0123456789ab', values: { max_steps: 6 } }
-  };
-
   it('persists the run-start block AT START, and the success metadata completes it with the outcome', async () => {
     axios.post.mockResolvedValue({
       status: 200,

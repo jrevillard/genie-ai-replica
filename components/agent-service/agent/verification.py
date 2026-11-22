@@ -341,7 +341,9 @@ class GroundingJudge:
             return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
         messages = judge_messages(answer_text, citations)
         # The judge's run-path span (story 2.11): the outcome attribute is
-        # the judge's own vocabulary, never the answer or the passages.
+        # read OFF the result after the decision ladder — the span never
+        # interleaves with the branch logic, and a new early-return path
+        # cannot forget the attribute.
         with tracing.with_span("agent.grounding_judge") as judge_span:
             try:
                 turn = await asyncio.wait_for(
@@ -349,20 +351,20 @@ class GroundingJudge:
                     timeout=self.timeout_seconds,
                 )
             except TimeoutError:
-                judge_span.set_attribute("outcome", JUDGE_OUTCOME_TIMEOUT)
                 logger.info("grounding judge timed out after %.3fs", self.timeout_seconds)
-                return {"ran": True, "outcome": JUDGE_OUTCOME_TIMEOUT, "verdict": None}
+                result = {"ran": True, "outcome": JUDGE_OUTCOME_TIMEOUT, "verdict": None}
             except BudgetExhausted as spent:  # the bound raced the budget mid-call accounting
-                judge_span.set_attribute("outcome", JUDGE_OUTCOME_BUDGET_EXHAUSTED)
                 logger.info("grounding judge refused: %s", spent)
-                return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
-            verdict = parse_judge_verdict(turn.content)
-            if verdict is None:
-                judge_span.set_attribute("outcome", JUDGE_OUTCOME_ERROR)
-                return {"ran": True, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None}
-            judge_span.set_attribute("outcome", JUDGE_OUTCOME_COMPLETED)
-            self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
-            return {"ran": True, "outcome": JUDGE_OUTCOME_COMPLETED, "verdict": verdict}
+                result = {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
+            else:
+                verdict = parse_judge_verdict(turn.content)
+                if verdict is None:
+                    result = {"ran": True, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None}
+                else:
+                    self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
+                    result = {"ran": True, "outcome": JUDGE_OUTCOME_COMPLETED, "verdict": verdict}
+            judge_span.set_attribute("outcome", result["outcome"])
+            return result
 
 
 def judge_messages(answer_text: str, citations: list[dict]) -> list[dict]:
@@ -578,47 +580,50 @@ class VerificationPipeline:
 
     async def _finalize(self, answer_text: str) -> Verdict:
         # The finalize's run-path span (story 2.11): the verification stage
-        # of the trace waterfall. Attributes are the policy name and the
-        # tri-state status — never the answer text or the citations.
+        # of the trace waterfall. The decision body is UNCHANGED
+        # (`_finalize_decision`, the pre-diff ladder); the span reads the
+        # tri-state status off the verdict it returns — the telemetry never
+        # interleaves with the branch logic.
         with tracing.with_span("agent.verify_finalize", attributes={"policy": self.policy}) as finalize_span:
-            # The insufficiency decision runs FIRST — before the judge, before
-            # the grounded claim is surfaced (FR-12: degraded beats grounded).
-            # The judge is skipped on this path: the answer it would evaluate is
-            # not the delivered answer. (An empty ledger necessarily lands here:
-            # entries can only grow through a dispatch that would have counted
-            # as a successful retrieval, so empty entries ⇒ required.)
-            insufficiency = self.insufficiency_decision()
-            if insufficiency["required"]:
-                # The delivered citations still ride the payload for diagnostics
-                # (a degraded search may have surfaced valid passages), and the
-                # mechanical validity check still classifies them — but the
-                # verdict is unverified and the loop replaces the drafted text
-                # with the standard insufficiency response.
-                validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
-                finalize_span.set_attribute("grounding_status", VERDICT_UNVERIFIED)
-                return self._verdict(
-                    VERDICT_UNVERIFIED,
-                    {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
-                    delivered=[dict(entry) for entry in validity.delivered],
-                    invalid=[dict(entry) for entry in validity.invalid],
-                    insufficient_evidence=insufficiency,
-                )
+            verdict = await self._finalize_decision(answer_text)
+            finalize_span.set_attribute("grounding_status", verdict.status)
+            return verdict
+
+    async def _finalize_decision(self, answer_text: str) -> Verdict:
+        # The insufficiency decision runs FIRST — before the judge, before
+        # the grounded claim is surfaced (FR-12: degraded beats grounded).
+        # The judge is skipped on this path: the answer it would evaluate is
+        # not the delivered answer. (An empty ledger necessarily lands here:
+        # entries can only grow through a dispatch that would have counted
+        # as a successful retrieval, so empty entries ⇒ required.)
+        insufficiency = self.insufficiency_decision()
+        if insufficiency["required"]:
+            # The delivered citations still ride the payload for diagnostics
+            # (a degraded search may have surfaced valid passages), and the
+            # mechanical validity check still classifies them — but the
+            # verdict is unverified and the loop replaces the drafted text
+            # with the standard insufficiency response.
             validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
-            delivered = [dict(entry) for entry in validity.delivered]
-            if not delivered or validity.invalid:
-                # Citable evidence existed but none of it survived the mechanical
-                # check (or entries were dropped as unauthorized): an unsupported
-                # assertion — not grounded, mechanically, before any judge runs.
-                finalize_span.set_attribute("grounding_status", VERDICT_UNGROUNDED)
-                return self._verdict(
-                    VERDICT_UNGROUNDED,
-                    {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
-                    delivered=delivered,
-                    invalid=[dict(entry) for entry in validity.invalid],
-                )
-            judge_result = await self._judge.judge(answer_text, delivered)
-            if judge_result["outcome"] != JUDGE_OUTCOME_COMPLETED:
-                finalize_span.set_attribute("grounding_status", VERDICT_UNVERIFIED)
-                return self._verdict(VERDICT_UNVERIFIED, judge_result, delivered=delivered)
-            finalize_span.set_attribute("grounding_status", judge_result["verdict"])
-            return self._verdict(judge_result["verdict"], judge_result, delivered=delivered)
+            return self._verdict(
+                VERDICT_UNVERIFIED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
+                delivered=[dict(entry) for entry in validity.delivered],
+                invalid=[dict(entry) for entry in validity.invalid],
+                insufficient_evidence=insufficiency,
+            )
+        validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
+        delivered = [dict(entry) for entry in validity.delivered]
+        if not delivered or validity.invalid:
+            # Citable evidence existed but none of it survived the mechanical
+            # check (or entries were dropped as unauthorized): an unsupported
+            # assertion — not grounded, mechanically, before any judge runs.
+            return self._verdict(
+                VERDICT_UNGROUNDED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
+                delivered=delivered,
+                invalid=[dict(entry) for entry in validity.invalid],
+            )
+        judge_result = await self._judge.judge(answer_text, delivered)
+        if judge_result["outcome"] != JUDGE_OUTCOME_COMPLETED:
+            return self._verdict(VERDICT_UNVERIFIED, judge_result, delivered=delivered)
+        return self._verdict(judge_result["verdict"], judge_result, delivered=delivered)

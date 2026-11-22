@@ -57,7 +57,7 @@ from preparation.translation import HttpxTransport, ModelEndpointCache, Translat
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
-from .events import EventEmitter, EventKind, EventSink
+from .events import EventEmitter, EventKind, EventSink, run_started_payload
 from .loop import MESSAGE_TRUNCATION, OUTCOME_CANCELLED, OUTCOME_ERROR, AgentLoop, LoopModelClient, RunResult
 from .prompt import PRODUCTION_SYSTEM_PROMPT
 from .toolset import document_toolset
@@ -71,6 +71,7 @@ from .verification import (
 from .version_record import (
     MODEL_SOURCE_UNRESOLVED,
     build_execution_version_record,
+    degraded_execution_version_record,
 )
 
 logger = logging.getLogger(__name__)
@@ -439,9 +440,7 @@ class RequestOrchestrator:
             # happens after the run began, and every stream must begin with
             # run_started — so the failure path announces it here, carrying
             # the SAME execution-version record the loop path carries.
-            emitter.emit(
-                EventKind.RUN_STARTED, {"question": request.question, "execution_versions": execution_versions}
-            )
+            emitter.emit(EventKind.RUN_STARTED, run_started_payload(request.question, execution_versions))
             emitter.emit(EventKind.RUN_ERROR, {"code": OUTCOME_ERROR, "message": message})
             return record(OUTCOME_ERROR, error=message)
         return record(result.outcome, error=result.error)
@@ -457,12 +456,11 @@ class RequestOrchestrator:
                 config=self._config, model_id=model_id, model_source=model_source, model_note=model_note
             )
         except Exception as failed:  # noqa: BLE001 — fail-soft by contract
-            return build_execution_version_record(
-                config=self._config,
-                model_id=None,
-                model_source=MODEL_SOURCE_UNRESOLVED,
-                model_note=f"record build degraded: {type(failed).__name__}: {str(failed)[:160]}",
-            )
+            # The TOTAL fallback (degraded_execution_version_record): a valid
+            # record of the usual shape minted WITHOUT touching the config —
+            # re-running the config-derived hashing that just failed would
+            # not be fail-soft.
+            return degraded_execution_version_record(f"record build degraded: {type(failed).__name__}: {failed}")
 
     async def _model_identity(self) -> tuple[str | None, str, str | None]:
         """The model axis, through the client's fail-soft resolver when it
@@ -476,7 +474,9 @@ class RequestOrchestrator:
         except asyncio.CancelledError:
             raise
         except Exception as failed:  # noqa: BLE001 — the identity is fail-soft by contract
-            return None, MODEL_SOURCE_UNRESOLVED, f"{type(failed).__name__}: {str(failed)[:200]}"
+            # The note rides raw — build_execution_version_record is the
+            # single clamp home (_NOTE_LIMIT).
+            return None, MODEL_SOURCE_UNRESOLVED, f"{type(failed).__name__}: {failed}"
 
     def _record(
         self,

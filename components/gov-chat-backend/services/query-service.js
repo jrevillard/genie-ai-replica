@@ -1124,17 +1124,23 @@ class QueryService {
    * catch — an attribution write failure must never break the answer path.
    *
    * @param {string} queryId - The `queries` doc key the entry minted.
-   * @param {string|null} runId - The seam run id.
-   * @param {Object|null} executionVersions - The FR-17 record from the
-   *   `run_started` payload (ids/fingerprints only). An older agent service
-   *   that does not send it still records run_id + started_at.
+   * @param {Object} runStart - The captured run-start block
+   *   (`captureRunStart` in agent-run-contract.js: `{run_id,
+   *   execution_versions, started_at}`, minted ONCE at the consumer so the
+   *   start write and the finalize write carry the same bytes). An older
+   *   agent service that sends no record still yields run_id + started_at.
    * @returns {Promise<void>}
    */
-  async persistAgentRunStart(queryId, runId, executionVersions) {
+  async persistAgentRunStart(queryId, runStart) {
     logger.info('QueryService.agent_run_start_persist', { queryId });
-    const patch = { run_id: runId ?? null, started_at: new Date().toISOString() };
-    if (executionVersions && typeof executionVersions === 'object' && !Array.isArray(executionVersions)) {
-      patch.execution_versions = executionVersions;
+    const block = runStart && typeof runStart === 'object' ? runStart : {};
+    const patch = { run_id: block.run_id ?? null, started_at: block.started_at || new Date().toISOString() };
+    if (
+      block.execution_versions &&
+      typeof block.execution_versions === 'object' &&
+      !Array.isArray(block.execution_versions)
+    ) {
+      patch.execution_versions = block.execution_versions;
     }
     await this._mergeAgentRunMetadata(queryId, patch);
   }

@@ -51,7 +51,7 @@ from capabilities.contract import CapabilityError
 
 from .budget import BudgetExhausted, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
-from .events import EventEmitter, EventKind
+from .events import EventEmitter, EventKind, run_started_payload
 from .registry import ToolRegistry, UnregisteredToolError
 from .taint import scan_tool_result
 from .verification import INSUFFICIENCY_RESPONSE, VerificationPipeline
@@ -177,10 +177,7 @@ class AgentLoop:
             {"role": "user", "content": question},
         ]
         tool_definitions = self.registry.definitions()
-        payload: dict = {"question": question}
-        if self.execution_versions is not None:
-            payload["execution_versions"] = self.execution_versions
-        self.emitter.emit(EventKind.RUN_STARTED, payload)
+        self.emitter.emit(EventKind.RUN_STARTED, run_started_payload(question, self.execution_versions))
         # The run-path span uses the ACTIVATING helper deliberately: the
         # per-model-call and per-tool-call children below (and the
         # verification/judge spans) are opened with ``tracing.with_span``,

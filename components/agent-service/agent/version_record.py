@@ -89,6 +89,19 @@ def configuration_fingerprint(values: dict) -> str:
     return short_sha256(canonical)
 
 
+def degraded_execution_version_record(note: str) -> dict:
+    """The total fallback: a VALID record of the usual shape, minted without
+    touching the config (no hashing, no attribute reads) — the shape a run
+    can always carry, even when the normal build path threw. The note rides
+    the model axis (clamped like any other)."""
+    return {
+        "implementation": {"version": IMPLEMENTATION_VERSION},
+        "model": {"id": None, "source": MODEL_SOURCE_UNRESOLVED, "note": str(note)[:_NOTE_LIMIT]},
+        "prompt": {"version": "unknown", "sha256": "unknown"},
+        "configuration": {"sha256": "unknown", "values": {}},
+    }
+
+
 def build_execution_version_record(
     *,
     config,

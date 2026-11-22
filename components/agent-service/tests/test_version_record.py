@@ -12,13 +12,14 @@ import re
 
 from conftest import (
     ScriptedLoopModel,
+    _governed_loop,
     fake_port,
     multihop_turns,
     orchestrator_config,
 )
 
 from agent.events import AgentEvent
-from agent.loop import AgentLoop, CancellationToken, EventEmitter, ModelTurn
+from agent.loop import ModelTurn
 from agent.orchestrator import AgentRunRequest, RequestOrchestrator
 from agent.probe import ProbeConfig, ProbeModelClient, ProbeTransientError
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
@@ -32,36 +33,6 @@ from agent.version_record import (
     short_sha256,
 )
 from noagent.lane import AdmissionLane
-
-
-def _governed_loop_with_record(model, port, execution_versions):
-    """The governed loop wiring with the record riding (the orchestrator's
-    shape): the local twin of conftest._governed_loop plus the record."""
-    from conftest import GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET, RunBudgetMonitor, run_budget
-
-    from agent.toolset import document_toolset
-    from agent.verification import VerificationPipeline
-
-    collector: list = []
-    monitor = RunBudgetMonitor(run_budget())
-    verifier = VerificationPipeline(
-        policy="verdict-marked",
-        judge_timeout_ms=5000,
-        judge_model_client=ScriptedLoopModel((ModelTurn(content='{"verdict": "grounded"}'),)),
-        monitor=monitor,
-        authorized_repos=(),
-    )
-    loop = AgentLoop(
-        model=model,
-        registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
-        monitor=monitor,
-        token=CancellationToken(),
-        emitter=EventEmitter(run_id="run-1", sink=collector.append),
-        system_prompt="the production prompt",
-        verifier=verifier,
-        execution_versions=execution_versions,
-    )
-    return loop, collector
 
 
 # ---------------------------------------------------------------------
@@ -196,7 +167,9 @@ def test_a_discovered_identity_names_the_served_model():
 def test_the_loop_emits_the_record_on_run_started_when_it_carries_one():
     record = _record_for()
     model = ScriptedLoopModel((ModelTurn(content="done"),))
-    loop, collector = _governed_loop_with_record(model, fake_port(), record)
+    loop, collector, _monitor, _verifier = _governed_loop(
+        model, fake_port(), execution_versions=record
+    )
 
     asyncio.run(loop.run("the question"))
 
@@ -208,28 +181,7 @@ def test_the_loop_emits_the_record_on_run_started_when_it_carries_one():
 
 def test_the_loop_without_a_record_keeps_the_probe_payload_shape():
     model = ScriptedLoopModel((ModelTurn(content="done"),))
-    from conftest import GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET, RunBudgetMonitor, run_budget
-
-    from agent.toolset import document_toolset
-    from agent.verification import VerificationPipeline
-
-    collector: list = []
-    verifier = VerificationPipeline(
-        policy="verdict-marked",
-        judge_timeout_ms=5000,
-        judge_model_client=ScriptedLoopModel((ModelTurn(content='{"verdict": "grounded"}'),)),
-        monitor=RunBudgetMonitor(run_budget()),
-        authorized_repos=(),
-    )
-    loop = AgentLoop(
-        model=model,
-        registry=document_toolset(fake_port(), GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
-        monitor=RunBudgetMonitor(run_budget()),
-        token=CancellationToken(),
-        emitter=EventEmitter(run_id="run-1", sink=collector.append),
-        system_prompt="the production prompt",
-        verifier=verifier,
-    )
+    loop, collector, _monitor, _verifier = _governed_loop(model, fake_port())
 
     asyncio.run(loop.run("the question"))
 

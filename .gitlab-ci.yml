@@ -4469,7 +4469,11 @@ test:rag-benchmarks:
   stage: test
   interruptible: true
   before_script:
-    - pip install --cache-dir .cache/pip pytest openpyxl
+    # pydantic + requests/httpx/numpy/kneed: the import closure of
+    # capabilities.contract — the config-B driver consumption test imports it,
+    # and `capabilities/__init__` pulls the adapters (requests, httpx) and the
+    # search capability (numpy, kneed) with the contract.
+    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests httpx numpy kneed
   cache:
     - key: test-rag-benchmarks
       paths:

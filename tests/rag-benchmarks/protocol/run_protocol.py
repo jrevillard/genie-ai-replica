@@ -123,8 +123,25 @@ def _write_manifest(out_dir: Path, name: str, manifest: dict) -> Path:
     return path
 
 
+def _validated_entries(args: argparse.Namespace) -> int | None:
+    """Validate the set where the RUN happens (not only in validate-set): the
+    composition floor is enforced before hashing/running. Returns the exit
+    code when the set is invalid, None when it passes."""
+    try:
+        load_set(args.set_path)
+    except SetValidationError as failed:
+        print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
+        for error in failed.errors:
+            print(f"  - {error}", file=sys.stderr)
+        return 1
+    return None
+
+
 def cmd_reference(args: argparse.Namespace) -> int:
     """The A-only reference run: anchor eval + reference manifest. NEVER gated."""
+    refused = _validated_entries(args)
+    if refused is not None:
+        return refused
     fingerprint = _corpus_fingerprint(args)
     configuration = _resolved_configuration(args, "A")
     configuration["model_ids"] = _model_ids(args)
@@ -159,9 +176,12 @@ def cmd_reference(args: argparse.Namespace) -> int:
 
 
 def cmd_assess(args: argparse.Namespace) -> int:
-    """The gated B/C run: gate FIRST (a refusal means no query ran), then the
-    driver, then the gated manifest chaining the lineage."""
+    """The gated B/C run: the set validated, then the gate (a refusal means no
+    query ran), then the driver, then the gated manifest chaining the lineage."""
     config = args.config
+    refused = _validated_entries(args)
+    if refused is not None:
+        return refused
     fingerprint = _corpus_fingerprint(args)
     set_sha256 = sha256_file(args.set_path)
     # THE GATE — before any query runs.
@@ -221,7 +241,9 @@ def cmd_assess(args: argparse.Namespace) -> int:
             print(f"pair check failed: {error}", file=sys.stderr)
         return 1
     path = _write_manifest(Path(args.out_dir), f"config-{config.lower()}.manifest.json", manifest)
-    n_failure = sum(1 for row in rows.values() if row.get("outcome") not in (None, "answered"))
+    # Config C rows carry `outcome`, config B rows carry `status` (ok|failure) —
+    # read whichever the row has, so a B failure never prints as 0 non-answered.
+    n_failure = sum(1 for row in rows.values() if row.get("outcome", row.get("status")) not in (None, "answered", "ok"))
     print(f"gated run: {len(rows)} case(s) recorded ({n_failure} non-answered outcome(s))")
     print(f"gated manifest: {path}")
     return 0

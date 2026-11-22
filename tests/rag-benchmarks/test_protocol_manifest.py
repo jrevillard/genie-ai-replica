@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from protocol import manifest as mf
 from protocol import pairs as pairs_mod
 
@@ -155,6 +156,17 @@ def test_pair_conditions_returns_a_copy():
     stamped = pairs_mod.pair_conditions("E01")
     stamped["held_fixed"] = []
     assert pairs_mod.PAIR_CONDITIONS["E01"]["held_fixed"] != []
+
+
+def test_pair_conditions_copy_is_deep():
+    """A DEEP copy: mutating a returned NESTED list must not touch the
+    shipped manifest (a shallow copy shares the lists)."""
+    stamped = pairs_mod.pair_conditions("E01")
+    stamped["held_fixed"].append("tampered")
+    stamped["compares"].clear()
+    shipped = pairs_mod.PAIR_CONDITIONS["E01"]
+    assert shipped["held_fixed"] == ["corpus", "evaluation_set", "execution_conditions", "model_services"]
+    assert shipped["compares"] == ["A", "B"]
 
 
 def test_check_run_against_pair_accepts_a_correctly_stamped_manifest():

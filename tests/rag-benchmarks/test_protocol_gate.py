@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from protocol import gate
 from protocol.manifest import build_manifest, manifest_digest
 

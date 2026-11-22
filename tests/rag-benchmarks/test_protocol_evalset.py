@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from protocol import evalset as es
 from protocol.run_protocol import cmd_validate_set
 
@@ -107,6 +108,21 @@ def test_schema_errors_name_the_case():
     assert "access_scenario" in joined
     assert "appears more than once" in joined
     assert "no string id" in joined
+
+
+def test_non_object_entry_produces_the_typed_error():
+    """A string entry must yield 'entry N is not an object', not AttributeError."""
+    data = {"_meta": {"provenance": "tuning"}, "entries": ["oops", {"id": "ok"}]}
+    errors = es.validate_set(data, "tuning")
+    assert "entry 0 is not an object" in "; ".join(errors)
+
+
+def test_non_numeric_minimums_value_is_a_typed_error(assessment_data):
+    assessment_data["_meta"]["minimums"] = {"answerable": "two"}
+    errors = es.validate_set(assessment_data, "assessment")
+    joined = "; ".join(errors)
+    assert "answerable" in joined
+    assert "'two'" in joined
 
 
 def test_minimums_override_can_raise_never_lower(assessment_data):

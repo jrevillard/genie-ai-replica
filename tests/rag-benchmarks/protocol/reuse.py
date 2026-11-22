@@ -91,15 +91,28 @@ def check_capture_artifact(
             }
         )
 
+    artifact_gold = (artifact.get("runs") or {}).get("gold_sha256")
     if gold_sha256 is None:
         gold_path = (artifact.get("runs") or {}).get("gold_dataset")
         if not gold_path:
             raise ValueError(
                 "gold_sha256 not given and the artifact records no gold_dataset path to hash — pass --gold explicitly"
             )
-        gold_sha256 = current_gold_sha256(gold_path)
-    artifact_gold = (artifact.get("runs") or {}).get("gold_sha256")
-    if artifact_gold != gold_sha256:
+        try:
+            gold_sha256 = current_gold_sha256(gold_path)
+        except OSError:
+            # The recorded gold is missing/unreadable on THIS machine (e.g. the
+            # artifact names a swarm-node path): a mismatch row naming the path
+            # problem — never a crash, never a silent pass.
+            mismatches.append(
+                {
+                    "field": "runs.gold_sha256",
+                    "artifact_value": artifact_gold,
+                    "current_value": None,
+                    "note": f"the recorded gold dataset is missing or unreadable: {gold_path}",
+                }
+            )
+    if gold_sha256 is not None and artifact_gold != gold_sha256:
         mismatches.append(
             {
                 "field": "runs.gold_sha256",

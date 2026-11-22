@@ -24,6 +24,8 @@ the run's config must belong to the pair.
 
 from __future__ import annotations
 
+import copy
+
 PAIR_IDS = ("E01", "E02")
 
 PAIR_CONDITIONS: dict[str, dict] = {
@@ -61,11 +63,11 @@ class PairError(ValueError):
 
 
 def pair_conditions(pair: str) -> dict:
-    """The shipped conditions of one pair (a copy — callers cannot mutate the
-    module-level manifest by reference)."""
+    """The shipped conditions of one pair (a DEEP copy — callers cannot mutate
+    the module-level manifest through it, nested lists included)."""
     if pair not in PAIR_CONDITIONS:
         raise PairError(f"unknown pair {pair!r} (known: {', '.join(PAIR_IDS)})")
-    return dict(PAIR_CONDITIONS[pair])
+    return copy.deepcopy(PAIR_CONDITIONS[pair])
 
 
 def check_run_against_pair(run_manifest: dict) -> list[str]:

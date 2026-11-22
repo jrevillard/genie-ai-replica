@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from protocol import reuse
 from protocol.run_protocol import cmd_check_reuse
 
@@ -111,6 +112,21 @@ def test_gold_sha_derived_from_the_artifacts_recorded_path(tmp_path):
     assert mismatch["current_value"] == reuse.current_gold_sha256(gold)
 
 
+def test_missing_recorded_gold_is_a_mismatch_row_not_a_crash(tmp_path):
+    """The artifact names a gold path that does not exist HERE (e.g. a
+    swarm-node path): the report names the path problem as a mismatch — no
+    FileNotFoundError, no silent pass."""
+    artifact = _artifact(runs={"gold_dataset": str(tmp_path / "nope.json"), "gold_sha256": "11" * 32})
+    report = reuse.check_capture_artifact(artifact, harness_sha=HARNESS_SHA)
+    assert report["suitable"] is False
+    (mismatch,) = report["mismatches"]
+    assert mismatch["field"] == "runs.gold_sha256"
+    assert mismatch["artifact_value"] == "11" * 32
+    assert mismatch["current_value"] is None
+    assert "missing or unreadable" in mismatch["note"]
+    assert "nope.json" in mismatch["note"]
+
+
 # --- CLI: check-reuse -------------------------------------------------------
 
 
@@ -163,3 +179,16 @@ def test_cli_check_reuse_without_explicit_digests_uses_the_live_harness_sha(tmp_
     rc = cmd_check_reuse(_cli_args(path, gold=str(gold)))
     assert rc == 0
     assert "SUITABLE" in capsys.readouterr().out
+
+
+def test_cli_check_reuse_survives_a_missing_recorded_gold(tmp_path, capsys):
+    """check-reuse with NO --gold against an artifact whose recorded gold path
+    does not exist: the mismatch report is printed and the CLI exits nonzero —
+    no crash."""
+    artifact = _artifact(runs={"gold_dataset": str(tmp_path / "nope.json"), "gold_sha256": "11" * 32})
+    path = _write_artifact(tmp_path, artifact)
+    rc = cmd_check_reuse(_cli_args(path))
+    assert rc == 1
+    out = capsys.readouterr()
+    assert "missing or unreadable" in out.out
+    assert "REFUSED" in out.err

@@ -30,6 +30,7 @@ STDLIB-ONLY: no new runtime dependency (the eval toolchain's constraint).
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import ssl
 import sys
@@ -166,6 +167,33 @@ def _b64(payload: bytes) -> str:
     return base64.b64encode(payload).decode("ascii")
 
 
+# The byte bound for ONE shipped cases payload. The payload rides the argv of
+# a single ``sh -c`` argument, and the kernel caps one argument at
+# MAX_ARG_STRLEN (128 KiB) with E2BIG — a realistic set (hundreds of cases
+# with queries, reference answers, expectations) blows past it. 64 KiB keeps
+# every ship comfortably under the cap.
+CASES_PAYLOAD_BOUND_BYTES = 64 * 1024
+
+
+def _split_by_bytes(cases: list[dict], bound: int, max_count: int):
+    """Split pending cases into payload-BYTE-bounded sub-batches (``bound``),
+    with ``max_count`` as the case-count ceiling. A single case larger than
+    the bound still ships alone — refusing it would hide the case; the exec
+    stays under the cap only because one case's payload is bounded by the
+    entry schema, not by this splitter."""
+    chunk: list[dict] = []
+    size = 0
+    for case in cases:
+        case_size = len(json.dumps(case, ensure_ascii=False).encode("utf-8")) + 1
+        if chunk and (size + case_size > bound or len(chunk) >= max_count):
+            yield chunk
+            chunk, size = [], 0
+        chunk.append(case)
+        size += case_size
+    if chunk:
+        yield chunk
+
+
 def run_config_b(
     set_path: str | Path,
     out_dir: str | Path,
@@ -173,13 +201,17 @@ def run_config_b(
     container: str = DEFAULT_AGENT_CONTAINER,
     transport=None,
     batch: int = DEFAULT_B_BATCH,
+    payload_bound: int = CASES_PAYLOAD_BOUND_BYTES,
 ) -> dict:
     """Run the assessment set through config B inside the agent-service container.
 
-    The flow per batch of pending cases: ship the driver script + the case
-    payload into the container (base64 through ``printf | base64 -d`` — no
-    stdin, no docker cp), run ``config_b_driver.py`` there, read the rows
-    file back (base64). Rows merge into the stable rows file atomically;
+    The flow: the driver script ships ONCE per invocation; each sub-batch of
+    pending cases ships its payload in its OWN exec call (base64 through
+    ``printf | base64 -d`` — no stdin, no docker cp) with the driver run in
+    the same call, and the rows file read back (base64). Sub-batches are
+    bounded by payload BYTES (``payload_bound``) with ``batch`` as the
+    case-count ceiling, so no single argv approaches the kernel's
+    MAX_ARG_STRLEN cap. Rows merge into the stable rows file atomically;
     resume sends ONLY the unfinished case ids (a case with a recorded row —
     including a failure row — is finished).
 
@@ -198,19 +230,22 @@ def run_config_b(
 
     script_path = Path(__file__).resolve().parent / "config_b_driver.py"
     script_b64 = _b64(script_path.read_bytes())
+    transport.exec_cmd(
+        container,
+        f"mkdir -p {CONTAINER_TMP} && printf %s '{script_b64}' | base64 -d > {CONTAINER_TMP}/config_b_driver.py",
+        timeout=120,
+    )
 
     resolved = prior.get("resolved")
     batch = max(1, int(batch))
-    for start in range(0, len(pending), batch):
-        chunk = pending[start : start + batch]
+    payload_bound = max(1, int(payload_bound))
+    for chunk in _split_by_bytes(pending, payload_bound, batch):
         cases_b64 = _b64(json.dumps({"cases": chunk}, ensure_ascii=False).encode("utf-8"))
-        run_cmd = f"python3 {CONTAINER_TMP}/config_b_driver.py {CONTAINER_TMP}/cases.json {CONTAINER_TMP}/rows.json"
         transport.exec_cmd(
             container,
-            f"mkdir -p {CONTAINER_TMP}"
-            f" && printf %s '{script_b64}' | base64 -d > {CONTAINER_TMP}/config_b_driver.py"
-            f" && printf %s '{cases_b64}' | base64 -d > {CONTAINER_TMP}/cases.json"
-            f" && {run_cmd}",
+            f"printf %s '{cases_b64}' | base64 -d > {CONTAINER_TMP}/cases.json"
+            f" && python3 {CONTAINER_TMP}/config_b_driver.py"
+            f" {CONTAINER_TMP}/cases.json {CONTAINER_TMP}/rows.json",
             timeout=3600,
         )
         rows_b64 = transport.exec_cmd(container, f"base64 -w0 {CONTAINER_TMP}/rows.json", timeout=60).strip()
@@ -342,10 +377,14 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
 
 
 def _outcome_for_http(status: int, body: dict) -> str:
+    """The typed refusal classification. A 503 is configuration_error ONLY
+    when the body names one of the seam's own error codes — a bare 503 (a
+    proxy or an infra wall answering HTML) is NOT the seam's typed error and
+    records as http_error."""
     error = str(body.get("error") or "")
     if status == 429 or error == "admission_refused":
         return OUTCOME_ADMISSION_REFUSED
-    if status == 503 or error in CONFIGURATION_ERROR_CODES:
+    if error in CONFIGURATION_ERROR_CODES:
         return OUTCOME_CONFIGURATION_ERROR
     if status == 422:
         return OUTCOME_INVALID_REQUEST
@@ -379,45 +418,44 @@ def run_one_case_c(
     timeout_s = deadline_ms / 1000.0 + timeout_margin_s
     started = time.monotonic()
     row: dict[str, Any] = {"case_id": case["id"], "status": "ok"}
-    stream = transport.open_run(url, c_payload_for_case(case, deadline_ms), timeout_s)
     answer_parts: list[str] = []
     run_id: str | None = None
     usage_record: dict | None = None
     outcome: str | None = None
     error_text: str | None = None
     events_seen = 0
+    stream = None
     try:
+        # The open is INSIDE the try: a venue-down transport failure (URLError,
+        # socket timeout) is a typed stream_error row for THIS case — the run
+        # continues, it never dies untyped.
+        stream = transport.open_run(url, c_payload_for_case(case, deadline_ms), timeout_s)
         if stream.status >= 400:
             body = stream.error_body or {}
             outcome = _outcome_for_http(stream.status, body)
             error_text = body.get("error") or f"the seam answered {stream.status}"
             row["error"] = body
         else:
-            try:
-                for event in stream.events():
-                    events_seen += 1
-                    kind = event.get("kind")
-                    run_id = event.get("run_id") or run_id
-                    if kind == "text_message_content":
-                        text = (event.get("payload") or {}).get("text")
-                        if isinstance(text, str):
-                            answer_parts.append(text)
-                    elif kind == "run_finished":
-                        outcome = OUTCOME_ANSWERED
-                    elif kind == "run_error":
-                        payload = event.get("payload") or {}
-                        outcome = OUTCOME_ERROR
-                        error_text = str(payload.get("code") or "run_error")
-                        if payload.get("message"):
-                            error_text = f"{error_text}: {payload['message']}"
-                    elif "usage_record" in event:
-                        usage_record = event["usage_record"]
-                    if is_cancellation and events_seen >= cancel_after_events:
-                        break
-            except (json.JSONDecodeError, OSError, ValueError) as failed:
-                if outcome is None:
-                    outcome = OUTCOME_STREAM_ERROR
-                    error_text = _error_preview(failed)
+            for event in stream.events():
+                events_seen += 1
+                kind = event.get("kind")
+                run_id = event.get("run_id") or run_id
+                if kind == "text_message_content":
+                    text = (event.get("payload") or {}).get("text")
+                    if isinstance(text, str):
+                        answer_parts.append(text)
+                elif kind == "run_finished":
+                    outcome = OUTCOME_ANSWERED
+                elif kind == "run_error":
+                    payload = event.get("payload") or {}
+                    outcome = OUTCOME_ERROR
+                    error_text = str(payload.get("code") or "run_error")
+                    if payload.get("message"):
+                        error_text = f"{error_text}: {payload['message']}"
+                elif "usage_record" in event:
+                    usage_record = event["usage_record"]
+                if is_cancellation and events_seen >= cancel_after_events:
+                    break
             if is_cancellation and events_seen >= cancel_after_events and outcome is None:
                 outcome = OUTCOME_CANCELLED
             if outcome is None:
@@ -425,8 +463,20 @@ def run_one_case_c(
                 # cancellation point: a stream death — recorded honestly.
                 outcome = OUTCOME_STREAM_ERROR
                 error_text = error_text or "the stream closed without a terminal event"
+    except (
+        json.JSONDecodeError,
+        http.client.HTTPException,
+        OSError,
+        ValueError,
+    ) as failed:
+        # Transport death mid-open or mid-stream (IncompleteRead subclasses
+        # HTTPException, not OSError — it is caught explicitly).
+        if outcome is None:
+            outcome = OUTCOME_STREAM_ERROR
+            error_text = _error_preview(failed)
     finally:
-        stream.close()
+        if stream is not None:
+            stream.close()
     row["outcome"] = outcome
     row["run_id"] = run_id
     row["events_seen"] = events_seen

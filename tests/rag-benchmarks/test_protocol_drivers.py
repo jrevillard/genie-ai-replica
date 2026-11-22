@@ -117,9 +117,13 @@ class FakeBTransport:
             payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b", "env": {"AGENT_X": "1"}}})
             return base64.b64encode(payload.encode("utf-8")).decode("ascii")
         quoted = re.findall(r"printf %s '([^']+)'", cmd)
-        self.shipped_driver = base64.b64decode(quoted[0])
-        cases = json.loads(base64.b64decode(quoted[1]).decode("utf-8"))["cases"]
-        self.cases_seen.append([c["id"] for c in cases])
+        if "python3" in cmd:
+            # The cases ship + the driver runs in this call.
+            cases = json.loads(base64.b64decode(quoted[0]).decode("utf-8"))["cases"]
+            self.cases_seen.append([c["id"] for c in cases])
+        else:
+            # The driver script ships alone in this call.
+            self.shipped_driver = base64.b64decode(quoted[0])
         return ""
 
 
@@ -246,7 +250,34 @@ def test_config_b_batches_container_invocations(tmp_path):
     transport = FakeBTransport()
     drivers.run_config_b(set_path, tmp_path / "out", transport=transport, batch=2)
     assert transport.cases_seen == [["c1", "c2"], ["c3"]]
-    assert sum(1 for cmd in transport.cmds if cmd.startswith("mkdir")) == 2
+    # The driver script ships ONCE; each sub-batch ships its own cases exec.
+    assert sum(1 for cmd in transport.cmds if cmd.startswith("mkdir")) == 1
+    assert sum(1 for cmd in transport.cmds if "python3" in cmd) == 2
+
+
+def test_config_b_splits_the_payload_by_bytes_before_the_argv_cap(tmp_path):
+    """One exec argv carries one sh -c argument — the kernel caps it at
+    MAX_ARG_STRLEN (128 KiB), so payloads are byte-bounded: fat cases split
+    even below the case-count ceiling."""
+    fat = ("c1", "c2", "c3")
+    set_path = tmp_path / "fat-set.json"
+    entries = [
+        {
+            "id": i,
+            "query": "x" * 200,
+            "language": "en",
+            "case_class": "answerable",
+            "access_scenario": "public",
+            "provenance": "assessment",
+        }
+        for i in fat
+    ]
+    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    transport = FakeBTransport()
+    result = drivers.run_config_b(set_path, tmp_path / "out", transport=transport, payload_bound=300)
+    # Each case's payload exceeds the bound alone → one case per exec.
+    assert transport.cases_seen == [["c1"], ["c2"], ["c3"]]
+    assert sorted(result["rows"]) == ["c1", "c2", "c3"]
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +390,56 @@ def test_config_c_stream_death_mid_run_is_recorded(tmp_path):
     assert "reset" in row["error_text"]
 
 
+def test_config_c_incomplete_read_is_a_typed_stream_error(tmp_path):
+    """``http.client.IncompleteRead`` subclasses HTTPException, NOT OSError —
+    it must still land in the typed stream_error row."""
+    import http.client
+
+    class IncompleteStream(FakeRunStream):
+        def events(self):
+            yield self._events[0]
+            raise http.client.IncompleteRead(b"partial chunk")
+
+    stream = IncompleteStream(events=_answered_events())
+    row = drivers.run_one_case_c({"id": "x", "query": "q"}, base_url="u", transport=FakeCTransport(stream))
+    assert row["outcome"] == "stream_error"
+    assert "answer" not in row
+    assert "IncompleteRead" in row["error_text"]
+    assert stream.closed is True
+
+
+class VenueDownTransport:
+    """open_run raises — the venue is unreachable (URLError/socket timeout)."""
+
+    def __init__(self):
+        self.open_attempts = 0
+
+    def open_run(self, url, payload, timeout, verify_tls=False):
+        self.open_attempts += 1
+        raise OSError("connection refused (venue down)")
+
+
+def test_config_c_venue_down_is_a_typed_row_and_the_run_continues(tmp_path):
+    """The open sits INSIDE the per-case try: a venue-down transport failure
+    records a typed stream_error row for that case; the assessment run
+    continues with the remaining cases — it never dies untyped."""
+    set_path = _b_set(tmp_path, ("c1", "c2"))
+    transport = VenueDownTransport()
+    result = drivers.run_config_c(set_path, tmp_path / "out", base_url="http://agent:8000", transport=transport)
+    assert transport.open_attempts == 2
+    assert result["rows"]["c1"]["outcome"] == "stream_error"
+    assert result["rows"]["c2"]["outcome"] == "stream_error"
+    assert "venue down" in result["rows"]["c1"]["error_text"]
+
+
+def test_config_c_bare_503_without_the_typed_code_is_http_error(tmp_path):
+    """A proxy/infra 503 whose body is not the seam's typed error is NOT a
+    configuration_error — it records as http_error."""
+    stream = FakeRunStream(status=503, error_body={"raw": "<html>Service Unavailable</html>"})
+    row = drivers.run_one_case_c({"id": "x", "query": "q"}, base_url="u", transport=FakeCTransport(stream))
+    assert row["outcome"] == "http_error"
+
+
 def test_config_c_run_resumes_by_case_id(tmp_path):
     set_path = _b_set(tmp_path, ("c1", "c2"))
     done = tmp_path / "out" / "config-c.rows.json"
@@ -421,11 +502,40 @@ def _assess_args(tmp_path, config, **kw):
     return type("Args", (), args)
 
 
+def _composed_set(tmp_path) -> Path:
+    """A composition-VALID set at the path _assess_args names — the CLI
+    commands enforce the composition floor before hashing/running, so the
+    assess/reference wiring tests need the committed sample's shape."""
+    sample = Path(__file__).resolve().parent / "protocol" / "sets" / "assessment.sample.json"
+    path = tmp_path / "set.json"
+    path.write_text(sample.read_text(encoding="utf-8"), encoding="utf-8")
+    return path
+
+
+def test_assess_refuses_an_under_composed_set_before_the_gate(tmp_path, monkeypatch, capsys):
+    """The composition floor is enforced where runs happen: an under-composed
+    set refuses with the typed errors BEFORE the gate is even consulted."""
+    _b_set(tmp_path, ("c1",))  # one answerable case — missing every other class
+    (tmp_path / "out").mkdir()
+    import protocol.run_protocol as rp
+
+    monkeypatch.setattr(
+        rp,
+        "check_gated_run",
+        lambda **kw: (_ for _ in ()).throw(AssertionError("the gate must not run on an invalid set")),
+    )
+    rc = cmd_assess(_assess_args(tmp_path, "C"))
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "cancellation" in err or "separation" in err
+
+
 def test_gated_run_without_reference_refuses_before_any_query(tmp_path, monkeypatch, capsys):
     """The matrix's 'refused before any query runs' row: the driver is never
     invoked, and the refusal names the missing predecessor. (The set file must
-    exist — its digest is part of the lineage the gate matches.)"""
-    _b_set(tmp_path, ("c1",))
+    exist AND be composition-valid — its digest is part of the lineage the
+    gate matches.)"""
+    _composed_set(tmp_path)
     (tmp_path / "out").mkdir()
     invoked = []
     import protocol.run_protocol as rp
@@ -438,7 +548,7 @@ def test_gated_run_without_reference_refuses_before_any_query(tmp_path, monkeypa
 
 
 def test_gated_run_with_complete_lineage_runs_and_chains_the_manifest(tmp_path, monkeypatch):
-    set_path = _b_set(tmp_path, ("c1",))
+    set_path = _composed_set(tmp_path)
     out_dir = tmp_path / "out"
     out_dir.mkdir()
     reference, thresholds = _write_reference_and_thresholds(out_dir, set_path)
@@ -469,7 +579,7 @@ def test_gated_run_with_complete_lineage_runs_and_chains_the_manifest(tmp_path, 
 
 
 def test_gated_config_b_maps_to_pair_e01(tmp_path, monkeypatch):
-    set_path = _b_set(tmp_path, ("c1",))
+    set_path = _composed_set(tmp_path)
     out_dir = tmp_path / "out"
     out_dir.mkdir()
     _write_reference_and_thresholds(out_dir, set_path)
@@ -504,7 +614,7 @@ def test_gated_config_b_maps_to_pair_e01(tmp_path, monkeypatch):
 def test_reference_run_is_never_gated(tmp_path, monkeypatch, capsys):
     """The A-only reference command runs without any gate check and writes a
     reference manifest."""
-    set_path = _b_set(tmp_path, ("c1",))
+    set_path = _composed_set(tmp_path)
     gate_calls = []
 
     def refusing_gate(**kw):

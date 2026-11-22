@@ -132,10 +132,10 @@ def case_is_non_latin(case: dict) -> bool:
 
 def _validate_case(index: int, case: dict, errors: list[str]) -> None:
     """One case's schema: the fields every case carries, whatever the set kind."""
-    label = case.get("id") or f"<entry {index}>"
     if not isinstance(case, dict):
         errors.append(f"entry {index} is not an object")
         return
+    label = case.get("id") or f"<entry {index}>"
     if not case.get("id") or not isinstance(case.get("id"), str):
         errors.append(f"entry {index} carries no string id")
     if not str(case.get("query", "")).strip():
@@ -173,12 +173,17 @@ def _validate_composition(
     class_minimums = dict(DEFAULT_COMPOSITION_MINIMUMS)
     access_minimums = dict(DEFAULT_ACCESS_MINIMUMS)
     for key, value in (minimums_override or {}).items():
+        try:
+            numeric = max(1, int(value))
+        except (TypeError, ValueError):
+            errors.append(f"_meta.minimums: {key!r} must be a number (got {value!r})")
+            continue
         if key in class_minimums:
-            class_minimums[key] = max(1, int(value))
+            class_minimums[key] = numeric
         elif key in access_minimums:
-            access_minimums[key] = max(1, int(value))
+            access_minimums[key] = numeric
         elif key == "non_latin":
-            class_minimums["non_latin"] = max(1, int(value))
+            class_minimums["non_latin"] = numeric
         else:
             errors.append(f"_meta.minimums: unknown composition key {key!r}")
 

@@ -1983,6 +1983,15 @@ services:
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
+    # Tool-calling pin (REC-6, issue #2052): granite4 is the vLLM 0.29
+    # documented parser for the shipped default model (granite-4.1-8b); the
+    # flags are inert for requests that carry no tools. A deployment
+    # overriding VLLM_LLM_MODEL_ID outside Granite 4.x (env.strixhalo's
+    # granite-3.1-2b does) must set VLLM_TOOL_CALL_PARSER to its model's
+    # documented parser (e.g. granite for Granite 3.x) — the default would
+    # misparse that model's tool output silently. Some model families also
+    # need a --chat-template for tool output to parse at all (see the GPU
+    # template note); setting the parser alone does not complete tool calling.
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
@@ -1991,6 +2000,8 @@ services:
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager
+      --enable-auto-tool-choice
+      --tool-call-parser ${VLLM_TOOL_CALL_PARSER:-granite4}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}

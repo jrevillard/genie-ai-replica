@@ -51,6 +51,12 @@
 | OPEA-free structural gate | `config:validate` (the `tests/config-validator` tree-walking gate) | no `comps` import, no OPEA build-time download in any agent-path package (proven red once on a scratch branch, story 1.4) |
 | BFF + frontend jest suites | `test:*` lanes | the V05 §7 coverage map stays green |
 
+## Check 5 — the per-stage FR-21 review check (explicit, every stage gate)
+
+| Evidence | Artifact | State |
+|---|---|---|
+| The OPEA-free structural gate is green on the stage's tree, and the audit scope (the agent-path packages of `scripts/ci/agent-path-packages.json`) is named in the stage's rollout record | `tests/config-validator/__tests__/opea-free-gate.test.js` (job `config:validate`) + the stage gate section of `docs/rollouts/<stage>-rollout.md` | **FR-21 check: no new OPEA coupling was added that makes the deferred OPEA exit harder.** A stage gate that cannot show this check green does not exit. Recurs for every delivered stage (FR-21); the canonical home of the recurring check is `docs/rollouts/README.md` (story 3.3) |
+
 ## Exit condition
 
-S3 exits when checks 1–3 are fully green with their evidence recorded (V02 ✓, V04 ✓, V05 ✓, suites green, CI lanes green) AND the V05 §9 work items each carry a disposition. Check 4 is context, not a blocker.
+S3 exits when checks 1–3 are fully green with their evidence recorded (V02 ✓, V04 ✓, V05 ✓, suites green, CI lanes green) AND the V05 §9 work items each carry a disposition AND the FR-21 review check (check 5) is green. Check 4 is context, not a blocker.

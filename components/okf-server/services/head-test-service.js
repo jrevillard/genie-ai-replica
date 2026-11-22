@@ -319,13 +319,20 @@ function qualifyProbes(scored /* [{graph, repo_id, top_scores}] */, knobs = rout
  * competitors (they signal selectivity without being searchable).
  * graph names come from ingested_graph_name (only ingested repos
  * have one).
+ *
+ * #2061 phase 2 (E-2): `opts.repoIds` NARROWS the universe to a carrier —
+ * the repositories an Evaluation Context resolves to. Without it the Lab
+ * races every head in the deployment, which is the honest description of
+ * what it does and the wrong answer to "does routing work for THIS group?".
+ * A narrowed universe is a SUBSET: the carrier never widens the race.
  */
-async function loadSiblings(db, underTestId) {
-  const cursor = await db.query(
+async function loadSiblings(db, underTestId, opts = {}) {
+  const scoped = Array.isArray(opts.repoIds) && opts.repoIds.length ? opts.repoIds : null;
+  const aql =
     'FOR r IN okf_repositories FILTER r._key != @me FILTER r.head != null ' +
-      'SORT r.name RETURN KEEP(r, ["_key", "name", "lifecycle_state", "ingested_at", "ingested_graph_name", "version"])',
-    { me: underTestId }
-  );
+    (scoped ? 'FILTER r._key IN @ids ' : '') +
+    'SORT r.name RETURN KEEP(r, ["_key", "name", "lifecycle_state", "ingested_at", "ingested_graph_name", "version"])';
+  const cursor = await db.query(aql, scoped ? { me: underTestId, ids: scoped } : { me: underTestId });
   const rows = await cursor.all();
   return rows.map((r) => ({
     repo_id: r._key,
@@ -428,7 +435,13 @@ async function routingTest(repoId, payload = {}, opts = {}) {
 
     // 3. Head leg (LEG A) — under test + every sibling with a head.
     const db = await dbService.getConnection();
-    const siblings = prefetched.siblings || (await loadSiblings(db, repoId));
+    // #2061 phase 2 (E-2): a carrier NARROWS the universe to the repositories
+    // the evaluated principal traverses. The run's own carrier (a resolved
+    // Evaluation Context) arrives here; without one the Lab races every head
+    // in the deployment, which is what it has always done and what the docs
+    // now say plainly.
+    const carrier = opts.carrier || null;
+    const siblings = prefetched.siblings || (await loadSiblings(db, repoId, { repoIds: carrier && carrier.repo_ids }));
 
     const headRows = [];
     const utHead = scoreHead(underTest.head, emb.vector, formula);
@@ -596,6 +609,19 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         probe: probeOutcome ? probeOutcome.per_repo[repoId] || null : null
       },
       siblings: sibDetail,
+      // #2061 phase 2 (E-2): the CARRIER this verdict was measured over —
+      // the Evaluation Context's resolved set, or null when the Lab ran
+      // against the whole deployment (which is what it always did, and what
+      // the docs now say plainly).
+      carrier: carrier
+        ? {
+            context_id: carrier.context ? carrier.context.id : null,
+            context_version: carrier.context ? carrier.context.version : null,
+            context_hash: carrier.context ? carrier.context.hash : null,
+            repo_count: carrier.repo_ids ? carrier.repo_ids.length : 0,
+            graph_count: carrier.graph_names ? carrier.graph_names.length : 0
+          }
+        : null,
       verdict: {
         head_routing_winner: headWinner ? headWinner.repo_id : null,
         // Gated claim (1-8a): the top scorer must ALSO clear its forbidden

@@ -1620,7 +1620,15 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // the sibling list per call, and Run-All executes it once per suite row.
     // Both objects are read-only inside routingTest, so the 4-way worker
     // pool shares them safely. Single-test endpoints pass no prefetch.
-    const prefetched = { underTest: repo, siblings: await headTestService.loadSiblings(db, repoId) };
+    // #2061 phase 2 (E-2): a carrier NARROWS the universe to the repositories
+    // the evaluated principal traverses. The prefetched sibling list is the
+    // race's universe, so it is the list that must be narrowed — narrowing it
+    // later, after the prefetch, would race against the whole deployment.
+    const carrier = opts.carrier || null;
+    const prefetched = {
+      underTest: repo,
+      siblings: await headTestService.loadSiblings(db, repoId, { repoIds: carrier && carrier.repo_ids })
+    };
     // #2061 phase 1b: the EFFECTIVE routing thresholds this run is scored
     // under. Resolved per run through the ONE shared loader and stored on the
     // record, so a stored run can always say WHICH thresholds produced it —
@@ -1809,6 +1817,21 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       payload: {
         suite_created_at: suite.created_at,
         sibling_names: suite.payload.sibling_names || [],
+        // #2061 phase 2 (E-2): the CARRIER this run was measured over — the
+        // Evaluation Context's identity and its resolved set. A run scored
+        // against a carrier says WHICH carrier; a run scored against the
+        // deployment says so by carrying null. The resolved set travels with
+        // the record, so a stored run can be re-read without the context
+        // still resolving the same way.
+        carrier: carrier
+          ? {
+              context_id: carrier.context ? carrier.context.id : null,
+              context_version: carrier.context ? carrier.context.version : null,
+              context_hash: carrier.context ? carrier.context.hash : null,
+              repo_ids: carrier.repo_ids || [],
+              graph_names: carrier.graph_names || []
+            }
+          : null,
         // The effective thresholds this run was scored under (#2061 phase 1b).
         knobs,
         // ... and whether those thresholds make the verdict stand for

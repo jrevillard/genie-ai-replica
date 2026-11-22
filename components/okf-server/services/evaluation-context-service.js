@@ -317,6 +317,30 @@ async function refreshContext(id, opts = {}) {
   return next;
 }
 
+/**
+ * The CARRIER a request asks to be evaluated against: a context's STORED
+ * snapshot, never a fresh resolution. The snapshot is the contract — a run
+ * recorded against version N stays comparable with the run recorded against
+ * version N, and CI resolves from snapshots with no Keycloak at all.
+ *
+ * @param {string} contextId
+ * @returns {Promise<{context: {id, version, hash, name}, repo_ids: string[], graph_names: string[]}>}
+ */
+async function carrierOf(contextId) {
+  const doc = await getContext(contextId);
+  const resolved = doc.resolved || {};
+  return {
+    context: {
+      id: doc._key,
+      name: doc.name,
+      version: doc.version,
+      hash: resolved.hash || null
+    },
+    repo_ids: (resolved.repos || []).map((r) => r.repo_id),
+    graph_names: resolved.graph_names || []
+  };
+}
+
 module.exports = {
   COLLECTION,
   EvalContextError,
@@ -326,5 +350,6 @@ module.exports = {
   createContext,
   getContext,
   listContexts,
-  refreshContext
+  refreshContext,
+  carrierOf
 };

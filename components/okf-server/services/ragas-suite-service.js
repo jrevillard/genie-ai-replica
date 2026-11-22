@@ -612,6 +612,49 @@ function decodePyRepr(content, quote) {
 // hence the generous 5-minute ceiling.
 const SERVE_TIMEOUT_MS = 300000;
 
+/**
+ * #2061 phase 2 (E-4): WHICH repository answered — the histogram over the
+ * per-source provenance chatqna emits. Keyed by the repository id when it
+ * emitted one, by the graph name otherwise, and by '(unattributed)' for a
+ * source that carried neither: an unattributed source is COUNTED, never
+ * invisible.
+ */
+function sourceRepoHistogram(attribution) {
+  const out = {};
+  for (const a of attribution || []) {
+    const key = a.repo_id || a.graph_name || '(unattributed)';
+    out[key] = (out[key] || 0) + 1;
+  }
+  return out;
+}
+
+/**
+ * The share of a row's ATTRIBUTABLE sources that came from outside the
+ * carrier. Null when there is no carrier (nothing to be wrong against) and
+ * null when no source carried a graph name (nothing to judge) — never a
+ * zero that would read as "nothing was wrong".
+ */
+function wrongSourceRate(attribution, carrierGraphNames) {
+  if (!Array.isArray(carrierGraphNames) || !carrierGraphNames.length) return null;
+  const carrier = new Set(carrierGraphNames);
+  const attributable = (attribution || []).filter((a) => a && a.graph_name);
+  if (!attributable.length) return null;
+  const wrong = attributable.filter((a) => !carrier.has(a.graph_name)).length;
+  return wrong / attributable.length;
+}
+
+/**
+ * The graphs the served run is measured over: the CARRIER's when it names
+ * any (the group the benchmark asks about), else the suite's own
+ * repositories. A carrier never WIDENS the set — it is the authority's
+ * resolved set, which is already a subset of what serves.
+ */
+function serveGraphNames(carrier, suiteGraphNames) {
+  const carrierGraphs = carrier && Array.isArray(carrier.graph_names) ? carrier.graph_names : null;
+  if (carrierGraphs && carrierGraphs.length) return carrierGraphs;
+  return Array.isArray(suiteGraphNames) ? suiteGraphNames : [];
+}
+
 async function serveAnswer(query, graphs) {
   // chatqna 401s unauthenticated calls before body parse — attach the
   // okf-server service-account bearer (same token the doc-repo calls use).
@@ -760,6 +803,18 @@ async function serveAnswer(query, graphs) {
       // not graph chunk keys. The ladder's delivered tier is decided by text
       // containment for serve rows; these ids are recorded for forensics.
       context_keys: docs.map((d) => String(d.document_id || '')),
+      // #2061 phase 2 (E-4): the per-source PROVENANCE chatqna already
+      // emits (graph_name / repo_id / bundle_version, genieai_chatqna.py
+      // :3728-3742). It used to stop at the text and the document id, so a
+      // benchmark could not say WHICH repository answered — which is the
+      // whole question a scoped benchmark asks. The fields are carried
+      // through unchanged; nothing is inferred here.
+      source_attribution: docs.map((d) => ({
+        graph_name: d.graph_name || null,
+        repo_id: d.repo_id || null,
+        bundle_version: d.bundle_version !== undefined ? d.bundle_version : null,
+        score: typeof d.score === 'number' ? d.score : null
+      })),
       source_documents: docs
     };
   } finally {
@@ -2151,7 +2206,15 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     await ensureCollection(db);
     const suite = await loadSuite(db, repoId, suiteKey);
     const repoIds = suite.repo_ids && suite.repo_ids.length ? suite.repo_ids : [repoId];
-    const graphNames = await graphNamesFor(db, repoIds);
+    // #2061 phase 2 (E-4): the CARRIER the served run is measured over. With
+    // a context, the served retrieval set is the CONTEXT's resolved set — the
+    // group the benchmark asks about — not the suite's own repositories. The
+    // array rides the EXISTING `context.authorized_graph_names` field, so
+    // chatqna and the retriever are UNCHANGED: the served pipeline is the
+    // production one, measured over the carrier the context names.
+    const carrier = opts.carrier || null;
+    const carrierGraphNames = carrier && carrier.graph_names ? carrier.graph_names : null;
+    const graphNames = serveGraphNames(carrier, await graphNamesFor(db, repoIds));
     if (!graphNames.length) {
       const err = new Error('no ingested graphs for the selected repositories — publish and wait for the drain first');
       err.code = 'NO_GRAPH';
@@ -2226,6 +2289,14 @@ async function runSuite(repoId, suiteKey, opts = {}) {
               retrieval_confidence: served.retrieval_confidence,
               is_grounded: served.is_grounded,
               related_documents: served.related_documents,
+              // #2061 phase 2 (E-4): the per-source provenance, and the two
+              // metrics it makes possible — WHICH repository answered (the
+              // histogram) and how often an answer was grounded OUTSIDE the
+              // carrier (the wrong-source rate). Without a carrier there is
+              // nothing to be wrong against, so the rate is null, not zero.
+              source_attribution: served.source_attribution || [],
+              source_repo_histogram: sourceRepoHistogram(served.source_attribution || []),
+              wrong_source_rate: wrongSourceRate(served.source_attribution || [], carrierGraphNames),
               error: null
             };
           } else {
@@ -2579,6 +2650,17 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     });
     const judgeCoverage = evaluation.coverage && typeof evaluation.coverage === 'object' ? evaluation.coverage : null;
     const summary = summarizeRun(suite, results, opts.metrics);
+    // #2061 phase 2 (E-4): the run-level attribution roll-up — WHICH
+    // repository answered across the whole suite, and how often an answer was
+    // grounded OUTSIDE the carrier. Per-row the numbers live on the row; the
+    // run-level figures are what a panel reads.
+    const allAttribution = results.flatMap((r) => (r && r.source_attribution) || []);
+    const sourceAttribution = {
+      repo_histogram: sourceRepoHistogram(allAttribution),
+      wrong_source_rate: wrongSourceRate(allAttribution, carrierGraphNames),
+      sources: allAttribution.length,
+      attributable: allAttribution.filter((a) => a && a.graph_name).length
+    };
     // The banner's coverage figure: how many rows the BEST-covered metric
     // measured. It is computed over the IN-SCOPE population — the sidecar's
     // own coverage counts every row it was handed, including the
@@ -2615,6 +2697,21 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         })),
         results,
         summary,
+        // #2061 phase 2 (E-4): the CARRIER the served run was measured over
+        // (the Evaluation Context's identity and its resolved set), and the
+        // attribution the run produced. Without a carrier the run was
+        // measured over the suite's own repositories and the rate is null —
+        // there is nothing to be wrong against.
+        carrier: carrier
+          ? {
+              context_id: carrier.context ? carrier.context.id : null,
+              context_version: carrier.context ? carrier.context.version : null,
+              context_hash: carrier.context ? carrier.context.hash : null,
+              repo_ids: carrier.repo_ids || [],
+              graph_names: carrier.graph_names || []
+            }
+          : null,
+        source_attribution: sourceAttribution,
         // How much of the suite the judge actually measured — a partial
         // average is not a benchmark result (sidecar review F2). The
         // denominator is the IN-SCOPE row count, so an out-of-scope control
@@ -4897,6 +4994,12 @@ module.exports = {
   // answered (the serve mode recorded a model that never answered —
   // David, 2026-10-25).
   answerFidelity,
+  // Exported for the unit test that pins the CARRIER rules: which graphs a
+  // served run is measured over, and the attribution the run's sources carry
+  // (#2061 E-4).
+  serveGraphNames,
+  sourceRepoHistogram,
+  wrongSourceRate,
   // Exported for the unit test that pins the COMPUTED second-judge
   // comparison (the advisor used to assert a second judge's verdict from
   // a hardcoded string).

@@ -91,6 +91,9 @@ activity(started) chunk activity(completed) chunk agent_verdict metadata done
 - **The endpoint gate constrains the unit spec.** `tests/config-validator/__tests__/e2e-stream-route.test.js` forbids the endpoint string in any spelling outside the defining module, so the route-pattern spec pins the DERIVATION (`STREAM_ROUTE` = `**${STREAM_PATH}**`), never the literal — the first validator run caught the literal, the fix is the relational assertion.
 - **Mutation proofs run** (stream-route.spec.js): dropping the verdict frame turned 2 specs red (restored: 7 green); the degradation spec's coverage of the new frames rides on the helper unit spec — same `sseBody` bytes, one module, no runtime drift possible.
 - **Venue evidence**: shared k3s stack (forge), edge `https://genieai-forge.local:4443` through `scripts/laptop-edge-relay.py 10.42.0.240 4443`, fixtures provisioned from the cluster secret. `chat-conversation.spec.js` (16) + `sse-contract.spec.js` (2): 18 passed; helper unit spec 7 passed; config-validator 674 passed, 0 failed. ESLint + Prettier clean on every changed file.
+- **Simplify pass (4 agents: reuse / simplification / efficiency / altitude)**: the ungrounded-warning DOM probe (probe-div token read + warnBg/token/sources) moved from two verbatim spec copies into `ungroundedWarningOf(page)` in `helpers/chatbot.js` — second caller justified the helper; assertions stay per-spec. The destructuring form of the verdict strip was skipped: the suite lint (`no-unused-vars`, no `ignoreRestSiblings`) rejects the unused named keys — spread-and-delete stays, with the reason in a comment. Verdict fixture literals share one name (`GROUNDED_VERDICT`) across the spec files. Efficiency and altitude had no further findings. Unit spec 9/9 and venue 18/18 re-run after the pass.
+- **Test-audit**: all 11 new/changed tests pass the authoring gate — each pins a distinct branch of the single-sourced builder or an AC at its owner boundary (rendered app); no junk patterns; zero production seams (the MR touches no production code); nothing to delete. `git diff --check` clean.
+- **CI**: pipeline on 086aafbcc (merge ref) — success. Correction + simplify commits push after the reviews; monitor armed on the new pipeline.
 
 ## Spec Change Log
 
@@ -99,6 +102,9 @@ activity(started) chunk activity(completed) chunk agent_verdict metadata done
 ## Review Triage Log
 
 <!-- Append-only. Populated by step-04 on every review pass. -->
+
+- Global review 1 (xhigh, diff 086aafbcc vs the umbrella): no important findings; frame contract, degradation mechanism, legacy byte-identity, donor parity, gates and pins verified against shipped code. Two nit findings (helper fidelity): verdict payload could override the frame discriminator/version (patched: strip before spread, mirroring agent-frame-writer.js, unit-pinned) and activity entries beyond the chunk count were silently dropped (patched: length mismatch throws, unit-pinned — the guard caught a real 2-entries/1-chunk misalignment in the degradation spec, fixed to two chunks).
+- FIX review (fresh context, correction diff 086aafbcc..HEAD): CLEAN — per-commit evidence for both corrections; length guard proven two-directional, no legacy caller affected, renames complete.
 
 ## Verification
 

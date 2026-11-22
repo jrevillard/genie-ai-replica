@@ -40,7 +40,7 @@ not a rehearsal failure, and never silently turned into a requirement (FR-26).
 
 - The shared stack's own workloads, env and Flux baseline are NEVER touched.
   The rehearsal runs DEDICATED workloads: `v08-rehearsal-backend`,
-  `v08-rehearsal-agent`, `v08-rehearsal-agent` Service — two Deployments +
+  `v08-rehearsal-agent`, `v08-rehearsal-agent-hl` Service — two Deployments +
   one Service in the existing namespace, nothing else.
 - The rehearsal backend pod carries `genieai.io/component=backend` (the
   component NetworkPolicy that admits chatqna ingress selects sources by that
@@ -105,7 +105,7 @@ both. The rehearsal tag is a build marker, not a release: it carries no
 changelog entry (the tag pipeline's `config:changelog` gate failing on it is
 expected and harmless once the pipeline is canceled). It is NOT deleted
 afterwards: the remote's pre-receive hook declines tag deletion for the
-protected patterns, so the tag stays (story 3.3's record names the two tags
+protected patterns, so the tag stays (story 3.3's record notes the two tags
 that remain) — harmless, with the registry-side `pending-*` tags aging out
 under the registry cleanup policy.
 
@@ -113,8 +113,10 @@ under the registry cleanup policy.
 
 ```bash
 mkdir -p /tmp/v08-rehearsal
-# Shared stack healthy, headroom within budget — ABORT on either check:
-kubectl top nodes --no-headers | awk '{ if ($3+0 > 70 || $5+0 > 70) { print "ABORT: node headroom exhausted (" $0 ")"; exit 1 } }' || exit 1
+# Shared stack healthy, headroom within budget — ABORT on either check
+# (a failed `kubectl top nodes` — metrics-server down — aborts too):
+NODE_TOP=$(kubectl top nodes --no-headers) || { echo "ABORT: kubectl top nodes failed"; exit 1; }
+printf '%s\n' "$NODE_TOP" | awk '{ if ($3+0 > 70 || $5+0 > 70) { print "ABORT: node headroom exhausted (" $0 ")"; exit 1 } }' || exit 1
 UNHEALTHY=$(kubectl -n genieai get pods --no-headers | grep -cv -E "Completed|Running" || true)
 [ "$UNHEALTHY" = "0" ] || { echo "ABORT: $UNHEALTHY non-Running/Completed pods in the stack"; exit 1; }
 # Secrets present:
@@ -304,7 +306,7 @@ actually FAIL on a deployed pair:
    in the backend log). Check the BFF pod's log for that warning; if it
    fired, the configured value never reached the wire — ABORT and fix the
    deployment's knob.
-2. **The ceiling binds inside the deadline.** If
+2. **The deadline binds inside the intended ceiling.** If
    `AGENT_RUN_MAX_WALL_CLOCK_SECONDS > deadline_ms/1000`, the deployment's
    intended ceiling is dead — every run is bounded only by the deadline
    arithmetic, not the configured ceiling. That is a configuration defect:

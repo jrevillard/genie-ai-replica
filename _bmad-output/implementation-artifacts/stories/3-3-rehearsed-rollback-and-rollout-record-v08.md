@@ -127,7 +127,7 @@ context:
 - R1-7 (admin-logs archival commit cc4238fcc landed on the feature branch, violating POST-PRD-ARCHIVAL's "archive on main") — real, nit, pre-existing history — defer; operator/orchestrator remedy (cherry-pick to main), surfaced in the worker report.
 
 - R2 (global round 2, /code-review medium on the MR !1023 diff — the correctly-targeted round): 8 findings on the runbook/record, all verified real against the files.
-- R2-1 (runbook:467 cleanup deletes svc/v08-rehearsal-agent but Phase 2 creates v08-rehearsal-agent-hl) — verified real (grep: 174 vs 467) — important — patch (delete the -hl name).
+- R2-1 (runbook:467 cleanup deletes svc/v08-rehearsal-agent but Phase 2 creates v08-rehearsal-agent-hl) — verified real (grep: 174 vs 467) — important — patch (the -hl name).
 - R2-2 (runbook:473 cleanup DELETEs users/$UID — read-only shell builtin, never assigned; user survives, the length check then fails every re-run) — verified real — important — patch (REHEARSAL_USER_ID assignment + use).
 - R2-3 (runbook:252 kubectl rollout status with TWO resources errors — kubectl takes exactly one) — verified real — important — patch (two sequential invocations).
 - R2-4 (runbook:80 tag shape v08-rehearsal-* is the protected v* class AND contradicts the record: the working tag was rehearsal-v08-2b7f72aef, deletion declined by the pre-receive hook, promise "deleted after superseded" false) — verified real (record §2 + cleanup section) — important — patch (recorded shape rehearsal-v08-*, deletion promise replaced by the recorded hook reality).

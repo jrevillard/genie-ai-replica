@@ -12,7 +12,7 @@ leaves the in-flight call running.
 import asyncio
 
 import pytest
-from conftest import cancel_when_started, hang_until_cancelled
+from conftest import cancel_when_started, hang_until_cancelled, slow_unwind_until_released
 
 from agent.cancellation import CancellationToken, run_cancellable
 
@@ -118,18 +118,8 @@ def test_the_caller_being_cancelled_waits_for_the_works_unwinding_to_finish():
     recorder: dict = {"release_unwind": asyncio.Event()}
     token = CancellationToken()
 
-    async def work():
-        recorder["started"] = True
-        try:
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            recorder["unwinding"] = True
-            await recorder["release_unwind"].wait()
-            recorder["unwound"] = True
-            raise
-
     async def scenario():
-        task = asyncio.get_running_loop().create_task(run_cancellable(token, work()))
+        task = asyncio.get_running_loop().create_task(run_cancellable(token, slow_unwind_until_released(recorder)))
         while "started" not in recorder:
             await asyncio.sleep(0)
         task.cancel()

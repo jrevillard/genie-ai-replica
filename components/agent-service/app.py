@@ -28,12 +28,13 @@ import json
 import logging
 import os
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 
 import fastapi
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent.cancellation import cancel_and_join
 from agent.events import AgentEvent, EventKind
 from agent.orchestrator import (
     AdmissionRefused,
@@ -232,18 +233,11 @@ async def _run_stream(orchestrator: RequestOrchestrator, request: AgentRunReques
         record = await run_task
         yield _usage_frame(record)
     finally:
-        if not run_task.done():
-            # The cancellation reaches the in-flight model call through the
-            # loop's cancellation hooks; the admission claim covers that
-            # whole teardown, so the slot is released only once the
-            # cancelled task has finished unwinding — freeing it earlier
-            # would admit the successor run while the dying run's work is
-            # still in flight. A CancelledError here is the cancelled run
-            # answering its own cancellation, never a failure of the
-            # stream's exit path.
-            run_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await run_task
+        # The admission claim covers the run's whole teardown: the slot is
+        # released only once the cancelled run has finished unwinding —
+        # freeing it earlier would admit the successor run while the dying
+        # run's work is still in flight.
+        await cancel_and_join(run_task)
         # The getter future: cancelled here too, or a client disconnect
         # mid-stream (GeneratorExit at the yield while a re-armed getter
         # still awaits the queue) leaves the pending task on the loop

@@ -57,6 +57,14 @@ def _frames(response) -> list[dict]:
     return frames
 
 
+async def drain(gen, sink=None):
+    """Consume a run's stream to its end, discarding the frames or appending
+    their parsed ``kind`` values to ``sink``."""
+    async for frame in gen:
+        if sink is not None:
+            sink.append(json.loads(frame[len("data: ") :]).get("kind"))
+
+
 # ---------------------------------------------------------------------
 # Admission: 429 before any stream byte; 503 for unconfigured knobs
 # ---------------------------------------------------------------------
@@ -344,15 +352,11 @@ def test_a_disconnected_client_cancels_the_run_and_releases_the_slot(tmp_path, m
     )
     seen_frames: list[str] = []
 
-    async def drain(gen):
-        async for frame in gen:
-            seen_frames.append(json.loads(frame[len("data: ") :]).get("kind"))
-
     async def scenario():
         admit_ctx = orchestrator.admit()
         await admit_ctx.__aenter__()
         gen = app_module._run_stream(orchestrator, request, admit_ctx)
-        task = asyncio.ensure_future(drain(gen))
+        task = asyncio.ensure_future(drain(gen, seen_frames))
         while "started" not in recorder:
             await asyncio.sleep(0.01)
         task.cancel()
@@ -374,7 +378,7 @@ def test_a_disconnected_client_cancels_the_run_and_releases_the_slot(tmp_path, m
     assert seen_frames == ["run_started"]  # no terminal event for a cancelled run
 
 
-def test_the_slot_stays_held_while_the_cancelled_run_unwinds(tmp_path, monkeypatch):
+def test_the_slot_stays_held_while_the_cancelled_run_unwinds(tmp_path):
     """The admission claim wraps the cancelled run's WHOLE teardown: while
     the in-flight model call is still aborting (the disconnect's
     cancellation is unwinding), every lane slot is still held and a
@@ -385,10 +389,6 @@ def test_the_slot_stays_held_while_the_cancelled_run_unwinds(tmp_path, monkeypat
     request = app_module.AgentRunRequest(
         question="q", deadline_ms=5000, context=CallerContext.model_validate(CONTEXT), bearer=None
     )
-
-    async def drain(gen):
-        async for _frame in gen:
-            pass
 
     async def scenario():
         admit_ctx = orchestrator.admit()

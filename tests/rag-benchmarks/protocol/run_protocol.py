@@ -27,6 +27,11 @@ reuse check REFUSE, they never warn)::
         The suitability report over a capture artifact; nonzero exit on any
         mismatch. There is no override.
 
+    verdicts --rows <rows.json> --set <set_path> --out <report.json> [--config A|B|C]
+        Re-judge stored rows into the findings report (story 4.2) without
+        re-running: the security verdict layer over the rows a previous run
+        wrote.
+
 Exit codes: 0 success; 1 a typed refusal / validation failure; 2 usage.
 """
 
@@ -40,6 +45,7 @@ from pathlib import Path
 if __package__ in (None, ""):  # executed as a script: make the package importable
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from protocol import verdicts as verdicts_mod  # noqa: E402
 from protocol.drivers import (  # noqa: E402
     DriverError,
     discover_model_ids,
@@ -48,6 +54,7 @@ from protocol.drivers import (  # noqa: E402
     run_config_c,
 )
 from protocol.evalset import SetValidationError, load_set  # noqa: E402
+from protocol.findings import build_findings_report, report_digest  # noqa: E402
 from protocol.gate import GateRefusal, check_gated_run  # noqa: E402
 from protocol.manifest import (  # noqa: E402
     ManifestError,
@@ -128,20 +135,41 @@ def _write_manifest(out_dir: Path, name: str, manifest: dict) -> Path:
     return path
 
 
-def _validated_entries(args: argparse.Namespace) -> int | None:
+def _validated_entries(args: argparse.Namespace) -> list | None:
     """Validate the set where the RUN happens (not only in validate-set), as
     an ASSESSMENT set: the composition floor AND the provenance separation are
     enforced before hashing/running — a tuning set never produces reference or
-    gated evidence. Returns the exit code when the set is invalid, None when
-    it passes."""
+    gated evidence. Returns the entries when the set is valid, None otherwise
+    (the refusal is printed; the caller exits 1)."""
     try:
-        load_set(args.set_path, kind="assessment")
+        _, entries = load_set(args.set_path, kind="assessment")
     except SetValidationError as failed:
         print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
         for error in failed.errors:
             print(f"  - {error}", file=sys.stderr)
-        return 1
-    return None
+        return None
+    return entries
+
+
+def _write_findings_report(out_dir: Path, config: str, entries: list, rows: dict) -> tuple[Path, dict]:
+    """The findings report (story 4.2): rows → verdicts → report, written into
+    the run out-dir beside the rows and the manifest. No silent pass."""
+    report = build_findings_report(config=config, verdicts_result=verdicts_mod.build_verdicts(entries, rows))
+    path = _write_manifest(Path(out_dir), "findings.report.json", report)
+    return path, report
+
+
+def _print_findings_summary(report: dict) -> None:
+    counts = report.get("counts") or {}
+    verdict_counts = counts.get("verdicts") or {}
+    total_findings = sum((counts.get("findings") or {}).values())
+    digest = report_digest(report)[:12]
+    n_pass = verdict_counts.get("pass", 0)
+    print(
+        f"findings report: {n_pass} pass / {verdict_counts.get('fail', 0)} fail / "
+        f"{verdict_counts.get('skipped', 0)} skipped / {verdict_counts.get('error', 0)} error verdict(s), "
+        f"{total_findings} finding(s); digest {digest}"
+    )
 
 
 def _corpus_record(args: argparse.Namespace, fingerprint: str) -> dict:
@@ -166,9 +194,9 @@ def _check_pair_or_fail(manifest: dict) -> int | None:
 
 def cmd_reference(args: argparse.Namespace) -> int:
     """The A-only reference run: anchor eval + reference manifest. NEVER gated."""
-    refused = _validated_entries(args)
-    if refused is not None:
-        return refused
+    entries = _validated_entries(args)
+    if entries is None:
+        return 1
     fingerprint = _corpus_fingerprint(args)
     configuration = _resolved_configuration(args, "A")
     configuration["model_ids"] = _model_ids(args)
@@ -191,18 +219,22 @@ def cmd_reference(args: argparse.Namespace) -> int:
     if pair_failed is not None:
         return pair_failed
     path = _write_manifest(Path(args.out_dir), "reference.manifest.json", manifest)
+    report_path, report = _write_findings_report(Path(args.out_dir), "A", entries, result.get("rows") or {})
+    _print_findings_summary(report)
     print(f"reference run: report {result['report_path']}")
     print(f"reference manifest: {path}")
+    print(f"findings report: {report_path}")
     return 0
 
 
 def cmd_assess(args: argparse.Namespace) -> int:
     """The gated B/C run: the set validated, then the gate (a refusal means no
-    query ran), then the driver, then the gated manifest chaining the lineage."""
+    query ran), then the driver, then the gated manifest chaining the lineage,
+    then the findings report over the rows."""
     config = args.config
-    refused = _validated_entries(args)
-    if refused is not None:
-        return refused
+    entries = _validated_entries(args)
+    if entries is None:
+        return 1
     fingerprint = _corpus_fingerprint(args)
     set_sha256 = sha256_file(args.set_path)
     # THE GATE — before any query runs.
@@ -256,6 +288,9 @@ def cmd_assess(args: argparse.Namespace) -> int:
     n_failure = sum(1 for row in rows.values() if row.get("outcome", row.get("status")) not in (None, "answered", "ok"))
     print(f"gated run: {len(rows)} case(s) recorded ({n_failure} non-answered outcome(s))")
     print(f"gated manifest: {path}")
+    report_path, report = _write_findings_report(Path(args.out_dir), config, entries, rows)
+    _print_findings_summary(report)
+    print(f"findings report: {report_path}")
     return 0
 
 
@@ -281,6 +316,28 @@ def cmd_check_reuse(args: argparse.Namespace) -> int:
         print(f"REFUSED: {args.artifact} is not current evidence (no override; re-capture)", file=sys.stderr)
         return 1
     print(f"SUITABLE: {args.artifact} matches the current harness/gold/stack identity")
+    return 0
+
+
+def cmd_verdicts(args: argparse.Namespace) -> int:
+    """Re-judge stored rows without re-running: the rows file a previous run
+    wrote + the set it ran → the findings report, written to --out."""
+    try:
+        _, entries = load_set(args.set_path, kind="assessment")
+    except SetValidationError as failed:
+        print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
+        for error in failed.errors:
+            print(f"  - {error}", file=sys.stderr)
+        return 1
+    rows_data = json.loads(Path(args.rows_path).read_text(encoding="utf-8"))
+    rows = rows_data.get("cases") if isinstance(rows_data, dict) else None
+    if not isinstance(rows, dict):
+        print(f"REFUSED: {args.rows_path} carries no cases mapping", file=sys.stderr)
+        return 1
+    report = build_findings_report(config=args.config, verdicts_result=verdicts_mod.build_verdicts(entries, rows))
+    path = _write_manifest(Path(args.out).parent, Path(args.out).name, report)
+    _print_findings_summary(report)
+    print(f"findings report: {path}")
     return 0
 
 
@@ -336,6 +393,13 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--harness-sha", default=None, help="an explicit harness identity (else computed live)")
     c.add_argument("--stack", default=None, help="the expected stack identity")
     c.set_defaults(func=cmd_check_reuse)
+
+    v = sub.add_parser("verdicts", help="re-judge stored rows into a findings report (no re-run)")
+    v.add_argument("--rows", dest="rows_path", required=True, help="a config-{a,b,c}.rows.json rows file")
+    v.add_argument("--set", dest="set_path", required=True)
+    v.add_argument("--out", required=True, help="the findings-report JSON path to write")
+    v.add_argument("--config", choices=("A", "B", "C"), default="B", help="the run's configuration letter")
+    v.set_defaults(func=cmd_verdicts)
     return p
 
 

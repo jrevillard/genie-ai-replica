@@ -35,6 +35,130 @@ def test_assessment_sample_validates():
     classes = {c["case_class"] for c in entries}
     assert classes == set(es.COMPOSITION_CLASSES)
     assert {c["access_scenario"] for c in entries} == set(es.ACCESS_SCENARIOS)
+    scenarios = {c["security_scenario"] for c in entries if c.get("security_scenario")}
+    assert scenarios == set(es.SECURITY_SCENARIOS)
+
+
+# --- Security vocabulary + minimums (story 4.2) ------------------------------
+
+
+def test_unknown_security_scenario_value_is_a_typed_error(assessment_data):
+    assessment_data["entries"][0]["security_scenario"] = "not-a-scenario"
+    errors = es.validate_set(assessment_data, "assessment")
+    assert any("security_scenario" in e and "not-a-scenario" in e for e in errors)
+
+
+def test_tuning_set_is_security_composition_free(assessment_data):
+    """A tuning set is composition-free — a single security case validates."""
+    data = json.loads(TUNING_SAMPLE.read_text(encoding="utf-8"))
+    data["entries"][0]["security_scenario"] = "injection_document"
+    assert es.validate_set(data, "tuning") == []
+
+
+def test_security_scenario_case_with_context_object_validates():
+    data = {
+        "_meta": {"provenance": "tuning"},
+        "entries": [
+            {
+                "id": "x",
+                "query": "q",
+                "language": "en",
+                "access_scenario": "public",
+                "case_class": "answerable",
+                "provenance": "tuning",
+                "security_scenario": "restricted_repo",
+                "context": {"user_id": "u", "authorized_source_ids": ["d-1"]},
+            }
+        ],
+    }
+    assert es.validate_set(data, "tuning") == []
+
+
+# --- Multi-turn shape (story 4.2) --------------------------------------------
+
+
+def test_multiturn_case_validates_and_query_is_then_optional():
+    data = {
+        "_meta": {"provenance": "tuning"},
+        "entries": [
+            {
+                "id": "mt",
+                "case_class": "answerable",
+                "provenance": "tuning",
+                "language": "en",
+                "access_scenario": "public",
+                "turns": [
+                    {"query": "turn one", "context": {"user_id": "u"}},
+                    {"query": "turn two"},
+                ],
+            }
+        ],
+    }
+    assert es.validate_set(data, "tuning") == []
+
+
+def test_multiturn_shape_errors_are_typed():
+    data = {
+        "_meta": {"provenance": "tuning"},
+        "entries": [
+            {"id": "not-a-list", "case_class": "answerable", "provenance": "tuning", "language": "en", "turns": "nope"},
+            {
+                "id": "empty",
+                "case_class": "answerable",
+                "provenance": "tuning",
+                "language": "en",
+                "turns": [],
+            },
+            {
+                "id": "no-query",
+                "case_class": "answerable",
+                "provenance": "tuning",
+                "language": "en",
+                "turns": [{"context": {}}, "not an object", {"query": "  "}],
+            },
+            {
+                "id": "bad-context",
+                "case_class": "answerable",
+                "provenance": "tuning",
+                "language": "en",
+                "turns": [{"query": "q", "context": ["not", "an", "object"]}],
+            },
+        ],
+    }
+    joined = "; ".join(es.validate_set(data, "tuning"))
+    assert "turns, when present, must be a non-empty list" in joined
+    assert "turn 1 must carry query text" in joined
+    assert "turn 2 is not an object" in joined
+    assert "turn 1 context, when present, must be an object" in joined
+    assert not any("query must carry text" in e for e in es.validate_set(data, "tuning"))
+
+
+def test_single_turn_case_still_requires_query():
+    data = {
+        "_meta": {"provenance": "tuning"},
+        "entries": [{"id": "x", "case_class": "answerable", "provenance": "tuning"}],
+    }
+    assert any("query must carry text" in e for e in es.validate_set(data, "tuning"))
+
+
+def test_turn_entries_expands_with_indexed_ids_and_drops_the_block():
+    case = {
+        "id": "p1",
+        "query": "unused",
+        "security_scenario": "permission_change",
+        "turns": [
+            {"query": "t1", "context": {"authorized_source_ids": ["a"]}},
+            {"query": "t2", "context": {"authorized_source_ids": ["b"]}},
+        ],
+    }
+    entries = es.turn_entries(case)
+    assert [e["id"] for e in entries] == ["p1#t1", "p1#t2"]
+    assert [e["turn"] for e in entries] == [1, 2]
+    assert [e["query"] for e in entries] == ["t1", "t2"]
+    assert entries[0]["context"] == {"authorized_source_ids": ["a"]}
+    assert entries[0]["security_scenario"] == "permission_change"  # case fields carry over
+    assert all("turns" not in e for e in entries)
+    assert es.turn_entries({"id": "s1", "query": "q"}) == [{"id": "s1", "query": "q"}]
 
 
 def test_tuning_sample_validates_and_separates():
@@ -43,7 +167,7 @@ def test_tuning_sample_validates_and_separates():
 
 
 def test_missing_class_fails_naming_class_and_minimum(assessment_data):
-    del assessment_data["entries"][-1]  # the cancellation case
+    assessment_data["entries"] = [c for c in assessment_data["entries"] if c["case_class"] != "cancellation"]
     with pytest.raises(es.SetValidationError) as failed:
         es.validate_set_or_raise(assessment_data, "assessment")
     joined = "; ".join(failed.value.errors)
@@ -126,9 +250,9 @@ def test_non_numeric_minimums_value_is_a_typed_error(assessment_data):
 
 
 def test_minimums_override_can_raise_never_lower(assessment_data):
-    assessment_data["_meta"]["minimums"] = {"answerable": 5}
+    assessment_data["_meta"]["minimums"] = {"answerable": 11}
     errors = es.validate_set(assessment_data, "assessment")
-    assert any("answerable" in e and "5 required" in e for e in errors)
+    assert any("answerable" in e and "11 required" in e for e in errors)
     assessment_data["_meta"]["minimums"] = {"answerable": 0}
     errors = es.validate_set(assessment_data, "assessment")
     assert not any("answerable" in e and "0 required" in e for e in errors)
@@ -175,7 +299,7 @@ def test_cli_validate_set_ok_on_sample(capsys):
 
 def test_cli_validate_set_names_errors_and_exits_nonzero(tmp_path, capsys):
     data = json.loads(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"))
-    del data["entries"][-1]
+    data["entries"] = [c for c in data["entries"] if c["case_class"] != "cancellation"]
     broken = tmp_path / "broken.json"
     broken.write_text(json.dumps(data), encoding="utf-8")
     rc = cmd_validate_set(type("Args", (), {"set_path": str(broken), "kind": "assessment"}))

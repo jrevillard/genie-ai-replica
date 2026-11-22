@@ -23,6 +23,9 @@ I/O (positional argv, matching the eval toolchain's convention)::
     python3 config_b_driver.py cases.json rows.json
 
 ``cases.json`` — ``{"cases": [{"id", "query", "language", "context": {...}}, ...]}``
+(a multi-turn case arrives pre-expanded by the harness into per-turn entries
+with turn-indexed ids ``<case_id>#t<n>`` and a ``turn`` field — story 4.2;
+the driver runs each entry as the single case it is)
 ``rows.json``  — ``{"cases": {case_id: row}, "resolved": {...}}`` written
 ATOMICALLY (tmp + ``os.replace``) after EVERY case, so a mid-run kill leaves
 the completed rows on disk and the harness's resume re-runs only the
@@ -94,8 +97,9 @@ def build_history(case: dict) -> list[dict]:
 def row_from_result(case: dict, result, wall_ms: float) -> dict:
     """Consume the ``NoAgentResult`` unchanged — the row carries its fields
     verbatim (the contract this driver exists to keep: zero noagent behavior
-    duplicated in the harness)."""
-    return {
+    duplicated in the harness). A per-turn entry (story 4.2) carries its
+    1-based ``turn`` index onto the row."""
+    row = {
         "case_id": case["id"],
         "status": "ok",
         "answer": result.answer,
@@ -105,17 +109,24 @@ def row_from_result(case: dict, result, wall_ms: float) -> dict:
         "metadata": dict(result.metadata),
         "wall_ms": round(wall_ms, 1),
     }
+    if case.get("turn") is not None:
+        row["turn"] = case["turn"]
+    return row
 
 
 def row_from_failure(case: dict, failed: BaseException, wall_ms: float) -> dict:
-    """The typed per-case failure row (run continues — the set is not lost)."""
-    return {
+    """The typed per-case failure row (run continues — the set is not lost).
+    A per-turn entry carries its turn index like an ok row."""
+    row = {
         "case_id": case["id"],
         "status": "failure",
         "error_type": type(failed).__name__,
         "error": str(failed)[:_ERROR_PREVIEW_CHARS],
         "wall_ms": round(wall_ms, 1),
     }
+    if case.get("turn") is not None:
+        row["turn"] = case["turn"]
+    return row
 
 
 async def run_case(case: dict, pipeline) -> dict:

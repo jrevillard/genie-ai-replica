@@ -689,7 +689,7 @@ def test_reference_writes_the_findings_report_with_the_a_side_difference(tmp_pat
     set_path.write_text(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
     out_dir = tmp_path / "out"
 
-    def fake_run_config_a(set_path_arg, out_dir_arg, seed=None, runner=None, env_extra=None):
+    def fake_run_config_a(set_path_arg, out_dir_arg, seed=None, runner=None, env_extra=None, entries=None):
         rows = drivers.security_skip_rows(load_set(set_path_arg, "assessment")[1])
         return {
             "report": {"aggregate": {"recall": 0.9}, "n_missed_traces": 0},

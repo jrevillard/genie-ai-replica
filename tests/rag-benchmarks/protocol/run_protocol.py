@@ -207,7 +207,7 @@ def cmd_reference(args: argparse.Namespace) -> int:
     fingerprint = _corpus_fingerprint(args)
     configuration = _resolved_configuration(args, "A")
     configuration["model_ids"] = _model_ids(args)
-    result = run_config_a(args.set_path, args.out_dir, seed=args.seed)
+    result = run_config_a(args.set_path, args.out_dir, seed=args.seed, entries=entries)
     manifest = build_manifest(
         kind="reference",
         config="A",
@@ -331,12 +331,8 @@ def cmd_check_reuse(args: argparse.Namespace) -> int:
 def cmd_verdicts(args: argparse.Namespace) -> int:
     """Re-judge stored rows without re-running: the rows file a previous run
     wrote + the set it ran → the findings report, written to --out."""
-    try:
-        _, entries = load_set(args.set_path, kind="assessment")
-    except SetValidationError as failed:
-        print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
-        for error in failed.errors:
-            print(f"  - {error}", file=sys.stderr)
+    entries = _validated_entries(args)
+    if entries is None:
         return 1
     try:
         rows_data = json.loads(Path(args.rows_path).read_text(encoding="utf-8"))

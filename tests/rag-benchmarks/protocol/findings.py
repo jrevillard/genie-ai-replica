@@ -30,6 +30,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from . import verdicts as verdicts_mod
+from .drivers import A_SECURITY_SKIP_REASON
 from .manifest import sha256_json
 
 FINDINGS_REPORT_VERSION = "1.0.0"
@@ -45,15 +46,13 @@ HONEST_EVIDENCE_STATEMENT = (
 
 # The intentional-difference record a config-A reference run over a
 # security-bearing set carries (the pair manifest's vocabulary: the difference
-# is recorded, never absorbed silently).
+# is recorded, never absorbed silently). The reason DERIVES from the drivers'
+# skip-row reason — the rows and the difference record state the same skip
+# from one source of the prose, never paraphrases that can drift.
 A_SECURITY_SKIP_DIFFERENCE = {
     "pair": "E01",
     "difference": "security_scenarios_skipped_on_A",
-    "reason": (
-        "config A is the legacy fixed RAG: no authorization executor and no steerable"
-        " agent — the security scenarios execute on the pair's B leg; the A reference"
-        " records them as skipped rows"
-    ),
+    "reason": f"{A_SECURITY_SKIP_REASON} (the findings report records them as skipped verdicts)",
 }
 
 

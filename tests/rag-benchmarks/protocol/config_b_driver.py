@@ -102,6 +102,14 @@ def build_history(case: dict) -> list[dict]:
     return [{"role": "user", "content": case["query"]}]
 
 
+def _turn_field(entry: dict) -> dict:
+    """The row's turn stamp (or nothing) — this driver ships standalone into
+    the container, so the helper lives here rather than in the package."""
+    if entry.get("turn") is not None:
+        return {"turn": entry["turn"]}
+    return {}
+
+
 def row_from_result(case: dict, result, wall_ms: float) -> dict:
     """Consume the ``NoAgentResult`` unchanged — the row carries its fields
     verbatim (the contract this driver exists to keep: zero noagent behavior
@@ -117,8 +125,7 @@ def row_from_result(case: dict, result, wall_ms: float) -> dict:
         "metadata": dict(result.metadata),
         "wall_ms": round(wall_ms, 1),
     }
-    if case.get("turn") is not None:
-        row["turn"] = case["turn"]
+    row.update(_turn_field(case))
     return row
 
 
@@ -132,8 +139,7 @@ def row_from_failure(case: dict, failed: BaseException, wall_ms: float) -> dict:
         "error": str(failed)[:_ERROR_PREVIEW_CHARS],
         "wall_ms": round(wall_ms, 1),
     }
-    if case.get("turn") is not None:
-        row["turn"] = case["turn"]
+    row.update(_turn_field(case))
     return row
 
 

@@ -842,7 +842,7 @@ def test_reference_run_is_never_gated(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         rp,
         "run_config_a",
-        lambda set_path_arg, out_dir, seed=None: {
+        lambda set_path_arg, out_dir, seed=None, runner=None, env_extra=None, entries=None: {
             "report": {"aggregate": {"recall": 0.9}, "n_missed_traces": 0},
             "report_path": str(Path(out_dir) / "config-a.report.json"),
         },

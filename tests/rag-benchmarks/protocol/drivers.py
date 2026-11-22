@@ -46,6 +46,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from harness import write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
 
+from .evalset import turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
+
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
 CONTAINER_TMP = "/tmp/genie-protocol"
@@ -91,21 +93,26 @@ A_SECURITY_SKIP_REASON = (
 )
 
 
+def _turn_field(entry: dict) -> dict:
+    """The row's turn stamp (or nothing) — ONE helper so the turn-index rows
+    never drift from the turn-indexed ids."""
+    if entry.get("turn") is not None:
+        return {"turn": entry["turn"]}
+    return {}
+
+
 def security_skip_rows(entries: list[dict]) -> dict:
     """The skipped rows a config-A reference run records for a set's security
     cases — one per turn entry, keyed by the same turn-indexed ids the
     verdict layer judges (a multi-turn case skips per turn). Recorded, never
     silent and never findings."""
-    from .evalset import turn_entries
-
     rows = {}
     for case in entries:
         if not isinstance(case, dict) or not case.get("security_scenario"):
             continue
         for entry in turn_entries(case):
             row = {"case_id": entry["id"], "outcome": "skipped", "reason": A_SECURITY_SKIP_REASON}
-            if entry.get("turn") is not None:
-                row["turn"] = entry["turn"]
+            row.update(_turn_field(entry))
             rows[entry["id"]] = row
     return rows
 
@@ -115,8 +122,6 @@ def _pending_in_order(cases: list[dict], done: set[str]) -> list[dict]:
     multi-turn case re-runs from its FIRST missing turn through the end — a
     later turn never executes before an earlier one, so a partial prior run
     re-runs the tail rather than resuming mid-sequence."""
-    from .evalset import turn_entries
-
     pending: list[dict] = []
     for case in cases:
         if not isinstance(case, dict):
@@ -173,15 +178,19 @@ def run_config_a(
     seed: int,
     runner=None,
     env_extra: dict | None = None,
+    entries: list[dict] | None = None,
 ) -> dict:
-    """One config-A anchor run over the set; return ``{"report", "report_path"}``.
+    """One config-A anchor run over the set; return ``{"report", "report_path", "rows"}``.
 
     The runner is injected so tests drive it without a live stack; the
     default reuses the capture machinery's subprocess invocation (never a
-    fork). The report path is STABLE per set run — run_eval resumes from its
-    own ``.done`` sidecar, so an interrupted run continues where it died.
-    Fail-fast on missed traces (the anchor's existing behavior): a reference
-    measurement with missed traces is a zero baseline in disguise.
+    fork). ``entries`` — the set's already-loaded entries (the CLI validated
+    the set before calling); when absent the set file is loaded here so a
+    direct driver caller enforces the same contract. The report path is
+    STABLE per set run — run_eval resumes from its own ``.done`` sidecar, so
+    an interrupted run continues where it died. Fail-fast on missed traces
+    (the anchor's existing behavior): a reference measurement with missed
+    traces is a zero baseline in disguise.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -200,7 +209,7 @@ def run_config_a(
     # The security cases (story 4.2): A has no agent surface — the skipped rows
     # record the reason so the pair's report shows an intentional difference,
     # never a silent absence.
-    skip_rows = security_skip_rows(_load_entries(set_path))
+    skip_rows = security_skip_rows(entries if entries is not None else _load_entries(set_path))
     rows_path = out_dir / "config-a.rows.json"
     write_json(rows_path, {"cases": skip_rows}, ensure_ascii=False)
     return {"report": report, "report_path": str(report_path), "rows": skip_rows, "rows_path": str(rows_path)}
@@ -565,10 +574,9 @@ def run_one_case_c(
         row["source_documents"] = source_documents
     if error_text is not None:
         row["error_text"] = error_text
-    if case.get("turn") is not None:
-        # A turn's row records its turn index (story 4.2) — the id carries the
-        # same fact, the field keeps it machine-readable without parsing.
-        row["turn"] = case["turn"]
+    # A turn's row records its turn index (story 4.2) — the id carries the
+    # same fact, the field keeps it machine-readable without parsing.
+    row.update(_turn_field(case))
     if is_cancellation:
         row["cancel_requested"] = True
         row["cancelled"] = outcome == OUTCOME_CANCELLED

@@ -2,7 +2,7 @@
 title: 'Story 2.7 — Activity line (web)'
 type: 'feature'
 created: '2026-11-22'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '016041d7467fc84d48bac2621e7f7db7b791ca72'

@@ -58,24 +58,28 @@ not a rehearsal failure, and never silently turned into a requirement (FR-26).
 
 ## Phase 0 — build the rehearsal images
 
-Fresh images are built from the stage's branch HEAD: a pipeline triggered with
-`FORCE_IMAGE_REBUILD=true` (the FORCE rule precedes the source filters, so a
-plain branch pipeline builds). `.build_template` tags non-MR builds
-`pending-<short-sha>` in the `tmp/` namespace.
+Fresh images are built from the stage's branch HEAD by the **tag pipeline**:
+`build:backend` and `build:agent-service` both carry the `if: $CI_COMMIT_TAG`
+rule, and `.build_template` tags every non-MR build `pending-<short-sha>` in
+the `tmp/` namespace — so a tag on the branch HEAD builds BOTH images under
+the SAME content tag. (A `FORCE_IMAGE_REBUILD=true` pipeline does NOT cover
+this pair: the agent-service build job predates the FORCE rule and carries
+only tag/MR/default/release rules — measured on story 3.3, where the FORCE
+pipeline built `build:backend` but never `build:agent-service`. The API and
+`web` pipeline sources cannot carry it either: the workflow blocks plain
+branch pipelines and both build jobs are `when: never` on web.)
 
 ```bash
 STAGE_BRANCH=<branch>            # the stage's delivery branch
-git push origin "$STAGE_BRANCH"
-PIPELINE_ID=$(glab api "projects/90/pipeline" -X POST \
-  -f "ref=$STAGE_BRANCH" \
-  -f "variables[0][key]=FORCE_IMAGE_REBUILD" \
-  -f "variables[0][value]=true" \
-  --jq '.id')
-# The two jobs this rehearsal needs:
-glab api "projects/90/pipelines/$PIPELINE_ID/jobs" --jq \
-  '.[] | select(.name=="build:backend" or .name=="build:agent-service") | "\(.id) \(.name) \(.status)"'
-# Poll until both are "success", then:
 SHORT_SHA=$(git rev-parse --short HEAD)
+git push origin "$STAGE_BRANCH"
+git tag "v08-rehearsal-$SHORT_SHA" "$SHORT_SHA" && git push origin "v08-rehearsal-$SHORT_SHA"
+PIPELINE_ID=$(glab api "projects/90/pipelines?ref=v08-rehearsal-$SHORT_SHA&per_page=1" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+# The two jobs this rehearsal needs:
+glab api "projects/90/pipelines/$PIPELINE_ID/jobs?per_page=100" \
+  | python3 -c "import sys,json; [print(j['id'],j['name'],j['status']) for j in json.load(sys.stdin) if j['name'] in ('build:backend','build:agent-service')]"
+# Poll until both are "success", then:
 BACKEND_IMAGE="registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-backend:pending-$SHORT_SHA"
 AGENT_IMAGE="registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-agent-server:pending-$SHORT_SHA"
 # Registry proof before deploying (regctl or skopeo):
@@ -84,7 +88,16 @@ regctl image inspect "$AGENT_IMAGE" >/dev/null && echo agent-ok
 ```
 
 One CI monitor per pipeline (the repo's CI-monitoring rule) watches the
-pipeline; the rehearsal proceeds when the two build jobs are green.
+pipeline; the rehearsal proceeds when the two build jobs are green. **Cancel
+the pipeline as soon as both build jobs are green** — the tag pipeline's
+promote stage would retag the content to `latest` (a non-`-alpha/-beta/-rc`
+tag updates `latest`) and DELETE the `tmp/...:pending-*` source tags the
+rehearsal deployments reference. Canceling after the build stage prevents
+both. The rehearsal tag is a build marker, not a release: it carries no
+changelog entry (the tag pipeline's `config:changelog` gate failing on it is
+expected and harmless once the pipeline is canceled), and it is deleted after
+the rehearsal's images are superseded.
+
 
 ## Phase 1 — preflight
 
@@ -245,12 +258,12 @@ dedicated test data.
 ```bash
 kubectl -n genieai port-forward svc/keycloak-service 18080:8080 &   # KPF=keycloak
 KC_ADMIN_PWD=$(kubectl -n genieai get secret keycloak-admin-credentials -o jsonpath='{.data.password}' | base64 -d)
-ADMIN_TOKEN=$(curl -sk -X POST "https://localhost:18080/realms/master/protocol/openid-connect/token" \
+ADMIN_TOKEN=$(curl -sk -X POST "http://localhost:18080/auth/realms/master/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_ADMIN_PWD}" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # dedicated rehearsal user
-curl -sk -X POST "https://localhost:18080/admin/realms/genie/users" \
+curl -sk -X POST "http://localhost:18080/auth/admin/realms/genie/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" -d '{
     "username": "v08-rehearsal", "email": "v08-rehearsal@rehearsal.invalid",
     "emailVerified": true, "firstName": "V08", "lastName": "Rehearsal",
@@ -258,29 +271,33 @@ curl -sk -X POST "https://localhost:18080/admin/realms/genie/users" \
     "credentials": [{"type": "password", "value": "<rehearsal-password>", "temporary": false}]}'
 
 # temporary ROPC on the app client
-CLIENT_ID=$(curl -sk "https://localhost:18080/admin/realms/genie/clients?clientId=genie-app" \
+# (the PUT bodies go through FILES: a process substitution or an unquoted
+# body occasionally ships a shell artifact Keycloak answers 400 on — the
+# 204/400 difference is visible, so a failed PUT never goes unnoticed)
+CLIENT_ID=$(curl -s "http://localhost:18080/auth/admin/realms/genie/clients?clientId=genie-app" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
-CLIENT_JSON=$(curl -sk "https://localhost:18080/admin/realms/genie/clients/$CLIENT_ID" \
+CLIENT_JSON=$(curl -s "http://localhost:18080/auth/admin/realms/genie/clients/$CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 echo "$CLIENT_JSON" > /tmp/v08-rehearsal/client-pre.json
 echo "$CLIENT_JSON" | jq '.directAccessGrantsEnabled = true' > /tmp/v08-rehearsal/client-ropc.json
-curl -sk -X PUT "https://localhost:18080/admin/realms/genie/clients/$CLIENT_ID" \
+echo "$CLIENT_JSON" | jq '.directAccessGrantsEnabled = false' > /tmp/v08-rehearsal/client-reverted.json
+curl -s -X PUT "http://localhost:18080/auth/admin/realms/genie/clients/$CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  --data-binary @/tmp/v08-rehearsal/client-ropc.json
+  --data-binary @/tmp/v08-rehearsal/client-ropc.json -w "PUT-enable HTTP %{http_code}\n"   # expected: 204
 
 # mint the rehearsal token(s) — the brief ROPC window; a refresh_token is
 # requested too, so later phases refresh WITHOUT touching ROPC again
-curl -sk -X POST "https://localhost:18080/realms/genie/protocol/openid-connect/token" \
+# (genie-app is a PUBLIC client on this realm — no client_secret involved)
+curl -s -X POST "http://localhost:18080/auth/realms/genie/protocol/openid-connect/token" \
   --data-urlencode "grant_type=password" --data-urlencode "client_id=genie-app" \
   --data-urlencode "username=v08-rehearsal" --data-urlencode "password=<rehearsal-password>" \
   --data-urlencode "scope=openid offline_access" > /tmp/v08-rehearsal/token.json
 
 # REVERT immediately, then VERIFY the revert
-echo "$CLIENT_JSON" | jq '.directAccessGrantsEnabled = false' > /tmp/v08-rehearsal/client-reverted.json
-curl -sk -X PUT "https://localhost:18080/admin/realms/genie/clients/$CLIENT_ID" \
+curl -s -X PUT "http://localhost:18080/auth/admin/realms/genie/clients/$CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  --data-binary @/tmp/v08-rehearsal/client-reverted.json
-curl -sk "https://localhost:18080/admin/realms/genie/clients/$CLIENT_ID" \
+  --data-binary @/tmp/v08-rehearsal/client-reverted.json -w "PUT-revert HTTP %{http_code}\n"   # expected: 204
+curl -s "http://localhost:18080/auth/admin/realms/genie/clients/$CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.directAccessGrantsEnabled'
 # expected output: false
 
@@ -288,12 +305,12 @@ TOKEN=$(jq -r .access_token /tmp/v08-rehearsal/token.json)
 REFRESH=$(jq -r .refresh_token /tmp/v08-rehearsal/token.json)
 ```
 
-A fresh access token without ROPC (used when the original expires mid-run):
+A fresh access token without ROPC (used when the original expires mid-run;
+the refresh grant needs no ROPC and no secret on a public client):
 
 ```bash
-TOKEN=$(curl -sk -X POST "https://localhost:18080/realms/genie/protocol/openid-connect/token" \
+TOKEN=$(curl -s -X POST "http://localhost:18080/auth/realms/genie/protocol/openid-connect/token" \
   --data-urlencode "grant_type=refresh_token" --data-urlencode "client_id=genie-app" \
-  --data-urlencode "client_secret=<KEYCLOAK_CLIENT_SECRET>" \
   --data-urlencode "refresh_token=$REFRESH" \
   | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['access_token'])")
 ```
@@ -411,23 +428,23 @@ kubectl -n genieai delete deploy/v08-rehearsal-backend deploy/v08-rehearsal-agen
 kubectl -n genieai get deploy,svc | grep v08-rehearsal   # expected: empty
 
 # rehearsal user
-curl -sk "https://localhost:18080/admin/realms/genie/users?username=v08-rehearsal" \
+curl -sk "http://localhost:18080/auth/admin/realms/genie/users?username=v08-rehearsal" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.[0].id'   # capture id
-curl -sk -X DELETE "https://localhost:18080/admin/realms/genie/users/$UID" -H "Authorization: Bearer $ADMIN_TOKEN"
-curl -sk "https://localhost:18080/admin/realms/genie/users?username=v08-rehearsal" \
+curl -sk -X DELETE "http://localhost:18080/auth/admin/realms/genie/users/$UID" -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -sk "http://localhost:18080/auth/admin/realms/genie/users?username=v08-rehearsal" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq 'length'     # expected: 0
 
 # ROPC reverted (Phase 4 already did the revert; re-verify here)
-curl -sk "https://localhost:18080/admin/realms/genie/clients/$CLIENT_ID" \
+curl -sk "http://localhost:18080/auth/admin/realms/genie/clients/$CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.directAccessGrantsEnabled'   # expected: false
 
 # rehearsal conversation docs (dedicated sessionId)
 ARANGO_PWD=$(kubectl -n genieai get secret arango-root-secret -o jsonpath='{.data.password}' | base64 -d)
 kubectl -n genieai port-forward svc/arangodb-single-single 18529:8529 &
-curl -s -u "root:$ARANGO_PWD" -X POST "http://localhost:18529/_api/cursor" \
+curl -s -u "root:$ARANGO_PWD" -X POST "http://localhost:18529/_db/_system/_api/cursor" \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"FOR d IN queries FILTER d.sessionId == '$SESSION' COLLECT WITH COUNT INTO c RETURN c\"}"
-curl -s -u "root:$ARANGO_PWD" -X POST "http://localhost:18529/_api/cursor" \
+curl -s -u "root:$ARANGO_PWD" -X POST "http://localhost:18529/_db/_system/_api/cursor" \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"FOR d IN queries FILTER d.sessionId == '$SESSION' REMOVE d IN queries\"}"
 # re-count → expected: 0

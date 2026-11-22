@@ -1432,6 +1432,15 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   1           — the service runs (internal only; the capability tools land
 #                 in the stories that follow).
 # MUST be 0 or 1, not true/false. Ansible: agent_enabled in group_vars.
+#
+# COMPOSE PROFILE PAIRING (compose mode): the agent-service sits behind the
+# `agent` compose profile (same shape as OKF_ENABLED above). Docker Swarm
+# ignores profiles — the replicas gate is enough there — but plain
+# `docker compose up -d` does NOT: with AGENT_ENABLED=1 and no `agent`
+# profile the service never starts. Pair them, either:
+#   docker compose --profile agent up -d
+# or (persistent, survives bare `docker compose up`):
+#   COMPOSE_PROFILES=agent         # in this env file
 # AGENT_ENABLED=1
 #
 # Agent run-budget knobs (story 2.3) — REQUIRED for the run surface. Read

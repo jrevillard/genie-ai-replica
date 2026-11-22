@@ -729,6 +729,30 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     expect(metadata.is_grounded).toBe(false);
   });
 
+  it('a payload carrying the service-side source_documents forwards THOSE rows (the service owns the mapping)', async () => {
+    setupAgentQuery();
+    // The merged agent-service payload names its own envelope rows (built by
+    // capabilities/citations.py, shared with the no-agent lane). The BFF
+    // forwards them verbatim — it does not re-derive from the raw citations.
+    const serviceRows = [
+      { document_id: 'svc_row', document_name: 'svc row', url: '', categoryLabels: [], serviceLabels: [], score: 0.5 }
+    ];
+    const verdict = { ...GROUNDED_VERDICT, source_documents: serviceRows };
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: answeredRunStream({ verdict })
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.source_documents).toEqual(serviceRows);
+  });
+
   it('a transport error mid-stream answers AGENT_STREAM_ERROR with the error contract', async () => {
     setupAgentQuery();
     const mockStream = new Readable({ read() {} });

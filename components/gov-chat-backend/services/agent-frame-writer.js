@@ -156,9 +156,14 @@ function assembleAgentMetadata({ emptyStreamMetadata, verdict, runId, usageRecor
   if (verdict) {
     metadata.grounding_status = verdict.grounding_status;
     metadata.is_grounded = verdict.is_grounded === true;
-    metadata.source_documents = (Array.isArray(verdict.citations) ? verdict.citations : [])
-      .map(citationToSourceDocument)
-      .filter(Boolean);
+    // The envelope rows are the AGENT SERVICE's projection when the payload
+    // carries them (capabilities/citations.py source_documents_from_citations
+    // — the one owner of the mapping, shared with the no-agent lane). The
+    // BFF-side derivation below is the fallback for an older payload that
+    // names only the raw citations.
+    metadata.source_documents = Array.isArray(verdict.source_documents)
+      ? verdict.source_documents
+      : (Array.isArray(verdict.citations) ? verdict.citations : []).map(citationToSourceDocument).filter(Boolean);
   } else {
     metadata.grounding_status = 'unverified';
     metadata.is_grounded = false;

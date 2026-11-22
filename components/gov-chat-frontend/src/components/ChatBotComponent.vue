@@ -146,6 +146,33 @@
                  first streaming frame; sources, actions and the confidence block
                  render inside it below the bubble. -->
             <div v-if="msg.sender === 'bot'" class="answer-card" data-testid="answer-card">
+              <!-- The agent activity line: the transient "what
+                   the agent is doing" status, the card's first child. It
+                   exists only between the turn's first agent_activity frame
+                   and its first chunk (the store latches it shut at the
+                   chunk), and only on the turn in flight (msg.isStreaming —
+                   the state is module-level, so the gate keeps older answer
+                   cards from repeating the live region); the states run
+                   running/completed/failed, failed in the warning family.
+                   Non-interactive, decorative marker, the state carried by
+                   the word in every locale. -->
+              <div
+                v-if="msg.isStreaming && agentActivity.visible"
+                class="agent-activity"
+                :class="`agent-activity--${agentActivity.status}`"
+                role="status"
+                aria-live="polite"
+                data-testid="agent-activity-line"
+              >
+                <div class="agent-activity__row" :data-testid="agentActivityOpHandle">
+                  <span class="agent-activity__marker" aria-hidden="true">
+                    <DsSpinner v-if="agentActivity.status === 'running'" size="sm" />
+                    <span v-else-if="agentActivity.status === 'completed'" class="agent-activity__dot"></span>
+                    <AlertTriangle v-else :size="14" aria-hidden="true" />
+                  </span>
+                  <span class="agent-activity__label">{{ agentActivityLabel }}</span>
+                </div>
+              </div>
               <div v-if="msg.isError" class="answer-error" data-testid="answer-error">
                 <AlertTriangle :size="16" aria-hidden="true" />
                 <span>{{ translate('chatbot.errorUnableToComplete', 'Unable to complete the response.') }}</span>
@@ -154,9 +181,9 @@
                   <span>{{ translate('chatbot.retry', 'Retry') }}</span>
                 </button>
               </div>
-              <div v-else class="message-bubble" data-testid="message-bubble-bot">
+              <div v-if="!msg.isError" class="message-bubble" data-testid="message-bubble-bot">
                 <div
-                  v-if="msg.isStreaming && !msg.content"
+                  v-if="msg.isStreaming && !msg.content && !agentActivity.visible"
                   class="streaming-indicator"
                   data-testid="streaming-indicator"
                 >
@@ -259,12 +286,51 @@
                   </template>
                 </div>
               </div>
-              <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-              <div v-if="msg.isGrounded === false" class="answer-warning" data-testid="answer-warning" role="note">
+              <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents.
+                   One guard: `unverified` (verification could not run) is NOT the
+                   ungrounded claim — it renders the neutral note below instead. Legacy metadata
+                   carries no grounding_status, so the legacy warning is untouched. -->
+              <div
+                v-if="msg.isGrounded === false && msg.metadata?.grounding_status !== 'unverified'"
+                class="answer-warning"
+                data-testid="answer-warning"
+                role="note"
+              >
                 <AlertTriangle :size="15" aria-hidden="true" />
                 <span>{{
                   translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
                 }}</span>
+              </div>
+              <!-- The verdict truth table, answer level. Unverified: a distinct
+                   neutral note (the verification pipeline did not run — never the ungrounded
+                   warning's claim). Grounded AND a translation delivered: the scope caption —
+                   the verdict certifies the source-language answer, not the translation. -->
+              <div v-if="answerUnverified(msg)" class="answer-note" data-testid="answer-verification-note" role="note">
+                <Info :size="15" aria-hidden="true" />
+                <span>
+                  {{
+                    translate(
+                      'chatbot.agentActivity.verificationUnavailable',
+                      'Verification unavailable — the answer could not be checked against the sources.'
+                    )
+                  }}
+                </span>
+              </div>
+              <div
+                v-if="answerTranslationScoped(msg)"
+                class="answer-note"
+                data-testid="answer-translation-scope"
+                role="note"
+              >
+                <Languages :size="15" aria-hidden="true" />
+                <span>
+                  {{
+                    translate(
+                      'chatbot.agentActivity.verificationTranslationScope',
+                      'The verification covered the original-language answer — the translation was not verified.'
+                    )
+                  }}
+                </span>
               </div>
               <!-- The translation backend did not answer. The text above is the
                    original response, not a translation of it. -->
@@ -572,6 +638,7 @@ import {
   Brain,
   FileDown,
   FileText,
+  Info,
   Save,
   ChevronDown,
   ChevronUp,
@@ -642,6 +709,14 @@ import { resolveConfigText } from '../utils/configResolver';
 // is scoped by the labels the deployment declared for it; a sidebar item is
 // scoped by the label the knowledge tree shows.
 const QUICK_HELP_SOURCE = 'quickHelp';
+
+// The state-generic activity labels, keyed by the rendered state the store
+// already normalized the wire status into (running/completed/failed).
+const GENERIC_ACTIVITY_KEYS = {
+  running: 'chatbot.agentActivity.working',
+  completed: 'chatbot.agentActivity.stepCompleted',
+  failed: 'chatbot.agentActivity.stepFailed'
+};
 
 // One Quick Help selection, in the shape every context item uses — whether it
 // was picked from the overlay, restored from a saved conversation, or re-added
@@ -784,6 +859,7 @@ export default {
     Sparkles,
     User,
     X,
+    Info,
     RotateCcw,
     Check,
     ThumbsUp,
@@ -884,7 +960,7 @@ export default {
   },
 
   computed: {
-    ...mapGetters('conversation', ['openConversation']),
+    ...mapGetters('conversation', ['openConversation', 'agentActivity']),
     openMessages() {
       return this.openConversation.messages;
     },
@@ -908,6 +984,29 @@ export default {
     },
     streamingQueryId() {
       return this.openConversation.streamingQueryId;
+    },
+    // The per-operation handle exists only when the frame named an
+    // operation; a null operation omits it (the container handle alone).
+    agentActivityOpHandle() {
+      const op = this.agentActivity.operation;
+      return op ? `agent-activity-op-${op}` : null;
+    },
+    // State carried by the word: the per-operation label when the
+    // catalogue knows the operation, the state-generic label otherwise.
+    // The store already normalizes the wire status to running/completed/
+    // failed, so the suffix reads straight off it; a missing catalogue
+    // entry degrades to the generic label, never blanks (translate falls
+    // back to en before it misses).
+    agentActivityLabel() {
+      const st = this.agentActivity;
+      const suffix = st.status || 'running';
+      if (st.operation) {
+        return this.translate(
+          `chatbot.agentActivity.operations.${st.operation}.${suffix}`,
+          this.translate(GENERIC_ACTIVITY_KEYS[suffix])
+        );
+      }
+      return this.translate(GENERIC_ACTIVITY_KEYS[suffix]);
     },
     conversationId() {
       return this.openConversation.conversationId;
@@ -2197,6 +2296,35 @@ export default {
       return value !== key ? value : fallback || key;
     },
 
+    // The verdict truth table, read per answer. The tri-state rides
+    // msg.metadata.grounding_status (the agent metadata assembly writes it;
+    // legacy metadata has no such field, so every predicate reads "legacy"
+    // and the render is exactly what it always was). The caption's
+    // translation signal prefers the property the verdict frame wrote ahead
+    // of the metadata frame (msg.translationMode) and falls back to the
+    // metadata row (the carrier of an answer restored from the transcript,
+    // folded in at save time).
+    answerUnverified(msg) {
+      return msg.metadata?.grounding_status === 'unverified';
+    },
+    answerTranslationScoped(msg) {
+      return (
+        msg.metadata?.grounding_status === 'grounded' &&
+        (msg.translationMode ?? msg.metadata?.translation_mode ?? 'none') !== 'none'
+      );
+    },
+
+    // The transcript's metadata blob is what a server-side restore reads
+    // back, so the caption's delivery carrier rides inside it: the live
+    // message holds the mode as a property (the verdict frame wrote it),
+    // persistence folds it into the saved copy, and a restored answer
+    // scopes its verdict exactly like a live one.
+    storableMetadata(message) {
+      const metadata = { ...(message.metadata || {}) };
+      if (message.translationMode) metadata.translation_mode = message.translationMode;
+      return metadata;
+    },
+
     // A Quick Help card press (tile or composer) is a MODE SWITCH: it
     // replaces the SIDEBAR selection — the two are alternative ways of
     // scoping the same query (the mobile rules this already). Keeping
@@ -3152,7 +3280,7 @@ export default {
               content: message.content,
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
-              metadata: message.metadata || {}
+              metadata: this.storableMetadata(message)
             };
             await this.chatHistoryService.addMessage(messageData);
             this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
@@ -3231,7 +3359,7 @@ export default {
               content: message.content,
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
-              metadata: message.metadata || {}
+              metadata: this.storableMetadata(message)
             };
             await this.chatHistoryService.addMessage(messageData);
             this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
@@ -4239,6 +4367,77 @@ export default {
   color: var(--muted);
   font-size: var(--text-sm);
   padding: var(--space-xs) 0;
+}
+
+/* The agent activity line, the answer card's first child.
+   Running and completed stay quiet (the muted indicator family); failed
+   wears the warning recipe — amber, never danger: a failed step is a
+   state, not an accusation — and its label wraps instead of truncating. */
+.agent-activity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agent-activity__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  padding: var(--space-xs) 0;
+}
+
+.agent-activity--failed .agent-activity__row {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  font-size: var(--text-xs);
+}
+
+.agent-activity__label {
+  min-width: 0;
+  /* The failed label wraps instead of truncating — nothing truncates:
+     the line is transient, and a long operation name stays readable. */
+  overflow-wrap: anywhere;
+}
+
+.agent-activity__marker {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* The completed marker: the static nav-status dot idiom. */
+.agent-activity__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+/* Reduced motion stops the one moving part the line owns, HERE and only
+   here — the DsSpinner primitive keeps its animation everywhere else. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-activity__marker :deep(.ds-spinner) {
+    animation: none;
+  }
+}
+
+/* The answer-level verdict notes: the unverified note and the
+   translation-scope caption. Both neutral (muted, surface): an unknown
+   verification state is information, not a warning. */
+.answer-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 
 .confidence-score {

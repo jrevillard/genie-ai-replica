@@ -1408,6 +1408,25 @@ export default {
     chatUpdated: 'Mazungumzo yamesasishwa',
     savingConversation: 'Inahifadhi…',
     thinking: 'Inafikiri…',
+    agentActivity: {
+      working: 'Inafanya kazi…',
+      stepCompleted: 'Hatima imekamilika',
+      stepFailed: 'Hatima imeshindikana.',
+      verificationUnavailable: 'Uthibitisho haupatikani — jibu halingeweza kuhakikiwa dhidi ya vyanzo.',
+      verificationTranslationScope: 'Uthibitisho ulihusu jibu katika lugha yake ya asili — tafsiri haikuhakikiwa.',
+      operations: {
+        search_knowledge: {
+          running: 'Inatafuta katika kanzedata…',
+          completed: 'Utafutaji wa kanzedata umefanyika',
+          failed: 'Utafutaji katika kanzedata umeshindikana'
+        },
+        read_source: {
+          running: 'Inasoma hati ya chanzo…',
+          completed: 'Hati ya chanzo imesomwa',
+          failed: 'Hati ya chanzo haikusomwa'
+        }
+      }
+    },
     newChatTitle: 'Anza Mazungumzo Mapya',
     exportChat: 'Hamisha Mazungumzo',
     exportFilename: 'Jina la Faili',

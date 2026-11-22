@@ -1415,6 +1415,26 @@ export default {
     chatUpdated: 'Conversación actualizada',
     savingConversation: 'Guardando…',
     thinking: 'Pensando…',
+    agentActivity: {
+      working: 'Trabajando…',
+      stepCompleted: 'Paso completado',
+      stepFailed: 'Paso fallido.',
+      verificationUnavailable: 'Verificación no disponible — no se pudo comprobar la respuesta contra las fuentes.',
+      verificationTranslationScope:
+        'La verificación cubrió la respuesta en el idioma original — la traducción no quedó verificada.',
+      operations: {
+        search_knowledge: {
+          running: 'Buscando en la base de conocimientos…',
+          completed: 'Base de conocimientos consultada',
+          failed: 'Error al buscar en la base de conocimientos'
+        },
+        read_source: {
+          running: 'Leyendo el documento fuente…',
+          completed: 'Documento fuente leído',
+          failed: 'No se pudo leer el documento fuente'
+        }
+      }
+    },
     newChatTitle: 'Iniciar Nuevo Chat',
     exportChat: 'Exportar Chat',
     exportFilename: 'Nombre de Archivo',

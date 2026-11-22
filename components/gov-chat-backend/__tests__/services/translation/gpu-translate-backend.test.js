@@ -297,8 +297,7 @@ describe('GpuTranslateBackend startup probe', () => {
       else process.env[envKey] = value;
     }
     jest.clearAllMocks();
-    // `clearAllMocks` keeps installed implementations: without the reset, the
-    // last request mock of the block leaks into any later `http`-based test.
+    // `clearAllMocks` keeps installed implementations — reset the request mock.
     http.request.mockReset();
   });
 
@@ -361,34 +360,25 @@ describe('GpuTranslateBackend startup probe', () => {
 
   // A /health answer that is not 2xx: `healthCheck` reads only `statusCode`.
   const servingStatus = (statusCode) => {
+    const res = new EventEmitter();
+    res.statusCode = statusCode;
+    // The refusal path drains the response (`resume`), which a real
+    // IncomingMessage carries; the double models that interface piece, as a
+    // jest.fn so the tests can pin the drain.
+    res.resume = jest.fn();
     http.request.mockImplementation((opts, cb) => {
       const req = new EventEmitter();
-      req.write = () => {};
-      req.setTimeout = () => {};
-      req.destroy = jest.fn();
-      req.end = () => {
-        const res = new EventEmitter();
-        res.statusCode = statusCode;
-        res.setEncoding = () => {};
-        // The refusal path drains the response (`resume`), which a real
-        // IncomingMessage carries; the double models that interface piece.
-        res.resume = () => {};
-        process.nextTick(() => {
-          cb(res);
-          // `healthCheck` reads only `statusCode` and registers no response
-          // listeners, so this emission is inert for it — finishing the
-          // response models a completed one for any body-reading caller.
-          res.emit('end');
-        });
-      };
+      req.end = () => process.nextTick(() => cb(res));
       return req;
     });
+    return res;
   };
 
   it.each([500, 503, 404])('rejects on health status %d — an unready service fails the gate', async (status) => {
-    servingStatus(status);
+    const res = servingStatus(status);
 
     await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow(new RegExp(`status ${status}`));
+    expect(res.resume).toHaveBeenCalled();
   });
 
   it('keeps init from marking a 503-serving vLLM as initialized', async () => {

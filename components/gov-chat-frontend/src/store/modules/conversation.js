@@ -3,6 +3,23 @@
 // flight keeps writing while no chat view is mounted.
 const OPEN_ID = 'open';
 
+// The agent activity line's turn-scoped state. Lives at the STORE ROOT,
+// never on a message: the msg object is what persistence serializes, and
+// the activity line is transient UI — nothing about it survives the turn,
+// a reload, or a transcript save.
+function freshAgentActivity() {
+  return { visible: false, operation: null, status: null, collapsed: false };
+}
+
+// The frame's wire status → the line's rendered state. An unmapped status
+// degrades to running (the line shows the generic working label — it never
+// blanks and never renders an unknown state).
+const ACTIVITY_STATUSES = {
+  started: 'running',
+  completed: 'completed',
+  failed: 'failed'
+};
+
 function emptyConversation() {
   return {
     messages: [],
@@ -46,13 +63,18 @@ function markEntryInterrupted(entry) {
 // and the full reset (a field added here must not be missed by RESET).
 const initialState = () => ({
   openId: OPEN_ID,
-  conversations: { [OPEN_ID]: emptyConversation() }
+  conversations: { [OPEN_ID]: emptyConversation() },
+  agentActivity: freshAgentActivity()
 });
 
 const state = initialState;
 
 const getters = {
-  openConversation: (st) => st.conversations[st.openId]
+  openConversation: (st) => st.conversations[st.openId],
+  // The activity line's turn-scoped state sits at the module root, beside
+  // the conversations map — never inside a conversation entry, which is
+  // what persistence serializes.
+  agentActivity: (st) => st.agentActivity
 };
 
 const mutations = {
@@ -118,6 +140,7 @@ const mutations = {
     entry.streamingQueryId = queryId || null;
     const last = entry.messages.at(-1);
     if (last && last.sender === 'bot') last.isStreaming = false;
+    st.agentActivity = freshAgentActivity();
   },
   failStream(st, { message = '', errorKey = null } = {}) {
     const entry = st.conversations[st.openId];
@@ -136,9 +159,11 @@ const mutations = {
       last.errorKey = errorKey || null;
       markTriggeringQuestion(entry);
     }
+    st.agentActivity = freshAgentActivity();
   },
   markInterrupted(st) {
     markEntryInterrupted(st.conversations[st.openId]);
+    st.agentActivity = freshAgentActivity();
   },
   addContextItem(st, item) {
     st.conversations[st.openId].selectedContextItems.push(item);
@@ -186,6 +211,26 @@ const mutations = {
     const entry = st.conversations[st.openId];
     entry.isStreaming = isStreaming;
     entry.streamingQueryId = streamingQueryId;
+  },
+  // One agent_activity frame, client-side: opens/updates the
+  // line until the turn's first chunk latches it shut. A frame arriving
+  // after the latch is accepted (parsed upstream, no error) and dropped
+  // here — the line never re-opens in the same turn.
+  agentActivityFrame(st, frame) {
+    const a = st.agentActivity;
+    if (a.collapsed) return;
+    a.visible = true;
+    a.operation = typeof frame?.operation === 'string' ? frame.operation : null;
+    a.status = ACTIVITY_STATUSES[frame?.status] || 'running';
+  },
+  // The collapse latch, fired by the turn's FIRST chunk. A client latch:
+  // later frames of the same turn are parsed but never rendered.
+  collapseAgentActivity(st) {
+    st.agentActivity.collapsed = true;
+    st.agentActivity.visible = false;
+  },
+  resetAgentActivity(st) {
+    st.agentActivity = freshAgentActivity();
   }
 };
 
@@ -318,8 +363,16 @@ function graftOkfIdentityOntoRestored(entry) {
 const actions = {
   sendStream({ commit, state, dispatch }, queryData) {
     commit('setStreaming', { isStreaming: true, streamingQueryId: null });
+    // A fresh turn owns a fresh line: the previous turn's activity state
+    // never leaks into it.
+    commit('resetAgentActivity');
     const controller = chatbotService.submitQueryStream(queryData, {
-      onChunk: (content) => commit('appendChunk', content),
+      onChunk: (content) => {
+        commit('appendChunk', content);
+        // The collapse latch fires on the FIRST chunk of the turn; once it
+        // is latched the commit is a no-op, so the hot path skips it.
+        if (!state.agentActivity.collapsed) commit('collapseAgentActivity');
+      },
       onMetadata: (metadata) => {
         commit('status/setOnline', null, { root: true });
         if (metadata.responseTime) {
@@ -363,7 +416,26 @@ const actions = {
         // frontmatter title, asynchronously, never blocking the render.
         dispatch('resolveOkfSourceTitles').catch(() => {});
       },
-      onTranslation: (text) => commit('setTranslation', text),
+      // A `translation` frame is the post-stream whole-answer delivery (the
+      // streaming-unit mode never sends one): marking the mode here gives the
+      // translation-scope caption its second carrier. Legacy turns carry no
+      // grounding_status, so the marker is inert there.
+      onTranslation: (text) => {
+        commit('setLastBotProperty', ['translationMode', 'post-stream']);
+        commit('setTranslation', text);
+      },
+      // The agent_activity frames drive the line (the state machine above);
+      // the verdict frame's translation_mode lands on the bot msg BEFORE the
+      // metadata frame replaces msg.metadata — the caption signal cannot ride
+      // metadata from this frame, so it takes its own property. The tri-state
+      // itself is read from msg.metadata.grounding_status (set by the agent
+      // metadata assembly); nothing here touches the five legacy callbacks.
+      onAgentActivity: (frame) => commit('agentActivityFrame', frame),
+      onAgentVerdict: (verdict) => {
+        if (verdict && typeof verdict.translation_mode === 'string') {
+          commit('setLastBotProperty', ['translationMode', verdict.translation_mode]);
+        }
+      },
       onDone: (data) => {
         commit('finishStream', data.queryId);
         if (data.queryId) commit('setLastBotProperty', ['queryId', data.queryId]);
@@ -586,7 +658,12 @@ export const STORAGE_KEY = 'genie.conversation.v1';
 
 export function persistConversation(moduleState) {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(moduleState));
+    // The payload IS the rehydrate contract: the two keys the reader
+    // consumes, nothing else — transient module state (the agent activity
+    // line, and any future root-level transient) is excluded structurally,
+    // not by a per-feature denylist.
+    const persisted = { openId: moduleState.openId, conversations: moduleState.conversations };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   } catch (error) {
     // A full or blocked storage degrades to navigation-only survival —
     // the Vuex state still holds the conversation for this page life.

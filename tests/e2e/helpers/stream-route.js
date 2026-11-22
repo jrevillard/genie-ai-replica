@@ -59,10 +59,10 @@ function sseBody(chunks, metadata, options = {}) {
     const a = options.activity?.[i];
     if (a) {
       frames.push(
-        `data: ${JSON.stringify({ type: 'agent_activity', version: 1, status: a.status, operation: a.operation, callId: a.callId })}`
+        sseFrame({ type: 'agent_activity', version: 1, status: a.status, operation: a.operation, callId: a.callId })
       );
     }
-    frames.push(`data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+    frames.push(sseFrame({ type: 'chunk', content: c }));
   });
   if (options.verdict) {
     // A verdict payload cannot override the frame's discriminator or
@@ -73,10 +73,10 @@ function sseBody(chunks, metadata, options = {}) {
     const verdictProjection = { ...options.verdict };
     delete verdictProjection.type;
     delete verdictProjection.version;
-    frames.push(`data: ${JSON.stringify({ type: 'agent_verdict', version: 1, ...verdictProjection })}`);
+    frames.push(sseFrame({ type: 'agent_verdict', version: 1, ...verdictProjection }));
   }
-  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
-  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
+  if (metadata) frames.push(sseFrame({ type: 'metadata', ...metadata }));
+  return [...frames, '', sseFrame({ type: 'done', queryId: 'mock-query-1' }), ''].join('\n');
 }
 
 /**
@@ -92,4 +92,15 @@ function sseFulfill(route, body) {
   return route.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
 }
 
-module.exports = { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill };
+/**
+ * One frame line for a caller that streams frames OUTSIDE a full body —
+ * the staged-stream helper. The payload
+ * shape is the caller's contract (the frame writer's, for the agent
+ * frames); this owns only the `data: ` prefix and the terminator, so a
+ * staged spec cannot drift from the wire spelling sseBody pins.
+ */
+function sseFrame(payload) {
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+module.exports = { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFrame, sseFulfill };

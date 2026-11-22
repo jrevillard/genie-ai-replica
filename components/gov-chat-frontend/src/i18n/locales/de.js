@@ -1420,6 +1420,26 @@ export default {
     chatUpdated: 'Unterhaltung aktualisiert',
     savingConversation: 'Speichern…',
     thinking: 'Denkt nach…',
+    agentActivity: {
+      working: 'Arbeitet…',
+      stepCompleted: 'Schritt abgeschlossen',
+      stepFailed: 'Schritt fehlgeschlagen.',
+      verificationUnavailable: 'Überprüfung nicht möglich — die Antwort konnte nicht gegen die Quellen geprüft werden.',
+      verificationTranslationScope:
+        'Die Überprüfung galt der Antwort in der Originalsprache — die Übersetzung wurde nicht geprüft.',
+      operations: {
+        search_knowledge: {
+          running: 'Durchsuche die Wissensbasis…',
+          completed: 'Wissensbasis durchsucht',
+          failed: 'Suche in der Wissensbasis fehlgeschlagen'
+        },
+        read_source: {
+          running: 'Lese das Quelldokument…',
+          completed: 'Quelldokument gelesen',
+          failed: 'Quelldokument konnte nicht gelesen werden'
+        }
+      }
+    },
     newChatTitle: 'Neuen Chat starten',
     exportChat: 'Chat exportieren',
     exportFilename: 'Dateiname',

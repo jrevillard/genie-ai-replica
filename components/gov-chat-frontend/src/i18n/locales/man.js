@@ -1396,6 +1396,25 @@ export default {
     chatUpdated: 'Ynsyn cagliait',
     savingConversation: 'Sauail…',
     thinking: 'Smooht…',
+    agentActivity: {
+      working: 'Gobbraghey…',
+      stepCompleted: 'Ard jeant',
+      stepFailed: 'Ard failsit.',
+      verificationUnavailable: 'Cha nel shickyraghey ry-gheddyn — cha row y coyrlie jeeraghit lesh ny bun-sourceyn.',
+      verificationTranslationScope: 'Hickyraghey dhen coyrlie ayns y chengey bunneydagh — cha nel y chyndaa shickyrit.',
+      operations: {
+        search_knowledge: {
+          running: 'Shirrey ayns y bunnyd-chooiney…',
+          completed: 'Shirrey y bunnyd-chooiney jeant',
+          failed: 'Shirrey y bunnyd-chooiney failsit'
+        },
+        read_source: {
+          running: 'Lhaih y dokument bunneydagh…',
+          completed: 'Dokument bunneydagh lhaiht',
+          failed: 'Cha dod y dokument bunneydagh ve lhaiht'
+        }
+      }
+    },
     newChatTitle: 'Kuma Kura Damina',
     exportChat: 'Kuma Kii Banta',
     exportFilename: 'Fayil Toh',

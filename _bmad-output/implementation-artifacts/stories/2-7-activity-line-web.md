@@ -1,0 +1,170 @@
+---
+title: 'Story 2.7 — Activity line (web)'
+type: 'feature'
+created: '2026-11-22'
+status: 'in-review'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: '016041d7467fc84d48bac2621e7f7db7b791ca72'
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/epic-2-context.md'
+  - '{project-root}/_bmad-output/planning-artifacts/architecture/architecture-genie-ai-2026-11-16/ARCHITECTURE-SPINE.md'
+---
+
+<frozen-after-approval reason="human-owned intent — the issue #1965 acceptance criteria, operator-authored">
+
+## Intent
+
+**Problem:** On the agentic answer path the web chat gives the user no sign of what the agent is doing between sending a question and the first answer chunk, and no surfacing of the tri-state verification verdict the BFF already streams.
+
+**Approach:** Render the new `agent_activity` SSE frames as one transient status line — the first child of `.answer-card`, replacing the typing indicator — with states running/completed/failed, collapsing at the first `chunk`; render the `agent_verdict` truth table at answer level (`grounded` → nothing but a translation-scope caption when a translation was delivered; `ungrounded` → the existing warning; `unverified` → a distinct neutral note). Ship all 11 `chatbot.agentActivity.*` keys in all 14 web locales behind the `localeConsistency` gate.
+
+## Boundaries & Constraints
+
+**Always:**
+- The line renders ONLY before the first `chunk` of a turn; the collapse is a client latch — post-chunk `agent_activity` frames are accepted (parsed, no error) but never rendered, and the line never re-opens in that turn.
+- Failed state uses the warning family (`--warning-bg`/`--warning-ink`) — never `--danger` — and the failed label wraps instead of truncating; running/completed stay quiet (`--muted`).
+- Accessibility: container `role="status"` + `aria-live="polite"`; marker decorative (`aria-hidden`); state carried by the word in every locale; reduced-motion stops the spinner animation, scoped to the line's own styles (DsSpinner untouched globally).
+- Handles: `data-testid="agent-activity-line"` on the container, `data-testid="agent-activity-op-<operation>"` on the operation row (this component's existing single-dash spelling). The line is non-interactive: no tabindex, no handlers, nothing persisted (transcript and sessionStorage carry no activity state).
+- Legacy path unchanged: a turn with no `agent_activity` frame behaves exactly as today (typing indicator, warnings).
+
+**Never:**
+- No change to the five existing SSE event semantics, the BFF frame writer, or the agent-service — the web consumes the frames as pinned by story 2.9's envelope.
+- No expandable tool detail, no per-op history list (iteration 1 renders the current operation only), no persisted activity messages, no second live region.
+- No rendering of the verdict BY the line — verdict surfacing is answer-level.
+- No mobile work (story 2.8), no new npm dependency.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| First activity frame | `agent_activity {status:'started', operation:'search_knowledge'}` before any chunk | Line visible, spinner + localized running label, legacy typing indicator hidden | N/A |
+| Completed frame | `{status:'completed', operation:'search_knowledge'}` | Static dot + completed label, still pre-chunk | N/A |
+| Failed frame | `{status:'failed', operation:'read_source'}` | Warning chip (warning family), failed label (wraps); next `started` replaces it | N/A |
+| Unknown operation | `{status:'started', operation:'other_tool'}` or `operation:null` | Generic `working` label; per-op handle omitted when operation null | N/A |
+| Collapse | first `chunk` after the line is visible | Line removed for the rest of the turn; later activity frames parsed but unrendered | N/A |
+| No activity frames | legacy/quiet turn | Typing indicator unchanged; line never appears | N/A |
+| Verdict grounded, no translation | `agent_verdict {grounding_status:'grounded', translation_mode:'none'}` | No warning, no note | N/A |
+| Verdict grounded + translated | `translation_mode` other than `none` | Translation-scope caption under the answer | N/A |
+| Verdict unverified | metadata `grounding_status:'unverified'` | Distinct neutral note; the ungrounded warning must NOT render | N/A |
+| Verdict ungrounded | metadata `is_grounded:false`, status `ungrounded` | Existing `.answer-warning` unchanged | N/A |
+| Abort / error / done | `error` frame, stop button, `done` | Line collapsed (immediately on abort); existing terminal surfaces unchanged | N/A |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `components/gov-chat-frontend/src/components/ChatBotComponent.vue` — `.answer-card` :148; `.answer-error` :149-156; `.message-bubble` :157-169 (v-if chain `msg.isError` → error, `v-else` bubble; typing indicator inside bubble :158-165, `v-if="msg.isStreaming && !msg.content"`); ungrounded warning :263-268 (`msg.isGrounded === false`); translation-failed :271-279; saving-indicator idiom :526-529 + styles :4660-4675; amber styles :3886-3926; `.animate-spin` :3647-3653; msg creation :2592-2601; history rehydrate reads `msg.metadata?.is_grounded` :2813. `data-testid` spelling throughout.
+- `components/gov-chat-frontend/src/services/chatbotService.js` — `processChunk` switch :194-222 (five cases; unknown types fall through silently — additive cases are safe); AbortError swallowed :235.
+- `components/gov-chat-frontend/src/store/modules/conversation.js` — `setLastBotMetadata` :100-109 (copies whole metadata object → replaces msg.metadata; runs AFTER the verdict frame); `setLastBotProperty` generic mutation; `setTranslation` :110; `markInterrupted` :140-142; `sendStream` callbacks :323-372; `abortStream` :409-419; `persistConversation` :587-595 serializes the WHOLE module state — a new root key must be excluded; rehydrate only reads `openId`/`conversations`.
+- `components/gov-chat-backend/services/agent-frame-writer.js` — READ-ONLY reference: `agent_activity` frames :414-432 `{type,version:1,status:'started'|'completed',operation:<name|null>,callId}` (no `failed` producer exists today — the web state machine still implements it per spec); `agent_verdict` :344-358 (after last chunk flush, before metadata), verdict payload relayed verbatim except `translation_mode`, which the frame writer annotates with the delivery it knows (`streaming-units` when the relay flushed delivered units — the review-fix amendment recorded in the Spec Change Log).
+- `components/gov-chat-backend/services/agent-run-contract.js` — `assembleAgentMetadata` :196-230: agent-path metadata frame carries `grounding_status` (verdict value, or `'unverified'` when no verdict) — the client's unverified signal; legacy metadata has no `grounding_status`.
+- `components/gov-chat-frontend/src/i18n/locales/*.js` — 14 files (ar,bn,de,en,es,fr,id,man,pt,ru,st,sw,th,zh); `chatbot` namespace en.js :1306; gate `src/__tests__/localeConsistency.test.js` :73-90.
+- `tests/e2e/chatbot/sse-contract.spec.js` + `tests/e2e/helpers/chatbot.js` (`mockChatStream` :502) — story 2.9's envelope: frame shapes + `NO_ACTIVITY_LINE` assertions (:35,:78,:105) to flip/extend.
+- `src/__tests__/components/ChatBotComponent.test.js`, `src/__tests__/services/chatbotService.test.js`, `src/__tests__/store/` — test homes.
+- `src/components/ds/Spinner.vue` — `size="sm"`; reuse as-is.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `components/gov-chat-frontend/src/services/chatbotService.js` -- add `agent_activity`/`agent_verdict` cases to the parser switch, forwarding to optional `onAgentActivity`/`onAgentVerdict` callbacks -- the frames reach the app without touching the five legacy cases
+- [x] `components/gov-chat-frontend/src/store/modules/conversation.js` -- turn-scoped `agentActivity` root state (`visible/operation/status/collapsed`), mutations (frame / collapse-at-first-chunk latch / reset on new send + done + fail + abort), `sendStream` wiring (new callbacks; `translationMode` stored on the bot msg from the verdict payload), exclusion of the new root key from `persistConversation` -- state machine + nothing-persisted guarantee
+- [x] `components/gov-chat-frontend/src/components/ChatBotComponent.vue` -- the line as first child of `.answer-card` (bubble's `v-else` → explicit `v-if="!msg.isError"`); typing indicator hidden once the line is visible; label resolution (per-op template, generic fallback); failed chip (warning family, wrapping label); `role="status"`+`aria-live="polite"`+decorative marker; reduced-motion scoped CSS; unverified neutral note + translation-scope caption at answer level; ungrounded warning now excludes the unverified case -- the rendered contract
+- [x] `components/gov-chat-frontend/src/i18n/locales/*.js` (all 14) -- the 11 `chatbot.agentActivity.*` keys (working, stepCompleted, stepFailed, verificationUnavailable, verificationTranslationScope, operations.search_knowledge.{running,completed,failed}, operations.read_source.{running,completed,failed}) -- the hard delivery gate
+- [x] `components/gov-chat-frontend/src/__tests__/` -- component tests (states, collapse latch, verdict truth table, a11y attrs, handles, legacy-path invariance), service parser tests (new cases + unknown-type fallthrough), store tests (latch, reset paths, persistence exclusion) -- the matrix as executable checks
+- [x] `tests/e2e/chatbot/sse-contract.spec.js` (+ helpers if needed) -- flip the `NO_ACTIVITY_LINE` degradation assertions where the mock carries activity frames into render/collapse assertions through the declared handles; add pre-chunk activity + post-chunk acceptance cases -- story 2.9's envelope pins the rendered behavior
+
+**Acceptance Criteria:**
+- Given `agent_activity` frames arrive before the first chunk, when the turn renders, then the line is the first child of `.answer-card` with the typing indicator replaced, states running/completed/failed per the spec (failed = warning family, wrapping label, never `--danger`), `role="status"` + `aria-live="polite"`, decorative marker, reduced-motion honored, handles `agent-activity-line` / `agent-activity-op-<operation>`.
+- Given the first `chunk`, when any further `agent_activity` frame arrives, then the line stays collapsed and the frame is accepted but unrendered.
+- Given `agent_verdict`, when the answer renders, then grounded → no warning (translation-scope caption only when `translation_mode` ≠ `none`), ungrounded → the existing ungrounded warning, unverified → the distinct neutral note `chatbot.agentActivity.verificationUnavailable` and never the ungrounded warning.
+- Given the 14 locale files, when `localeConsistency.test.js` runs, then all 11 keys ship in every file and the suite passes.
+- Given a legacy turn (no `agent_activity` frame), when the answer streams, then behavior is byte-for-byte today's (typing indicator, warnings, transcript).
+
+## Implementation Notes
+
+<!-- Agent-owned. Append-only during implementation. -->
+
+- **The line is gated on `msg.isStreaming` in addition to `agentActivity.visible`.** The activity state is module-level (turn-scoped), so without the gate every historical answer card in the transcript would repeat the live region while a turn streamed — a second (and third…) live region, which the Never-list forbids. The store's terminal resets (done/fail/abort) already bound the state to the turn; the component gate is the render-side twin. Proven by the "exactly ONE live region" component assertion.
+- **The latch fires in the `sendStream` `onChunk` wiring, not inside `appendChunk`.** `appendChunk` is the legacy chunk mutation and stays byte-identical in behavior; the collapse is the agent turn's addition and lives beside it (`appendChunk` + `collapseAgentActivity`, the mutation idempotent from the second chunk on). Legacy invariance is then structural, and the wiring is proven by a store test driven through the real action's captured callbacks.
+- **The staged-stream e2e needed an interception outside `page.route`** — a single-body mock processes activity+chunk inside one read, so the pre-chunk render never paints. `mockStagedChatStream` (helpers/chatbot.js) wraps `window.fetch` in an init script and hands the body over a `ReadableStream` the spec drives stage by stage (`stagedSend`); the app's own fetch + SSE parsing path runs, each stage's rendered assertion gates the next send, and no fixed waits exist. The endpoint literal travels as the init script's argument — the e2e-stream-route gate forbids the string outside stream-route.js (the first validator run caught it).
+- **The e2e collapse-side flips are honest about what a one-body mock can see:** the two story-2.9 degradation tests now pin the collapse contract's END state (latch closed at the first chunk, nothing re-opened, no handle after done); the RENDER side lives in the staged spec.
+- **Mutation proofs run:** dropping the unverified guard turned the truth-table suite red (1 failed; restored: 13 passed); removing `visible=false` from the latch turned 3 specs red (restored: 31 passed); deleting one locale key turned the deep-key-set gate red (restored: 10 passed).
+- **Verification:** frontend `npm test` 157 suites / 4608 tests green (localeConsistency's 11×14 gate included); `eslint src/` clean (one pre-existing `vue/no-v-html` warning, untouched file); frontend + e2e Prettier clean; e2e tree ESLint clean; config-validator 674 passed / 0 failed; offline e2e specs (stream-route 11, chatbot helpers 25) green. `npx playwright test tests/e2e/chatbot/sse-contract.spec.js` NOT run — no stack is available in this environment; per the spec's own verification note, the unit suites carry the contract here, and the staged spec's determinism rests on the helper unit specs plus the venue run being required before merge.
+- **Incident, self-inflicted and repaired:** a mutation-proof revert used `git checkout --` on ChatBotComponent.vue and wiped the story's component edits; they were re-applied in full from the working notes and re-verified (full suite + lint + prettier green). A locale repair in the same session briefly deleted two pre-existing `okf.*.working` keys in zh.js (a `str.replace` matching three occurrences); both restored, `git diff` re-read story-only, locale gate green.
+- **Review fix — the caption's delivery signal (G1 finding F2).** The review proved the caption could never render on the live path: `verification.py` emits `translation_mode` as the constant `'none'` and no BFF code overwrote it. The fix closes the signal end-to-end: the BFF annotates the one mode it can know at verdict time (`streaming-units` when the relay flushed delivered units before the verdict frame; a failed relay keeps `'none'`), and the client reads the second mode off the wire itself (`onTranslation` marks `translationMode: 'post-stream'` — a whole-answer delivery is the one mode that sends a translation frame). Pinned by frame-writer tests (delivered → `streaming-units`, failed relay → `'none'`) and a store wiring test. Backend suite green after the change (100 suites / 2656 tests incl. the node-test verifier); frontend 157 / 4609.
+- **En copy aligned to EXPERIENCE (planning fix before G1).** The i18n values are the UX contract's (`EXPERIENCE.md` pins the `en` column); the initial implementation paraphrased several (`Step failed — trying to continue`, `Searching the knowledge base…`, `Could not read the source document`). `en.js` now carries the contract values verbatim (`Working…`, `Step completed.`, `A step failed.`, `Response verification could not be completed.`, `Searching knowledge…`, `Searched the knowledge base.`, `Reading source…`, `Read the source.`, `Reading the source failed.`). The other 13 locales translate the same meaning; the Manx/Sesotho strings remain best-effort under the recorded native-reviewer caveat.
+
+## Spec Change Log
+
+<!-- Append-only. Populated by step-04 during review loops. -->
+
+- **G1 finding F2 amended the frozen boundary "No change to the BFF frame writer".** The amendment is driven by the frozen intent itself: the AC "with the translation-scope caption when a translation was delivered" states a fact about DELIVERY, and the web cannot know delivery without the wire carrying it. With the BFF never annotating `translation_mode`, the caption was dead code on the live path (fireable only by mocks) — implementing the web half alone would have shipped the criterion unmet. The amendment is the smallest closing fix (one annotation in `doAgentTerminal` + the client's own post-stream carrier), keeps the five legacy event semantics untouched, and the remaining BFF scope (frame writer structure, positions, envelope) stays out of bounds as before.
+
+## Review Triage Log
+
+<!-- Append-only. Populated by step-04 on every review pass. -->
+
+### Global review G1 (2026-11-22, xhigh effort, whole branch vs origin/HEAD)
+
+| Finding | Verdict | Disposition |
+|---|---|---|
+| docker-compose agent-service env block forwards none of the TEI/Arango/vLLM knobs its port assembly requires — `AGENT_ENABLED=1` serves `503 run_surface_unconfigured` on every run | important — verified real (`search_knowledge.py:133-135` raises without the TEI endpoints; no pass-through in the compose block) | PRE-EXISTING (deployment pass-through from earlier stories, untouched by this diff) — filed as issue #2074 (`type::bug`, `area::deploy`, `status::backlog`). |
+| `translation_mode` is never overwritten by the BFF — the translation-scope caption can never render on the live path | important — verified real (`verification.py:452` constant `'none'`; no overwrite anywhere) | FIXED in this story (see Spec Change Log — the frozen boundary amended with the AC's own authority): BFF annotates `streaming-units` on delivered relay flush; client reads `post-stream` off the translation frame. Tests pin both. |
+| The story-2.10 agentic translation leg has no production consumer — AD-14 residual budget enforced nowhere on the served path | important — real (both agentic entries use the legacy request-resolved translator) | PRE-EXISTING (story-2.10 output, untouched by this diff) — filed as issue #2075 (`type::bug`, `area::backend`, `status::backlog`). |
+| The verdict frame ships every citation's full passage text to the client — unread wire weight | nit — real | PRE-EXISTING (2.6 payload relayed verbatim) — filed as issue #2076 (`type::bug`, `area::backend`, `status::backlog`). |
+| Pre-stream JSON refusals log a client disconnect that did not happen | nit — real | PRE-EXISTING — filed as issue #2077 (`type::bug`, `area::backend`, `status::backlog`). |
+| `initStreamQuery` `@returns` JSDoc omits `authHeaders` | pre_existing nit — real | PRE-EXISTING — filed as issue #2078 (`type::bug`, `area::backend`, `status::backlog`). |
+
+### FIX review F0 (2026-11-22, fresh context, correction diff d4a0a9cf1..ea05a2a31 only)
+
+Verdict: no important findings; four nits — three applied, one filed.
+
+| Finding | Disposition |
+|---|---|
+| Test gap: nothing pins that streaming-OFF + translation-requested keeps the verdict at `'none'` (a guard regression would mislabel a failed post-stream run) | APPLIED: new frame-writer test (streaming off + `language: 'DE'` + verdict → `'none'`). |
+| Whitespace-only answer edge: the annotation fires on a truthy-but-blank `fullResponseText` with a healthy relay | APPLIED: the guard now reads `/\S/.test(fullResponseText)` — no units delivered, no annotation. |
+| The e2e fixture staged `translation_mode:'streamed'`, a value the wire can never send | APPLIED: fixtures aligned to the pinned vocabulary (`'streaming-units'`) in the e2e spec and the frontend suites. |
+| The non-streaming JSON path never records `translation_mode` — caption dead on that surface | PRE-EXISTING (story-2.4b surface) — filed as issue #2079 (`type::bug`, `area::backend`, `status::backlog`). |
+
+Backend 100 suites / 2649 tests green (one new), frontend 157 / 4609 green after the fixes.
+
+### Global review G2 (2026-11-22, xhigh effort, MR diff vs the umbrella base)
+
+Verdict: no important findings — six nits. All verification targets re-checked clean (annotation logic, truth table, latch, persistence exclusion, 11×14 locale parity, staged-fetch shim).
+
+| Finding | Disposition |
+|---|---|
+| Caption lost on a server-history restore (`loadConversation` rebuilds messages without `translationMode`) | FIXED: `storableMetadata` folds `translation_mode` into the saved metadata blob at transcript-save time; the existing metadata-fallback predicate picks it up on restore. Unit test added (fold in, nothing folded for mode-less messages). |
+| A relay that delivers units and THEN fails annotates `'none'` — a mixed run under-reports its delivery | ACCEPTED (fail-safe direction, never overstates): documented in the annotation comment as deliberate — the annotation keys on the post-flush failure latch. |
+| The caption's metadata fallback has no writer on today's wire; the JSON-path test mocks a field production never sends | ACCEPTED: the fallback is the restore carrier now (via `storableMetadata`) and the JSON surface's carrier once #2079 lands — the test pins that contract. #2079 remains the writer fix. |
+| Locale drift: all 13 non-en locales carried a continuation clause on `stepFailed` that en (the source of truth, EXPERIENCE-pinned) lacks | FIXED: the clause stripped from all 13 — every locale now says only that the step failed, matching the contract and the en value. |
+| Story file text contradicted the shipped annotation (two passages still said the annotation was owed elsewhere) | FIXED: both passages (Code Map, Design Notes) updated to the landed state, pointing at the Spec Change Log amendment. |
+| Story refs in shipped-code comments (branch-wide pattern; this diff added its own) | FIXED for every comment THIS diff added — refs stripped, technical substance kept. Pre-existing files' refs are their own stories' output (branch-wide cleanup, out of this story's scope). |
+
+### FIX review F1 (2026-11-22, fresh context, correction diff f231bc8cf..8ad4aaedd only)
+
+Verdict: **CLEAN** — no findings. All six correction goals verified against the code: `storableMetadata` copy semantics (no store mutation; user messages byte-identical to before), metadata-blob consumers (backend stores verbatim, QueryInspector reads named keys only), the restore chain complete (save → backend → `loadConversation` → predicate), 13-locale value-only edits (gate green, en untouched), describe-string renames inert (no testNamePattern anywhere), comment sweep confirmed against the true branch point `016041d74` (residual refs blame to pre-branch merges). Suites re-verified by the reviewer: frontend 157/4610, backend 100/2649 (+38 node tests).
+
+### Quality phase — simplify + test-audit (2026-11-22)
+
+**Simplify (4 angles, findings applied in commit `1cf4b3a0a`):** the label computed now composes the component's own `translate(key, fallback)` over one generic-key map (the store owns the status normalization — the re-derived ternary chain deleted); `persistConversation` writes the rehydrate contract explicitly (`{openId, conversations}`) instead of serialize-everything-then-delete (transient root state excluded structurally, no per-feature denylist); the per-chunk latch commit is guarded off the streaming hot path; `sseBody` delegates to `sseFrame` (one wire-dialect spelling per file); the staged shim's redundant `ready` flag collapsed into the object's existence behind one `ensureStagedStream` wait; the suites reuse the real-i18n rig and the real status module instead of hand-rolled lookalikes. **Rejected:** the altitude suggestion to stop writing `is_grounded:false` for unverified runs upstream — that derivation is story-2.6's pinned contract ("derived is_grounded, true iff grounded", applied verbatim by the JSON consumer), so the client-side guard is the honest reader of a spec'd encoding.
+
+**Test-audit (authoring gate + junk-pattern sweep over this diff's tests):** every added test protects a behavior at its owning boundary (store state machine + wiring through the real action; parser forwarding/inertness at the service switch; render/a11y/truth-table at the component; annotation pins at the frame writer; rendered staged behavior through declared handles). One rename: the metadata-fallback truth-table case is now titled as what it became after `storableMetadata` — the restore carrier (the fallback has a real writer on the save path, not only the future JSON one). No deletions; no production seam added for tests (`storableMetadata` has a production caller).
+
+## Design Notes
+
+**State machine (turn-scoped, store root — not under `conversations`, stripped from persistence).** `{visible, operation, status, collapsed}`: `agent_activity` frame → if `collapsed`, ignore; else `visible=true` + set op/status (`started`→running, `completed`→completed, `failed`→failed, anything else → running). First `chunk` → `collapsed=true, visible=false`. Reset on new send, `finishStream`, `failStream`, `markInterrupted`. The msg object never carries activity state (nothing persisted, nothing replayed).
+
+**Label resolution.** `operation` present and status mapped → `chatbot.agentActivity.operations.<operation>.<running|completed|failed>`; otherwise state-generic `working`/`stepCompleted`/`stepFailed`. `translate()` falls back to en then the supplied default — a missing catalogue entry degrades, never blanks.
+
+**Verdict projection (client side).** The verdict frame arrives before `metadata`; `setLastBotMetadata` later replaces `msg.metadata`, so the caption signal cannot live in metadata from the verdict frame: store `translation_mode` as `msg.translationMode` from the verdict frame (SSE; the BFF annotates the streaming-units delivery — see the Spec Change Log), and read `msg.metadata.grounding_status` (set by `assembleAgentMetadata` on the metadata frame) for the tri-state. Ungrounded warning condition gains one guard: `msg.metadata?.grounding_status !== 'unverified'` — legacy metadata carries no `grounding_status`, so the legacy warning is untouched. Caption condition: `msg.metadata?.grounding_status === 'grounded'` AND `(msg.translationMode ?? msg.metadata?.translation_mode ?? 'none') !== 'none'`; the fallback row is written at save time (`storableMetadata` folds `translationMode` into the persisted metadata), so a restored transcript scopes its verdict like a live one. Non-streaming JSON path: the note renders from metadata the same way; the caption reads `metadata.translation_mode` when present (the JSON surface does not write it yet — issue #2079).
+
+**Failed chip = the `.answer-warning` recipe** (`padding: var(--space-xs) var(--space-sm)`, `var(--radius-sm)`, `--warning-bg`/`--warning-ink`); running/completed = the saving-indicator recipe (`--muted` label). Marker: `DsSpinner size="sm"` while running, static dot (nav-status pill idiom) when completed, `AlertTriangle` glyph (aria-hidden) when failed. Reduced motion: `@media (prefers-reduced-motion: reduce)` → `:deep` spinner animation `none`, inside the line's own scoped style.
+
+## Verification
+
+**Commands:**
+- `cd components/gov-chat-frontend && npm test` -- expected: all suites green, including `localeConsistency.test.js` (11 keys × 14 locales) and the new component/service/store tests
+- `cd components/gov-chat-frontend && npx eslint src/` -- expected: clean (use `rtk proxy` for the real result)
+- `npx playwright test tests/e2e/chatbot/sse-contract.spec.js` -- expected: green against a local stack per `tests/e2e/run/run-local-e2e.sh`; when no stack is available, state so and rely on the unit suites

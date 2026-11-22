@@ -13,7 +13,7 @@
 //     the app against these very bytes, so a silent drift here would
 //     unhook both.
 const { test, expect } = require('@playwright/test');
-const { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill } = require('./stream-route');
+const { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFrame, sseFulfill } = require('./stream-route');
 
 const GROUNDED_VERDICT = {
   grounding_status: 'grounded',
@@ -118,6 +118,28 @@ test.describe('sseFulfill — the shared envelope', () => {
     await sseFulfill(route, 'BODY');
     expect(calls).toEqual([{ status: 200, contentType: 'text/event-stream', headers: CORS_HEADERS, body: 'BODY' }]);
     expect(CORS_HEADERS).toEqual({ 'access-control-allow-origin': '*' });
+  });
+});
+
+test.describe('sseFrame — one line outside a full body', () => {
+  // The staged-stream spec sends frames one at a time; the pin is the
+  // same wire spelling sseBody uses, so a staged frame cannot drift from
+  // a body-built one (the app parses both with the same split).
+  test('a frame is the data prefix, the verbatim JSON, and a terminator', () => {
+    const payload = {
+      type: 'agent_activity',
+      version: 1,
+      status: 'started',
+      operation: 'search_knowledge',
+      callId: 'c1'
+    };
+    expect(sseFrame(payload)).toBe(`data: ${JSON.stringify(payload)}\n\n`);
+  });
+
+  test('staged frames splice into the body dialect without changing it', () => {
+    const frames = parseFrames(`${sseFrame({ type: 'agent_activity', status: 'started' })}${sseBody(['x'], null)}`);
+    expect(frames.map((f) => f.type)).toEqual(['agent_activity', 'chunk', 'done']);
+    expect(frames[0]).toEqual({ type: 'agent_activity', status: 'started' });
   });
 });
 

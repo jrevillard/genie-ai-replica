@@ -25,7 +25,9 @@
 // UNRESTRICTED serving repository (restricted ones stay fenced); in closed
 // mode it is an EMPTY carrier WITH a loud warning — never a silent one.
 
-const crypto = require('crypto');
+// nodeCrypto, not crypto: Node 19+ ships a global `crypto`, and shadowing
+// it is a redeclare error (the repo's convention — retrieval-config-client).
+const nodeCrypto = require('crypto');
 const dbService = require('../shared-lib/db-connection-service');
 const { resolveGraphSet } = require('./authz-resolver-service');
 const { parseOkfScope } = require('./scope-authz-service');
@@ -65,7 +67,7 @@ async function ensureCollection(db) {
 async function groupScopes(ref) {
   const group = (await keycloakAccess.findGroupByName) ? await keycloakAccess.findGroupByName(ref) : null;
   const groupId = group && group.id ? group.id : ref;
-  let roles = [];
+  let roles;
   try {
     roles = (await keycloakAccess.groupRealmRoles(groupId)) || [];
   } catch (err) {
@@ -121,7 +123,7 @@ function repoSetHash(repos) {
     .map((r) => `${r.repo_id}:${r.graph_name}`)
     .sort()
     .join('\n');
-  return crypto.createHash('sha256').update(pairs).digest('hex').slice(0, 32);
+  return nodeCrypto.createHash('sha256').update(pairs).digest('hex').slice(0, 32);
 }
 
 /**
@@ -206,7 +208,7 @@ async function createContext(payload = {}, opts = {}) {
   const col = await ensureCollection(db);
   const now = new Date().toISOString();
   const doc = {
-    _key: `ec-${crypto.randomUUID()}`,
+    _key: `ec-${nodeCrypto.randomUUID()}`,
     name: input.name,
     scopes: input.scopes,
     principal_refs: input.principal_refs,
@@ -268,7 +270,7 @@ async function getContext(id) {
 /** LIST the contexts (newest first). */
 async function listContexts() {
   const db = await dbService.getConnection();
-  const col = await ensureCollection(db);
+  await ensureCollection(db);
   const cursor = await db.query('FOR c IN @@collection SORT c.created_at DESC RETURN c', {
     collection: COLLECTION
   });

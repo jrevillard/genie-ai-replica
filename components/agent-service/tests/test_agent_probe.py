@@ -301,6 +301,9 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
         ({"prompt_tokens": 101.5, "completion_tokens": 23}, (None, 23)),  # a fractional float is garbage
         ({"prompt_tokens": True, "completion_tokens": 23}, (None, 23)),  # a boolean is never a count
         ({"prompt_tokens": "many", "completion_tokens": 23}, (None, 23)),  # a non-numeric string is garbage
+        ({"prompt_tokens": 1.0e15, "completion_tokens": 23}, (None, 23)),  # over MAX_SANE_TOKENS: garbage
+        ({"prompt_tokens": "-5", "completion_tokens": 23}, (None, 23)),  # a negative count is garbage
+        ({"prompt_tokens": 0, "completion_tokens": 23}, (None, 23)),  # a non-positive count is garbage
     ],
 )
 def test_complete_accepts_the_numeric_forms_proxies_serve_for_usage(served, expected):
@@ -308,7 +311,9 @@ def test_complete_accepts_the_numeric_forms_proxies_serve_for_usage(served, expe
     # serialize numbers as floats or digit strings; a usage record served
     # in either form is a complete record, not an incomplete one — the
     # old isinstance(int) gate flagged every such run "incomplete" and
-    # left the token budget unbounded for the whole run.
+    # left token enforcement degraded to a lower bound (agent/budget.py
+    # check_tokens). The sane cap mirrors _coerce_window so a
+    # garbage-but-integral record cannot read as a spent budget.
     transport = _transport((200, _chat_body(content="a", usage=served)))
     client = ProbeModelClient(verifier_config(), transport=transport)
     turn = asyncio.run(client.complete([{"role": "user", "content": "q"}], (), max_output_tokens=None))

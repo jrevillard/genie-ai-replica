@@ -53,7 +53,7 @@ from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content, resolve_window_tokens
-from preparation.translation import HttpxTransport, coerce_int
+from preparation.translation import MAX_SANE_TOKENS, HttpxTransport, coerce_int
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
@@ -473,10 +473,16 @@ class ProbeModelClient:
         # The shared coerce_int stance: proxies serialize numbers as floats
         # or digit strings, and a boolean is never a count — the old
         # isinstance(int) gate flagged every float/string-served record
-        # "incomplete" and left the token budget unbounded for the run.
+        # "incomplete" and left token enforcement degraded to a lower
+        # bound for the run (agent/budget.py check_tokens). The sane cap
+        # mirrors _coerce_window: a garbage-but-integral record (e.g.
+        # 1e15) must not read as a spent budget and end the run as
+        # budget-exhausted.
         usage = body.get("usage")
         if isinstance(usage, dict):
-            return coerce_int(usage.get(name))
+            coerced = coerce_int(usage.get(name))
+            if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
+                return coerced
         return None
 
 

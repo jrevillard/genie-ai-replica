@@ -217,3 +217,28 @@ describe('the pre-adoption checklist is satisfied for every pinned dependency', 
     expect(lane).not.toMatch(/pytest==/);
   });
 });
+
+describe('agentic activation wiring on the BFF container', () => {
+  let backendBlock;
+
+  beforeAll(() => {
+    const composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
+    backendBlock = parseComposeServiceBlock(composeText, 'backend');
+  });
+
+  test('the backend container receives AGENT_ENABLED and AGENT_SERVICE_URL', () => {
+    // The shared query routing helper reads both inside the BFF. A variable
+    // absent from a service's environment block is unreachable by that
+    // container, so an unwired flag would leave the BFF serving legacy
+    // while the agent service runs — the half-activated deployment the
+    // routing helper exists to prevent.
+    expect(backendBlock).not.toBeNull();
+    expect(backendBlock).toMatch(/- AGENT_ENABLED=\$\{AGENT_ENABLED:-0\}/);
+    expect(backendBlock).toMatch(/- AGENT_SERVICE_URL=\$\{AGENT_SERVICE_URL:-http:\/\/agent-service:8010\}/);
+  });
+
+  test('the env template documents the routing target as an optional override', () => {
+    const envText = fs.readFileSync(ENV_PATH, 'utf-8');
+    expect(envText).toMatch(/^#\s*AGENT_SERVICE_URL=http:\/\/agent-service:8010$/m);
+  });
+});

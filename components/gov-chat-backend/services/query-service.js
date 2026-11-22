@@ -74,13 +74,32 @@ function agentServiceUrl() {
 // their upstream target from this helper and from nowhere else: a deployment
 // that flips AGENT_ENABLED cannot end up with one path agentic and the other
 // legacy. The agentic target is the agent service — it can never be the
-// chatqna/OPEA URL, a guarantee a test carries (the CI dependency gate
-// cannot see the BFF runtime call graph, so no grep enforces it).
+// chatqna/OPEA URL, a guarantee a test carries behaviorally (no grep can see
+// the BFF runtime call graph).
 function resolveQueryRoute() {
   if (process.env.AGENT_ENABLED === '1') {
     return { agentic: true, url: agentServiceUrl() };
   }
   return { agentic: false, url: opeaChatQnaUrl() };
+}
+
+// The refusal both entries throw while the agentic route has no serving
+// path. One constant, one constructor: the two entries cannot answer an
+// activated flag with different refusal texts. The 503 + code let the
+// routes map an intentional, configuration-driven refusal away from the
+// 500 "unexpected server fault" class (monitors and retry clients read
+// those as crashes).
+const AGENTIC_REFUSAL_CODE = 'AGENTIC_PATH_NOT_SERVED';
+const AGENTIC_REFUSAL_MESSAGE =
+  'AGENTIC_PATH_NOT_SERVED: the agentic path is activated (AGENT_ENABLED=1) ' +
+  'but its serving path does not exist yet; the request is refused before ' +
+  'any upstream call';
+
+function agenticRefusalError() {
+  const error = new Error(AGENTIC_REFUSAL_MESSAGE);
+  error.code = AGENTIC_REFUSAL_CODE;
+  error.statusCode = 503;
+  return error;
 }
 
 // The target language the client asked for. It travels to OPEA, which
@@ -604,18 +623,14 @@ class QueryService {
 
     // The routing decision is the request's upstream truth, taken once and
     // taken before the query record is written: a request on the agentic
-    // branch persists nothing, because the branch has no serving path yet
-    // (the BFF frame writer is story 2.4's deliverable). Refusing loudly —
-    // on both entries, with the same marker — keeps an activated deployment
-    // honest; silently serving legacy under AGENT_ENABLED=1 would be the
-    // half-activated deployment the shared helper exists to prevent.
+    // branch persists nothing, because the branch has no serving path yet.
+    // Refusing loudly — on both entries, with the same refusal — keeps an
+    // activated deployment honest; silently serving legacy under
+    // AGENT_ENABLED=1 would be the half-activated deployment the shared
+    // helper exists to prevent.
     const route = resolveQueryRoute();
     if (route.agentic) {
-      throw new Error(
-        'AGENTIC_PATH_NOT_SERVED: AGENT_ENABLED=1 activated the agentic path, ' +
-          'but its BFF serving path does not exist yet (story 2.4, BFF frame writer); ' +
-          'the request is refused before any upstream call'
-      );
+      throw agenticRefusalError();
     }
 
     const queryText = pickUserText(queryData.messages, queryData.userQuestion);
@@ -1025,11 +1040,7 @@ class QueryService {
       // refusal is mode-independent.
       const route = resolveQueryRoute();
       if (route.agentic) {
-        throw new Error(
-          'AGENTIC_PATH_NOT_SERVED: AGENT_ENABLED=1 activated the agentic path, ' +
-            'but its BFF serving path does not exist yet (story 2.4, BFF frame writer); ' +
-            'the request is refused before any upstream call'
-        );
+        throw agenticRefusalError();
       }
 
       // Derive text from the last message for backward compatibility and analytics
@@ -2292,3 +2303,5 @@ module.exports.pickUserText = pickUserText;
 // Pure helper, no instance state — the production branch points are the two
 // request entries, which read it internally.
 module.exports.resolveQueryRoute = resolveQueryRoute;
+// The refusal marker, exported for the routes' 503 mapping and the tests.
+module.exports.AGENTIC_REFUSAL_CODE = AGENTIC_REFUSAL_CODE;

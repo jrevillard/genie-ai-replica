@@ -299,6 +299,23 @@ describe('POST /stream', () => {
     expect(response.body.error).toBe('STREAM_ERROR');
   });
 
+  it('maps the intentional agentic refusal to 503 with the marker as the code', async () => {
+    // An activated flag without a serving path is a named, operator-chosen
+    // state — not a server fault. 503 + the machine-readable code keep
+    // monitors and retry clients from reading it as a crash.
+    const refusal = new Error('AGENTIC_PATH_NOT_SERVED: the agentic path is activated');
+    refusal.code = 'AGENTIC_PATH_NOT_SERVED';
+    refusal.statusCode = 503;
+    queryService.initStreamQuery.mockRejectedValue(refusal);
+    queryService.AGENTIC_REFUSAL_CODE = 'AGENTIC_PATH_NOT_SERVED';
+
+    const response = await authPost('/api/queries/stream', { sessionId: 's1' });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
+    delete queryService.AGENTIC_REFUSAL_CODE;
+  });
+
   it('should return 504 on timeout/abort', async () => {
     const abortError = new Error('Timeout');
     abortError.code = 'ECONNABORTED';
@@ -1256,6 +1273,22 @@ describe('POST /', () => {
 
     expect(response.status).toBe(500);
     expect(response.body.message).toBe('Create failed');
+  });
+
+  it('maps the intentional agentic refusal to 503 with the marker as the code', async () => {
+    // The same mapping the streaming path applies: the refusal is a named,
+    // configuration-driven state, never the 500 unexpected-fault class.
+    const refusal = new Error('AGENTIC_PATH_NOT_SERVED: the agentic path is activated');
+    refusal.code = 'AGENTIC_PATH_NOT_SERVED';
+    refusal.statusCode = 503;
+    queryService.createQuery.mockRejectedValue(refusal);
+    queryService.AGENTIC_REFUSAL_CODE = 'AGENTIC_PATH_NOT_SERVED';
+
+    const response = await authPost('/api/queries', { sessionId: 's1' });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
+    delete queryService.AGENTIC_REFUSAL_CODE;
   });
 
   // Review 2026-10-29 round 3: a bearer failure caught during OKF fan-out

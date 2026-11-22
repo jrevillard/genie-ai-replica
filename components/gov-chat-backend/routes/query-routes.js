@@ -686,13 +686,20 @@ module.exports = (queryService) => {
           // resolution propagates as 401 — never silently degraded to the
           // legacy path (the request itself is invalid).
           res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+        } else if (error.code && error.code === queryService.AGENTIC_REFUSAL_CODE) {
+          // The intentional, configuration-driven agentic refusal is not a
+          // server fault: 503 with the marker as the code keeps monitors and
+          // retry clients from reading an operator's own flag flip as a crash.
+          res.status(503).json({ error: queryService.AGENTIC_REFUSAL_CODE, message: error.message });
         } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
           res.status(504).json({ error: 'CHATQNA_UNAVAILABLE', message: 'ChatQnA service unavailable or timed out' });
         } else {
           res.status(500).json({ error: 'STREAM_ERROR', message: error.message });
         }
       } else {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: 'STREAM_ERROR' })}\n\n`);
+        const sseErrorCode =
+          error.code && error.code === queryService.AGENTIC_REFUSAL_CODE ? error.code : 'STREAM_ERROR';
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: sseErrorCode })}\n\n`);
         res.end();
       }
     }
@@ -904,6 +911,12 @@ module.exports = (queryService) => {
       // fault.
       if (error.statusCode === 401) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
+      }
+      if (error.code && error.code === queryService.AGENTIC_REFUSAL_CODE) {
+        // The intentional, configuration-driven agentic refusal: 503 with
+        // the marker as the code — the same mapping the streaming path
+        // applies, never the 500 "unexpected server fault" class.
+        return res.status(503).json({ error: queryService.AGENTIC_REFUSAL_CODE, message: error.message });
       }
       res.status(500).json({ message: error.message });
     }

@@ -2020,21 +2020,42 @@ describe('query routing — one flag, both entries', () => {
   });
 
   it('flag on: both entries refuse with the same marker, before any persistence or upstream call', async () => {
-    // Stream entry: the refusal fires before the query record is written.
+    // Stream entry: the refusal fires before the query record is written,
+    // and carries the code/status the routes map to a 503.
+    let streamError = null;
     await withEnv({ AGENT_ENABLED: '1' }, async () => {
-      await expect(queryService.initStreamQuery(createMockQueryData(), {})).rejects.toThrow(REFUSAL);
+      try {
+        await queryService.initStreamQuery(createMockQueryData(), {});
+      } catch (error) {
+        streamError = error;
+      }
+      expect(streamError).not.toBeNull();
+      expect(streamError.message).toContain(REFUSAL);
+      expect(streamError.code).toBe('AGENTIC_PATH_NOT_SERVED');
+      expect(streamError.statusCode).toBe(503);
       expect(mockQueriesCollection.save).not.toHaveBeenCalled();
     });
 
-    // Non-stream entry: same marker, the worker is never called, nothing
-    // persisted. Two genuinely separate entry points, one decision.
+    // Non-stream entry: same refusal — asserted here as FULL cross-entry
+    // equality of message and code, not just a per-entry marker match — the
+    // worker is never called, nothing persisted. Two genuinely separate
+    // entry points, one decision.
     await withEnv({ AGENT_ENABLED: '1', CONTEXT_OPTION: undefined }, async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
       const workerSpy = jest
         .spyOn(queryService, 'runOPEAWorker')
         .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
       try {
-        await expect(queryService.createQuery(createMockQueryData())).rejects.toThrow(REFUSAL);
+        let nonStreamError = null;
+        try {
+          await queryService.createQuery(createMockQueryData());
+        } catch (error) {
+          nonStreamError = error;
+        }
+        expect(nonStreamError).not.toBeNull();
+        expect(nonStreamError.message).toBe(streamError.message);
+        expect(nonStreamError.code).toBe(streamError.code);
+        expect(nonStreamError.statusCode).toBe(streamError.statusCode);
         expect(workerSpy).not.toHaveBeenCalled();
         expect(mockQueriesCollection.save).not.toHaveBeenCalled();
       } finally {

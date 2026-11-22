@@ -79,6 +79,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
+import tracing
 from capabilities.citations import source_documents_from_citations
 
 from .budget import BudgetExhausted, RunBudgetMonitor
@@ -339,22 +340,31 @@ class GroundingJudge:
             logger.info("grounding judge skipped: %s", spent)
             return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
         messages = judge_messages(answer_text, citations)
-        try:
-            turn = await asyncio.wait_for(
-                self.model_client.complete(messages, (), max_output_tokens=bound),
-                timeout=self.timeout_seconds,
-            )
-        except TimeoutError:
-            logger.info("grounding judge timed out after %.3fs", self.timeout_seconds)
-            return {"ran": True, "outcome": JUDGE_OUTCOME_TIMEOUT, "verdict": None}
-        except BudgetExhausted as spent:  # the bound raced the budget mid-call accounting
-            logger.info("grounding judge refused: %s", spent)
-            return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
-        verdict = parse_judge_verdict(turn.content)
-        if verdict is None:
-            return {"ran": True, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None}
-        self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
-        return {"ran": True, "outcome": JUDGE_OUTCOME_COMPLETED, "verdict": verdict}
+        # The judge's run-path span (story 2.11): the outcome attribute is
+        # read OFF the result after the decision ladder — the span never
+        # interleaves with the branch logic, and a new early-return path
+        # cannot forget the attribute.
+        with tracing.with_span("agent.grounding_judge") as judge_span:
+            try:
+                turn = await asyncio.wait_for(
+                    self.model_client.complete(messages, (), max_output_tokens=bound),
+                    timeout=self.timeout_seconds,
+                )
+            except TimeoutError:
+                logger.info("grounding judge timed out after %.3fs", self.timeout_seconds)
+                result = {"ran": True, "outcome": JUDGE_OUTCOME_TIMEOUT, "verdict": None}
+            except BudgetExhausted as spent:  # the bound raced the budget mid-call accounting
+                logger.info("grounding judge refused: %s", spent)
+                result = {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
+            else:
+                verdict = parse_judge_verdict(turn.content)
+                if verdict is None:
+                    result = {"ran": True, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None}
+                else:
+                    self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
+                    result = {"ran": True, "outcome": JUDGE_OUTCOME_COMPLETED, "verdict": verdict}
+            judge_span.set_attribute("outcome", result["outcome"])
+            return result
 
 
 def judge_messages(answer_text: str, citations: list[dict]) -> list[dict]:
@@ -569,6 +579,17 @@ class VerificationPipeline:
             )
 
     async def _finalize(self, answer_text: str) -> Verdict:
+        # The finalize's run-path span (story 2.11): the verification stage
+        # of the trace waterfall. The decision body is UNCHANGED
+        # (`_finalize_decision`, the pre-diff ladder); the span reads the
+        # tri-state status off the verdict it returns — the telemetry never
+        # interleaves with the branch logic.
+        with tracing.with_span("agent.verify_finalize", attributes={"policy": self.policy}) as finalize_span:
+            verdict = await self._finalize_decision(answer_text)
+            finalize_span.set_attribute("grounding_status", verdict.status)
+            return verdict
+
+    async def _finalize_decision(self, answer_text: str) -> Verdict:
         # The insufficiency decision runs FIRST — before the judge, before
         # the grounded claim is surfaced (FR-12: degraded beats grounded).
         # The judge is skipped on this path: the answer it would evaluate is

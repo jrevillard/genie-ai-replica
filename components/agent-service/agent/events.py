@@ -82,6 +82,17 @@ def _vocabulary_never_carries_a_bff_frame_name() -> None:
 _vocabulary_never_carries_a_bff_frame_name()
 
 
+def run_started_payload(question: str, execution_versions: dict | None) -> dict:
+    """The ``run_started`` payload — ONE home for the handshake shape
+    (story 2.11, AD-11): the question plus the execution-version record
+    when one was built. A ``None`` record keeps the probe-shaped
+    ``{"question"}`` payload (the record key is additive)."""
+    payload: dict = {"question": question}
+    if execution_versions is not None:
+        payload["execution_versions"] = execution_versions
+    return payload
+
+
 class AgentEvent(BaseModel):
     """The internal envelope of every seam event.
 

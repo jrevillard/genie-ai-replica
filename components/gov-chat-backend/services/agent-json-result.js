@@ -8,6 +8,9 @@ const {
   resolveUpstreamTimeoutMs,
   deriveDeadlineMs,
   assembleAgentMetadata,
+  captureRunStart,
+  seamRunOutcome,
+  createAgentRunAttribution,
   readUpstreamBody,
   passthroughBody,
   agentHttpAgent,
@@ -158,6 +161,23 @@ async function runAgentJsonTurn({
   const effectiveTimeoutMs = resolveUpstreamTimeoutMs();
   const controller = new AbortController();
   const bearer = headers?.authorization || null;
+  // Story 2.11 — the attribution state: the run-start block persisted AT
+  // START (the same writes the streaming consumer makes) through the shared
+  // writer pair (agent-run-contract.js — one home for the fire-and-forget
+  // discipline and the one-honest-outcome latch: a deadline fire's
+  // `timed_out` is never overwritten by the teardown it caused).
+  let runStart = null;
+  // The run actually started (the 200 seam stream is being consumed): the
+  // gate that keeps a slow refusal body's deadline fire from writing a
+  // `timed_out` the run never earned.
+  let legEstablished = false;
+  const attribution = createAgentRunAttribution({
+    queryService,
+    queryId,
+    logPrefix: 'AgentJsonResult',
+    gate: () => legEstablished
+  });
+  const persistRunOutcome = attribution.persistRunOutcome;
 
   // The shared posture resolution (one home with the fan-out carrier — no
   // double upstream calls, no drift). Fail-closed, DELIBERATELY stricter
@@ -239,6 +259,11 @@ async function runAgentJsonTurn({
   deadline = setTimeout(() => {
     deadline = null;
     logger.warn('AgentJsonResult.upstream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
+    // The BFF-attributed deadline is an honest terminal fact (story 2.11).
+    // Latched: the abort's stream teardown must not overwrite it. The
+    // pre-200 refusals (a slow 429/503 body under the armed deadline) wrote
+    // nothing and still don't — the run never started.
+    persistRunOutcome('timed_out');
     controller.abort();
   }, effectiveTimeoutMs);
 
@@ -273,6 +298,7 @@ async function runAgentJsonTurn({
   // once a terminal state is captured; every path below funnels through the
   // one `failure` slot, so nothing throws INSIDE a stream handler (a throw
   // there would be an uncaught exception, not a rejection).
+  legEstablished = true;
   const stream = response.data;
   let buffer = '';
   let fullResponseText = '';
@@ -292,7 +318,16 @@ async function runAgentJsonTurn({
       const event = parsed.event;
       runId = event.run_id;
       switch (event.kind) {
-        case 'run_started':
+        case 'run_started': {
+          // Run lifecycle is seam-internal; the payload IS the run-start
+          // handshake (story 2.11, AD-11): persisted AT START, fire-and-
+          // forget — a run that later fails keeps its versions (the tail
+          // that would write them never runs on a throw). captureRunStart
+          // is the ONE shape home (the streaming consumer shares it).
+          runStart = captureRunStart(event);
+          attribution.persistRunStart(runStart);
+          break;
+        }
         case 'text_message_started':
         case 'text_message_finished':
         case 'run_finished':
@@ -319,6 +354,12 @@ async function runAgentJsonTurn({
               ? event.payload.message
               : 'the agent run failed';
           failure = new AgentJsonTurnError(502, { error: 'AGENT_RUN_ERROR', message });
+          // The agent's own verdict lands on the doc (story 2.11): the
+          // shared mapping — the usage record's outcome when it already
+          // arrived, else the event's code verbatim (the post-failure
+          // frames are ignored below, so the record is not consulted
+          // here).
+          persistRunOutcome(seamRunOutcome(event, usageRecord));
           clearDeadline();
           // Idempotent: the leg must not keep working behind a dead consumer.
           controller.abort();
@@ -372,6 +413,10 @@ async function runAgentJsonTurn({
       error: 'AGENT_SERVICE_UNAVAILABLE',
       message: error.message
     });
+    // The upstream died before the final metadata (story 2.11): the doc
+    // keeps its versions and reads `interrupted`. Latched — a deadline
+    // fire's `timed_out` is never overwritten by the abort's teardown.
+    persistRunOutcome('interrupted');
   });
 
   // Multi-byte UTF-8 characters can split across chunk boundaries — decode on
@@ -442,9 +487,11 @@ async function runAgentJsonTurn({
 
   // The assembled metadata — the same home the streaming terminal uses —
   // plus THIS story's own derivation: the V05 abstention vocabulary, mapped
-  // from the verdict (no verdict → `abstained` stays null).
+  // from the verdict (no verdict → `abstained` stays null). The assembled
+  // block merges the run-start record + the `answered` outcome (story
+  // 2.11) — createQuery's tail writes it, completing the start write.
   const metadata = applyAbstentionOverlay(
-    assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord }),
+    assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome: 'answered' }),
     capturedVerdict
   );
 

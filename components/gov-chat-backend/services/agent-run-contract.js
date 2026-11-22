@@ -195,13 +195,25 @@ const emptyStreamMetadata = () => ({
  * @param {Object|null} params.verdict - The captured verdict payload.
  * @param {string|null} params.runId - The seam run id.
  * @param {Object|null} params.usageRecord - The terminal usage record.
+ * @param {Object|null} [params.runStart] - The captured run-start block
+ *   (story 2.11: `{run_id, execution_versions, started_at}` — what the
+ *   `run_started` seam event carried). Merged into `agent_run` so the
+ *   success finalize COMPLETES the start write instead of clobbering it:
+ *   a finalize that never arrives leaves the start write intact, which IS
+ *   the cancelled-run guarantee.
+ * @param {string|null} [params.outcome] - The honest terminal outcome
+ *   (story 2.11 vocabulary). Carried with `finished_at` on the assembled
+ *   block; the BFF-terminal paths write theirs through the outcome patch
+ *   instead (query-service persistAgentRunOutcome).
  * @returns {Object}
  */
 function assembleAgentMetadata({
   emptyStreamMetadata: baseFactory = emptyStreamMetadata,
   verdict,
   runId,
-  usageRecord
+  usageRecord,
+  runStart,
+  outcome
 }) {
   // ONE deliberate override on the legacy empty-stream base (story 3.2):
   // analytics vocabulary parity with the legacy answered path.
@@ -222,10 +234,92 @@ function assembleAgentMetadata({
     metadata.is_grounded = false;
   }
   metadata.agent_run = { run_id: runId ?? null };
+  if (runStart && typeof runStart === 'object') {
+    if (runStart.execution_versions !== undefined && runStart.execution_versions !== null) {
+      metadata.agent_run.execution_versions = runStart.execution_versions;
+    }
+    if (runStart.started_at) {
+      metadata.agent_run.started_at = runStart.started_at;
+    }
+  }
   if (usageRecord) {
     metadata.agent_run.usage_record = usageRecord;
   }
+  if (outcome) {
+    metadata.agent_run.outcome = outcome;
+    metadata.agent_run.finished_at = new Date().toISOString();
+  }
   return metadata;
+}
+
+// ─── the run attribution (story 2.11, AD-11) ────────────────────────────────
+
+/**
+ * The run-start block a `run_started` seam event carries — ONE home for the
+ * shape both consumers persist AT START and the success finalize later
+ * completes. `started_at` is minted HERE (one fact, minted once): the start
+ * write and the finalize write carry the same bytes by construction.
+ * @param {Object} event - The parsed seam envelope.
+ * @returns {{run_id: string|null, execution_versions: Object|null, started_at: string}}
+ */
+function captureRunStart(event) {
+  const payloadVersions = event?.payload?.execution_versions;
+  return {
+    run_id: event?.run_id ?? null,
+    execution_versions:
+      payloadVersions && typeof payloadVersions === 'object' && !Array.isArray(payloadVersions)
+        ? payloadVersions
+        : null,
+    started_at: new Date().toISOString()
+  };
+}
+
+/**
+ * The honest outcome a seam `run_error` maps to: the terminal usage
+ * record's outcome when it already arrived, else the event's code verbatim
+ * (the loop keeps code == record outcome), else the generic `error`.
+ * @param {Object} event - The parsed seam envelope.
+ * @param {Object|null} usageRecord - The terminal usage record, when captured.
+ * @returns {string}
+ */
+function seamRunOutcome(event, usageRecord) {
+  if (usageRecord?.outcome) return usageRecord.outcome;
+  const code = event?.payload?.code;
+  return typeof code === 'string' && code ? code : 'error';
+}
+
+/**
+ * The per-run attribution writer pair both consumers share — ONE home for
+ * the fire-and-forget discipline (an attribution write failure must never
+ * break the answer path) and the one-honest-outcome latch (first fact
+ * wins). `gate` decides whether the run has reached the phase where doc
+ * writes are honest (the SSE headers sent on the streaming entry, the
+ * established 200 leg on the JSON entry): before it, the pre-stream
+ * refusals and an upstream-wait disconnect wrote nothing and still don't.
+ * @param {Object} params
+ * @param {Object} params.queryService - The query service (persistAgentRunStart / persistAgentRunOutcome).
+ * @param {string} params.queryId - The `queries` doc key.
+ * @param {string} params.logPrefix - The log-event prefix (the consumer's name).
+ * @param {Function} params.gate - () => boolean, the write-honesty gate.
+ * @returns {{persistRunStart: Function, persistRunOutcome: Function}}
+ */
+function createAgentRunAttribution({ queryService, queryId, logPrefix, gate }) {
+  let outcomePersisted = false;
+  const fireAndForget = (write, event) => {
+    Promise.resolve(write()).catch((err) =>
+      logger.error(`${logPrefix}.attribution_persist_failed`, { queryId, event, error: err.message })
+    );
+  };
+  return {
+    persistRunStart(runStart) {
+      fireAndForget(() => queryService.persistAgentRunStart(queryId, runStart), 'run_start');
+    },
+    persistRunOutcome(outcome) {
+      if (outcomePersisted || !outcome || !gate()) return;
+      outcomePersisted = true;
+      fireAndForget(() => queryService.persistAgentRunOutcome(queryId, outcome), 'run_outcome');
+    }
+  };
 }
 
 /**
@@ -310,6 +404,9 @@ module.exports = {
   citationToSourceDocument,
   emptyStreamMetadata,
   assembleAgentMetadata,
+  captureRunStart,
+  seamRunOutcome,
+  createAgentRunAttribution,
   passthroughBody,
   readUpstreamBody,
   // The shared keepAlive pair — BOTH run-body call sites dial with these.

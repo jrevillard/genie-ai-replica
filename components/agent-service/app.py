@@ -44,6 +44,7 @@ from agent.orchestrator import (
     build_preparer_factory,
 )
 from agent.probe import ProbeConfig, ProbeModelClient, build_stateless_adapters
+from agent.version_record import IMPLEMENTATION_VERSION
 from capabilities.contract import CallerContext
 from noagent.config import NoAgentConfig
 from noagent.lane import AdmissionLane
@@ -169,7 +170,9 @@ async def lifespan(app: fastapi.FastAPI):
 # would carry no OTel middleware and would emit no request span at all.
 app = fastapi.FastAPI(
     title="GENIE.AI agent service",
-    version="0.1.0",
+    # The single source is the version record's IMPLEMENTATION_VERSION — the
+    # same number the run-start handshake stamps on every execution record.
+    version=IMPLEMENTATION_VERSION,
     lifespan=lifespan,
 )
 

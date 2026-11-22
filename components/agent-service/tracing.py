@@ -212,6 +212,33 @@ def setup_tracing(service_name: str) -> None:
             "FastAPI auto-instrumentation unavailable (install opentelemetry-instrumentation-fastapi): %s", exc
         )
 
+    # --- Outbound HTTP instrumentation (story 2.11) ---
+    # W3C traceparent propagation on every outbound hop: httpx (the model
+    # endpoint and the TEI embed/rerank calls) and requests (the doc-repo /
+    # okf-server adapter GETs, run in worker threads — asyncio.to_thread
+    # copies the trace context, so the injected traceparent still parents to
+    # the active span). Behind the SAME single gate, here in setup_tracing:
+    # the instrumentors are global library patches, installed exactly where
+    # the SDK is initialised, never at import.
+    try:
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        HTTPXClientInstrumentor().instrument()
+        logging.getLogger(__name__).debug("httpx outbound instrumentation enabled")
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "httpx outbound instrumentation unavailable (install opentelemetry-instrumentation-httpx): %s", exc
+        )
+    try:
+        from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
+        RequestsInstrumentor().instrument()
+        logging.getLogger(__name__).debug("requests outbound instrumentation enabled")
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "requests outbound instrumentation unavailable (install opentelemetry-instrumentation-requests): %s", exc
+        )
+
     # --- Metrics ---
     try:
         metric_endpoint = f"{endpoint_base.rstrip('/')}/v1/metrics"

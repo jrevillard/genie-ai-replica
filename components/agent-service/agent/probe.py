@@ -71,6 +71,11 @@ from .loop import (
 # lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
 # name stays importable from here for the probe harness and its suites.
 from .toolset import document_toolset
+from .version_record import (
+    MODEL_SOURCE_DISCOVERED,
+    MODEL_SOURCE_OVERRIDE,
+    MODEL_SOURCE_UNRESOLVED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +346,25 @@ class ProbeModelClient:
             if isinstance(discovered, int) and discovered > 0:
                 self._discovered_window = discovered
         return self._model_id
+
+    async def model_identity(self) -> tuple[str | None, str, str | None]:
+        """The execution-version record's model axis, resolved FAIL-SOFT.
+
+        The override wins without a probe (``override``); discovery reuses
+        the same ``/v1/models`` GET — and the same per-client cache — the
+        first model call runs (``discovered``); a discovery failure degrades
+        to the unresolved identity carrying the truncated reason, never an
+        exception past the run (the I/O matrix row: the record is built at
+        assembly and the run proceeds).
+        """
+        if self._config.model_id_override:
+            return self._config.model_id_override, MODEL_SOURCE_OVERRIDE, None
+        try:
+            return await self._resolve_model_id(), MODEL_SOURCE_DISCOVERED, None
+        except ProbeTransientError as failed:
+            # The note rides raw — build_execution_version_record is the
+            # single clamp home (_NOTE_LIMIT).
+            return None, MODEL_SOURCE_UNRESOLVED, str(failed)
 
     async def _window_tokens(self) -> int:
         """The window one call must fit — the deployed three tiers of

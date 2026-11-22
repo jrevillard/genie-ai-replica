@@ -46,11 +46,12 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
+import tracing
 from capabilities.contract import CapabilityError
 
 from .budget import BudgetExhausted, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
-from .events import EventEmitter, EventKind
+from .events import EventEmitter, EventKind, run_started_payload
 from .registry import ToolRegistry, UnregisteredToolError
 from .taint import scan_tool_result
 from .verification import INSUFFICIENCY_RESPONSE, VerificationPipeline
@@ -164,6 +165,10 @@ class AgentLoop:
     emitter: EventEmitter
     system_prompt: str
     verifier: VerificationPipeline | None = None
+    # The run's execution-version record (FR-17), built by the request
+    # orchestrator at assembly. ``None`` keeps the probe-shaped
+    # ``{"question"}`` payload — the handshake key is additive.
+    execution_versions: dict | None = None
 
     async def run(self, question: str) -> RunResult:
         """Drive one run to a terminal outcome; cancellation propagates."""
@@ -172,52 +177,76 @@ class AgentLoop:
             {"role": "user", "content": question},
         ]
         tool_definitions = self.registry.definitions()
-        self.emitter.emit(EventKind.RUN_STARTED, {"question": question})
-        try:
-            while True:
-                self.monitor.begin_step()
-                self.token.raise_if_cancelled()
-                self.monitor.check_tokens()
-                self.monitor.take_model_call()
-                # The token bound rides the request: the call may spend at
-                # most the remaining allowance (None — field omitted — when
-                # the served usage is a lower bound and no honest bound
-                # exists).
-                turn = await run_cancellable(
-                    self.token,
-                    self.model.complete(
-                        list(self._messages),
-                        tool_definitions,
-                        max_output_tokens=self.monitor.remaining_output_tokens(),
-                    ),
-                )
-                self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
-                if turn.tool_calls:
-                    self._messages.append(self._assistant_tool_call_message(turn))
-                    for request in turn.tool_calls:
-                        result_payload = await self._dispatch_tool(request)
-                        # One serialization home: the evidence size and the
-                        # tool message report the same bytes.
-                        result_json = json.dumps(result_payload)
-                        self.monitor.record_evidence(len(result_json.encode("utf-8")))
-                        self._messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": request.call_id,
-                                "content": result_json,
-                            }
+        self.emitter.emit(EventKind.RUN_STARTED, run_started_payload(question, self.execution_versions))
+        # The run-path span uses the ACTIVATING helper deliberately: the
+        # per-model-call and per-tool-call children below (and the
+        # verification/judge spans) are opened with ``tracing.with_span``,
+        # which parents them to the ACTIVE span — the activation is what
+        # makes ``agent.run`` their parent, and what the outbound model /
+        # doc-repo hops inherit for traceparent propagation. Attributes are
+        # counters/ids only (the record and the events carry the facts).
+        with tracing.background_span("agent.run"):
+            try:
+                while True:
+                    # The budget checks precede the span: a refused dispatch
+                    # (step, token or fleet model-call budget spent) opens no
+                    # span — the model_call span covers DISPATCHED calls only.
+                    self.monitor.begin_step()
+                    self.token.raise_if_cancelled()
+                    self.monitor.check_tokens()
+                    self.monitor.take_model_call()
+                    with tracing.with_span("agent.model_call", attributes={"step": self.monitor.steps}) as model_span:
+                        # The token bound rides the request: the call may spend at
+                        # most the remaining allowance (None — field omitted — when
+                        # the served usage is a lower bound and no honest bound
+                        # exists).
+                        turn = await run_cancellable(
+                            self.token,
+                            self.model.complete(
+                                list(self._messages),
+                                tool_definitions,
+                                max_output_tokens=self.monitor.remaining_output_tokens(),
+                            ),
                         )
-                    continue
-                return await self._finish(turn)
-        except UnregisteredToolError as refused:
-            # The registry refused before any resolution; the run ends
-            # honestly with the refusal — no tool result is invented.
-            return self._fail(OUTCOME_ERROR, str(refused))
-        except BudgetExhausted as exhausted:
-            return self._fail(OUTCOME_BUDGET_EXHAUSTED, str(exhausted))
-        except Exception as failed:  # noqa: BLE001 — a failed run still gets its terminal event
-            logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:MESSAGE_TRUNCATION])
-            return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}")
+                        self._model_span_counters(model_span, turn)
+                    self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
+                    if turn.tool_calls:
+                        self._messages.append(self._assistant_tool_call_message(turn))
+                        for request in turn.tool_calls:
+                            result_payload = await self._dispatch_tool(request)
+                            # One serialization home: the evidence size and the
+                            # tool message report the same bytes.
+                            result_json = json.dumps(result_payload)
+                            self.monitor.record_evidence(len(result_json.encode("utf-8")))
+                            self._messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": request.call_id,
+                                    "content": result_json,
+                                }
+                            )
+                        continue
+                    return await self._finish(turn)
+            except UnregisteredToolError as refused:
+                # The registry refused before any resolution; the run ends
+                # honestly with the refusal — no tool result is invented.
+                return self._fail(OUTCOME_ERROR, str(refused))
+            except BudgetExhausted as exhausted:
+                return self._fail(OUTCOME_BUDGET_EXHAUSTED, str(exhausted))
+            except Exception as failed:  # noqa: BLE001 — a failed run still gets its terminal event
+                logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:MESSAGE_TRUNCATION])
+                return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}")
+
+    @staticmethod
+    def _model_span_counters(span, turn: ModelTurn) -> None:
+        """The model-call span's counters/ids — never message text."""
+        span.set_attribute("tool_calls", len(turn.tool_calls))
+        if turn.finish_reason:
+            span.set_attribute("finish_reason", turn.finish_reason)
+        if turn.prompt_tokens is not None:
+            span.set_attribute("prompt_tokens", turn.prompt_tokens)
+        if turn.completion_tokens is not None:
+            span.set_attribute("completion_tokens", turn.completion_tokens)
 
     # -- the model turn ------------------------------------------------------
 
@@ -301,7 +330,13 @@ class AgentLoop:
             {"name": request.name, "arguments": request.arguments},
             call_id=request.call_id,
         )
-        result_payload = await self._execute(request)
+        with tracing.with_span(
+            "agent.tool_call", attributes={"call_id": request.call_id, "tool": request.name}
+        ) as tool_span:
+            result_payload = await self._execute(request)
+            # The declared-error surface flows back as data (see _execute):
+            # the span records THAT fact, never the payload text.
+            tool_span.set_attribute("errored", "error" in result_payload)
         if self.verifier is not None:
             # Every dispatched result reaches the verification ledger —
             # success shapes contribute their citations, error envelopes

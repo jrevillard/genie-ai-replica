@@ -9,6 +9,9 @@ const {
   resolveUpstreamTimeoutMs,
   deriveDeadlineMs,
   assembleAgentMetadata,
+  captureRunStart,
+  seamRunOutcome,
+  createAgentRunAttribution,
   readUpstreamBody,
   passthroughBody,
   agentHttpAgent,
@@ -106,6 +109,21 @@ async function proxyAgentRun({
   let runId = null;
   let capturedVerdict = null;
   let usageRecord = null;
+  // Story 2.11 — the attribution state. `runStart` is what the
+  // `run_started` payload carried (persisted AT START, so a run whose final
+  // frame never arrives keeps its versions); the writer pair below owns the
+  // fire-and-forget discipline and the one-honest-outcome latch (the first
+  // terminal fact wins — a deadline fire keeps `timed_out` even when the
+  // abort's stream teardown then reports an error). The shared home is
+  // createAgentRunAttribution in agent-run-contract.js.
+  let runStart = null;
+  const attribution = createAgentRunAttribution({
+    queryService,
+    queryId,
+    logPrefix: 'AgentFrameWriter',
+    gate: () => res.headersSent
+  });
+  const persistRunOutcome = attribution.persistRunOutcome;
   // The stream is finished from the BFF's perspective (completed, errored or
   // disconnected): no further frames, no partial save. One flag owns the
   // terminal state — every terminal path sets it, every guard reads it.
@@ -137,13 +155,18 @@ async function proxyAgentRun({
     streamDeadline = setTimeout(() => {
       streamDeadline = null;
       logger.warn('AgentFrameWriter.stream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
+      // The BFF-attributed deadline is an honest terminal fact (story 2.11):
+      // the run's doc keeps its versions and reads `timed_out`. Latched —
+      // the abort's stream teardown below must not overwrite it.
+      persistRunOutcome('timed_out');
       if (!controller.signal.aborted) {
         controller.abort();
       }
     }, effectiveTimeoutMs);
   };
 
-  const assembleMetadata = () => assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord });
+  const assembleMetadata = (outcome) =>
+    assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome });
 
   // The disconnect signal: `res.on('close')`. Registered before any await, so
   // a client that leaves during the posture resolution or the agent-leg wait
@@ -168,9 +191,17 @@ async function proxyAgentRun({
     // (the verdict was never terminaled; 3.2's `false` rationale covers
     // COMPLETED turns only, and `answer_interrupted` already distinguishes
     // interrupted-ness). A disconnect before any text chunk leaves the
-    // at-start doc unanswered — nothing is fabricated.
+    // at-start doc unanswered — nothing is fabricated. The `cancelled`
+    // outcome rides exactly ONE write (story 2.11): with partial text, the
+    // partial save's assembled metadata carries it (merging the run-start
+    // block instead of clobbering it) and the standalone patch stays
+    // latched OFF — a fire-and-forget patch racing the save would be a
+    // second read-merge-write whose stale metadata could overwrite the
+    // save's assembled block (losing `answer_interrupted`); the patch fires
+    // only as the save's failure fallback. Without partial text, the patch
+    // is the one write.
     if (fullResponseText) {
-      const metadata = assembleMetadata();
+      const metadata = assembleMetadata('cancelled');
       metadata.answer_interrupted = true;
       metadata.abstained = null;
       queryService
@@ -179,7 +210,14 @@ async function proxyAgentRun({
           // left untouched (branch-driven skip; story 2.4b).
           skipRoutedGraphs: true
         })
-        .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
+        .catch((err) => {
+          logger.error('QueryService.partial_save_failed', { queryId, error: err.message });
+          // The save failed: the standalone patch is still the doc's only
+          // chance to carry the honest outcome.
+          persistRunOutcome('cancelled');
+        });
+    } else {
+      persistRunOutcome('cancelled');
     }
   });
 
@@ -320,7 +358,7 @@ async function proxyAgentRun({
     res.write(': keepalive\n\n');
   }, 15000);
 
-  const finishWithErrorFrame = (message, code) => {
+  const finishWithErrorFrame = (message, code, outcome) => {
     if (streamFinished || res.writableEnded) return;
     streamFinished = true;
     cleanupKeepalive();
@@ -330,6 +368,12 @@ async function proxyAgentRun({
     if (!controller.signal.aborted) {
       controller.abort();
     }
+    // The honest outcome rides the same terminal (story 2.11): the seam's
+    // own outcome code for a run_error, `interrupted` for an upstream
+    // stream that died before the final metadata. Latched — a deadline
+    // fire's `timed_out` (written at the abort) is never overwritten by the
+    // teardown it caused.
+    persistRunOutcome(outcome);
     writeSSEFrame(res, { type: 'error', message, code });
     res.end();
   };
@@ -376,8 +420,11 @@ async function proxyAgentRun({
       // consumer applies — so an insufficiency run persists
       // `abstained: true` + reason on BOTH entries, an answered run false,
       // and a stream with NO verdict restores null ("decision never
-      // reported"; the base's null rides untouched).
-      const metadata = applyAbstentionOverlay(assembleMetadata(), capturedVerdict);
+      // reported"; the base's null rides untouched). The assembled
+      // metadata merges the run-start block + the `answered` outcome
+      // (story 2.11) — the finalize COMPLETES the start write, never
+      // clobbers it.
+      const metadata = applyAbstentionOverlay(assembleMetadata('answered'), capturedVerdict);
       await handleStreamDone(queryId, fullResponseText, streamStartTime, res, metadata, {
         targetLanguage,
         translator,
@@ -400,7 +447,17 @@ async function proxyAgentRun({
     }
     runId = event.run_id;
     switch (event.kind) {
-      case 'run_started':
+      case 'run_started': {
+        // No client frame; the payload IS the run-start handshake (story
+        // 2.11, AD-11): the execution-version record is persisted AT START,
+        // so a run whose final frame never arrives keeps its versions.
+        // Fire-and-forget: an attribution write failure must never break
+        // the answer path. (captureRunStart is the ONE shape home — the
+        // success finalize later completes the same bytes.)
+        runStart = captureRunStart(event);
+        attribution.persistRunStart(runStart);
+        break;
+      }
       case 'text_message_started':
       case 'text_message_finished':
       case 'run_finished':
@@ -452,17 +509,23 @@ async function proxyAgentRun({
         // the last chunk flushes and before the metadata frame.
         capturedVerdict = event.payload;
         break;
-      case 'run_error':
+      case 'run_error': {
         // The legacy error contract: error frame then end — no metadata, no
-        // done, nothing fabricated. The usage record that follows the seam
-        // terminal is ignored (the run failed; the doc stays unanswered).
+        // done, nothing fabricated. The outcome is the agent's own verdict
+        // (story 2.11): the event's code — which the loop keeps identical
+        // to the usage record's outcome that follows on the stream — so the
+        // doc reads `error` / `budget_exhausted` verbatim. The usage record
+        // itself is not persisted here (the run failed; the doc stays
+        // unanswered — today's contract).
         finishWithErrorFrame(
           typeof event.payload?.message === 'string' && event.payload.message
             ? event.payload.message
             : 'the agent run failed',
-          'AGENT_RUN_ERROR'
+          'AGENT_RUN_ERROR',
+          seamRunOutcome(event, usageRecord)
         );
         break;
+      }
       default:
         // A seam kind this BFF does not know: ignored — a newer agent service
         // must not break an older BFF (the envelope is additive by design).
@@ -513,7 +576,7 @@ async function proxyAgentRun({
       return;
     }
     logger.error('AgentFrameWriter.agent_stream_error', { error: error.message, queryId });
-    finishWithErrorFrame(error.message, 'AGENT_STREAM_ERROR');
+    finishWithErrorFrame(error.message, 'AGENT_STREAM_ERROR', 'interrupted');
   });
 
   stream.on('end', () => {
@@ -537,7 +600,7 @@ async function proxyAgentRun({
     // the JSON consumer — the error contract ends the response honestly.
     if (streamFinished) return;
     logger.error('AgentFrameWriter.agent_stream_close', { queryId });
-    finishWithErrorFrame('the agent stream terminated', 'AGENT_STREAM_ERROR');
+    finishWithErrorFrame('the agent stream terminated', 'AGENT_STREAM_ERROR', 'interrupted');
   });
 }
 

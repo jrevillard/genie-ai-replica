@@ -319,6 +319,32 @@
       }
     },
     {
+      "name": "opentelemetry-instrumentation-httpx",
+      "version": "0.48b0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_instrumentation_httpx-0.48b0.tar.gz#licence:opentelemetry_instrumentation_httpx-0.48b0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "beta (0.48b0)",
+      "risk_acceptance": "Accepted (2026-11-22, story 2.11): the 0.48b0 line is the exact version the OPEA overlay already ships (opentelemetry-instrumentation-fastapi 0.48b0), so the agent path reuses a tree the platform already builds, scans and runs in production - the risk is the packaging/API stability of a 0.x release, not an unknown code base. The API used here (the global .instrument() patch) is the same surface the FastAPI instrumentation uses. Revisit when the 1.0 line ships.",
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-instrumentation-requests",
+      "version": "0.48b0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_instrumentation_requests-0.48b0.tar.gz#licence:opentelemetry_instrumentation_requests-0.48b0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "beta (0.48b0)",
+      "risk_acceptance": "Accepted (2026-11-22, story 2.11): the 0.48b0 line is the exact version the OPEA overlay already ships (opentelemetry-instrumentation-fastapi 0.48b0), so the agent path reuses a tree the platform already builds, scans and runs in production - the risk is the packaging/API stability of a 0.x release, not an unknown code base. The API used here (the global .instrument() patch) is the same surface the FastAPI instrumentation uses. Revisit when the 1.0 line ships.",
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
       "name": "opentelemetry-proto",
       "version": "1.27.0",
       "license": "Apache-2.0",

@@ -12,6 +12,7 @@
 // (agent-frame-writer.test.js) pins the other entry of the same contract.
 
 require('../setup-env');
+const { EXECUTION_VERSIONS } = require('../fixtures/agent-run-attribution');
 
 process.env.AGENT_ENABLED = '1';
 delete process.env.AGENT_SERVICE_URL;
@@ -165,6 +166,16 @@ function answeredRunStream({ verdict = GROUNDED_VERDICT, answer = 'Hello world.'
 // ── the service under test: the real singleton with mock DB touchpoints ────
 
 let collections;
+
+// The attribution writes go through the server-side AQL merge (story 2.11 —
+// the real arangojs aql template binds the patch as the query's second bind
+// var); the wholesale tail update stays on the collection mock.
+const attributionPatch = (callIndex = 0) => {
+  const arg = queryService.db.query.mock.calls[callIndex][0];
+  expect(arg.query).toContain('MERGE(doc.metadata.agent_run || {}');
+  expect(arg.bindVars.value0).toBe('q1');
+  return arg.bindVars.value1;
+};
 let analytics;
 
 beforeEach(() => {
@@ -245,6 +256,10 @@ describe('POST /api/queries — the agentic success contract', () => {
     // The legacy top-level shape {queryId, response, metadata, responseTime}
     // — toEqual pins the exact key set, so the only additive key ever
     // allowed beside them is translationFailed (asserted by its own test).
+    // Story 2.11: the agent_run block gains started_at/outcome/finished_at
+    // (the completed run-start + outcome write); execution_versions is
+    // ABSENT here — this fixture's run_started payload carries none (an
+    // older agent service; the block degrades to run_id + started_at).
     expect(response.body).toEqual({
       queryId: 'q1',
       response: 'Hello world.',
@@ -259,7 +274,13 @@ describe('POST /api/queries — the agentic success contract', () => {
         abstention_reason: null,
         filter_labels: null,
         grounding_status: 'grounded',
-        agent_run: { run_id: 'run-abc', usage_record: USAGE_RECORD }
+        agent_run: {
+          run_id: 'run-abc',
+          started_at: expect.any(String),
+          usage_record: USAGE_RECORD,
+          outcome: 'answered',
+          finished_at: expect.any(String)
+        }
       },
       responseTime: expect.any(Number)
     });
@@ -285,7 +306,8 @@ describe('POST /api/queries — the agentic success contract', () => {
     expect(options.signal).toBeInstanceOf(AbortSignal);
 
     // The ONE tail: the same queryId completes the doc with the assembled
-    // metadata (the agent_run block rides in) and analytics records it.
+    // metadata (the agent_run block rides in, completing the start write)
+    // and analytics records it.
     expect(collections.update).toHaveBeenCalledWith(
       'q1',
       expect.objectContaining({
@@ -294,14 +316,21 @@ describe('POST /api/queries — the agentic success contract', () => {
         metadata: expect.objectContaining({
           grounding_status: 'grounded',
           is_grounded: true,
-          agent_run: { run_id: 'run-abc', usage_record: USAGE_RECORD }
+          agent_run: expect.objectContaining({
+            run_id: 'run-abc',
+            outcome: 'answered',
+            usage_record: USAGE_RECORD
+          })
         })
       })
     );
     // An agentic answer cannot name routed graphs (the citation envelope
     // carries no graph_name by contract): the sticky set is left UNTOUCHED —
-    // no `okfRoutedGraphs` key on the payload, never a false reset.
-    expect(collections.update.mock.calls[0][1]).not.toHaveProperty('okfRoutedGraphs');
+    // no `okfRoutedGraphs` key on the payload, never a false reset. (The
+    // LAST update is the tail; the first is the run-start attribution
+    // write, story 2.11.)
+    const tailCall = collections.update.mock.calls[collections.update.mock.calls.length - 1];
+    expect(tailCall[1]).not.toHaveProperty('okfRoutedGraphs');
     expect(analytics.recordQuery).toHaveBeenCalledTimes(1);
   });
 
@@ -310,7 +339,9 @@ describe('POST /api/queries — the agentic success contract', () => {
 
     await postQuery();
 
-    // The doc was minted first; the id that completes it is the minted one.
+    // The doc was minted first; the id that completes it is the minted one —
+    // both attribution writes included (story 2.11: the run-start write and
+    // the tail).
     expect(collections.save).toHaveBeenCalledTimes(1);
     expect(collections.update).toHaveBeenCalledWith('q1', expect.anything());
   });
@@ -500,10 +531,18 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
 
     expect(response.status).toBe(502);
     expect(response.body).toEqual({ error: 'AGENT_RUN_ERROR', message: 'token budget exhausted' });
-    // The doc was minted but never finalized: no update, no analytics — the
-    // trailing usage record is ignored.
+    // The doc was minted but never finalized: the ONLY write is the honest
+    // outcome patch (story 2.11 — the agent's own verdict, verbatim) — no
+    // answer, no analytics; the trailing usage record is ignored.
     expect(collections.save).toHaveBeenCalledTimes(1);
+    // The ONE write is the server-side outcome patch (story 2.11) — the
+    // tail update never runs, no analytics.
     expect(collections.update).not.toHaveBeenCalled();
+    expect(queryService.db.query).toHaveBeenCalledTimes(1);
+    expect(attributionPatch()).toEqual({
+      outcome: 'budget_exhausted',
+      finished_at: expect.any(String)
+    });
     expect(analytics.recordQuery).not.toHaveBeenCalled();
   });
 
@@ -620,7 +659,12 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
 
     expect(response.status).toBe(504);
     expect(response.body.error).toBe('AGENT_SERVICE_UNAVAILABLE');
+    // Story 2.11 — the ONE honest outcome is the deadline's: the abort's
+    // stream teardown reports interrupted, but the deadline fired first and
+    // the latch keeps the fact that actually ended the run (the write is
+    // the server-side patch — the tail update never runs).
     expect(collections.update).not.toHaveBeenCalled();
+    expect(attributionPatch()).toEqual({ outcome: 'timed_out', finished_at: expect.any(String) });
   });
 
   it('unparsable 429/503/422 bodies degrade to the documented error names, never raw passthrough', async () => {
@@ -683,8 +727,10 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       error: 'AGENT_SERVICE_UNAVAILABLE',
       message: 'Agent service unavailable or timed out'
     });
-    // The truncated text never became a complete answer.
+    // The truncated text never became a complete answer — the doc keeps the
+    // deadline's honest outcome only (story 2.11, the server-side patch).
     expect(collections.update).not.toHaveBeenCalled();
+    expect(attributionPatch()).toEqual({ outcome: 'timed_out', finished_at: expect.any(String) });
   });
 
   it('a posture 401 propagates as 401 UNAUTHENTICATED — no run starts', async () => {
@@ -714,6 +760,13 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       requested_labels: []
     });
     expect(response.status).toBe(201);
+    // Story 2.11: TWO writes — the run-start attribution patch (server-side
+    // merge), then the tail update that completes the doc.
+    expect(queryService.db.query).toHaveBeenCalledTimes(1);
+    expect(attributionPatch()).toEqual({
+      run_id: 'run-abc',
+      started_at: expect.any(String)
+    });
     expect(collections.update).toHaveBeenCalledTimes(1);
   });
 });
@@ -857,5 +910,61 @@ describe('POST /api/queries — the agentic language refusal (same map, same bod
     // The refusal precedes every side effect: no run, no doc, no completion.
     expect(axios.post).not.toHaveBeenCalled();
     expect(collections.update).not.toHaveBeenCalled();
+  });
+});
+
+// ── story 2.11 — execution attribution on the JSON entry ────────────────────
+describe('POST /api/queries — story 2.11, the run-start handshake', () => {
+  it('persists the run-start block AT START, and the success metadata completes it with the outcome', async () => {
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q', execution_versions: EXECUTION_VERSIONS }, { seq: 0 }),
+        envelope('text_message_content', { text: 'answer' }, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await postQuery();
+
+    expect(response.status).toBe(201);
+    // AT START: the versions persisted the moment run_started arrived (the
+    // server-side merge patch).
+    expect(queryService.db.query).toHaveBeenCalledTimes(1);
+    expect(attributionPatch()).toEqual({
+      run_id: 'run-abc',
+      execution_versions: EXECUTION_VERSIONS,
+      started_at: expect.any(String)
+    });
+    // The assembled metadata the tail writes completes the block: the same
+    // versions + the answered outcome, never a clobber.
+    expect(response.body.metadata.agent_run).toEqual({
+      run_id: 'run-abc',
+      execution_versions: EXECUTION_VERSIONS,
+      started_at: expect.any(String),
+      usage_record: USAGE_RECORD,
+      outcome: 'answered',
+      finished_at: expect.any(String)
+    });
+  });
+
+  it('the no-credentials invariant: the persisted block and the answered metadata carry ids only', async () => {
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q', execution_versions: EXECUTION_VERSIONS }, { seq: 0 }),
+        envelope('text_message_content', { text: 'answer' }, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    await postQuery();
+
+    const serialized = JSON.stringify(collections.update.mock.calls);
+    expect(serialized).not.toMatch(/bearer|authorization|secret|api[_-]?key|password/i);
   });
 });

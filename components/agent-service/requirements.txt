@@ -13,6 +13,10 @@
 #   opentelemetry-api/sdk                — the tracing/metrics SDK
 #   opentelemetry-exporter-otlp-proto-http — OTLP/HTTP export to the collector
 #   opentelemetry-instrumentation-fastapi — FastAPI request spans
+#   opentelemetry-instrumentation-httpx    — outbound httpx spans + W3C traceparent
+#                                            (the model endpoint, the TEI calls; story 2.11)
+#   opentelemetry-instrumentation-requests — outbound requests spans + W3C traceparent
+#                                            (the doc-repo / okf-server adapter GETs; story 2.11)
 #   pydantic                              — the typed document capability contract
 #   python-arango                         — the ArangoDB driver (search_knowledge adapter, story 1.6)
 #   httpx                                 — the async TEI calls (embed + rerank); promoted from
@@ -54,6 +58,8 @@ opentelemetry-exporter-otlp-proto-http==1.27.0
 opentelemetry-instrumentation==0.48b0
 opentelemetry-instrumentation-asgi==0.48b0
 opentelemetry-instrumentation-fastapi==0.48b0
+opentelemetry-instrumentation-httpx==0.48b0
+opentelemetry-instrumentation-requests==0.48b0
 opentelemetry-proto==1.27.0
 opentelemetry-sdk==1.27.0
 opentelemetry-semantic-conventions==0.48b0

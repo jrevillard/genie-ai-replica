@@ -1986,8 +1986,10 @@ services:
     # Tool-calling pin (REC-6, issue #2052): granite4 is the vLLM 0.29
     # documented parser for the shipped default model (granite-4.1-8b); the
     # flags are inert for requests that carry no tools. A deployment
-    # overriding VLLM_LLM_MODEL_ID outside Granite 4.x must replace this
-    # parser with its model's documented one.
+    # overriding VLLM_LLM_MODEL_ID outside Granite 4.x (env.strixhalo's
+    # granite-3.1-2b does) must set VLLM_TOOL_CALL_PARSER to its model's
+    # documented parser (e.g. granite for Granite 3.x) — the default would
+    # misparse that model's tool output silently.
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
@@ -1997,7 +1999,7 @@ services:
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager
       --enable-auto-tool-choice
-      --tool-call-parser granite4
+      --tool-call-parser ${VLLM_TOOL_CALL_PARSER:-granite4}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}

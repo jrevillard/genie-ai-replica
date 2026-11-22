@@ -47,10 +47,10 @@ services:
       --max_num_seqs {{ vllm_max_num_seqs | default('16') }}
       --dtype={{ vllm_dtype | default('half') }}
       --enforce-eager
-{%- if 'granite-4' in (vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct')) %}
+{% if 'granite-4' in (vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct')) %}
       --enable-auto-tool-choice
       --tool-call-parser granite4
-{%- endif %}
+{% endif %}
     environment:
       - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}

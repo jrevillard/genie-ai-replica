@@ -459,14 +459,17 @@ async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
 
 /**
  * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
- * when given, rides a metadata frame before the done frame. The interception
- * sits at the network layer (page.route), so the app's own fetch + SSE
- * parsing path runs — only the bytes on the wire are scripted.
+ * when given, rides a metadata frame before the done frame. `options`
+ * passes through to `sseBody`'s agentic extension (story 2.9): `activity`
+ * frames interleaved with the chunks, an `agent_verdict` frame before the
+ * metadata frame. The interception sits at the network layer (page.route),
+ * so the app's own fetch + SSE parsing path runs — only the bytes on the
+ * wire are scripted.
  */
-async function mockChatStream(page, chunks, metadata) {
+async function mockChatStream(page, chunks, metadata, options) {
   // The body is registration-invariant: chunks and metadata are literals at
   // every call site, so build the wire bytes once, not per interception.
-  const body = sseBody(chunks, metadata);
+  const body = sseBody(chunks, metadata, options);
   await page.route(
     STREAM_ROUTE,
     runPostOnlyRouteHandler(page, async (route) => {

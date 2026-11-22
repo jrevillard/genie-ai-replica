@@ -56,6 +56,7 @@ The handles these specs read (`stat-*`, `logs-*`, `admin-documents-*`,
 | `quick-help-scope.spec.js` | handle (+ `hasText` discriminators on handles, declared `data-state` attributes) | — |
 | `real-rag-citation.spec.js` | handle (+ a `hasText` discriminator on a handle) | — |
 | `send-message-and-stream.spec.js` | handle (via `BOT_BUBBLE` in `helpers/chatbot.js`) | — |
+| `sse-contract.spec.js` | handle | — |
 | `conversation-history.spec.js` | handle (via helper) | — (`#chatTitle` migrated onto `chat-title`, #1830) |
 
 ### `documents/` — fully handle-based (converted in #1822)

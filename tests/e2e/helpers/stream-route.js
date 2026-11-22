@@ -36,9 +36,31 @@ const CORS_HEADERS = { 'access-control-allow-origin': '*' };
 /**
  * The wire bytes of a mocked answer: the chunk frames, the metadata
  * frame when one is given, and the done frame that closes the stream.
+ *
+ * The agentic extension (story 2.9): `options.activity` carries one
+ * entry per chunk — an `{status, operation, callId}` object or null —
+ * and a non-null entry emits an `agent_activity` frame immediately
+ * before that chunk (the pinned interleave: activity frames ride
+ * WITH the chunks); `options.verdict` carries the projection payload
+ * and emits an `agent_verdict` frame after the last chunk, before the
+ * metadata frame — the pinned terminal order (agent-frame-writer.js,
+ * story 2.4). A two-arg call builds exactly the legacy bytes, so the
+ * five existing event types keep their dialect by construction.
  */
-function sseBody(chunks, metadata) {
-  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+function sseBody(chunks, metadata, options = {}) {
+  const frames = [];
+  chunks.forEach((c, i) => {
+    const a = options.activity?.[i];
+    if (a) {
+      frames.push(
+        `data: ${JSON.stringify({ type: 'agent_activity', version: 1, status: a.status, operation: a.operation, callId: a.callId })}`
+      );
+    }
+    frames.push(`data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+  });
+  if (options.verdict) {
+    frames.push(`data: ${JSON.stringify({ type: 'agent_verdict', version: 1, ...options.verdict })}`);
+  }
   if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
   return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
 }

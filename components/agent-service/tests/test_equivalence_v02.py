@@ -277,6 +277,23 @@ def test_dense_retrieval_runs_bruteforce_cosine_over_the_recorded_knobs():
     assert bind_vars["@collection"] == f"{config.graph_name}_SOURCE"
 
 
+def test_dense_null_score_rows_are_skipped_not_crashed():
+    """A deliberate divergence from the recorded dense_retrieval behavior:
+    the deployed wrapper raises on a chunk whose embedding is null (a null
+    COSINE_SIMILARITY score reaches its float() coercion). The port SKIPS
+    the unscoreable row instead — the leg degrades to the remaining scored
+    rows, and the skip is safe after the LIMIT because null sorts last
+    under SORT score DESC."""
+
+    rows = [
+        {"key": "c1", "text": "a", "score": None},
+        {"key": "c2", "text": "b", "score": 0.9},
+    ]
+    adapter = make_adapter({"COSINE_SIMILARITY": rows})
+    results = asyncio.run(adapter.dense_search([0.1] * 4, [], "OR"))
+    assert [r["doc"].key for r in results] == ["c2"]
+
+
 def test_bm25_lexical_leg_searches_the_view_with_the_raw_query():
     """expected_output: GRAPH_BM25_VIEW, TOKENS on the RAW query, native
     BM25, n = max(k, BM25_CANDIDATES), failure → empty leg, never a raise."""

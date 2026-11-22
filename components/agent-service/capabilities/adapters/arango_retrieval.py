@@ -268,20 +268,33 @@ class ArangoRetrievalAdapter:
         # A chunk without an embedding (partially indexed collection) makes
         # COSINE_SIMILARITY return null — the row cannot be scored, so it is
         # not a dense candidate: skip it and let the remaining rows (or the
-        # BM25 leg) carry the result.
-        results = [
-            {
-                "doc": RetrievedChunk(
-                    key=row["key"],
-                    text=row.get("text") or "",
-                    score=float(row["score"]),
-                    embedding=row.get("embedding"),
-                ),
-                "score": float(row["score"]),
-            }
-            for row in rows
-            if row.get("score") is not None
-        ]
+        # BM25 leg) carry the result. Skipping is safe AFTER the LIMIT
+        # because null sorts LAST under SORT score DESC: a null row only
+        # enters the top-k when fewer than k scored rows exist, so the skip
+        # can never evict a scored candidate.
+        results = []
+        skipped_unscoreable = 0
+        for row in rows:
+            if row.get("score") is None:
+                skipped_unscoreable += 1
+                continue
+            score = float(row["score"])
+            results.append(
+                {
+                    "doc": RetrievedChunk(
+                        key=row["key"],
+                        text=row.get("text") or "",
+                        score=score,
+                        embedding=row.get("embedding"),
+                    ),
+                    "score": score,
+                }
+            )
+        if skipped_unscoreable:
+            logger.warning(
+                f"dense_search skipped {skipped_unscoreable} unscoreable row(s) "
+                f"(null embedding) on '{self.collection_name}'"
+            )
         # The recorded wrapper applies score_threshold AFTER the top-k cut.
         results = [r for r in results if r["score"] >= self._config.score_threshold]
         # Defense-in-depth label filter on the DENSE results. The recorded

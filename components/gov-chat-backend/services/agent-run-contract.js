@@ -47,9 +47,9 @@ const DEADLINE_FLOOR_MS = 1000;
 function resolveUpstreamTimeoutMs() {
   const configured = parsePositiveInt(process.env.AGENT_UPSTREAM_TIMEOUT_MS, DEFAULT_UPSTREAM_TIMEOUT_MS, { min: 1 });
   if (configured <= TRANSLATION_RESERVE_MS + FINALIZATION_MARGIN_MS + DEADLINE_FLOOR_MS) {
-    // The event name keeps the AgentFrameWriter prefix the frame-writer suite
-    // pins (`upstream_timeout_below_reserves`) — the helper moved here in
-    // 2.4b, the pin followed the rename to the module's own prefix.
+    // Entry-neutral name: the warning belongs to the SHARED module — either
+    // consumer (streaming or JSON) can trip it, so neither entry's prefix
+    // misattributes it. The frame-writer suite pins THIS name.
     logger.warn('AgentRunContract.upstream_timeout_below_reserves', {
       knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
       configured,

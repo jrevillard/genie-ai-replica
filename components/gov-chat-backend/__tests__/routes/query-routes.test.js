@@ -1274,6 +1274,20 @@ describe('POST /', () => {
     expect(response.body.message).toBe('token expired');
   });
 
+  // Story 2.4b — the verbatim-answer gate is the AgentJsonTurnError CLASS,
+  // not the statusCode+body shape: a typed error from any other source (the
+  // VlUnavailableError pattern) keeps the legacy 500 shape, never an
+  // accidental verbatim passthrough.
+  it('a plain statusCode+body error still answers the legacy 500 shape (only AgentJsonTurnError is verbatim)', async () => {
+    const err = Object.assign(new Error('vl down'), { statusCode: 503, body: { error: 'vl_unreachable' } });
+    queryService.createQuery.mockRejectedValue(err);
+
+    const response = await authPost('/api/queries', { sessionId: 's1' });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: 'vl down' });
+  });
+
   // Story 2.4b — the flag-off wiring pin: the legacy entry only CHECKS the
   // language (chatqna translates the answer server-side — no translator is
   // built) and calls createQuery with EXACTLY the legacy two arguments (no

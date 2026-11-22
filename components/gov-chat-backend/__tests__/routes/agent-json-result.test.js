@@ -664,6 +664,10 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       const response = await responsePromise;
       expect(response.status).toBe(429);
       expect(response.body).toEqual({ error: 'admission_refused' });
+      // The pin that reddens if the pre-ladder arming is removed: the fire
+      // itself is what bounded the read, so its warning must be on record.
+      const { logger } = require('../mocks/shared-lib');
+      expect(logger.warn).toHaveBeenCalledWith('AgentJsonResult.upstream_deadline_exceeded', expect.anything());
       expect(collections.update).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();

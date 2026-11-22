@@ -1379,7 +1379,7 @@ export default {
     agentActivity: {
       working: '处理中…',
       stepCompleted: '步骤已完成',
-      stepFailed: '步骤失败 — 正在尝试继续',
+      stepFailed: '步骤失败。',
       verificationUnavailable: '无法验证 — 未能对照来源核查该回答。',
       verificationTranslationScope: '验证针对的是原文回答 — 译文未经核查。',
       operations: {

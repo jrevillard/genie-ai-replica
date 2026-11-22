@@ -1,7 +1,7 @@
 // Story 2.9 — the SSE contract's regression coverage: the extended
 // envelope (the five legacy event types + the additive agent_activity /
 // agent_verdict frames, helpers/stream-route.js) rendered by the CURRENT
-// client. Story 2.7 has landed the activity line, so this file now pins
+// client. The activity line is landed, so this file now pins
 // both halves of the contract: the collapse side of the two original
 // degradation tests (the line rides the frames and ends collapsed) and —
 // in its own describe — the line's pre-chunk render, its latch, and the
@@ -57,7 +57,7 @@ test.describe('SSE contract — graceful degradation (story 2.9)', () => {
   // The degradation AC: a client (this app) that consumes the two new
   // types behaves exactly as today — answer, metadata, done all render;
   // the activity line the app now renders for these frames collapses at
-  // the turn's first chunk and never re-opens (story 2.7's latch).
+  // the turn's first chunk and never re-opens (the client's latch).
   test('an extended stream renders exactly as a legacy one and the activity line ends collapsed', async ({
     browser
   }) => {
@@ -114,7 +114,7 @@ test.describe('SSE contract — graceful degradation (story 2.9)', () => {
   });
 });
 
-test.describe('SSE contract — the agent activity line (story 2.7)', () => {
+test.describe('SSE contract — the agent activity line', () => {
   const LINE = '[data-testid="agent-activity-line"]';
 
   // The render windows a single-body mock cannot produce: with the whole

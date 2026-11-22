@@ -94,7 +94,7 @@ function sseFulfill(route, body) {
 
 /**
  * One frame line for a caller that streams frames OUTSIDE a full body —
- * the staged-stream helper (story 2.7's render windows). The payload
+ * the staged-stream helper. The payload
  * shape is the caller's contract (the frame writer's, for the agent
  * frames); this owns only the `data: ` prefix and the terminator, so a
  * staged spec cannot drift from the wire spelling sseBody pins.

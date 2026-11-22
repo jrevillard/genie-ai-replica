@@ -6517,9 +6517,9 @@ describe('W9 browse affordance (answer cards)', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Story 2.7 — the agent activity line + the verdict truth table
+  // The agent activity line + the verdict truth table
   // -----------------------------------------------------------------------
-  describe('story 2.7 — the agent activity line', () => {
+  describe('the agent activity line', () => {
     // The en catalogue, the way the app resolves it — the label tests need
     // keys that RESOLVE, so this mount's $t reads the real en file.
     const enAgent = enChatbot.agentActivity;
@@ -6713,6 +6713,20 @@ describe('W9 browse affordance (answer cards)', () => {
           translation_mode: 'post-stream'
         });
         expect(wrapper.find('[data-testid="answer-translation-scope"]').exists()).toBe(true);
+        wrapper.unmount();
+      });
+
+      it('persistence folds the translation mode into the saved metadata (a restored answer keeps the caption)', () => {
+        const wrapper = createChatBotWrapper({});
+        const saved = wrapper.vm.storableMetadata({
+          metadata: { grounding_status: 'grounded', is_grounded: true },
+          translationMode: 'streaming-units'
+        });
+        expect(saved.translation_mode).toBe('streaming-units');
+        expect(saved.grounding_status).toBe('grounded');
+        // A message with no mode on it saves none — legacy turns persist
+        // metadata with nothing added.
+        expect(wrapper.vm.storableMetadata({ metadata: { is_grounded: false } }).translation_mode).toBeUndefined();
         wrapper.unmount();
       });
 

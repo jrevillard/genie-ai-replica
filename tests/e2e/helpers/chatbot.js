@@ -512,7 +512,8 @@ async function mockChatStream(page, chunks, metadata, options) {
 }
 
 /**
- * Script the answer stream in STAGES — story 2.7's render windows. A
+ * Script the answer stream in STAGES — the render windows a
+ * single-body mock cannot produce. A
  * single-body mock processes every frame inside one read, so a frame
  * followed by its chunk never paints between them; the activity line's
  * pre-chunk render needs the body delivered incrementally. `page.route`

@@ -1399,7 +1399,7 @@ export default {
     agentActivity: {
       working: 'Gobbraghey…',
       stepCompleted: 'Ard jeant',
-      stepFailed: 'Ard failsit — geiyrt dy gholl er',
+      stepFailed: 'Ard failsit.',
       verificationUnavailable: 'Cha nel shickyraghey ry-gheddyn — cha row y coyrlie jeeraghit lesh ny bun-sourceyn.',
       verificationTranslationScope: 'Hickyraghey dhen coyrlie ayns y chengey bunneydagh — cha nel y chyndaa shickyrit.',
       operations: {

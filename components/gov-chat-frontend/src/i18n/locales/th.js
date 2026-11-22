@@ -1401,7 +1401,7 @@ export default {
     agentActivity: {
       working: 'กำลังทำงาน…',
       stepCompleted: 'ขั้นตอนเสร็จสิ้น',
-      stepFailed: 'ขั้นตอนล้มเหลว — กำลังพยายามดำเนินการต่อ',
+      stepFailed: 'ขั้นตอนล้มเหลว.',
       verificationUnavailable: 'ไม่สามารถตรวจสอบได้ — ไม่ได้ตรวจคำตอบเทียบกับแหล่งข้อมูล',
       verificationTranslationScope: 'การตรวจสอบครอบคลุมคำตอบในภาษาต้นฉบับ — คำแปลไม่ได้รับการตรวจสอบ',
       operations: {

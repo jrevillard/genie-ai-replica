@@ -1421,7 +1421,7 @@ export default {
     agentActivity: {
       working: 'E sebetsa…',
       stepCompleted: 'Mohato o phethiloe',
-      stepFailed: 'Mohato o hlolehile — ho lekwa ho tsoela pele',
+      stepFailed: 'Mohato o hlolehile.',
       verificationUnavailable: 'Netefatso ha e fumanehe — karabo ea ne ea hlahlojoa khahlanong le methopo.',
       verificationTranslationScope: 'Netefatso e ne e sebetsa karabong ea puo ea pele — phetolelo ha ea hlahlojoa.',
       operations: {

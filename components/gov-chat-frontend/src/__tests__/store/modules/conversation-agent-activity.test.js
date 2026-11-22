@@ -1,8 +1,8 @@
 'use strict';
 
-// Story 2.7 — the agent activity line's store state machine: the
-// turn-scoped root state, the frame/collapse-latch mutations, the reset
-// paths, the sendStream wiring (frames + verdict translationMode) and the
+// The agent activity line's store state machine: the turn-scoped root
+// state, the frame/collapse-latch mutations, the reset paths, the
+// sendStream wiring (frames + verdict translationMode) and the
 // nothing-persisted guarantee.
 const mockSubmitQueryStream = jest.fn(() => ({ abort: jest.fn(), signal: {} }));
 
@@ -64,7 +64,7 @@ async function startStream(store) {
   return mockSubmitQueryStream.mock.calls.at(-1)[1];
 }
 
-describe('conversation store — agent activity (story 2.7)', () => {
+describe('conversation store — agent activity', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sessionStorage.clear();

@@ -828,9 +828,9 @@ describe('chatbotService', () => {
       );
     });
 
-    // Story 2.7 — the additive agent-path frames: forwarded to their
-    // optional callbacks, inert without them, and never a disturbance to
-    // the five legacy cases.
+    // The additive agent-path frames: forwarded to their optional
+    // callbacks, inert without them, and never a disturbance to the five
+    // legacy cases.
     describe('the additive agent frames', () => {
       const streamOf = (body) => {
         const mockFetch = jest.fn().mockResolvedValue({

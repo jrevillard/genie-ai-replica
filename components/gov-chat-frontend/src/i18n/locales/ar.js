@@ -1400,7 +1400,7 @@ export default {
     agentActivity: {
       working: 'جارٍ العمل…',
       stepCompleted: 'اكتملت الخطوة',
-      stepFailed: 'فشلت الخطوة — محاولة المتابعة',
+      stepFailed: 'فشلت الخطوة.',
       verificationUnavailable: 'التحقق غير متاح — لم يمكن مطابقة الإجابة مع المصادر.',
       verificationTranslationScope: 'غطّى التحقق الإجابة بلغتها الأصلية — لم يتم التحقق من الترجمة.',
       operations: {

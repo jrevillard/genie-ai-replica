@@ -121,7 +121,7 @@ test.describe('sseFulfill — the shared envelope', () => {
   });
 });
 
-test.describe('sseFrame — one line outside a full body (story 2.7)', () => {
+test.describe('sseFrame — one line outside a full body', () => {
   // The staged-stream spec sends frames one at a time; the pin is the
   // same wire spelling sseBody uses, so a staged frame cannot drift from
   // a body-built one (the app parses both with the same split).

@@ -362,6 +362,10 @@ async function proxyAgentRun({
         // The post-stream whole-answer mode (streaming translation off) is
         // unknowable at this point — its translation frame lands after this
         // frame, and the client reads the delivery from that frame itself.
+        // A relay that delivered units and THEN failed keeps 'none': the
+        // annotation keys on the post-flush failure latch, so a mixed run
+        // understates rather than overstates what was verified — never the
+        // other way round.
         if (streamRelay && !alreadyFailedTranslation && /\S/.test(fullResponseText)) {
           verdictProjection.translation_mode = 'streaming-units';
         }

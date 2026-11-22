@@ -146,7 +146,7 @@
                  first streaming frame; sources, actions and the confidence block
                  render inside it below the bubble. -->
             <div v-if="msg.sender === 'bot'" class="answer-card" data-testid="answer-card">
-              <!-- Story 2.7 — the agent activity line: the transient "what
+              <!-- The agent activity line: the transient "what
                    the agent is doing" status, the card's first child. It
                    exists only between the turn's first agent_activity frame
                    and its first chunk (the store latches it shut at the
@@ -287,7 +287,7 @@
                 </div>
               </div>
               <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents.
-                   Story 2.7 adds one guard: `unverified` (verification could not run) is NOT the
+                   One guard: `unverified` (verification could not run) is NOT the
                    ungrounded claim — it renders the neutral note below instead. Legacy metadata
                    carries no grounding_status, so the legacy warning is untouched. -->
               <div
@@ -301,7 +301,7 @@
                   translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents')
                 }}</span>
               </div>
-              <!-- Story 2.7 — the verdict truth table, answer level. Unverified: a distinct
+              <!-- The verdict truth table, answer level. Unverified: a distinct
                    neutral note (the verification pipeline did not run — never the ungrounded
                    warning's claim). Grounded AND a translation delivered: the scope caption —
                    the verdict certifies the source-language answer, not the translation. -->
@@ -2292,13 +2292,14 @@ export default {
       return value !== key ? value : fallback || key;
     },
 
-    // Story 2.7 — the verdict truth table, read per answer. The tri-state
-    // rides msg.metadata.grounding_status (the agent metadata assembly
-    // writes it; legacy metadata has no such field, so every predicate
-    // reads "legacy" and the render is exactly what it always was). The
-    // caption's translation signal prefers the property the verdict frame
-    // wrote ahead of the metadata frame (msg.translationMode) and falls
-    // back to the metadata row (the non-streaming JSON path's carrier).
+    // The verdict truth table, read per answer. The tri-state rides
+    // msg.metadata.grounding_status (the agent metadata assembly writes it;
+    // legacy metadata has no such field, so every predicate reads "legacy"
+    // and the render is exactly what it always was). The caption's
+    // translation signal prefers the property the verdict frame wrote ahead
+    // of the metadata frame (msg.translationMode) and falls back to the
+    // metadata row (the carrier of an answer restored from the transcript,
+    // folded in at save time).
     answerUnverified(msg) {
       return msg.metadata?.grounding_status === 'unverified';
     },
@@ -2307,6 +2308,17 @@ export default {
         msg.metadata?.grounding_status === 'grounded' &&
         (msg.translationMode ?? msg.metadata?.translation_mode ?? 'none') !== 'none'
       );
+    },
+
+    // The transcript's metadata blob is what a server-side restore reads
+    // back, so the caption's delivery carrier rides inside it: the live
+    // message holds the mode as a property (the verdict frame wrote it),
+    // persistence folds it into the saved copy, and a restored answer
+    // scopes its verdict exactly like a live one.
+    storableMetadata(message) {
+      const metadata = { ...(message.metadata || {}) };
+      if (message.translationMode) metadata.translation_mode = message.translationMode;
+      return metadata;
     },
 
     // A Quick Help card press (tile or composer) is a MODE SWITCH: it
@@ -3264,7 +3276,7 @@ export default {
               content: message.content,
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
-              metadata: message.metadata || {}
+              metadata: this.storableMetadata(message)
             };
             await this.chatHistoryService.addMessage(messageData);
             this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
@@ -3343,7 +3355,7 @@ export default {
               content: message.content,
               sender: message.sender === 'user' ? 'user' : 'assistant',
               queryId: message.queryId || null,
-              metadata: message.metadata || {}
+              metadata: this.storableMetadata(message)
             };
             await this.chatHistoryService.addMessage(messageData);
             this.$store.commit('conversation/setMessageProperty', [messageIndex, 'isSaved', true]);
@@ -4353,7 +4365,7 @@ export default {
   padding: var(--space-xs) 0;
 }
 
-/* Story 2.7 — the agent activity line, the answer card's first child.
+/* The agent activity line, the answer card's first child.
    Running and completed stay quiet (the muted indicator family); failed
    wears the warning recipe — amber, never danger: a failed step is a
    state, not an accusation — and its label wraps instead of truncating. */
@@ -4410,7 +4422,7 @@ export default {
   }
 }
 
-/* Story 2.7 — the answer-level verdict notes: the unverified note and the
+/* The answer-level verdict notes: the unverified note and the
    translation-scope caption. Both neutral (muted, surface): an unknown
    verification state is information, not a warning. */
 .answer-note {

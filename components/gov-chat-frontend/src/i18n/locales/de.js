@@ -1423,7 +1423,7 @@ export default {
     agentActivity: {
       working: 'Arbeitet…',
       stepCompleted: 'Schritt abgeschlossen',
-      stepFailed: 'Schritt fehlgeschlagen — es wird fortgesetzt',
+      stepFailed: 'Schritt fehlgeschlagen.',
       verificationUnavailable: 'Überprüfung nicht möglich — die Antwort konnte nicht gegen die Quellen geprüft werden.',
       verificationTranslationScope:
         'Die Überprüfung galt der Antwort in der Originalsprache — die Übersetzung wurde nicht geprüft.',

@@ -1411,7 +1411,7 @@ export default {
     agentActivity: {
       working: 'Inafanya kazi…',
       stepCompleted: 'Hatima imekamilika',
-      stepFailed: 'Hatima imeshindikana — inajaribu kuendelea',
+      stepFailed: 'Hatima imeshindikana.',
       verificationUnavailable: 'Uthibitisho haupatikani — jibu halingeweza kuhakikiwa dhidi ya vyanzo.',
       verificationTranslationScope: 'Uthibitisho ulihusu jibu katika lugha yake ya asili — tafsiri haikuhakikiwa.',
       operations: {

@@ -1413,7 +1413,7 @@ export default {
     agentActivity: {
       working: 'Работаю…',
       stepCompleted: 'Шаг выполнен',
-      stepFailed: 'Шаг не удался — продолжаем работу',
+      stepFailed: 'Шаг не удался.',
       verificationUnavailable: 'Проверка недоступна — ответ не удалось сопоставить с источниками.',
       verificationTranslationScope: 'Проверка охватывала ответ на исходном языке — перевод не проверялся.',
       operations: {

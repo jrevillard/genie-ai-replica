@@ -1409,7 +1409,7 @@ export default {
     agentActivity: {
       working: 'কাজ চলছে…',
       stepCompleted: 'ধাপ সম্পন্ন হয়েছে',
-      stepFailed: 'ধাপ ব্যর্থ হয়েছে — চালিয়ে যাওয়ার চেষ্টা চলছে',
+      stepFailed: 'ধাপ ব্যর্থ হয়েছে.',
       verificationUnavailable: 'যাচাই করা যায়নি — উত্তরটি উৎসের সঙ্গে মিলিয়ে দেখা যায়নি।',
       verificationTranslationScope: 'যাচাইটি মূল ভাষার উত্তরকে কভার করেছিল — অনুবাদটি যাচাই করা হয়নি।',
       operations: {

@@ -212,7 +212,7 @@ const mutations = {
     entry.isStreaming = isStreaming;
     entry.streamingQueryId = streamingQueryId;
   },
-  // One agent_activity frame, client-side (story 2.7): opens/updates the
+  // One agent_activity frame, client-side: opens/updates the
   // line until the turn's first chunk latches it shut. A frame arriving
   // after the latch is accepted (parsed upstream, no error) and dropped
   // here — the line never re-opens in the same turn.
@@ -658,7 +658,7 @@ export const STORAGE_KEY = 'genie.conversation.v1';
 
 export function persistConversation(moduleState) {
   try {
-    // The agent activity line is transient UI (story 2.7): it rides the
+    // The agent activity line is transient UI: it rides the
     // module state but never the persisted payload — a rehydrated
     // conversation carries no activity state, and the stored bytes carry
     // no activity key at all.

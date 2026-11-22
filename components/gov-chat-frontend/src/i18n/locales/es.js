@@ -1418,7 +1418,7 @@ export default {
     agentActivity: {
       working: 'Trabajando…',
       stepCompleted: 'Paso completado',
-      stepFailed: 'Paso fallido — se intenta continuar',
+      stepFailed: 'Paso fallido.',
       verificationUnavailable: 'Verificación no disponible — no se pudo comprobar la respuesta contra las fuentes.',
       verificationTranslationScope:
         'La verificación cubrió la respuesta en el idioma original — la traducción no quedó verificada.',

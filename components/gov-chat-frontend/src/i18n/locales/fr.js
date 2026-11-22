@@ -1425,7 +1425,7 @@ export default {
     agentActivity: {
       working: 'Traitement en cours…',
       stepCompleted: 'Étape terminée',
-      stepFailed: 'Étape échouée — poursuite en cours',
+      stepFailed: 'Étape échouée.',
       verificationUnavailable: 'Vérification indisponible — la réponse n’a pas pu être confrontée aux sources.',
       verificationTranslationScope:
         'La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.',

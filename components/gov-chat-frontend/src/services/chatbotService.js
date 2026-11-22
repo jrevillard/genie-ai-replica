@@ -221,7 +221,7 @@ export default {
                   callbacks.onError?.(error);
                   return;
                 }
-                // The additive agent-path frames (story 2.9's envelope):
+                // The additive agent-path frames:
                 // forwarded to their optional callbacks and otherwise
                 // inert — a client that never registered them behaves
                 // exactly as the legacy client did.

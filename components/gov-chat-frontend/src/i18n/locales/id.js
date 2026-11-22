@@ -1415,7 +1415,7 @@ export default {
     agentActivity: {
       working: 'Sedang bekerja…',
       stepCompleted: 'Langkah selesai',
-      stepFailed: 'Langkah gagal — mencoba melanjutkan',
+      stepFailed: 'Langkah gagal.',
       verificationUnavailable: 'Verifikasi tidak tersedia — jawaban tidak dapat diperiksa terhadap sumber.',
       verificationTranslationScope: 'Verifikasi mencakup jawaban dalam bahasa aslinya — terjemahan tidak diverifikasi.',
       operations: {

@@ -228,13 +228,16 @@ def run_config_b(
     done = set(prior.get("cases") or {})
     pending = [c for c in cases if c.get("id") not in done]
 
-    script_path = Path(__file__).resolve().parent / "config_b_driver.py"
-    script_b64 = _b64(script_path.read_bytes())
-    transport.exec_cmd(
-        container,
-        f"mkdir -p {CONTAINER_TMP} && printf %s '{script_b64}' | base64 -d > {CONTAINER_TMP}/config_b_driver.py",
-        timeout=120,
-    )
+    if pending:
+        # Nothing pending → no container round-trip at all (a converged resume
+        # succeeds with the container down, as the count-batched flow did).
+        script_path = Path(__file__).resolve().parent / "config_b_driver.py"
+        script_b64 = _b64(script_path.read_bytes())
+        transport.exec_cmd(
+            container,
+            f"mkdir -p {CONTAINER_TMP} && printf %s '{script_b64}' | base64 -d > {CONTAINER_TMP}/config_b_driver.py",
+            timeout=120,
+        )
 
     resolved = prior.get("resolved")
     batch = max(1, int(batch))

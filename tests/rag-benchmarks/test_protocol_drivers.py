@@ -232,9 +232,11 @@ def test_config_b_resume_reruns_only_unfinished_ids(tmp_path):
     first = drivers.run_config_b(set_path, tmp_path / "out", transport=transport)
     assert sorted(first["rows"]) == ["c1", "c2", "c3"]
     # Second invocation: every case has a recorded row (failure rows count as
-    # finished outcomes) — nothing is re-run.
-    second = drivers.run_config_b(set_path, tmp_path / "out", transport=FakeBTransport())
+    # finished outcomes) — nothing is re-run and NO container round-trip happens.
+    converged = FakeBTransport()
+    second = drivers.run_config_b(set_path, tmp_path / "out", transport=converged)
     assert second["pending_ids"] == []
+    assert converged.cmds == []
     # And a partial rows file: only the missing ids are shipped.
     (tmp_path / "out2").mkdir()
     transport2 = FakeBTransport()
@@ -578,7 +580,7 @@ def test_gated_run_with_complete_lineage_runs_and_chains_the_manifest(tmp_path, 
     assert manifest["pair"]["intentional_difference"] == "orchestration"
 
 
-def test_gated_config_b_maps_to_pair_e01(tmp_path, monkeypatch):
+def test_gated_config_b_maps_to_pair_e01(tmp_path, monkeypatch, capsys):
     set_path = _composed_set(tmp_path)
     out_dir = tmp_path / "out"
     out_dir.mkdir()
@@ -586,23 +588,25 @@ def test_gated_config_b_maps_to_pair_e01(tmp_path, monkeypatch):
 
     def fake_run_config_b(set_path_arg, out_dir_arg, container=None):
         rows_path = Path(out_dir_arg) / "config-b.rows.json"
+        rows = {
+            # status-based rows (config B): the ok row must not count, the
+            # failure row must — the summary reads status when outcome is absent.
+            "c1": {"case_id": "c1", "status": "ok", "answer": "a"},
+            "c2": {"case_id": "c2", "status": "failure", "error_type": "LaneBusyError"},
+        }
         rows_path.write_text(
-            json.dumps(
-                {
-                    "cases": {"c1": {"case_id": "c1", "status": "ok", "answer": "a"}},
-                    "resolved": {"model_id": "granite-4.1-8b", "env": {"AGENT_X": "1"}},
-                }
-            ),
+            json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b", "env": {"AGENT_X": "1"}}}),
             encoding="utf-8",
         )
         resolved = {"model_id": "granite-4.1-8b", "env": {"AGENT_X": "1"}}
-        return {"rows": {"c1": {"case_id": "c1", "status": "ok", "answer": "a"}}, "resolved": resolved}
+        return {"rows": rows, "resolved": resolved}
 
     import protocol.run_protocol as rp
 
     monkeypatch.setattr(rp, "run_config_b", fake_run_config_b)
     rc = cmd_assess(_assess_args(tmp_path, "B"))
     assert rc == 0
+    assert "1 non-answered outcome(s)" in capsys.readouterr().out
     manifest = json.loads((out_dir / "config-b.manifest.json").read_text(encoding="utf-8"))
     assert manifest["pair"]["pair"] == "E01"
     assert manifest["pair"]["intentional_difference"] == "retrieval_backend"

@@ -338,6 +338,26 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       }
     });
 
+    test('the vLLM tool-calling pin resolves per vendor shape (#2052)', () => {
+      // granite4 is the vLLM 0.29 parser for Granite 4.x (the base files'
+      // default model); env.strixhalo serves granite-3.1-2b and pins
+      // VLLM_TOOL_CALL_PARSER=granite. The RESOLVED command must carry the
+      // right parser per shape — a flipped or dropped pin silently misparses
+      // the model's tool output (checked on the resolved render, not the raw
+      // file: the interpolation default is part of the contract).
+      const parserOf = (services) => {
+        const parts = String(services.vllm.command).split(/\s+/);
+        return parts[parts.indexOf('--tool-call-parser') + 1];
+      };
+      const singleServices = JSON.parse(single.stdout).services;
+      const nvidiaServices = JSON.parse(singleNvidia.stdout).services;
+      expect(parserOf(singleServices)).toBe('granite');
+      expect(parserOf(nvidiaServices)).toBe('granite4');
+      for (const services of [singleServices, nvidiaServices]) {
+        expect(String(services.vllm.command)).toContain('--enable-auto-tool-choice');
+      }
+    });
+
     test('the GPU device mappings come from env.strixhalo', () => {
       const services = JSON.parse(single.stdout).services;
       for (const name of ['vllm', 'vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {

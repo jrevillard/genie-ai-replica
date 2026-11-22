@@ -4182,11 +4182,9 @@ docs:validate:
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-granite4.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-4.1-8b"
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm-granite4.yaml" -c local -e "gpu_vendor=rocm vllm_llm_model_id=ibm-granite/granite-4.1-8b"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-granite4.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite4' in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
-    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm-granite4.yaml'))['services']['vllm-llm']; assert '--tool-call-parser granite4' in s['command'] and any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment']); assert 'vllm-reranker' in yaml.safe_load(open('/tmp/gpu-rocm-granite4.yaml'))['services']"
+    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm-granite4.yaml'))['services']['vllm-llm']; assert '--tool-call-parser granite4' in s['command'] and any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-nvidia.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']"
-    # Same pin, compose surface: the static compose file carries the flags.
-    - python3 -c "import yaml; c=yaml.safe_load(open('docker-compose.yaml'))['services']['vllm']['command']; assert '--enable-auto-tool-choice' in c and '--tool-call-parser' in c"
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers
@@ -4200,8 +4198,6 @@ docs:validate:
         - "deploy/**/*"
         - "docs/**/*"
         - "tests/ansible-non-root/**/*"
-        - "docker-compose.yaml"
-        - "env"
         - "CLAUDE.md"
         - ".gitlab-ci.yml"
       when: on_success

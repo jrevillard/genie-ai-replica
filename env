@@ -131,8 +131,9 @@ HUGGING_FACE_HUB_TOKEN=
 #   outside Granite 4.x (env.strixhalo's granite-3.1-2b, for example) must
 #   set VLLM_TOOL_CALL_PARSER to its model's documented parser (granite for
 #   Granite 3.x) — the granite4 default misparses that model's tool output
-#   silently. Requests that carry no tools (chat, translation, labeling) are
-#   unaffected by either flag.
+#   silently. The lever feeds docker-compose.yaml's vllm service; requests
+#   that carry no tools (chat, translation, labeling) are unaffected by
+#   either flag.
 # VLLM_TOOL_CALL_PARSER=
 #   Default: granite4. The --tool-call-parser value the vLLM container is
 #   launched with; must match the SERVED model family (see the note above).

@@ -3159,3 +3159,6 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/3-3-rehearsed-rollback-and-rollout-record-v08.md`
   summary: The admin-logs-victorialogs archival commit (cc4238fcc) landed on feat/agentic-foundations/prd instead of main, against POST-PRD-ARCHIVAL's archive-on-main rule.
   evidence: global review round 1; pre-existing history; remedy (cherry-pick to main) is the operator's — surfaced to the orchestrator.
+- source_spec: `_bmad-output/implementation-artifacts/stories/4-1-evaluation-harness-one-runway.md`
+  summary: tests/rag-benchmarks/CLAUDE.md's Layout tree predates the story-4.1 protocol/ package and its five test files.
+  evidence: Global code-review round 1 (confirmed — the Layout section enumerates eval/, scripts/, capture_baseline.py only). Deferred per protocol: the fix edits an agent-context file (CLAUDE.md). Next toucher of tests/rag-benchmarks extends the tree with protocol/ (evalset/manifest/pairs/gate/reuse/drivers/run_protocol/config_b_driver), the sample sets, the evaluator instructions and the test_protocol_*.py files.

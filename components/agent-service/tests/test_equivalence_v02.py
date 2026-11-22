@@ -16,13 +16,18 @@ mechanics; this suite ties each recorded expectation to the implementation
 through the recorded values, and pins the four behaviors the port
 deliberately does NOT implement as recorded deviations — absence assertions
 plus the deviation table below. A deviation that silently disappears (the
-behavior starts being implemented) or changes breaks this suite.
+behavior starts being implemented) or changes breaks this suite. One
+further divergence lives INSIDE an implemented behavior and is pinned by
+its own test, not the table:
+``test_dense_null_score_rows_are_skipped_not_crashed`` (the port skips a
+null-score dense row where the deployed wrapper crashes).
 
 No live venue, no network: everything runs against the fake seams.
 """
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 import httpx
@@ -277,6 +282,29 @@ def test_dense_retrieval_runs_bruteforce_cosine_over_the_recorded_knobs():
     assert bind_vars["@collection"] == f"{config.graph_name}_SOURCE"
 
 
+def test_dense_null_score_rows_are_skipped_not_crashed(caplog):
+    """A deliberate divergence from the recorded dense_retrieval behavior:
+    the deployed wrapper raises on a chunk whose embedding is null (a null
+    COSINE_SIMILARITY score reaches its float() coercion). The port SKIPS
+    the unscoreable row instead — the leg degrades to the remaining scored
+    rows, and the skip is safe after the LIMIT because null sorts last
+    under SORT score DESC. The skip is visible: one WARNING naming the
+    unscoreable count."""
+
+    rows = [
+        {"key": "c1", "text": "a", "score": None},
+        {"key": "c2", "text": "b", "score": 0.9},
+    ]
+    adapter = make_adapter({"COSINE_SIMILARITY": rows})
+    with caplog.at_level(logging.WARNING):
+        results = asyncio.run(adapter.dense_search([0.1] * 4, [], "OR"))
+    assert [r["doc"].key for r in results] == ["c2"]
+    skipped = [r for r in caplog.records if "unscoreable" in r.getMessage()]
+    assert len(skipped) == 1
+    assert skipped[0].levelno == logging.WARNING
+    assert "1 unscoreable row(s)" in skipped[0].getMessage()
+
+
 def test_bm25_lexical_leg_searches_the_view_with_the_raw_query():
     """expected_output: GRAPH_BM25_VIEW, TOKENS on the RAW query, native
     BM25, n = max(k, BM25_CANDIDATES), failure → empty leg, never a raise."""
@@ -507,8 +535,6 @@ def test_reranking_score_count_mismatch_is_not_fatal():
 
     def mismatched(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[{"index": 0, "score": 0.9}])  # 1 score for 3 docs
-
-    import logging
 
     class ListHandler(logging.Handler):
         def emit(self, record):

@@ -7,6 +7,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
+import 'package:genie_ai_mobile/components/chat/agent_activity_line.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
@@ -88,6 +89,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   int _sendSeq = 0;
   bool _isLoading = false;
   bool _isStreaming = false;
+
+  // The agent activity line's per-turn state. `active` flips on the first
+  // agent_activity frame of the turn — which is the ONLY turn phase the
+  // line ever renders in: a frame seen after this turn's first chunk is
+  // accepted but unrendered (`chunkSeen`), whatever the line's state —
+  // and while it is active it supersedes the legacy in-flight indicator.
+  // `active` + `chunkSeen` together collapse the turn's trailing slot —
+  // the line never coexists with answer text and never re-opens. The
+  // (operation, status) pair is the single current row (a started frame
+  // replaces it, a completed/failed one holds until the next frame).
+  // Nothing here persists.
+  bool _agentLineActive = false;
+  bool _agentChunkSeen = false;
+  String? _agentOperation;
+  String _agentStatus = 'started';
+
+  /// Whether the line has collapsed this turn: it rendered, and the
+  /// answer has taken over.
+  bool get _agentLineCollapsed => _agentLineActive && _agentChunkSeen;
+
   StreamSubscription<String>? _streamSubscription;
 
   bool get _canStream => httpClient != null && streamBaseUrl != null;
@@ -953,6 +974,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       List<Map<String, dynamic>> loadedMessages = [];
       if (conv['messages'] != null && conv['messages'] is List) {
         loadedMessages = (conv['messages'] as List).map((m) {
+          // One shape guard for every metadata read (`_metadataOf`): a
+          // corrupted record (a scalar where the map belongs) must degrade
+          // the FIELDS, not fail the whole conversation load.
+          final Map<String, dynamic>? metadata = _metadataOf(m['metadata']);
           return {
             'id': m['_id'] ?? m['id'],
             'role': m['sender'] == 'user' ? 'user' : 'assistant',
@@ -960,11 +985,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             'timestamp': m['timestamp'],
             'isSaved': true,
             'confidence': m['confidence'],
-            'metadata': m['metadata'],
-            'sources': m['metadata'] != null
-                ? (m['metadata']['sources'] ??
-                      m['metadata']['source_documents'])
-                : [],
+            'metadata': metadata,
+            // Whatever the live path sets, the restore sets too — the
+            // restored conversation speaks the same verdict truth table
+            // (the is_grounded derivation the web's own restore applies).
+            'isGrounded': metadata?['is_grounded'],
+            // Whether the answer the record carries is an untranslated
+            // English original (the persisted translation_status, where
+            // the lane persisted it): without this, a failed translation
+            // restores as if its answer were a delivered translation —
+            // the untranslated caption vanishes and the scope caption
+            // (which a translation does not inherit) shows in its place.
+            'translationFailed': isTranslationFailed(metadata),
+            'sources':
+                metadata?['sources'] ?? metadata?['source_documents'] ?? [],
           };
         }).toList();
       }
@@ -1056,6 +1090,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _streamSubscription?.cancel();
     _streamSubscription = null;
     setState(() {
+      _resetAgentActivityLine();
       _currentConversationId = null;
       _conversationTitle = tr('chatbot.newChatTitle');
       _titleController.text = _conversationTitle;
@@ -1078,6 +1113,73 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _messages.add(_buildWelcomeMessage());
     _lastSavedMessageCount = 1;
     _updateQuickHelpVisibility();
+  }
+
+  /// Clears the activity line's per-turn state. Called at every turn
+  /// boundary — send start, reset, and every terminal path — so a stale
+  /// collapse can never suppress a later turn's in-flight row.
+  void _resetAgentActivityLine() {
+    _agentLineActive = false;
+    _agentChunkSeen = false;
+    _agentOperation = null;
+    _agentStatus = 'started';
+  }
+
+  /// The tri-state grounding verdict a message's metadata carries
+  /// (`grounded` | `ungrounded` | `unverified`), or null when it has none
+  /// — a legacy turn (its metadata never carries the field), which then
+  /// decides its answer warning from `is_grounded` alone. Live and
+  /// restored messages share this one derivation, so the truth table
+  /// renders identically on both.
+  String? _groundingStatusOf(Map<String, dynamic> msg) {
+    final status = _metadataOf(msg['metadata'])?['grounding_status'];
+    return status is String && status.isNotEmpty ? status : null;
+  }
+
+  /// The message's metadata as the typed map, or null — one shape guard
+  /// for every metadata read: a corrupted record (a scalar where the map
+  /// belongs) degrades the fields, not the load.
+  Map<String, dynamic>? _metadataOf(dynamic raw) =>
+      raw is Map<String, dynamic> ? raw : null;
+
+  /// The verdict truth table for one message — the three answer-level
+  /// outcomes, all false for a user message (nothing answer-level ever
+  /// renders on one). Known tri-state values decide; a legacy turn (no
+  /// field) — or a future state this client does not know — falls back
+  /// to `is_grounded` alone, so an unfamiliar verdict can never silently
+  /// retire the answer-level warning. The translated-grounded caption:
+  /// grounded AND a translation DELIVERED (the delivery mode), never on
+  /// an untranslated original.
+  ({bool ungrounded, bool unverified, bool scopeCaption}) _verdictTruthTableOf(
+    Map<String, dynamic> msg,
+    bool isUser,
+  ) {
+    if (isUser) {
+      return (ungrounded: false, unverified: false, scopeCaption: false);
+    }
+    final groundingStatus = _groundingStatusOf(msg);
+    final knownVerdict =
+        groundingStatus == 'grounded' ||
+        groundingStatus == 'ungrounded' ||
+        groundingStatus == 'unverified';
+    final ungrounded =
+        groundingStatus == 'ungrounded' ||
+        (!knownVerdict && msg['isGrounded'] == false);
+    final unverified = groundingStatus == 'unverified';
+    // The translated-grounded caption, web parity (answerTranslationScoped):
+    // grounded AND a translation delivered — the delivery mode the verdict
+    // frame annotated ('streaming-units') or the translation frame marked
+    // ('post-stream'), folded into the saved metadata so a restored answer
+    // scopes exactly like a live one. 'none'/absent = the verified text
+    // was delivered untranslated; a failed translation never earns a mode.
+    final scopeCaption =
+        groundingStatus == 'grounded' &&
+        (msg['metadata']?['translation_mode'] ?? 'none') != 'none';
+    return (
+      ungrounded: ungrounded,
+      unverified: unverified,
+      scopeCaption: scopeCaption,
+    );
   }
 
   void _sendMessage(String text, {String? hiddenPrompt}) async {
@@ -1132,6 +1234,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     setState(() {
       _messages.add(userMessage);
       _isLoading = true;
+      _resetAgentActivityLine();
     });
 
     _inputController.clear();
@@ -1200,6 +1303,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
     bool? isGrounded;
+    // The tri-state grounding verdict the metadata frame carries on the
+    // agentic path (null on a legacy stream — the answer-level warning
+    // then falls back to is_grounded alone).
+    String? groundingStatus;
+    // The answer-translation delivery mode, the translation-scope
+    // caption's live signal (web parity): the verdict frame annotates
+    // 'streaming-units' when the relay delivered translated units; a
+    // `translation` frame is the post-stream whole-answer delivery.
+    // 'none'/absent = the verified text was delivered untranslated.
+    String? translationMode;
     // What the query-translation step fed the embedder for this answer (the
     // non-streaming path keeps the whole metadata map; this path rebuilds
     // it, so the field is carried here for the two to agree).
@@ -1268,25 +1381,65 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 }
                 switch (event) {
                   case SseChunkEvent(:final content):
+                    // The turn's first chunk is remembered whatever the
+                    // line's state: a frame that arrives after it is a
+                    // post-chunk frame, and post-chunk frames are accepted
+                    // but unrendered. The line collapses at the FIRST
+                    // chunk — client-side, never to re-open this turn
+                    // (the collapsed slot is dropped by itemCount, so no
+                    // row state needs clearing here).
                     accumulatedContent += content;
                     setState(() {
                       msg['content'] = accumulatedContent;
+                      _agentChunkSeen = true;
                     });
                     _scrollToBottom();
+                  case SseAgentActivityEvent(:final operation, :final status):
+                    // The line renders BEFORE the first chunk only: a
+                    // frame seen after it (the answer already streaming)
+                    // never activates the line — the legacy in-flight
+                    // indicator keeps the slot for the rest of the turn.
+                    if (!_agentChunkSeen) {
+                      setState(() {
+                        _agentLineActive = true;
+                        _agentOperation = operation;
+                        _agentStatus = status;
+                      });
+                      _scrollToBottom();
+                    }
+                  case SseAgentVerdictEvent(translationMode: final mode):
+                    // The verdict is an answer-level statement, never a
+                    // line state: the answer warning renders from the
+                    // metadata frame (pinned to follow this one), which
+                    // carries the same grounding_status a restored
+                    // conversation persists. The delivery mode it
+                    // annotates feeds the translation-scope caption.
+                    translationMode = mode;
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
                     isGrounded: final grounded,
                     :final queryTranslationStatus,
+                    groundingStatus: final status,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    groundingStatus = status;
                     streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
+                    // A translation frame carries ANSWER text: it marks
+                    // the answer phase just like a chunk, so the line can
+                    // never render under delivered answer content (today
+                    // the envelope puts translation after the last chunk;
+                    // the invariant does not lean on that order). It is
+                    // also the post-stream delivery itself: the caption's
+                    // mode marker, exactly as the web store records it.
                     accumulatedContent = content;
+                    translationMode = 'post-stream';
                     setState(() {
                       msg['content'] = content;
+                      _agentChunkSeen = true;
                     });
                     _scrollToBottom();
                   case SseDoneEvent(:final queryId, :final translationFailed):
@@ -1311,15 +1464,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     :final confidenceScore,
                     isGrounded: final grounded,
                     :final queryTranslationStatus,
+                    groundingStatus: final status,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    groundingStatus = status;
                     streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                   case SseErrorEvent(:final message):
                     debugPrint('[SSE] Error event (flush): $message');
+                  case SseAgentActivityEvent():
+                    // Buffered activity/verdict frames surface at the
+                    // turn's end, where the line is already gone: accepted
+                    // but unrendered, like any post-chunk frame.
+                    break;
+                  case SseAgentVerdictEvent(translationMode: final mode):
+                    translationMode = mode;
                 }
               }
 
@@ -1338,7 +1500,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     'sources': sources,
                     'confidence_score': confidence,
                     'is_grounded': isGrounded,
+                    'grounding_status': groundingStatus,
                     'query_translation_status': streamQueryTranslationStatus,
+                    // The answer-translation outcome, in the vocabulary the
+                    // restore reads (isTranslationFailed): the mobile save
+                    // uploads THIS map (messages-post metadata), so the
+                    // record it stores must carry what the live turn knew
+                    // — the agent lane's server-side doc does not (issue
+                    // #2080), and a restored failed translation would
+                    // otherwise read as a delivered one.
+                    'translation_status': answerTranslationFailed
+                        ? 'failed'
+                        : 'ok',
+                    // The delivery mode, folded when this turn learned it
+                    // (web's storableMetadata): the restored conversation's
+                    // scope caption reads it — a restored answer scopes its
+                    // verdict exactly like a live one.
+                    'translation_mode': ?translationMode,
                   }..removeWhere((key, value) => value == null);
                 });
               }
@@ -1346,6 +1524,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               setState(() {
                 _isStreaming = false;
                 _isLoading = false;
+                _resetAgentActivityLine();
               });
 
               // NOTE: _activeServiceLabels is NOT cleared here. Quick Help is a
@@ -1377,6 +1556,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               setState(() {
                 _isStreaming = false;
                 _isLoading = false;
+                _resetAgentActivityLine();
               });
             },
             cancelOnError: true,
@@ -1395,6 +1575,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       setState(() {
         _isStreaming = false;
         _isLoading = false;
+        _resetAgentActivityLine();
       });
       NotificationService.error(_failureMessage(e));
     }
@@ -1459,10 +1640,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final response = jsonDecode(res.body) as Map<String, dynamic>;
       final Map<String, dynamic>? metadata = response['metadata'];
 
-      // What happened to the language of the answer: chatqna reports whether
-      // it translated it. An answer that was not translated is flagged, so
+      // What happened to the language of the answer: the metadata's
+      // translation_status (the lanes that persist it) or the body's root
+      // latch (story 2.4b — the agent lane's metadata does not carry the
+      // field, #2080). An answer that was not translated is flagged, so
       // the English original is never read as a translation of it.
-      final bool translationFailed = isTranslationFailed(metadata);
+      final bool translationFailed =
+          isTranslationFailed(metadata) ||
+          response['translationFailed'] == true;
+      // The record the save uploads must carry what this turn knew: stamp
+      // the outcome into the metadata when the lane did not, so a restored
+      // conversation derives the same fact the live one showed.
+      if (metadata != null && !metadata.containsKey('translation_status')) {
+        metadata['translation_status'] = translationFailed ? 'failed' : 'ok';
+      }
 
       final assistantMessage = {
         // The bubble handle's discriminator: the queryId when the answer
@@ -1481,6 +1672,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'sources': metadata?['sources'] ?? [],
         'confidence': metadata?['confidence_score'],
         'metadata': metadata,
+        // Whatever the live path sets, this path sets too — the truth
+        // table's legacy fallback (is_grounded alone) works on the JSON
+        // path the same as on the stream and a restore.
+        'isGrounded': metadata?['is_grounded'],
         'translationFailed': translationFailed,
         'isSaved': false,
       };
@@ -2465,10 +2660,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   controller: _scrollController,
                   padding: const EdgeInsets.all(DsSpacing.md),
                   itemCount:
-                      _messages.length + (_isLoading || _isStreaming ? 1 : 0),
+                      _messages.length +
+                      ((_isLoading || _isStreaming) && !_agentLineCollapsed
+                          ? 1
+                          : 0),
                   itemBuilder: (context, index) {
                     if (index == _messages.length &&
                         (_isLoading || _isStreaming)) {
+                      // The agent activity line: from the turn's first
+                      // agent_activity frame it supersedes the legacy
+                      // in-flight indicator; the collapse removed the slot
+                      // entirely (never reached here).
+                      if (_agentLineActive) {
+                        return AgentActivityLine(
+                          status: _agentStatus,
+                          operation: _agentOperation,
+                        );
+                      }
                       return Padding(
                         // The test handle the web declares on the same
                         // surface (streaming-indicator).
@@ -2480,11 +2688,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           children: [
                             const CircularProgressIndicator(strokeWidth: 2),
                             const SizedBox(width: 12),
-                            Text(
-                              _isStreaming
-                                  ? tr('chatbot.generating')
-                                  : tr('chatbot.thinking'),
-                              style: TextStyle(color: tokens.fg),
+                            // The label flexes: the row's full width is
+                            // the list's, and the localized strings clip
+                            // on phone widths otherwise.
+                            Expanded(
+                              child: Text(
+                                _isStreaming
+                                    ? tr('chatbot.generating')
+                                    : tr('chatbot.thinking'),
+                                style: TextStyle(color: tokens.fg),
+                              ),
                             ),
                           ],
                         ),
@@ -2493,6 +2706,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
                     final msg = _messages[index];
                     final bool isUser = msg['role'] == 'user';
+                    final verdict = _verdictTruthTableOf(msg, isUser);
 
                     return Align(
                       alignment: isUser
@@ -2590,6 +2804,41 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 ),
                               ),
 
+                            // The translated-grounded caption: the
+                            // verification covered the answer in its
+                            // original language, and the text above is a
+                            // translation of it — the user reads the
+                            // scope of the grounded claim, never a
+                            // translated answer silently inheriting it.
+                            if (verdict.scopeCaption)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: DsSpacing.sm,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.translate,
+                                      size: 14,
+                                      color: tokens.fg50,
+                                    ),
+                                    const SizedBox(width: DsSpacing.xs),
+                                    Expanded(
+                                      child: Text(
+                                        tr(
+                                          'chatbot.agentActivity.verificationTranslationScope',
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: tokens.textXs,
+                                          color: tokens.fg50,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
                             // Footer: Confidence & Feedback
                             if (!isUser)
                               Padding(
@@ -2600,22 +2849,48 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    if (msg['isGrounded'] == false)
-                                      Text(
-                                        tr('chatbot.aiGeneratedNoDocs'),
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.warning,
-                                          fontStyle: FontStyle.italic,
+                                    // The verdict truth table, answer
+                                    // level: ungrounded keeps the existing
+                                    // warning; unverified is its own
+                                    // NEUTRAL note — it must never read
+                                    // as "not based on library documents",
+                                    // which claims a different fact. The
+                                    // text flexes: the bubble is narrower
+                                    // than the phone, and the long
+                                    // localized labels clip otherwise.
+                                    if (verdict.ungrounded)
+                                      Expanded(
+                                        child: Text(
+                                          tr('chatbot.aiGeneratedNoDocs'),
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.warning,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      )
+                                    else if (verdict.unverified)
+                                      Expanded(
+                                        child: Text(
+                                          tr(
+                                            'chatbot.agentActivity.verificationUnavailable',
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.fg50,
+                                            fontStyle: FontStyle.italic,
+                                          ),
                                         ),
                                       )
                                     else if (msg['confidence'] != null)
-                                      Text(
-                                        "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.fg50,
-                                          fontStyle: FontStyle.italic,
+                                      Expanded(
+                                        child: Text(
+                                          "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.fg50,
+                                            fontStyle: FontStyle.italic,
+                                          ),
                                         ),
                                       ),
                                     // Feedback Button

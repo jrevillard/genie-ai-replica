@@ -1,0 +1,131 @@
+{
+  "_doc": "Assessment-set SAMPLE — a CI fixture proving the composition validator (story 4.1), NOT deployment case content. Every composition class is present and countable: answerable (3), unanswerable (1), citation_check (1), representative_language (2, one non-Latin), failure (1), cancellation (1); access public (7) + restricted (2). Deployment sets follow the same shape with real corpus queries (see protocol/evalset.py).",
+  "_meta": {
+    "provenance": "assessment"
+  },
+  "entries": [
+    {
+      "id": "sample-ans-pub-1",
+      "query": "How do I submit the quarterly service report?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "The quarterly report is submitted through the ministry portal with the case number attached.",
+      "expected_chunks": [],
+      "case_class": "answerable",
+      "access_scenario": "public",
+      "provenance": "assessment",
+      "expectations": {"require_citation": true}
+    },
+    {
+      "id": "sample-ans-restricted-1",
+      "query": "What is the internal escalation procedure for a restricted file?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "Restricted files escalate to the owning unit through the internal registry, not the public channel.",
+      "expected_chunks": [],
+      "case_class": "answerable",
+      "access_scenario": "restricted",
+      "provenance": "assessment",
+      "context": {
+        "user_id": "eval-restricted-user",
+        "authorized_graph_names": ["GRAPH_RESTRICTED_SAMPLE"]
+      },
+      "expectations": {"require_citation": true}
+    },
+    {
+      "id": "sample-ans-restricted-2",
+      "query": "Which fees apply to a classified land-registry request?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "Classified land-registry requests carry the reduced statutory fee schedule.",
+      "expected_chunks": [],
+      "case_class": "answerable",
+      "access_scenario": "restricted",
+      "provenance": "assessment",
+      "context": {
+        "user_id": "eval-restricted-user",
+        "authorized_graph_names": ["GRAPH_RESTRICTED_SAMPLE"]
+      }
+    },
+    {
+      "id": "sample-unans-pub-1",
+      "query": "What is the airspeed velocity of an unladen swallow on Mars?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "",
+      "expected_chunks": [],
+      "case_class": "unanswerable",
+      "access_scenario": "public",
+      "provenance": "assessment",
+      "expectations": {"expect_abstained": true}
+    },
+    {
+      "id": "sample-cite-pub-1",
+      "query": "Which document defines the complaint-filing deadline?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "The complaint-filing deadline is defined in the procedural guide, section 4.",
+      "expected_chunks": [],
+      "case_class": "citation_check",
+      "access_scenario": "public",
+      "provenance": "assessment",
+      "expectations": {"require_citation": true}
+    },
+    {
+      "id": "sample-lang-ru-1",
+      "query": "Как подать заявление на сельскохозяйственную субсидию?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "ru",
+      "reference_answer": "Заявление подаётся в министерство с подтверждением права на землю.",
+      "expected_chunks": [],
+      "case_class": "representative_language",
+      "access_scenario": "public",
+      "provenance": "assessment",
+      "script": "non-latin"
+    },
+    {
+      "id": "sample-lang-es-1",
+      "query": "¿Dónde se presenta la solicitud de apoyo agrícola?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "es",
+      "reference_answer": "La solicitud se presenta en la oficina regional con el formulario completo.",
+      "expected_chunks": [],
+      "case_class": "representative_language",
+      "access_scenario": "public",
+      "provenance": "assessment"
+    },
+    {
+      "id": "sample-fail-pub-1",
+      "query": "Summarize the service catalogue while the retrieval backend is saturated.",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "",
+      "expected_chunks": [],
+      "case_class": "failure",
+      "access_scenario": "public",
+      "provenance": "assessment",
+      "expectations": {"expect_typed_failure": true}
+    },
+    {
+      "id": "sample-cancel-pub-1",
+      "query": "List every requirement of the long procurement checklist.",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "",
+      "expected_chunks": [],
+      "case_class": "cancellation",
+      "access_scenario": "public",
+      "provenance": "assessment",
+      "expectations": {"expect_cancelled": true}
+    }
+  ]
+}

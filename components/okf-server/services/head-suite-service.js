@@ -76,11 +76,11 @@ const CLASS_MAX = { positive: 1000, negative: 500, random: 500, meta: 500, nearM
 const GEN_BATCH = 30;
 // Story 1-8d — the advisor predicts the production gate LOCALLY (embed +
 // cosine), so it can simulate tag-set changes before recommending them.
-// These mirror retriever config.py / head-test-service.js (same env names,
-// same defaults) — keep the three definitions in sync.
-const GATE_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
-const GATE_FLOOR = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_FLOOR || '0.55');
-const GATE_TAG_MAX = parseFloat(process.env.RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX || '0.55');
+// #2061 phase 1b: the thresholds come from the ONE shared loader
+// (services/route-knobs.js) — the GATE_* copies of the retriever's env
+// values are gone, so the advisor can no longer drift away from the run it
+// is advising on. Read per call, like the run leg.
+const { routeKnobs, routeParity } = require('./route-knobs');
 // Story 1-8e — ANTI-TREADMILL DAMPING (David 2026-10-09: the live cycle
 // added one admin tag per advisor round for +1 suppressed negative each —
 // "this type of gating must not become a long term full time job"). A tag
@@ -1621,6 +1621,15 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // Both objects are read-only inside routingTest, so the 4-way worker
     // pool shares them safely. Single-test endpoints pass no prefetch.
     const prefetched = { underTest: repo, siblings: await headTestService.loadSiblings(db, repoId) };
+    // #2061 phase 1b: the EFFECTIVE routing thresholds this run is scored
+    // under. Resolved per run through the ONE shared loader and stored on the
+    // record, so a stored run can always say WHICH thresholds produced it —
+    // a retune between two runs is then visible instead of a phantom
+    // regression (the same reason the tagset identity is stored). The SAME
+    // set is threaded into every leg below (`opts.knobs`), so the recorded
+    // set IS the scoring set and not merely one that happened to be in
+    // force while the run went on.
+    const knobs = routeKnobs();
     const all = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
     // 1-8g-x (David: "the UI should show a progress bar for the run"): the
     // worker reports {phase, done, total} through opts.reportProgress — the
@@ -1653,7 +1662,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           const r = await headTestService.routingTest(
             repoId,
             { query: q.query, include_probes: false },
-            { ...opts, prefetched }
+            { ...opts, prefetched, knobs }
           );
           results[i] = {
             query: q.query,
@@ -1769,7 +1778,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       });
     }
 
-    const summary = summarizeRun(results);
+    const summary = summarizeRun(results, {
+      repo_id: repoId,
+      repo_name: repo.name || null,
+      siblings: prefetched.siblings || [],
+      knobs
+    });
     // 1-8g-v: async runs hand the key in (the placeholder doc was saved at
     // begin); sync callers (tests) let it mint as before.
     const runKey = opts.runKey || `r${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
@@ -1795,6 +1809,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       payload: {
         suite_created_at: suite.created_at,
         sibling_names: suite.payload.sibling_names || [],
+        // The effective thresholds this run was scored under (#2061 phase 1b).
+        knobs,
+        // ... and whether those thresholds make the verdict stand for
+        // production (three of the retriever's route knobs change the
+        // routing OUTCOME, not a threshold).
+        parity: summary.parity,
         results,
         summary
       }
@@ -1827,7 +1847,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       suite_key: suiteKey,
       run_key: runKey,
       pass_rate: summary.pass_rate,
-      steals: summary.steals.length
+      steals: summary.steals ? summary.steals.length : 0,
+      lost_no_winner: summary.lost_no_winner,
+      negative_wrongly_claimed: summary.negative_wrongly_claimed
     });
     return runDoc;
   });
@@ -2054,27 +2076,258 @@ function suppressReason(q, ut) {
  *   via the floor condition even in a one-repo universe.
  *   avg_margin over positives, null when no siblings (margin==1 is the
  *   solo-race artifact, not a quality signal).
- *   steals: positives lost, grouped by the winning sibling.
+ *
+ * F7 (#2061 phase 1c) — the accounting has to say WHAT HAPPENED:
+ *   - steals are keyed by repo_id, not by the display NAME (two repos can
+ *     share a name, and the name was resolved against the TRUNCATED
+ *     sibling list, so a winner outside it vanished from the accounting
+ *     entirely). The name rides ALONGSIDE the id; the renderer shows it.
+ *   - a positive lost to NOBODY (the top-ranked head did not claim, so
+ *     no head won the leg at all) is counted in `lost_no_winner`. It used
+ *     to be recorded NOWHERE, and it is the most consequential outcome in
+ *     a restricted carrier: the query went nowhere.
+ *   - a negative the under-test correctly refused is NOT the same thing as
+ *     a negative a SIBLING wrongly claimed. Both count as "the under-test
+ *     did not claim it", so the pass rate alone cannot tell them apart:
+ *     `negative_wrongly_claimed` reports the second.
+ *   - a null margin is not a zero margin. Only the margins that EXIST are
+ *     averaged, and `avg_margin_n` states how many contributed.
  */
-function summarizeRun(results) {
+/**
+ * The repository index of a run: the FULL sibling list, the name→id map
+ * and the id→name map, shared by the summary and the confusion matrix.
+ *
+ * The per-row sibling list the run keeps is TRUNCATED (the top N by
+ * name), so anything that must resolve a repository by id or by name
+ * resolves it HERE — against every repository that competed.
+ *
+ * @param {{repo_id?: string, repo_name?: string, siblings?: Array}} ctx - The run's context
+ * @returns {{siblings: Array, nameToId: Map, idToName: Map, ownerIdOf: Function}} The index
+ */
+function repoIndex(ctx = {}) {
+  const siblings = Array.isArray(ctx.siblings) ? ctx.siblings : [];
+  const nameToId = new Map();
+  const idToName = new Map();
+  for (const s of siblings) {
+    if (!s || !s.repo_id) continue;
+    idToName.set(s.repo_id, s.name || s.repo_id);
+    if (typeof s.name === 'string' && s.name.trim()) nameToId.set(s.name.trim().toLowerCase(), s.repo_id);
+  }
+  if (ctx.repo_id) idToName.set(ctx.repo_id, ctx.repo_name || idToName.get(ctx.repo_id) || ctx.repo_id);
+  return {
+    siblings,
+    nameToId,
+    idToName,
+    /**
+     * The repository a row was MEANT for: the repo under test for a
+     * positive, the named competitor for a negative. Null when the row
+     * names none, or names one this deployment does not have.
+     */
+    ownerIdOf(r) {
+      if (r.kind === 'positive') return ctx.repo_id || null;
+      const raw = typeof r.expected_repo === 'string' ? r.expected_repo.trim() : '';
+      if (!raw) return null;
+      return nameToId.get(raw.toLowerCase()) || null;
+    }
+  };
+}
+
+/**
+ * The pair-level confusion matrix (#2061 phase 1d, E-3).
+ *
+ * An aggregate pass rate HIDES the pairs: "62% pass" says nothing about
+ * WHICH repo took which query, and a near-tie between two repos is
+ * invisible in it. The matrix names the pairs:
+ *
+ *   rows    = the repo each query was INTENDED for
+ *   columns = the repo that actually answered it
+ *   cells   = the counts, and the rate each pair carries
+ *
+ * The intended repo of a row:
+ *   - a POSITIVE belongs to the repo under test (the suite IS that repo's
+ *     suite);
+ *   - a NEGATIVE names the competing repository that owns it
+ *     (`expected_repo` — the suite generator is told to write the EXACT
+ *     competing repository name).
+ *
+ * A negative with no `expected_repo` has no intended repo and is NOT
+ * counted: an unknown row must not land in a matrix cell.
+ *
+ * `claim_accuracy` is the share of the counted queries that were answered
+ * by the repo they were meant for. The matrix's denominators are visible
+ * on purpose — a rate without its row total is the same trap as a pass
+ * rate without its universe.
+ *
+ * @param {Array} results - The run's rows
+ * @param {{repo_id?: string, repo_name?: string, siblings?: Array}} ctx - The run's context
+ * @returns {object} The matrix
+ */
+function buildConfusion(results, ctx = {}) {
+  const repoId = ctx.repo_id || null;
+  const repoName = ctx.repo_name || null;
+  const index = repoIndex(ctx);
+  const { nameToId, idToName } = index;
+
+  // The column key for "nobody answered".
+  const NO_WINNER = 'none';
+  const labelFor = (id) => idToName.get(id) || id;
+
+  /** The intended repo of one row, or null when the row names none. */
+  const intendedOf = (r) => {
+    if (r.kind === 'positive') {
+      return { repo_id: repoId, label: repoName || repoId || 'the repo under test' };
+    }
+    const raw = typeof r.expected_repo === 'string' ? r.expected_repo.trim() : '';
+    if (!raw) return null;
+    const id = nameToId.get(raw.toLowerCase()) || null;
+    return { repo_id: id, label: id ? labelFor(id) : raw, unresolved: !id };
+  };
+
+  const cells = new Map(); // rowKey -> Map(colKey -> count)
+  const rowMeta = new Map(); // rowKey -> { repo_id, label, total, unresolved }
+  const colMeta = new Map(); // colKey -> { repo_id, label }
+  let counted = 0;
+  let correct = 0;
+  let unresolvedCount = 0;
+
+  for (const r of results) {
+    if (r.error) continue;
+    const intended = intendedOf(r);
+    if (!intended) continue;
+    const rowKey = intended.repo_id || `name:${intended.label}`;
+    const actualId = r.winner || null;
+    const colKey = actualId || NO_WINNER;
+    if (!cells.has(rowKey)) cells.set(rowKey, new Map());
+    const rowCells = cells.get(rowKey);
+    rowCells.set(colKey, (rowCells.get(colKey) || 0) + 1);
+    if (!rowMeta.has(rowKey)) {
+      rowMeta.set(rowKey, {
+        repo_id: intended.repo_id,
+        label: intended.label,
+        total: 0,
+        // The intended repository the run could NOT resolve (the suite
+        // generator named a repository this deployment does not have).
+        // The row is kept and shown as unresolved — it is NOT folded into
+        // another row — and it is kept OUT of the accuracy rate, which
+        // would otherwise be deflated by a row nobody can correct.
+        unresolved: !!intended.unresolved
+      });
+    }
+    rowMeta.get(rowKey).total += 1;
+    if (!colMeta.has(colKey)) {
+      colMeta.set(colKey, {
+        repo_id: actualId,
+        label: actualId ? labelFor(actualId) : 'no winner',
+        total: 0
+      });
+    }
+    colMeta.get(colKey).total += 1;
+    counted += 1;
+    if (intended.unresolved) {
+      unresolvedCount += 1;
+    } else if (actualId && actualId === intended.repo_id) {
+      correct += 1;
+    }
+  }
+
+  const rows = [...rowMeta.entries()].map(([key, meta]) => ({ key, ...meta }));
+  const columns = [...colMeta.entries()].map(([key, meta]) => ({ key, ...meta }));
+  const flat = [];
+  for (const [rowKey, rowCells] of cells) {
+    const total = rowMeta.get(rowKey).total;
+    for (const [colKey, count] of rowCells) {
+      flat.push({
+        intended: rowKey,
+        actual: colKey,
+        count,
+        rate: total ? count / total : null,
+        // null = UNKNOWN (the intended repository could not be resolved,
+        // so the cell is neither right nor wrong); true/false otherwise.
+        correct: rowMeta.get(rowKey).unresolved
+          ? null
+          : !!(colMeta.get(colKey).repo_id && colMeta.get(colKey).repo_id === rowMeta.get(rowKey).repo_id)
+      });
+    }
+  }
+  flat.sort((a, b) =>
+    a.intended === b.intended ? a.actual.localeCompare(b.actual) : a.intended.localeCompare(b.intended)
+  );
+
+  return {
+    n_queries: counted,
+    // The accuracy rate is over the RESOLVED rows: an unresolved intended
+    // repository can never be "answered correctly", and counting it would
+    // silently depress the rate by a share nobody can act on. The count of
+    // those rows is reported beside it.
+    claim_accuracy: counted - unresolvedCount ? correct / (counted - unresolvedCount) : null,
+    n_unresolved: unresolvedCount,
+    rows,
+    columns,
+    cells: flat
+  };
+}
+
+function summarizeRun(results, ctx = {}) {
+  const repoId = ctx.repo_id || null;
+  const index = repoIndex(ctx);
   const done = results.filter((r) => !r.error);
   const positives = done.filter((r) => r.kind === 'positive');
   const negatives = done.filter((r) => r.kind !== 'positive');
-  const siblingCount = done.length ? Math.max(...done.map((r) => r.sibling_count || 0)) : 0;
+  // The UNIVERSE the score was measured over: every head that competed,
+  // not the truncated display list. `loadSiblings` returns every
+  // repository with a head and the race ranks all of them; the per-row
+  // `sibling_count` is the TRUNCATED detail list (the top 20 by name), so
+  // reporting it as the universe under-reports the denominator exactly
+  // when the deployment is large — and hides the fact that a winner
+  // outside the truncated list existed.
+  const siblingCount = index.siblings.length
+    ? index.siblings.length
+    : done.length
+      ? Math.max(...done.map((r) => r.sibling_count || 0))
+      : 0;
   const posPassed = positives.filter((r) => r.under_test_wins_head).length;
   // Gate-era negatives are evaluatable solo; legacy (head_claimed null)
   // only with siblings.
   const negEvaluatable = negatives.filter((r) => r.head_claimed !== null || (r.sibling_count || 0) > 0);
-  const negPassed = negEvaluatable.filter((r) =>
-    r.head_claimed !== null ? r.head_claimed === false : !r.under_test_wins_head
-  ).length;
+  // The under-test did NOT claim the query. The gate held (or, for legacy
+  // rows, the under-test did not win the rank).
+  const underTestSilent = (r) => (r.head_claimed !== null ? r.head_claimed === false : !r.under_test_wins_head);
+  const negPassed = negEvaluatable.filter(underTestSilent).length;
+  // ... and a repository OTHER than the one it was meant for claimed it
+  // anyway. The negative still "passes" for the under-test (its gate
+  // behaved), but the answer was served by the wrong repository — a
+  // routing failure the pass rate must not hide. A negative answered by
+  // its OWN intended owner (`expected_repo`) was routed exactly right and
+  // is NOT counted here.
+  const negWronglyClaimed = negEvaluatable.filter((r) => {
+    if (!underTestSilent(r) || !r.winner || r.winner === repoId) return false;
+    const owner = index.ownerIdOf(r);
+    return !owner || owner !== r.winner;
+  }).length;
   const evaluatable = positives.length + negEvaluatable.length;
-  const margins = positives.filter((r) => (r.sibling_count || 0) > 0).map((r) => r.margin);
+  // Only the margins that EXIST: a null margin (no scored sibling) is an
+  // absent measurement, and averaging it as zero dragged the mean down.
+  const margins = positives
+    .filter((r) => (r.sibling_count || 0) > 0 && typeof r.margin === 'number')
+    .map((r) => r.margin);
 
   const stealMap = new Map();
+  const stealNames = new Map();
+  let lostNoWinner = 0;
   for (const r of positives) {
-    if (!r.under_test_wins_head && r.winner_name) {
-      stealMap.set(r.winner_name, (stealMap.get(r.winner_name) || 0) + 1);
+    if (r.under_test_wins_head) continue;
+    if (r.winner) {
+      stealMap.set(r.winner, (stealMap.get(r.winner) || 0) + 1);
+      // The display name, resolved against the FULL sibling list — the
+      // per-row `winner_name` was looked up in the TRUNCATED one, so a
+      // winner outside it had no name at all (and the steal line showed a
+      // bare id next to a matrix that named it).
+      const name = index.idToName.get(r.winner) || r.winner_name || null;
+      if (!stealNames.has(r.winner) && name) stealNames.set(r.winner, name);
+    } else {
+      // Nobody won the leg: the top-ranked head did not claim it. The
+      // positive is lost, and it is lost to NOBODY.
+      lostNoWinner += 1;
     }
   }
 
@@ -2091,7 +2344,34 @@ function summarizeRun(results) {
     negative_pass_rate: negEvaluatable.length ? negPassed / negEvaluatable.length : null,
     pass_rate: evaluatable ? (posPassed + negPassed) / evaluatable : null,
     avg_margin: margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : null,
-    steals: [...stealMap.entries()].map(([by_repo, count]) => ({ by_repo, count }))
+    // The denominator of the average above — a mean without it is the
+    // "pass rate without its universe" trap in a smaller costume.
+    avg_margin_n: margins.length,
+    // Keyed by repo_id; `by_name` is the display name when the run kept
+    // it. Null (not []) when there was no positive to lose: the accounting
+    // was not MEASURED, which is not the same claim as "nothing was lost".
+    steals: positives.length
+      ? [...stealMap.entries()].map(([by_repo, count]) => ({
+          by_repo,
+          by_name: stealNames.get(by_repo) || null,
+          count
+        }))
+      : null,
+    // Positives the run lost with no winner at all.
+    lost_no_winner: lostNoWinner,
+    // Negatives the under-test correctly refused that a sibling claimed
+    // anyway — the wrong repo answered.
+    negative_wrongly_claimed: negWronglyClaimed,
+    // Whether this run's verdict STANDS FOR PRODUCTION under the knobs it
+    // was scored under. Three of the retriever's route knobs change the
+    // routing OUTCOME (routing off, heads not superseding, a head weight
+    // other than 1) — under those, the Lab scores the GATE and the
+    // deployment decides routing some other way. The record says so
+    // instead of certifying a parity that does not hold.
+    parity: routeParity(ctx.knobs || routeKnobs()),
+    // The pair-level view (E-3): which repo answered which query, and the
+    // rate each pair carries. The pass rate above cannot say that.
+    confusion: buildConfusion(results, ctx)
   };
 }
 
@@ -2492,6 +2772,11 @@ subject tags over query-specific ones. Respond with ONLY a JSON object:
 async function recommendTagSet(repoId, payload = {}, opts = {}) {
   return withSpan('okf.headsuite.recommend', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
+    // #2061 phase 1b: the gate thresholds are resolved PER CALL through the
+    // ONE shared loader (services/route-knobs.js) — the module-load copies are
+    // gone. The advisor therefore simulates the thresholds a run would use
+    // RIGHT NOW, even after a retune that needed no restart.
+    const knobs = routeKnobs();
     const runLimit = Math.max(1, Math.min(parseInt(payload.run_limit, 10) || 5, 20));
     const db = await dbService.getConnection();
     await ensureCollection(db);
@@ -2576,15 +2861,15 @@ async function recommendTagSet(repoId, payload = {}, opts = {}) {
     };
     const predict = (qv, tags, tagVecMap) => {
       const score = cos(qv, head.vector);
-      if (score === null || score < GATE_FLOOR) return { claimed: false, why: 'floor' };
+      if (score === null || score < knobs.ROUTE_HEAD_FLOOR) return { claimed: false, why: 'floor' };
       const vecs = tags.map((t) => tagVecMap.get(t)).filter(Array.isArray);
       if (vecs.length) {
         for (const tv of vecs) {
           const c = cos(qv, tv);
-          if (c !== null && c >= GATE_TAG_MAX) return { claimed: false, why: 'veto' };
+          if (c !== null && c >= knobs.ROUTE_FORBIDDEN_TAG_MAX) return { claimed: false, why: 'veto' };
         }
         const c = cos(qv, centroid(vecs));
-        if (c !== null && score - c <= GATE_MARGIN) return { claimed: false, why: 'margin' };
+        if (c !== null && score - c <= knobs.ROUTE_HEAD_MARGIN) return { claimed: false, why: 'margin' };
       }
       return { claimed: true, why: null, score };
     };
@@ -2829,6 +3114,12 @@ Respond with ONLY: {"add": ["...", "..."]}`;
       repo_id: repoId,
       runs_considered: runs.length,
       queries_considered: queries.length,
+      // #2061 phase 1b: the thresholds this advice was SIMULATED under.
+      // The advisor proposes changes to the gate itself, so an advice doc
+      // with no threshold attribution is an answer nobody can act on
+      // months later ("add these tags" — under which floor?).
+      knobs,
+      parity: routeParity(knobs),
       // 1-8g-b: the scope the scorecard aggregated — the UI renders it so
       // "which suite / which tag set am I looking at" is never a guess.
       scope: {
@@ -3070,6 +3361,7 @@ module.exports = {
   // boundaries.
   _internals: {
     summarizeRun,
+    buildConfusion,
     nearMissQueries
   }
 };

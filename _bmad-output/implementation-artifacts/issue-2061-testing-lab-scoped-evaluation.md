@@ -1,6 +1,6 @@
 # #2061 — OKF Testing Lab: group-scoped evaluation (Phased epic)
 
-**Status:** IN PROGRESS (2026-11-22) — Phase 1 in flight; verification lands at the end of each phase.
+**Status:** IN PROGRESS (2026-11-22) — Phase 1 code complete and green; the phase lands as one MR, verified on the local build before merge. Phase 2 next.
 **Issue:** https://opensource.unicc.org/un/itu/genie-ai/-/issues/2061
 **Branch:** `feat/okf-testing-lab-scoped-eval`, off `origin/main` (`56d87e763`).
 **Worktree:** `.claude/worktrees/okf-lab-scoped-eval`.
@@ -11,8 +11,8 @@ and is verified before the next begins.
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | E-3 pair-level reporting + F7 steal accounting + F6 knob unification + the blank-principal fix | IN FLIGHT |
-| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | pending |
+| 1 | E-3 pair-level reporting + F7 steal accounting + F6 knob unification + the blank-principal fix | CODE COMPLETE — verification green |
+| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | pending — gated on the carrier-trust findings (F1/F2 below) |
 | 3 | E-7 context-native generation + suite binding | pending |
 | 4 | E-4 attribution metrics + E-5 evidence-grade run records | pending |
 | 5 | E-6 offline harness parity + the tenant-segment decision | pending |
@@ -178,3 +178,58 @@ the phasing says diagnose before creating objects, and the matrix is the
 diagnostic that says which of them is even needed. Also out: RAGAS
 attribution preservation (E-4, Phase 4) — it is the PREREQUISITE for the
 read-time disclosure gate, not a Phase 1 metric.
+
+## Phase 1 — delivery record (2026-11-22)
+
+**Status: CODE COMPLETE, verification green.** The MR carries the phase; the
+phase's own evidence is the local build (deployed before merge) plus the
+suite runs below.
+
+| Acceptance | Where it landed | Proof |
+|---|---|---|
+| 1 — the run record names the acting principal | `components/okf-server/controllers/actor-from.js` (one additive `user_id` on the shared actor shape; 25 readers repaired at once) | `head-suite-service.test.js` — "the suite record names the acting principal" |
+| 2 — one loader, per run, recorded | `services/route-knobs.js` (new) + `head-test-service.js` + `head-suite-service.js` (`GATE_*` gone) + `payload.knobs` on the run doc | `route-knobs.test.js` (4) + the advisor/loader wiring |
+| 3 — the knobs reach the container | `docker-compose.yaml` (okf-server block) + `charts/.../opea/okf-server.yaml` (`$routeGateEnv`, read from the retriever's values block) | `tests/config-validator/__tests__/route-knob-parity.test.js` — delivery + drift legs |
+| 4 — the accounting says what happened | `head-suite-service.js` `summarizeRun`: steals keyed by `repo_id` (+`by_name`), `lost_no_winner`, `negative_wrongly_claimed`, `avg_margin_n`, `steals: null` when unmeasured | 5 new tests in `head-suite-service.test.js` — **verified RED against the pre-change code** (all 5 failed), then GREEN |
+| 5 — the pair-level matrix | `head-suite-service.js` `buildConfusion` + the Suites & analytics tab (matrix beside the pass rate, with the universe) | 3 new backend tests + 1 new frontend test |
+| 6 — the universe is visible | the summary block, the run-history table's new *Universe* column | the frontend test asserts the rendered universe |
+| 7 — the docs stop claiming what the code lacks | `site/content/en/docs/knowledge-base/testing-lab.md`, `access-control.md`, `okf-studio.md`, `docs/configure/okf-variables.md` (the route thresholds are now documented), and the Test tab's own string in **all 14 locales** | — |
+| 8 — suites green, coverage up, CHANGELOG | okf-server **95 suites / 2448 tests green**; frontend **156 suites / 4577 tests green**; config-validator green except 5 PRE-EXISTING e2e failures (`tests/e2e` deps missing in this checkout + a class-selector violation in `tests/e2e/auth/g1-swagger-authorize.spec.js` — neither file is touched by this change) | coverage vs the base commit, measured the same way: component total **87.85% → 88.08%** statements, **89.35% → 89.55%** lines, **75.35% → 75.71%** branches; `head-suite-service.js` 82.78% → 83.65% statements; `head-test-service.js` 85.95% → 91.59% (the retry/timeout probe path is now covered by two new tests); `route-knobs.js` 100% |
+
+### The security baseline that Phase 2 inherits
+
+A read-only baseline review of the **fan-out carrier trust boundary** (the
+BFF → chatqna → retriever chain) was run BEFORE the change set, because
+Phase 2 replaces the carrier's writer and the baseline says what a
+carrier-substituting client inherits. It found six issues in the production
+path — **none of them introduced by this change set, and none of them in a
+file this change set touches**. They are recorded here and filed as a backlog
+issue, because the phasing puts the carrier work in Phase 2 and the fix for
+a carrier-trust finding belongs with the carrier work:
+
+- **F1 (HIGH)** — chatqna reads `authorized_graph_names` / `sticky_graph_names`
+  / `exclude_legacy` out of the REQUEST BODY (`genieai_chatqna.py:2638-2644`),
+  so a caller with any valid bearer can name any graph; the BFF's 4-key
+  whitelist (`query-service.js:626-634`) is the only thing that stops it, and
+  it lives in a different service from the consumer that trusts the result.
+- **F2 (HIGH)** — the retriever enforces NO authorization on the carrier: only
+  a character-set check (`genieai_retriever_arangodb.py:327,1393-1394`), with
+  the shared root Arango credential behind it (`config.py:71-72`), and its own
+  `/v1/retrieval` endpoint carries no auth dependency.
+- **F3 (MEDIUM)** — the sticky-graph lookup is scoped by `sessionId` alone
+  (`query-service.js:834-853`), and `sessionId` is caller-supplied, so a
+  caller can read another session's routed-repository set.
+- **F4 (MEDIUM)** — `exclude_legacy` (the "OKF only" posture) rides the wire
+  and is honoured as-is; the retriever has no deployment knob of its own.
+- **F5 (MEDIUM)** — the carrier's LENGTH is unbounded (`FANOUT_MAX_GRAPHS`
+  bounds concurrency, not the array), so a substituting caller can turn the
+  retriever into a repository-existence oracle.
+- **F6 (LOW)** — the BFF's `okf_only` sticky filter omits the legacy-graph
+  exclusion its `hybrid` sibling enforces (`query-service.js:769` vs `:785`).
+  Unreachable today; it stops being unreachable when a second writer exists.
+
+**Consequence for the phasing:** Phase 2 (E-4 carrier substitution) MUST NOT
+land until F1 and F2 have a fix — the Testing Lab must be able to say "I am
+evaluating these graphs", and the retriever must be able to tell that from
+"I am authorized to read them". That is Phase 2's entry criterion, not an
+optional extra.

@@ -402,7 +402,7 @@ describe('runSuite + summarizeRun', () => {
     expect(s.negative_pass_rate).toBe(1); // sibling always won
     expect(s.pass_rate).toBeCloseTo(5 / 6, 5);
     expect(s.avg_margin).toBeGreaterThan(0);
-    expect(s.steals).toEqual([{ by_repo: 'Sibling Repo', count: 1 }]);
+    expect(s.steals).toEqual([{ by_repo: 'sib1', by_name: 'Sibling Repo', count: 1 }]);
     // persisted run doc
     expect(Object.keys(__mockDb._stores.okf_head_test_runs)).toHaveLength(2); // suite + run
   });
@@ -509,6 +509,9 @@ describe('runSuite + summarizeRun', () => {
         under_test_wins_head: false,
         sibling_count: 2,
         margin: 0.1,
+        // #2061 phase 1c: the steal is keyed by the repo_id; the display
+        // name rides alongside it (the name alone collided and vanished).
+        winner: 'sib-id',
         winner_name: 'Sib'
       },
       {
@@ -531,7 +534,231 @@ describe('runSuite + summarizeRun', () => {
     expect(s.negative_passed).toBe(3); // only the CLAIMED confusable fails
     expect(s.negative_pass_rate).toBeCloseTo(3 / 4, 5);
     expect(s.pass_rate).toBeCloseTo(4 / 6, 5);
-    expect(s.steals).toEqual([{ by_repo: 'Sib', count: 1 }]);
+    expect(s.steals).toEqual([{ by_repo: 'sib-id', by_name: 'Sib', count: 1 }]);
+  });
+
+  // ─── #2061 phase 1c (F7): the accounting says WHAT HAPPENED ───
+  describe('#2061: the run summary accounts for what actually happened', () => {
+    it('keys a steal by the repo_id, so two repos sharing a name stay two steals', () => {
+      const row = (query, winner) => ({
+        query,
+        kind: 'positive',
+        under_test_wins_head: false,
+        sibling_count: 2,
+        margin: 0.1,
+        winner,
+        winner_name: 'Shared Name'
+      });
+      const s = svc._internals.summarizeRun([row('p-lose-1', 'repo-b'), row('p-lose-2', 'repo-c')], {
+        repo_id: 'repo-a'
+      });
+      // Keyed by name, these two collapsed into ONE steal of 2 — and a
+      // winner outside the run's truncated sibling list vanished entirely.
+      expect(s.steals).toEqual([
+        { by_repo: 'repo-b', by_name: 'Shared Name', count: 1 },
+        { by_repo: 'repo-c', by_name: 'Shared Name', count: 1 }
+      ]);
+    });
+
+    it('counts a positive lost to NOBODY — no head won the leg at all', () => {
+      // The most consequential outcome in a restricted carrier: the query
+      // went nowhere. It used to be recorded NOWHERE, so the run read as
+      // if nothing had been lost.
+      const s = svc._internals.summarizeRun(
+        [
+          {
+            query: 'p',
+            kind: 'positive',
+            under_test_wins_head: false,
+            sibling_count: 2,
+            margin: 0.1,
+            winner: null,
+            winner_name: null
+          }
+        ],
+        { repo_id: 'repo-a' }
+      );
+      expect(s.lost_no_winner).toBe(1);
+      expect(s.steals).toEqual([]);
+    });
+
+    it('separates "the under-test correctly refused" from "a sibling wrongly claimed"', () => {
+      const s = svc._internals.summarizeRun(
+        [
+          { query: 'n-silent', kind: 'negative', head_claimed: false, sibling_count: 2, winner: null },
+          { query: 'n-taken', kind: 'negative', head_claimed: false, sibling_count: 2, winner: 'repo-b' }
+        ],
+        { repo_id: 'repo-a' }
+      );
+      // Both pass for the under-test — its gate held in both cases ...
+      expect(s.negative_passed).toBe(2);
+      expect(s.negative_pass_rate).toBe(1);
+      // ... but only one of them was answered by the WRONG repo, and the
+      // pass rate alone could not say so.
+      expect(s.negative_wrongly_claimed).toBe(1);
+    });
+
+    it('averages only the margins that EXIST, and states how many contributed', () => {
+      const s = svc._internals.summarizeRun(
+        [
+          { query: 'p1', kind: 'positive', under_test_wins_head: true, sibling_count: 2, margin: 0.4 },
+          { query: 'p2', kind: 'positive', under_test_wins_head: true, sibling_count: 2, margin: null },
+          { query: 'p3', kind: 'positive', under_test_wins_head: true, sibling_count: 2, margin: 0.2 }
+        ],
+        { repo_id: 'repo-a' }
+      );
+      // A null margin is an ABSENT measurement, not a zero: averaging it as
+      // zero reported 0.2 for a run whose real mean is 0.3.
+      expect(s.avg_margin).toBeCloseTo(0.3, 5);
+      expect(s.avg_margin_n).toBe(2);
+    });
+
+    it('does NOT count a negative answered by its OWN intended owner as wrongly claimed', () => {
+      // The suite generator names the competing repository that owns a
+      // negative (`expected_repo`). When THAT repository answers it, the
+      // query was routed exactly right — counting it as "taken by another
+      // repository" would print the alarm on a correct routing.
+      const s = svc._internals.summarizeRun(
+        [
+          {
+            query: 'n-right',
+            kind: 'negative',
+            head_claimed: false,
+            sibling_count: 2,
+            winner: 'repo-b',
+            expected_repo: 'Repo B'
+          },
+          {
+            query: 'n-wrong',
+            kind: 'negative',
+            head_claimed: false,
+            sibling_count: 2,
+            winner: 'repo-c',
+            expected_repo: 'Repo B'
+          }
+        ],
+        {
+          repo_id: 'repo-a',
+          siblings: [
+            { repo_id: 'repo-b', name: 'Repo B' },
+            { repo_id: 'repo-c', name: 'Repo C' }
+          ]
+        }
+      );
+      expect(s.negative_wrongly_claimed).toBe(1);
+    });
+
+    it('reports the universe the score was measured over, not the truncated display list', () => {
+      // The per-row `sibling_count` is the TRUNCATED detail list (the top
+      // 20 by name); the race ranks EVERY head. Reporting the truncated
+      // count as the universe under-reports the denominator exactly when
+      // the deployment is large.
+      const s = svc._internals.summarizeRun(
+        [
+          { query: 'p', kind: 'positive', under_test_wins_head: true, sibling_count: 20, margin: 0.1, winner: 'repo-a' }
+        ],
+        {
+          repo_id: 'repo-a',
+          siblings: Array.from({ length: 25 }, (_, i) => ({ repo_id: `s${i}`, name: `S${i}` }))
+        }
+      );
+      expect(s.sibling_count).toBe(25);
+    });
+
+    it('names a steal whose winner is outside the truncated sibling list', () => {
+      // The per-row `winner_name` was resolved against the TRUNCATED list,
+      // so a winner outside it had no name at all — and the steal line
+      // showed a bare id next to a matrix that named it.
+      const s = svc._internals.summarizeRun(
+        [
+          {
+            query: 'p',
+            kind: 'positive',
+            under_test_wins_head: false,
+            sibling_count: 20,
+            margin: 0.1,
+            winner: 's24',
+            winner_name: null
+          }
+        ],
+        {
+          repo_id: 'repo-a',
+          siblings: Array.from({ length: 25 }, (_, i) => ({ repo_id: `s${i}`, name: `Sibling ${i}` }))
+        }
+      );
+      expect(s.steals).toEqual([{ by_repo: 's24', by_name: 'Sibling 24', count: 1 }]);
+    });
+
+    it('reports the steal accounting as NOT MEASURED when there was no positive to lose', () => {
+      const s = svc._internals.summarizeRun([{ query: 'n', kind: 'negative', head_claimed: false, sibling_count: 0 }], {
+        repo_id: 'repo-a'
+      });
+      // Null and zero are different claims: "nothing was stolen" is a
+      // measurement; "nothing could be stolen" is not one.
+      expect(s.steals).toBeNull();
+    });
+  });
+
+  // ─── #2061 phase 1d (E-3): the pair-level confusion matrix ───
+  describe('#2061: the run summary carries the pair-level matrix', () => {
+    const CTX = {
+      repo_id: 'repo-a',
+      repo_name: 'Repo A',
+      siblings: [{ repo_id: 'repo-b', name: 'Repo B' }]
+    };
+
+    it('names the PAIRS: intended repo by actual winner, with the counts', () => {
+      const s = svc._internals.summarizeRun(
+        [
+          { kind: 'positive', winner: 'repo-a' },
+          { kind: 'positive', winner: 'repo-b' },
+          { kind: 'negative', expected_repo: 'Repo B', winner: 'repo-a' },
+          // No intended repo: an unknown row must not land in a cell.
+          { kind: 'negative', expected_repo: '', winner: 'repo-b' }
+        ],
+        CTX
+      );
+      const m = s.confusion;
+      expect(m.n_queries).toBe(3);
+      expect(m.rows).toEqual([
+        { key: 'repo-a', repo_id: 'repo-a', label: 'Repo A', total: 2, unresolved: false },
+        { key: 'repo-b', repo_id: 'repo-b', label: 'Repo B', total: 1, unresolved: false }
+      ]);
+      expect(m.cells).toEqual([
+        { intended: 'repo-a', actual: 'repo-a', count: 1, rate: 0.5, correct: true },
+        { intended: 'repo-a', actual: 'repo-b', count: 1, rate: 0.5, correct: false },
+        { intended: 'repo-b', actual: 'repo-a', count: 1, rate: 1, correct: false }
+      ]);
+      // The aggregate: one of the three queries was answered by the repo it
+      // was meant for.
+      expect(m.claim_accuracy).toBeCloseTo(1 / 3, 5);
+    });
+
+    it('has a column for "nobody answered" — the vanished answer', () => {
+      const s = svc._internals.summarizeRun([{ kind: 'positive', winner: null }], CTX);
+      const m = s.confusion;
+      expect(m.columns).toEqual([{ key: 'none', repo_id: null, label: 'no winner', total: 1 }]);
+      expect(m.cells).toEqual([{ intended: 'repo-a', actual: 'none', count: 1, rate: 1, correct: false }]);
+      expect(m.claim_accuracy).toBe(0);
+    });
+
+    it('keeps an intended repo the run could not resolve, and does not call it correct', () => {
+      const s = svc._internals.summarizeRun(
+        [{ kind: 'negative', expected_repo: 'Unknown Corp', winner: 'repo-b' }],
+        CTX
+      );
+      const m = s.confusion;
+      expect(m.rows).toEqual([
+        { key: 'name:Unknown Corp', repo_id: null, label: 'Unknown Corp', total: 1, unresolved: true }
+      ]);
+      // UNKNOWN, not wrong: the cell is neither right nor wrong when the
+      // intended repository could not be resolved.
+      expect(m.cells[0].correct).toBeNull();
+      // ... and the row is kept OUT of the accuracy rate, which would
+      // otherwise be deflated by a row nobody can act on.
+      expect(m.claim_accuracy).toBeNull();
+      expect(m.n_unresolved).toBe(1);
+    });
   });
 
   it('captures per-query errors without failing the whole run (cls passthrough on error rows)', async () => {

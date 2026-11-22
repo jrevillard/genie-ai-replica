@@ -343,7 +343,11 @@ def cmd_verdicts(args: argparse.Namespace) -> int:
     if not isinstance(rows, dict):
         print(f"REFUSED: {args.rows_path} carries no cases mapping", file=sys.stderr)
         return 1
-    report = build_findings_report(config=args.config, verdicts_result=verdicts_mod.build_verdicts(entries, rows))
+    report = build_findings_report(
+        config=args.config,
+        verdicts_result=verdicts_mod.build_verdicts(entries, rows),
+        created_utc=args.created_utc,
+    )
     path = _write_manifest(Path(args.out).parent, Path(args.out).name, report)
     _print_findings_summary(report)
     print(f"findings report: {path}")
@@ -407,6 +411,12 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--rows", dest="rows_path", required=True, help="a config-{a,b,c}.rows.json rows file")
     v.add_argument("--set", dest="set_path", required=True)
     v.add_argument("--out", required=True, help="the findings-report JSON path to write")
+    v.add_argument(
+        "--created-utc",
+        default=None,
+        help="pin the report timestamp (the digest covers it — pinning makes two re-judges of"
+        " the same rows digest-comparable)",
+    )
     v.add_argument("--config", choices=("A", "B", "C"), default="B", help="the run's configuration letter")
     v.set_defaults(func=cmd_verdicts)
     return p

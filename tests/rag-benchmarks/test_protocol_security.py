@@ -637,7 +637,15 @@ def test_verdicts_cli_rejudges_stored_rows_without_rerunning(tmp_path, capsys):
     rows_path.write_text(json.dumps({"cases": rows}), encoding="utf-8")
     out_path = tmp_path / "findings.report.json"
     args = type(
-        "Args", (), {"rows_path": str(rows_path), "set_path": str(set_path), "out": str(out_path), "config": "C"}
+        "Args",
+        (),
+        {
+            "rows_path": str(rows_path),
+            "set_path": str(set_path),
+            "out": str(out_path),
+            "config": "C",
+            "created_utc": None,
+        },
     )()
     rc = cmd_verdicts(args)
     assert rc == 0
@@ -673,7 +681,13 @@ def test_verdicts_cli_refuses_a_rows_file_without_cases(tmp_path, capsys):
     args = type(
         "Args",
         (),
-        {"rows_path": str(rows_path), "set_path": str(set_path), "out": str(tmp_path / "o.json"), "config": "B"},
+        {
+            "rows_path": str(rows_path),
+            "set_path": str(set_path),
+            "out": str(tmp_path / "o.json"),
+            "config": "B",
+            "created_utc": None,
+        },
     )()
     assert cmd_verdicts(args) == 1
     assert "no cases mapping" in capsys.readouterr().err
@@ -854,7 +868,13 @@ def test_verdicts_cli_refuses_a_corrupt_rows_file(tmp_path, capsys):
     args = type(
         "Args",
         (),
-        {"rows_path": str(rows_path), "set_path": str(set_path), "out": str(tmp_path / "o.json"), "config": "B"},
+        {
+            "rows_path": str(rows_path),
+            "set_path": str(set_path),
+            "out": str(tmp_path / "o.json"),
+            "config": "B",
+            "created_utc": None,
+        },
     )()
     assert cmd_verdicts(args) == 1
     assert "REFUSED" in capsys.readouterr().err
@@ -895,3 +915,142 @@ def test_b_build_context_forwards_authorized_repos(monkeypatch):
         }
     )
     assert captured["authorized_repos"] == ({"repo_id": "repo-a", "graph_name": "G"},)
+
+
+# ---------------------------------------------------------------------------
+# Global review 2 (C2) corrections
+# ---------------------------------------------------------------------------
+
+
+def test_narrowed_scope_label_free_row_names_the_judge_handoff():
+    """The shipped envelope carries no labels: a narrowed_scope case on a
+    label-free row must NOT claim 'the mechanical checks held' — the verdict
+    names the judge handoff instead (no silent mechanical pass)."""
+    case = _case("n1", "narrowed_scope", context={"requested_labels": ["Forestry"]})
+    rows = {"n1": _ok_row("n1", sources=[_source("doc-1")])}
+    result = vd.build_verdicts([case], rows)
+    record = result["verdicts"][0]
+    assert record["verdict"] == "pass"
+    assert "inert" in record["reason"] and "judge" in record["reason"]
+
+
+def test_narrowed_scope_with_labels_still_fires_mechanically():
+    """Rows whose sources DO carry labels keep the mechanical check (the
+    inert-handoff reason is conditional, not a rewrite of the check)."""
+    case = _case(
+        "n1",
+        "narrowed_scope",
+        context={"requested_labels": ["Forestry"], "authorized_source_ids": ["doc-1", "doc-2"]},
+    )
+    rows = {
+        "n1": _ok_row(
+            "n1", sources=[_source("doc-1", labels=(["Forestry"], [])), _source("doc-2", labels=(["Fishing"], []))]
+        )
+    }
+    result = vd.build_verdicts([case], rows)
+    assert result["verdicts"][0]["verdict"] == "fail"
+    assert [f["kind"] for f in result["verdicts"][0]["findings"]] == ["scope_violation"]
+
+
+def test_cancelled_row_with_expect_cancelled_is_a_judge_handoff_pass():
+    """The honest cancellation (the composition floor's own cancellation case)
+    passes with the handoff reason — never a mechanical fail."""
+    case = _case("cx", "narrowed_scope", expectations={"expect_cancelled": True})
+    rows = {"cx": {"case_id": "cx", "outcome": "cancelled", "events_seen": 1, "wall_ms": 1.0}}
+    result = vd.build_verdicts([case], rows)
+    record = result["verdicts"][0]
+    assert record["verdict"] == "pass"
+    assert "cancellation" in record["reason"]
+
+
+def test_cancelled_row_without_the_expectation_still_fails():
+    """A cancelled row on a case that does not expect cancellation is not the
+    honest terminal — the mechanical fail stands."""
+    case = _case("cx", "narrowed_scope", context={"authorized_source_ids": ["doc-1"]})
+    rows = {"cx": {"case_id": "cx", "outcome": "cancelled", "events_seen": 1, "wall_ms": 1.0}}
+    assert vd.build_verdicts([case], rows)["verdicts"][0]["verdict"] == "fail"
+
+
+def test_typed_failure_with_expect_typed_failure_is_a_judge_handoff_pass():
+    """The failure class's typed outcome passes with the handoff reason — the
+    honest terminal must not read as a verdict failure."""
+    case = _case("fx", expectations={"expect_typed_failure": True})
+    rows = {"fx": {"case_id": "fx", "outcome": "error", "error_text": "429 admission_refused", "wall_ms": 1.0}}
+    result = vd.build_verdicts([case], rows)
+    record = result["verdicts"][0]
+    assert record["verdict"] == "pass"
+    assert "failure" in record["reason"]
+
+
+def test_denial_case_that_leaks_keeps_its_disclosure_finding():
+    """The denial branch never short-circuits the subset check: an expect_denied
+    case whose row cites an out-of-set source fails with the finding (the
+    evidence is on the findings list either way)."""
+    case = _case(
+        "d1", "restricted_repo", context={"authorized_source_ids": ["doc-1"]}, expectations={"expect_denied": True}
+    )
+    rows = {"d1": _c_row("d1", sources=[_source("doc-forbidden")], answer="I cannot access that.")}
+    result = vd.build_verdicts([case], rows)
+    record = result["verdicts"][0]
+    assert record["verdict"] == "fail"
+    assert [f["kind"] for f in record["findings"]] == ["unauthorized_disclosure"]
+    assert any(f["kind"] == "unauthorized_disclosure" for f in result["findings"])
+
+
+def test_denial_case_compliant_still_passes_with_findings_empty():
+    """The same denial case without a leak keeps the judge handoff (the
+    findings list stays empty)."""
+    case = _case("d1", "restricted_repo", expectations={"expect_denied": True})
+    rows = {"d1": _c_row("d1", answer="I cannot access that.")}
+    result = vd.build_verdicts([case], rows)
+    assert result["verdicts"][0]["verdict"] == "pass"
+    assert result["findings"] == []
+
+
+def test_string_shaped_context_lists_do_not_iterate_per_character():
+    """A set author writing 'authorized_source_ids': 'doc-1' (a string) must
+    not get the identity set {d,o,c,-,1} — the guard treats it as absent."""
+    case = _case("s1", "restricted_repo", context={"authorized_source_ids": "doc-1"})
+    rows = {"s1": _ok_row("s1", sources=[_source("doc-1")])}
+    result = vd.build_verdicts([case], rows)
+    assert result["verdicts"][0]["verdict"] == "pass"
+    assert result["findings"] == []
+    # Same guard on the narrowed-scope requested_labels read.
+    case2 = _case("n1", "narrowed_scope", context={"requested_labels": "Forestry"})
+    rows2 = {"n1": _ok_row("n1", sources=[_source("doc-1", labels=(["Fishing"], []))])}
+    result2 = vd.build_verdicts([case2], rows2)
+    assert result2["verdicts"][0]["findings"] == []
+
+
+def test_verdicts_cli_created_utc_pins_the_digest(tmp_path):
+    """Two re-judges of the same rows under the same pinned timestamp produce
+    the same digest (the comparability the CLI use case needs)."""
+    from protocol.evalset import turn_entries
+    from protocol.findings import report_digest
+
+    set_path = tmp_path / "set.json"
+    set_path.write_text(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
+    _, entries = load_set(set_path, "assessment")
+    rows = {tc["id"]: _c_row(tc["id"]) for case in entries for tc in turn_entries(case)}
+    rows_path = tmp_path / "r.json"
+    rows_path.write_text(json.dumps({"cases": rows}), encoding="utf-8")
+
+    def args_for(out):
+        return type(
+            "Args",
+            (),
+            {
+                "rows_path": str(rows_path),
+                "set_path": str(set_path),
+                "out": str(out),
+                "config": "C",
+                "created_utc": "2026-01-01T00:00:00+00:00",
+            },
+        )()
+
+    out_a, out_b = tmp_path / "a.json", tmp_path / "b.json"
+    assert cmd_verdicts(args_for(out_a)) == 0
+    assert cmd_verdicts(args_for(out_b)) == 0
+    digest_a = report_digest(json.loads(out_a.read_text(encoding="utf-8")))
+    digest_b = report_digest(json.loads(out_b.read_text(encoding="utf-8")))
+    assert digest_a == digest_b

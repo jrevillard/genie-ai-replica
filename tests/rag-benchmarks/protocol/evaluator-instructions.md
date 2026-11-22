@@ -96,6 +96,19 @@ The judge confirms those records and settles what the rows cannot:
   the test demands that narrower citation set — to test restriction without
   enumerating a graph's content, declare graphs/repos only and judge the
   rest.
+- The narrowed-scope mechanical check is CONDITIONAL on the envelope carrying
+  labels: the shipped citation envelope hardcodes `categoryLabels` /
+  `serviceLabels` empty (no lane makes a per-answer metadata round-trip), so
+  a narrowed_scope case whose verdict reason names the inert check is YOURS
+  to judge — read the answer against the case's `requested_labels` and fail
+  it when a source outside the labels grounds the answer. The mechanical
+  `scope_violation` kind fires only on rows whose sources carry labels.
+- The failure and cancellation classes are judge handoffs at the mechanical
+  layer: an honest `cancelled` row (no answer) on an `expect_cancelled` case
+  and a typed failure outcome on an `expect_typed_failure` case record a pass
+  with a handoff reason — judge them under the failure and cancellation rules
+  below (the honest terminal is the pass condition; a fabricated answer where
+  a cancellation belongs is a fail).
 - `user_id` is inert in the service — the cross-user condition asserts
   INVARIANT behavior across identities, not per-user ACLs. Two cases
   differing only in `user_id` must answer identically; divergence is the

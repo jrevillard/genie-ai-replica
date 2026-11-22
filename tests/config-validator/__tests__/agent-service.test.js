@@ -170,6 +170,66 @@ describe('the agent service carries no OPEA overlay dependency', () => {
   });
 });
 
+describe('the agent service observability pair (story 2.11 — AD-11)', () => {
+  let tracingSource;
+  let appSource;
+  let agentBlock;
+
+  beforeAll(() => {
+    agentBlock = parseComposeServiceBlock(fs.readFileSync(COMPOSE_PATH, 'utf-8'), 'agent-service');
+    tracingSource = fs.readFileSync(path.join(AGENT_DIR, 'tracing.py'), 'utf-8');
+    appSource = fs.readFileSync(path.join(AGENT_DIR, 'app.py'), 'utf-8');
+  });
+
+  test('the compose block carries the OTel env pair naming the service', () => {
+    // The compose↔source pair convention (the backend block is the
+    // pattern): the SDK gate, the collector endpoint and the service name —
+    // the name the dashboards' `service_name` label discovery resolves.
+    expect(agentBlock).toMatch(/- ENABLE_OBSERVABILITY=\$\{ENABLE_OBSERVABILITY:-0\}/);
+    expect(agentBlock).toMatch(
+      /- OTEL_EXPORTER_OTLP_ENDPOINT=\$\{OTEL_EXPORTER_OTLP_ENDPOINT:-http:\/\/otel-collector:4318\}/
+    );
+    expect(agentBlock).toMatch(/- OTEL_SERVICE_NAME=agent-service/);
+    // The fluentd anchor stays: container logs reach VictoriaLogs
+    // unconditionally (the existing pin, re-asserted on the same block).
+    expect(agentBlock).toMatch(/logging: \*fluent-logging/);
+  });
+
+  test('the source default and the compose name agree', () => {
+    expect(appSource).toMatch(/SERVICE_NAME = "agent-service"/);
+    expect(appSource).toMatch(/setup_tracing\(SERVICE_NAME\)/);
+    expect(agentBlock).toMatch(/OTEL_SERVICE_NAME=agent-service/);
+  });
+
+  test('the outbound hops are instrumented behind the observability gate', () => {
+    // W3C propagation on every outbound hop: httpx (the model endpoint, the
+    // TEI calls) and requests (the doc-repo / okf-server adapters).
+    expect(tracingSource).toMatch(/HTTPXClientInstrumentor/);
+    expect(tracingSource).toMatch(/RequestsInstrumentor/);
+    // Behind the SINGLE gate: the instrumentors are installed inside
+    // setup_tracing, which no-ops unless ENABLE_OBSERVABILITY is "1" — the
+    // install sites must come after the gate check.
+    const gate = tracingSource.indexOf('ENABLE_OBSERVABILITY');
+    const httpxInstall = tracingSource.indexOf('HTTPXClientInstrumentor().instrument()');
+    const requestsInstall = tracingSource.indexOf('RequestsInstrumentor().instrument()');
+    expect(gate).toBeGreaterThan(-1);
+    expect(httpxInstall).toBeGreaterThan(gate);
+    expect(requestsInstall).toBeGreaterThan(gate);
+  });
+
+  test('the outbound instrumentation pins are in the audited tree', () => {
+    const requirements = fs.readFileSync(path.join(AGENT_DIR, 'requirements.txt'), 'utf-8');
+    expect(requirements).toMatch(/^opentelemetry-instrumentation-httpx==0\.48b0$/m);
+    expect(requirements).toMatch(/^opentelemetry-instrumentation-requests==0\.48b0$/m);
+    // Their licence evidence rows exist (the generic per-pin gate below
+    // verifies licence + defaults; this pins the pins' PRESENCE).
+    const evidence = JSON.parse(fs.readFileSync(EVIDENCE_PATH, 'utf-8'));
+    const names = evidence.packages.map((entry) => entry.name);
+    expect(names).toContain('opentelemetry-instrumentation-httpx');
+    expect(names).toContain('opentelemetry-instrumentation-requests');
+  });
+});
+
 describe('the pre-adoption checklist is satisfied for every pinned dependency', () => {
   const evidence = JSON.parse(fs.readFileSync(EVIDENCE_PATH, 'utf-8'));
   // The evidence declares the trees it covers (the runtime tree and the

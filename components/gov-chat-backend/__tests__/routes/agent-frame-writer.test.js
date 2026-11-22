@@ -8,6 +8,7 @@
 // off) pins the byte-identical legacy path.
 
 require('../setup-env');
+const { EXECUTION_VERSIONS } = require('../fixtures/agent-run-attribution');
 
 process.env.AGENT_ENABLED = '1';
 process.env.OPEA_STREAMING = 'true';
@@ -38,6 +39,9 @@ jest.mock('../../services/user-provisioning-service', () => ({
 jest.mock('../../services/query-service', () => ({
   initStreamQuery: jest.fn(),
   finalizeStreamQuery: jest.fn(),
+  // Story 2.11 — the run-start handshake + the honest-outcome patch.
+  persistAgentRunStart: jest.fn(),
+  persistAgentRunOutcome: jest.fn(),
   parseChatQnASSELine: jest.fn(),
   resolveFanoutPosture: jest.fn(),
   buildAgentCallerContext: jest.fn(),
@@ -319,7 +323,17 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
         source: 'okf-concept'
       }
     ]);
-    expect(metadata.agent_run).toEqual({ run_id: 'run-abc', usage_record: USAGE_RECORD });
+    // Story 2.11: the assembled block carries the run-start handshake
+    // (started_at) and the honest outcome (answered + finished_at) —
+    // execution_versions is absent, this fixture's run_started payload
+    // carries none (an older agent service; the block degrades).
+    expect(metadata.agent_run).toEqual({
+      run_id: 'run-abc',
+      started_at: expect.any(String),
+      usage_record: USAGE_RECORD,
+      outcome: 'answered',
+      finished_at: expect.any(String)
+    });
     expect(metadata.responseTime).toEqual(expect.any(Number));
     // The legacy fallback keys stay (the empty-stream base) — with ONE
     // deliberate override: an agentic turn is an ANSWER in the legacy
@@ -649,8 +663,12 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     const frames = parseSSEEvents(response.text);
     expect(frames.map((f) => f.type)).toEqual(['chunk', 'error']);
     expect(frames[1]).toEqual({ type: 'error', message: 'token budget exhausted', code: 'AGENT_RUN_ERROR' });
-    // No metadata, no done, nothing fabricated — the doc stays unanswered.
+    // No metadata, no done, nothing fabricated — the doc stays unanswered
+    // EXCEPT the honest outcome (story 2.11): the agent's own verdict,
+    // verbatim the usage record's outcome, rides the outcome patch.
     expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledWith('q1', 'budget_exhausted');
   });
 
   it('an answered run without a verdict event reads unverified — never a confident default', async () => {
@@ -888,6 +906,11 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
       expect(frames[frames.length - 1].type).toBe('error');
       expect(frames.find((f) => f.type === 'done')).toBeUndefined();
       expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+      // Story 2.11 — the BFF-attributed deadline is an honest terminal: the
+      // doc reads timed_out, and the abort's stream teardown does NOT
+      // overwrite it with `interrupted` (the one-outcome latch).
+      expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
+      expect(queryService.persistAgentRunOutcome).toHaveBeenCalledWith('q1', 'timed_out');
     } finally {
       jest.useRealTimers();
     }
@@ -957,7 +980,16 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
 
     const response = await responsePromise;
     const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
-    expect(metadata.agent_run).toEqual({ run_id: 'run-abc', usage_record: USAGE_RECORD });
+    // Story 2.11: the honest outcome rides the assembled block (answered +
+    // finished_at). This script carries NO run_started event, so no
+    // run-start keys (started_at / execution_versions) exist — the run_id
+    // comes from the envelope, the write still completes.
+    expect(metadata.agent_run).toEqual({
+      run_id: 'run-abc',
+      usage_record: USAGE_RECORD,
+      outcome: 'answered',
+      finished_at: expect.any(String)
+    });
   });
 });
 
@@ -1223,7 +1255,10 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
       expect.objectContaining({
         grounding_status: 'unverified',
         is_grounded: false,
-        agent_run: { run_id: 'run-abc' },
+        // Story 2.11: the partial save carries the honest `cancelled`
+        // outcome (+ finished_at); this stream carried no run_started, so
+        // no execution_versions/started_at ride.
+        agent_run: expect.objectContaining({ run_id: 'run-abc', outcome: 'cancelled' }),
         // The honesty marker: a partial save is never indistinguishable
         // from a completion (ADR agentic-003).
         answer_interrupted: true,
@@ -1237,6 +1272,35 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
     );
     // No frames after the disconnect.
     expect(res.writes.some((w) => w.includes('"type":"done"'))).toBe(false);
+    // Exactly ONE write carries the outcome (story 2.11): the partial
+    // save's assembled metadata — the standalone patch stays latched OFF,
+    // because a fire-and-forget patch racing the save is a second
+    // read-merge-write whose stale metadata could overwrite the save's
+    // assembled block.
+    expect(queryService.persistAgentRunOutcome).not.toHaveBeenCalled();
+  });
+
+  it('a failed partial save falls back to the standalone outcome patch (cancelled still lands)', async () => {
+    queryService.finalizeStreamQuery.mockRejectedValueOnce(new Error('db down'));
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const res = fakeRes();
+    const runPromise = directRun(res);
+    await flush();
+    mockStream.push(
+      `data: ${JSON.stringify(envelope('text_message_content', { text: 'partial an' }, { seq: 0 }))}\n\n`
+    );
+    await flush();
+    res.emit('close');
+    await runPromise;
+    await flush();
+
+    // The save failed: the fallback patch is the doc's only chance to
+    // carry the honest outcome — exactly one patch, `cancelled`.
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledWith('q1', 'cancelled');
   });
 
   it('a disconnect before any text chunk leaves the doc unanswered (no partial save fabricated)', async () => {
@@ -1301,7 +1365,8 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
       expect.objectContaining({
         grounding_status: 'grounded',
         is_grounded: true,
-        agent_run: { run_id: 'run-abc' },
+        // Story 2.11: the partial save carries the honest `cancelled` outcome.
+        agent_run: expect.objectContaining({ run_id: 'run-abc', outcome: 'cancelled' }),
         answer_interrupted: true
       }),
       // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
@@ -1362,5 +1427,192 @@ describe('proxyAgentRun — posture failures (401 propagates, others fail closed
     expect(response.status).toBe(401);
     expect(response.body.error).toBe('UNAUTHENTICATED');
     expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+  });
+});
+
+// ── story 2.11 — execution attribution and observability ────────────────────
+// The run-start handshake and the honest outcome vocabulary: every terminal
+// path writes exactly one outcome; the three named AC failure cases
+// (cancel-before-first-token, timeout-during-judge, kill-before-final-
+// metadata) each leave versions + their honest state; the persisted block
+// carries ids/fingerprints only.
+
+describe('proxyAgentRun — story 2.11, the run-start handshake and the honest outcomes', () => {
+  const postureContext = () => ({
+    user_id: 'user-123',
+    authorized_graph_names: [],
+    authorized_repos: [],
+    requested_labels: []
+  });
+
+  beforeEach(() => {
+    queryService.resolveFanoutPosture.mockResolvedValue(legacyPosture());
+    queryService.buildAgentCallerContext.mockReturnValue(postureContext());
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    queryService.persistAgentRunStart.mockResolvedValue(undefined);
+    queryService.persistAgentRunOutcome.mockResolvedValue(undefined);
+  });
+
+  it('persists the run-start block AT START, and the success finalize completes it with the outcome', async () => {
+    setupAgentQuery();
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q', execution_versions: EXECUTION_VERSIONS }, { seq: 0 }),
+        envelope('text_message_content', { text: 'answer' }, { seq: 1 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 2 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 3 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const res = fakeRes();
+    await directRun(res);
+    await flush();
+
+    // AT START: the versions are persisted the moment run_started arrives —
+    // a run whose final frame never arrives keeps them.
+    expect(queryService.persistAgentRunStart).toHaveBeenCalledTimes(1);
+    // The BLOCK is persisted verbatim (one mint at the consumer — the same
+    // bytes the success finalize completes).
+    expect(queryService.persistAgentRunStart).toHaveBeenCalledWith(
+      'q1',
+      expect.objectContaining({
+        run_id: 'run-abc',
+        execution_versions: EXECUTION_VERSIONS,
+        started_at: expect.any(String)
+      })
+    );
+    // The finalize COMPLETES the start write (never clobbers it): the
+    // assembled block merges the versions + the answered outcome.
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    const persistedMetadata = queryService.finalizeStreamQuery.mock.calls[0][3];
+    expect(persistedMetadata.agent_run).toEqual({
+      run_id: 'run-abc',
+      execution_versions: EXECUTION_VERSIONS,
+      started_at: expect.any(String),
+      usage_record: USAGE_RECORD,
+      outcome: 'answered',
+      finished_at: expect.any(String)
+    });
+  });
+
+  it('AC cancel-before-first-token: a disconnect after run_started keeps the versions, writes cancelled, fabricates nothing', async () => {
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const res = fakeRes();
+    const runPromise = directRun(res);
+    await flush();
+    mockStream.push(
+      `data: ${JSON.stringify(
+        envelope('run_started', { question: 'q', execution_versions: EXECUTION_VERSIONS }, { seq: 0 })
+      )}\n\n`
+    );
+    await flush();
+    // The client leaves before ANY chunk.
+    res.emit('close');
+    await runPromise;
+
+    // The versions are on the doc (the AT START write, the block verbatim).
+    expect(queryService.persistAgentRunStart).toHaveBeenCalledWith(
+      'q1',
+      expect.objectContaining({
+        run_id: 'run-abc',
+        execution_versions: EXECUTION_VERSIONS,
+        started_at: expect.any(String)
+      })
+    );
+    // The honest BFF-terminal outcome, and nothing fabricated: no finalize,
+    // no partial save, no chunk ever written.
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledWith('q1', 'cancelled');
+    expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+    expect(res.writes.some((w) => w.includes('"type":"chunk"'))).toBe(false);
+  });
+
+  it('AC kill-before-final-metadata: an upstream death after chunks writes interrupted, the client error contract unchanged', async () => {
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const res = fakeRes();
+    const runPromise = directRun(res);
+    await flush();
+    mockStream.push(`data: ${JSON.stringify(envelope('run_started', { question: 'q' }, { seq: 0 }))}\n\n`);
+    mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'half an' }, { seq: 1 }))}\n\n`);
+    await flush();
+    // The upstream dies before any metadata: the stream errors.
+    mockStream.emit('error', new Error('connection reset'));
+    await runPromise;
+
+    // The doc keeps the honest interrupted state (no finalize — the today
+    // contract: error frame then end).
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledWith('q1', 'interrupted');
+    expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+    expect(res.writes.some((w) => w.includes('"type":"error"'))).toBe(true);
+    expect(res.writes.some((w) => w.includes('"type":"done"'))).toBe(false);
+  });
+
+  it('AC timeout-during-judge (direct view): a deadline abort after chunks latches timed_out over the teardown', async () => {
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      const mockStream = new Readable({ read() {} });
+      axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+      const res = fakeRes();
+      const runPromise = directRun(res);
+      for (let i = 0; i < 200 && mockStream.listenerCount('data') === 0; i++) {
+        await new Promise(setImmediate);
+      }
+      mockStream.push(`data: ${JSON.stringify(envelope('run_started', { question: 'q' }, { seq: 0 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'slow' }, { seq: 1 }))}\n\n`);
+      await new Promise(setImmediate);
+
+      // The deadline fires mid-judge: the abort, and the timed_out write.
+      jest.advanceTimersByTime(40000);
+      expect(queryService.persistAgentRunOutcome).toHaveBeenCalledWith('q1', 'timed_out');
+      // The abort tears the stream down (what a real adapter does): the
+      // teardown's interrupted must NOT overwrite the deadline's fact.
+      mockStream.emit('error', new Error('aborted'));
+      await runPromise;
+
+      expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
+      expect(res.writes.some((w) => w.includes('"type":"error"'))).toBe(true);
+    } finally {
+      jest.useRealTimers();
+      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+    }
+  });
+
+  it('the no-credentials invariant: the persisted attribution block carries ids/fingerprints only', async () => {
+    setupAgentQuery();
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q', execution_versions: EXECUTION_VERSIONS }, { seq: 0 }),
+        envelope('text_message_content', { text: 'answer' }, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const res = fakeRes();
+    await directRun(res);
+    await flush();
+
+    // Every attribution write and the assembled block, serialized and
+    // scanned: no bearer, no token, no secret-shaped value — the request's
+    // bearer rides the RUN BODY, never the record.
+    const startArgs = JSON.stringify(queryService.persistAgentRunStart.mock.calls);
+    const outcomeArgs = JSON.stringify(queryService.persistAgentRunOutcome.mock.calls);
+    const persistedBlock = JSON.stringify(queryService.finalizeStreamQuery.mock.calls[0][3].agent_run);
+    for (const serialized of [startArgs, outcomeArgs, persistedBlock]) {
+      expect(serialized).not.toMatch(/bearer|authorization|secret|api[_-]?key|password/i);
+      expect(serialized).not.toContain('Bearer tok');
+    }
   });
 });

@@ -4173,6 +4173,18 @@ docs:validate:
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local
     - grep -q "vllm-reranker" /tmp/gpu-rocm.yaml
     - '! grep -q "vllm-reranker" /tmp/gpu-nvidia.yaml'
+    # The REC-6 tool-calling pin (#2052): the granite4 flags render ONLY when
+    # the served model is Granite 4.x. Asserted STRUCTURALLY (parsed YAML,
+    # not substring grep — a grep passes on a corrupted render): the flags in
+    # the vllm-llm command AND the environment entry still carrying
+    # HUGGING_FACE_HUB_TOKEN, on the granite-4.1-8b renders (nvidia + rocm);
+    # absent on both 3.3 default renders.
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-granite4.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-4.1-8b"
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm-granite4.yaml" -c local -e "gpu_vendor=rocm vllm_llm_model_id=ibm-granite/granite-4.1-8b"
+    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-granite4.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite4' in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
+    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm-granite4.yaml'))['services']['vllm-llm']; assert '--tool-call-parser granite4' in s['command'] and any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
+    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-nvidia.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
+    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']"
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers

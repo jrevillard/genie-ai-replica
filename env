@@ -124,6 +124,19 @@ HUGGING_FACE_HUB_TOKEN=
 # `response_format={"type":"json_object"}` (the labelling path needs
 # guided JSON) — e.g. ibm-granite/granite-3.3-2b-instruct (faster).
 # VLLM_LLM_MODEL_ID=
+#
+#   Tool-calling note (#2052): the vLLM container is pinned with
+#   --enable-auto-tool-choice --tool-call-parser $VLLM_TOOL_CALL_PARSER
+#   (default granite4 — the parser for Granite 4.x models). Serving a model
+#   outside Granite 4.x (env.strixhalo's granite-3.1-2b, for example) must
+#   set VLLM_TOOL_CALL_PARSER to its model's documented parser (granite for
+#   Granite 3.x) — the granite4 default misparses that model's tool output
+#   silently. The lever feeds docker-compose.yaml's vllm service; requests
+#   that carry no tools (chat, translation, labeling) are unaffected by
+#   either flag.
+# VLLM_TOOL_CALL_PARSER=
+#   Default: granite4. The --tool-call-parser value the vLLM container is
+#   launched with; must match the SERVED model family (see the note above).
 
 # Translation model (OPEA Translation service)
 # The model used for guardrails and translation (Service: vllm-translation-guardrail)

@@ -19,8 +19,9 @@
 //   NVIDIA shape:  base file(s), no Strix Halo env, no rocm-models profile
 //
 // and asserts the ROCm facts (device rows, void env, pooling backends,
-// image pins) AND the NVIDIA inertness (the profile firewall, the
-// every-host device defaults, the entrypoint no-op).
+// image pins, the tool-calling parser pin) AND the NVIDIA inertness (the
+// profile firewall, the every-host device defaults, the entrypoint no-op,
+// the parser default).
 //
 // `docker compose config` is a CLIENT-SIDE render - it needs no daemon and
 // touches no container - so the gate runs wherever a compose binary exists.
@@ -72,6 +73,7 @@ const FILE_OWNED_KNOBS = [
   'EMBEDDING_VLLM_ENDPOINT',
   'NVIDIA_VISIBLE_DEVICES',
   'VLLM_IMAGE',
+  'VLLM_TOOL_CALL_PARSER',
   'TEI_EMBEDDING_IMAGE',
   'TEI_RERANKING_IMAGE',
   'GPU_DEVICE_KFD',
@@ -245,6 +247,7 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       env: {
         EMBEDDING_VLLM_ENDPOINT: '',
         RERANKER_VLLM_ENDPOINT: '',
+        VLLM_TOOL_CALL_PARSER: '',
         GPU_DEVICE_KFD: '',
         GPU_DEVICE_DRI: '',
         RENDER_GID: '',
@@ -335,6 +338,29 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
           service: name,
           entrypoint: ['vllm', 'serve']
         });
+      }
+    });
+
+    test('the vLLM tool-calling pin resolves per vendor shape (#2052)', () => {
+      // granite4 is the vLLM 0.29 parser for Granite 4.x (the base files'
+      // default model); env.strixhalo serves granite-3.1-2b and pins
+      // VLLM_TOOL_CALL_PARSER=granite. The RESOLVED command must carry the
+      // right parser per shape — a flipped or dropped pin silently misparses
+      // the model's tool output (checked on the resolved render, not the raw
+      // file: the interpolation default is part of the contract). compose-go
+      // marshals a folded command scalar as a string and list-form as an
+      // array — parserOf reads both shapes.
+      const tokensOf = (command) => (Array.isArray(command) ? command : String(command).split(/\s+/));
+      const parserOf = (services) => {
+        const parts = tokensOf(services.vllm.command);
+        return parts[parts.indexOf('--tool-call-parser') + 1];
+      };
+      const singleServices = JSON.parse(single.stdout).services;
+      const nvidiaServices = JSON.parse(singleNvidia.stdout).services;
+      expect(parserOf(singleServices)).toBe('granite');
+      expect(parserOf(nvidiaServices)).toBe('granite4');
+      for (const services of [singleServices, nvidiaServices]) {
+        expect(tokensOf(services.vllm.command)).toContain('--enable-auto-tool-choice');
       }
     });
 

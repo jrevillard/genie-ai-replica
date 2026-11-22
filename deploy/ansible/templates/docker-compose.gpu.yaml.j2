@@ -34,6 +34,11 @@ services:
       - "{{ rocm_render_gid | default(990) }}" # render group (getent group render)
       - "{{ rocm_video_gid | default(44) }}"   # video group
 {% endif %}
+    # Tool-calling pin (REC-6, issue #2052): granite4 is the vLLM 0.29
+    # documented parser for Granite 4.x models; the flags are inert for
+    # requests that carry no tools. The pin follows the served model —
+    # Granite 3.x (this template's default) needs the `granite` parser
+    # plus a chat template and is deliberately not pinned here.
     command: >
       --model {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --gpu_memory_utilization {{ vllm_gpu_utilization | default('0.55') }}
@@ -42,6 +47,10 @@ services:
       --max_num_seqs {{ vllm_max_num_seqs | default('16') }}
       --dtype={{ vllm_dtype | default('half') }}
       --enforce-eager
+{% if 'granite-4' in (vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct')) %}
+      --enable-auto-tool-choice
+      --tool-call-parser granite4
+{% endif %}
     environment:
       - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}

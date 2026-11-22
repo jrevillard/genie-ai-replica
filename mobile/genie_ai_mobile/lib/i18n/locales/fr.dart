@@ -1091,6 +1091,27 @@ const Map<String, dynamic> frLocale = {
     "exportError": "Échec de l'exportation du chat. Veuillez réessayer.",
     "thinking": "Genie réfléchit...",
     "generating": "Génération de la réponse...",
+    "agentActivity": {
+      "working": "Travail en cours…",
+      "stepCompleted": "Étape terminée.",
+      "stepFailed": "Une étape a échoué.",
+      "verificationUnavailable":
+          "La vérification de la réponse n'a pas pu être effectuée.",
+      "verificationTranslationScope":
+          "La vérification a porté sur la réponse dans la langue d’origine — la traduction n’a pas été vérifiée.",
+      "operations": {
+        "search_knowledge": {
+          "running": "Recherche dans la base de connaissances…",
+          "completed": "Recherche dans la base de connaissances terminée.",
+          "failed": "La recherche dans la base de connaissances a échoué.",
+        },
+        "read_source": {
+          "running": "Lecture de la source…",
+          "completed": "Source lue.",
+          "failed": "Échec de la lecture de la source.",
+        },
+      },
+    },
     "contextPrefix": "Contexte :",
     "removeContext": "Retirer le contexte",
     "dialogs": {

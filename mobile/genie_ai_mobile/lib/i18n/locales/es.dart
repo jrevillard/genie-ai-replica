@@ -1082,6 +1082,27 @@ const Map<String, dynamic> esLocale = {
     "exportError": "Error al exportar chat. Inténtalo de nuevo.",
     "thinking": "Genie está pensando...",
     "generating": "Generando respuesta...",
+    "agentActivity": {
+      "working": "Trabajando…",
+      "stepCompleted": "Paso completado.",
+      "stepFailed": "Un paso ha fallado.",
+      "verificationUnavailable":
+          "No se pudo completar la verificación de la respuesta.",
+      "verificationTranslationScope":
+          "La verificación cubrió la respuesta en el idioma original — la traducción no quedó verificada.",
+      "operations": {
+        "search_knowledge": {
+          "running": "Buscando en la base de conocimientos…",
+          "completed": "Búsqueda en la base de conocimientos completada.",
+          "failed": "La búsqueda en la base de conocimientos ha fallado.",
+        },
+        "read_source": {
+          "running": "Leyendo la fuente…",
+          "completed": "Fuente leída.",
+          "failed": "La lectura de la fuente ha fallado.",
+        },
+      },
+    },
     "contextPrefix": "Contexto:",
     "removeContext": "Eliminar contexto",
     "dialogs": {

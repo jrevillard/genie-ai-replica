@@ -1092,6 +1092,27 @@ const Map<String, dynamic> deLocale = {
         "Exportieren des Chats fehlgeschlagen. Bitte versuche es erneut.",
     "thinking": "Genie denkt nach...",
     "generating": "Antwort wird generiert...",
+    "agentActivity": {
+      "working": "Arbeite…",
+      "stepCompleted": "Schritt abgeschlossen.",
+      "stepFailed": "Ein Schritt ist fehlgeschlagen.",
+      "verificationUnavailable":
+          "Die Überprüfung der Antwort konnte nicht abgeschlossen werden.",
+      "verificationTranslationScope":
+          "Die Überprüfung galt der Antwort in der Originalsprache — die Übersetzung wurde nicht geprüft.",
+      "operations": {
+        "search_knowledge": {
+          "running": "Durchsuche die Wissensbasis…",
+          "completed": "Die Wissensbasis wurde durchsucht.",
+          "failed": "Die Suche in der Wissensbasis ist fehlgeschlagen.",
+        },
+        "read_source": {
+          "running": "Lese die Quelle…",
+          "completed": "Quelle gelesen.",
+          "failed": "Das Lesen der Quelle ist fehlgeschlagen.",
+        },
+      },
+    },
     "contextPrefix": "Kontext:",
     "removeContext": "Kontext entfernen",
     "dialogs": {

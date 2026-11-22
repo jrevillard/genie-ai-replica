@@ -145,6 +145,90 @@ void main() {
       expect(meta.extra, isEmpty);
     });
 
+    test('parses grounding_status in metadata event', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9,'
+        '"grounding_status":"unverified"}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.groundingStatus, 'unverified');
+    });
+
+    test('leaves grounding_status null when absent (legacy metadata)', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9,"is_grounded":false}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.groundingStatus, isNull);
+    });
+
+    test('keeps grounding_status out of extra', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9,'
+        '"grounding_status":"grounded","is_grounded":true}\n\n',
+      );
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.extra, isEmpty);
+    });
+
+    test('parses agent_activity started frame', () {
+      final events = parser.parseChunk(
+        'data: {"type":"agent_activity","version":1,"status":"started","operation":"search_knowledge","callId":"c1"}\n\n',
+      );
+      expect(events, hasLength(1));
+      final activity = events[0] as SseAgentActivityEvent;
+      expect(activity.status, 'started');
+      expect(activity.operation, 'search_knowledge');
+      expect(activity.callId, 'c1');
+    });
+
+    test('parses agent_activity completed and failed frames', () {
+      final events = parser.parseChunk(
+        'data: {"type":"agent_activity","version":1,"status":"completed","operation":"search_knowledge","callId":"c1"}\n'
+        'data: {"type":"agent_activity","version":1,"status":"failed","operation":"read_source","callId":"c2"}\n\n',
+      );
+      expect(events, hasLength(2));
+      expect((events[0] as SseAgentActivityEvent).status, 'completed');
+      final failed = events[1] as SseAgentActivityEvent;
+      expect(failed.status, 'failed');
+      expect(failed.operation, 'read_source');
+    });
+
+    test('degrades a missing agent_activity status to started', () {
+      final events = parser.parseChunk(
+        'data: {"type":"agent_activity","version":1,"operation":"search_knowledge"}\n\n',
+      );
+      expect((events[0] as SseAgentActivityEvent).status, 'started');
+    });
+
+    test('parses agent_verdict frame with projection extra', () {
+      final events = parser.parseChunk(
+        'data: {"type":"agent_verdict","version":1,"grounding_status":"grounded","is_grounded":true,'
+        '"translation_mode":"none","policy":"verdict-marked","marking":{"required":false,"reason":null}}\n\n',
+      );
+      expect(events, hasLength(1));
+      final verdict = events[0] as SseAgentVerdictEvent;
+      expect(verdict.groundingStatus, 'grounded');
+      expect(verdict.isGrounded, isTrue);
+      // The delivery mode the BFF annotates normalizes into its field.
+      expect(verdict.translationMode, 'none');
+      // The projection keys beyond the normalized set ride verbatim.
+      expect(verdict.extra, {
+        'policy': 'verdict-marked',
+        'marking': {'required': false, 'reason': null},
+      });
+    });
+
+    test('defaults agent_verdict is_grounded to false when absent', () {
+      final events = parser.parseChunk(
+        'data: {"type":"agent_verdict","version":1,"grounding_status":"unverified"}\n\n',
+      );
+      final verdict = events[0] as SseAgentVerdictEvent;
+      expect(verdict.groundingStatus, 'unverified');
+      expect(verdict.isGrounded, isFalse);
+      expect(verdict.extra, isEmpty);
+    });
+
     test('parses translation event', () {
       final events = parser.parseChunk(
         'data: {"type":"translation","content":"Bonjour"}\n\n',

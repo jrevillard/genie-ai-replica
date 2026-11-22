@@ -1084,6 +1084,27 @@ const Map<String, dynamic> stLocale = {
     "exportError": "Ho hlotsoe ho romela puisano. Ka kopo leka hape.",
     "thinking": "Genie oa nahana...",
     "generating": "Generating response...",
+    "agentActivity": {
+      "working": "O sebetsa…",
+      "stepCompleted": "Mohato o phethetse.",
+      "stepFailed": "Mohato o le mong o hlotsohetse.",
+      "verificationUnavailable":
+          "Ha e khonehe ho phethahatsa netefatso ea karabo.",
+      "verificationTranslationScope":
+          "Netefatso e ne e sebetsa karabong ea puo ea pele — phetolelo ha ea hlahlojoa.",
+      "operations": {
+        "search_knowledge": {
+          "running": "E batla tsebo…",
+          "completed": "Ho batla ha tsebo ho phethetse.",
+          "failed": "Ho batla ha tsebo ho hlotsohetse.",
+        },
+        "read_source": {
+          "running": "E bala mohloli…",
+          "completed": "Mohloli o baliloe.",
+          "failed": "Ho bala mohloli ho hlotsohetse.",
+        },
+      },
+    },
     "contextPrefix": "Moelelo:",
     "removeContext": "Tlosa Moelelo",
     "dialogs": {

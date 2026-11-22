@@ -398,13 +398,13 @@ module.exports = (queryService) => {
           opeaController.abort();
           logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
+            // The partial save carries the `answer_interrupted` honesty
+            // marker (ADR agentic-003) — the same marker the agentic
+            // disconnect path writes: one finalize, one honesty contract,
+            // both paths.
+            const partialMetadata = { ...(capturedMetadata || emptyStreamMetadata()), answer_interrupted: true };
             queryService
-              .finalizeStreamQuery(
-                queryId,
-                fullResponseText,
-                Date.now() - streamStartTime,
-                capturedMetadata || emptyStreamMetadata()
-              )
+              .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, partialMetadata)
               .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }
         }
@@ -582,6 +582,15 @@ module.exports = (queryService) => {
 
       stream.on('end', () => {
         if (fullResponseText && res.writableEnded === false) {
+          // The stream ended without a `done` frame (a truncated upstream —
+          // generator abort, proxy trim): this finalize is a partial save and
+          // carries the same `answer_interrupted` honesty marker as the
+          // close paths (ADR agentic-003). A `done` frame already handled
+          // leaves the metadata untouched — the marker must never leak into
+          // a normally completed answer.
+          if (!doneState.handled) {
+            capturedMetadata = { ...(capturedMetadata || emptyStreamMetadata()), answer_interrupted: true };
+          }
           doHandleStreamDone();
         }
       });

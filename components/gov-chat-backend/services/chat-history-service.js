@@ -206,6 +206,22 @@ class ChatHistoryService {
             const fileId = rawId.includes('/') ? rawId : `files/${rawId}`;
 
             try {
+              // An okf-concept source row carries its stable ids onto the
+              // snapshot (the exact snake_case names the frontend's
+              // translateSources reads), so a restored conversation's sidebar
+              // re-resolves the concept through the existing conventions
+              // instead of building a dead /api/files/<concept_id>/download
+              // URL (ADR agentic-003). Legacy document rows carry none of the
+              // identity keys.
+              const okfIdentity =
+                doc.source === 'okf-concept'
+                  ? {
+                      source: 'okf-concept',
+                      concept_id: doc.concept_id || null,
+                      repo_id: doc.repo_id || null,
+                      bundle_version: doc.bundle_version === undefined ? null : doc.bundle_version
+                    }
+                  : {};
               // FIX: Save as standard fields since this is a Document collection
               await this.conversationFiles.save({
                 conversationId: convKey, // Standard field link
@@ -220,6 +236,7 @@ class ChatHistoryService {
                 labels: doc.serviceLabels || doc.labels || [],
                 categoryLabel: doc.categoryLabel || '',
                 confidenceScore: doc.score || 0,
+                ...okfIdentity,
                 createdAt: new Date().toISOString()
               });
               logger.info(`[DEBUG] Saved file mapping: conversation ${convKey} -> file ${fileId}`);
@@ -363,17 +380,30 @@ class ChatHistoryService {
             LET fileDoc = DOCUMENT(doc.fileId) || {}
             
             RETURN {
-              id: PARSE_IDENTIFIER(doc.fileId).key, 
+              id: PARSE_IDENTIFIER(doc.fileId).key,
               labels: doc.labels,
               categoryLabel: doc.categoryLabel,
               score: doc.confidenceScore,
               createdAt: doc.createdAt,
-              
+
+              // The okf-concept stable ids ride the read path too: the
+              // snapshot rows carry them (addMessage), and without this
+              // projection a restored conversation's sidebar could not tell a
+              // concept row from a document row (it would build the dead
+              // /api/files/<concept_id>/download URL — ADR agentic-003).
+              // Absent (null) on legacy rows.
+              source: doc.source || null,
+              concept_id: doc.concept_id || null,
+              repo_id: doc.repo_id || null,
+              // Null-safe, mirroring the write side: only "absent" becomes
+              // null — a pinned bundle_version 0 must survive the read.
+              bundle_version: doc.bundle_version == null ? null : doc.bundle_version,
+
               // SCHEMA FIX: Map 'file_name' from files collection to 'documentName' for UI
               // Priority: 1. Snapshot name, 2. file_name (DB schema), 3. name (fallback), 4. default
               documentName: doc.documentName || fileDoc.file_name || fileDoc.name || "Unknown Document",
               fileName: doc.fileName || fileDoc.file_name || fileDoc.name || "Unknown File",
-              
+
               // SCHEMA FIX: Map 'source_url' from files collection
               url: doc.url || fileDoc.source_url || fileDoc.url || null
             }

@@ -2259,14 +2259,121 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // The partial answer was saved with the empty-stream metadata (nothing
-    // was captured yet) — the dead code's documented intent, now live.
+    // was captured yet) — the dead code's documented intent, now live — and
+    // it carries the `answer_interrupted` honesty marker (ADR agentic-003): a
+    // partial save is never indistinguishable from a completion.
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
       'q1',
       'legacy answer',
       expect.any(Number),
-      expect.objectContaining({ source_documents: [], is_grounded: false, abstained: null })
+      expect.objectContaining({
+        source_documents: [],
+        is_grounded: false,
+        abstained: null,
+        answer_interrupted: true
+      })
     );
+  });
+
+  it('a disconnect after metadata was captured partial-saves the captured fields PLUS the marker', async () => {
+    const mockStream = setupLegacyStream();
+
+    const req = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+    const settled = req.then(
+      (response) => ({ response }),
+      (error) => ({ error })
+    );
+
+    for (let i = 0; i < 500 && mockStream.listenerCount('data') === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+    mockStream.push('data: {"type":"chunk","content":"legacy answer"}\n\n');
+    mockStream.push(
+      'data: {"type":"metadata","source_documents":[{"document_id":"doc-1","document_name":"Doc One"}],"is_grounded":true,"abstained":false}\n\n'
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    req.abort();
+    await settled;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // The captured metadata rides the partial save verbatim, with the marker
+    // added on top — the same finalize, the same honesty contract as the
+    // agentic path (ADR agentic-003).
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      'legacy answer',
+      expect.any(Number),
+      expect.objectContaining({
+        is_grounded: true,
+        abstained: false,
+        source_documents: [{ document_id: 'doc-1', document_name: 'Doc One' }],
+        answer_interrupted: true
+      })
+    );
+  });
+
+  it('a stream that ends without its completion frame partial-saves the truncated answer with the marker', async () => {
+    const mockStream = setupLegacyStream();
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"legacy answer"}\n\n');
+    // The upstream ends cleanly but the `done` frame never arrives (a
+    // truncated upstream: generator abort, proxy trim).
+    mockStream.push(null);
+
+    await responsePromise;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // The truncated answer was finalized exactly once — as a PARTIAL save,
+    // carrying the honesty marker (the same contract as the close paths).
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      'legacy answer',
+      expect.any(Number),
+      expect.objectContaining({ answer_interrupted: true })
+    );
+  });
+
+  it('a normal completion in relay mode is never marked interrupted, even when the stream ends during the flush', async () => {
+    // The end handler marks only when the done frame was never handled
+    // (ADR agentic-003). In relay mode the done frame sets `handled`
+    // synchronously and the terminal awaits the relay flush — the `end`
+    // event fires inside that window. The guard must keep the marker out
+    // of a normally completed answer whose finalize happens after the
+    // `end` event.
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    const mockStream = setupLegacyStream();
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'es' }
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"legacy answer"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    await responsePromise;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.finalizeStreamQuery.mock.calls[0][3].answer_interrupted).toBeUndefined();
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
   });
 
   it('a normal completion is NOT partial-saved by the close event (doneState guard)', async () => {
@@ -2285,8 +2392,10 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
     await responsePromise;
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // Exactly ONE finalize — the terminal's, not the close listener's.
+    // Exactly ONE finalize — the terminal's, not the close listener's — and
+    // it carries NO interrupted marker (the partial-save-only field).
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.finalizeStreamQuery.mock.calls[0][3].answer_interrupted).toBeUndefined();
   });
 
   it('a disconnect during the chatqna connect window aborts the call (listener armed before the POST)', async () => {

@@ -138,11 +138,16 @@ function citationToSourceDocument(citation) {
  *
  * Base: the legacy empty-stream shape (`emptyStreamMetadata()` — abstained
  * null, filter_labels null), so an agentic doc is indistinguishable in shape
- * from a legacy one. The verdict overlays the additive grounding fields and
- * the citation set; a run WITHOUT a verdict event defaults to `unverified` —
- * never a confident default. The `agent_run` block (run_id + the terminal
- * usage record when one arrived) rides additively on the wire and into the
- * persisted doc — the version-record persistence of this story.
+ * from a legacy one — with ONE deliberate override: `abstained` normalizes to
+ * `false`, the legacy answered vocabulary. An agentic insufficiency answer is
+ * an answer (its insufficiency lives in grounding_status / the marking), and
+ * the legacy `null` here means "chatqna never answered" — an agentic turn
+ * must never read as that in abstention analytics. The verdict overlays the
+ * additive grounding fields and the citation set; a run WITHOUT a verdict
+ * event defaults to `unverified` — never a confident default. The
+ * `agent_run` block (run_id + the terminal usage record when one arrived)
+ * rides additively on the wire and into the persisted doc — the
+ * version-record persistence of this story.
  *
  * @param {Object} params
  * @param {Function} params.emptyStreamMetadata - The route's metadata factory.
@@ -153,6 +158,8 @@ function citationToSourceDocument(citation) {
  */
 function assembleAgentMetadata({ emptyStreamMetadata, verdict, runId, usageRecord }) {
   const metadata = emptyStreamMetadata();
+  // Analytics vocabulary parity with the legacy answered path.
+  metadata.abstained = false;
   if (verdict) {
     metadata.grounding_status = verdict.grounding_status;
     metadata.is_grounded = verdict.is_grounded === true;
@@ -348,9 +355,14 @@ async function proxyAgentRun({
     }
     // A partial answer already streamed is partial-saved like the legacy
     // close path does — the agent-service cancels its in-flight work (its
-    // contract; a cancelled run emits no terminal event).
+    // contract; a cancelled run emits no terminal event). The save carries
+    // the `answer_interrupted` honesty marker (ADR agentic-003): a truncated
+    // answer must never persist indistinguishable from a complete one. A
+    // disconnect before any text chunk leaves the at-start doc unanswered —
+    // nothing is fabricated.
     if (fullResponseText) {
       const metadata = assembleMetadata();
+      metadata.answer_interrupted = true;
       queryService
         .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, metadata)
         .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));

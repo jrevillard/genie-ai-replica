@@ -36,9 +36,45 @@ const CORS_HEADERS = { 'access-control-allow-origin': '*' };
 /**
  * The wire bytes of a mocked answer: the chunk frames, the metadata
  * frame when one is given, and the done frame that closes the stream.
+ *
+ * The agentic extension (story 2.9): `options.activity` carries one
+ * entry per chunk — an `{status, operation, callId}` object or null —
+ * and a non-null entry emits an `agent_activity` frame immediately
+ * before that chunk (the pinned interleave: activity frames ride
+ * WITH the chunks); `options.verdict` carries the projection payload
+ * and emits an `agent_verdict` frame after the last chunk, before the
+ * metadata frame — the pinned terminal order (agent-frame-writer.js,
+ * story 2.4). A two-arg call builds exactly the legacy bytes, so the
+ * five existing event types keep their dialect by construction.
  */
-function sseBody(chunks, metadata) {
-  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+function sseBody(chunks, metadata, options = {}) {
+  // One activity entry per chunk, no silent misalignment: a longer (or
+  // shorter) array would absorb the mismatch and a spec would then assert
+  // against a stream it did not script.
+  if (options.activity && options.activity.length !== chunks.length) {
+    throw new Error(`sseBody: ${options.activity.length} activity entries for ${chunks.length} chunks`);
+  }
+  const frames = [];
+  chunks.forEach((c, i) => {
+    const a = options.activity?.[i];
+    if (a) {
+      frames.push(
+        `data: ${JSON.stringify({ type: 'agent_activity', version: 1, status: a.status, operation: a.operation, callId: a.callId })}`
+      );
+    }
+    frames.push(`data: ${JSON.stringify({ type: 'chunk', content: c })}`);
+  });
+  if (options.verdict) {
+    // A verdict payload cannot override the frame's discriminator or
+    // version — the same rule the BFF frame writer applies
+    // (agent-frame-writer.js deletes its payload's own type/version before
+    // spreading; spread-and-delete over destructuring because the suite's
+    // lint flags the unused named keys).
+    const verdictProjection = { ...options.verdict };
+    delete verdictProjection.type;
+    delete verdictProjection.version;
+    frames.push(`data: ${JSON.stringify({ type: 'agent_verdict', version: 1, ...verdictProjection })}`);
+  }
   if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
   return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
 }

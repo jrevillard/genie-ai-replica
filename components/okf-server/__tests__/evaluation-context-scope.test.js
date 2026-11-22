@@ -86,6 +86,17 @@ describe('#2061 E-2: the universe query is bound to the carrier', () => {
     expect(bindVars.ids).toBeUndefined();
     expect(siblings).toHaveLength(1);
   });
+
+  test('an EMPTY carrier narrows the universe to NOTHING (never the deployment)', async () => {
+    // A carrier that resolves to zero repositories means the principal
+    // traverses none. Dropping the filter (the old behaviour) raced every
+    // head in the deployment while the record claimed a zero-repo universe.
+    const db = await require('../shared-lib/db-connection-service').getConnection();
+    await headTestService.loadSiblings(db, 'r-me', { repoIds: [] });
+    const [aql, bindVars] = __mockDb.query.mock.calls[0];
+    expect(aql).toContain('FILTER r._key IN @ids');
+    expect(bindVars.ids).toEqual([]);
+  });
 });
 
 describe('#2061 E-2: the routing verdict says which carrier it was measured over', () => {

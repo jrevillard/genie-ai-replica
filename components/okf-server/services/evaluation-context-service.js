@@ -24,9 +24,13 @@
 // as the deployment's default posture. In open mode that is every
 // UNRESTRICTED serving repository (restricted ones stay fenced); in closed
 // mode it is an EMPTY carrier WITH a loud warning — never a silent one.
+//
+// A principal that CANNOT BE READ is neither the open context nor a silent
+// empty carrier: it is REFUSED. The failure mode it must never have is the
+// one that reads best and means least — a context that names a group which
+// cannot be resolved quietly resolving to the whole public corpus, and
+// measuring it as if it had measured the group.
 
-// nodeCrypto, not crypto: Node 19+ ships a global `crypto`, and shadowing
-// it is a redeclare error (the repo's convention — retrieval-config-client).
 const nodeCrypto = require('crypto');
 const dbService = require('../shared-lib/db-connection-service');
 const { resolveGraphSet } = require('./authz-resolver-service');
@@ -38,6 +42,10 @@ const { withSpan } = require('../shared-lib/tracing');
 
 const COLLECTION = 'okf_evaluation_contexts';
 const SUPERADMIN_REALM_ROLE = 'tools-admin';
+// A Keycloak group id is an opaque uuid. A principal reference that is NOT
+// uuid-shaped and does not resolve by name is a name that does not exist —
+// it never becomes a path segment.
+const UUID_SHAPED = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** An Evaluation Context is refused with this shape (the repo's error style). */
 class EvalContextError extends Error {
@@ -51,7 +59,17 @@ class EvalContextError extends Error {
 
 async function ensureCollection(db) {
   const col = db.collection(COLLECTION);
-  if (!(await col.exists())) await col.create();
+  if (!(await col.exists())) {
+    try {
+      await col.create();
+    } catch (err) {
+      // 1207 = duplicate collection: another request created it first, which
+      // is fine — the collection is there either way. Any other failure is
+      // real and propagates.
+      const code = err && (err.errorNum || err.code);
+      if (Number(code) !== 1207) throw err;
+    }
+  }
   return col;
 }
 
@@ -61,56 +79,91 @@ async function ensureCollection(db) {
  * privileged — the same reduction a multi-group token gets, where the
  * super-role rides in realm_access.roles.
  *
- * @param {string} ref - a Keycloak group id OR a group name
- * @returns {Promise<{scopes: string[], isSuperAdmin: boolean}>}
+ * A group that CANNOT be read is reported as `failed`, never as "grants
+ * nothing": the difference matters because "grants nothing" resolves to the
+ * deployment's default (public) set, which is exactly the widening an
+ * unreadable principal must never get.
+ *
+ * @param {string} ref - a Keycloak group name OR a uuid-shaped group id
+ * @returns {Promise<{scopes: string[], isSuperAdmin: boolean, failed: boolean, reason?: string}>}
  */
 async function groupScopes(ref) {
-  const group = (await keycloakAccess.findGroupByName) ? await keycloakAccess.findGroupByName(ref) : null;
-  const groupId = group && group.id ? group.id : ref;
-  let roles;
+  let group = null;
   try {
-    roles = (await keycloakAccess.groupRealmRoles(groupId)) || [];
-  } catch (err) {
-    // A group that does not exist grants nothing — but the caller asked for
-    // it, so it is worth saying out loud.
-    logger.warn('eval_context.group_unreadable', { group_ref: ref, error: err.message });
-    return { scopes: [], isSuperAdmin: false };
-  }
-  const scopes = [];
-  let isSuperAdmin = false;
-  for (const role of roles) {
-    const name = role && role.name;
-    if (!name) continue;
-    if (name === SUPERADMIN_REALM_ROLE) {
-      isSuperAdmin = true;
-      continue;
+    if (typeof keycloakAccess.findGroupByName === 'function') {
+      group = await keycloakAccess.findGroupByName(ref);
     }
-    // Only GRAMMAR-VALID scopes count: a typo level grants nothing, exactly
-    // as it would in a token.
-    if (parseOkfScope(name)) scopes.push(name);
+    let groupId = group && group.id ? group.id : null;
+    if (!groupId && UUID_SHAPED.test(ref)) {
+      // The reference may be a group ID. ONLY a uuid-shaped one: anything
+      // else is a name that does not exist and never reaches a URL path.
+      groupId = ref;
+    }
+    if (!groupId) {
+      return { scopes: [], isSuperAdmin: false, failed: true, reason: 'not_found' };
+    }
+    const roles = (await keycloakAccess.groupRealmRoles(groupId)) || [];
+    const scopes = [];
+    let isSuperAdmin = false;
+    for (const role of roles) {
+      const name = role && role.name;
+      if (!name) continue;
+      if (name === SUPERADMIN_REALM_ROLE) {
+        isSuperAdmin = true;
+        continue;
+      }
+      // Only GRAMMAR-VALID scopes count: a typo level grants nothing, exactly
+      // as it would in a token.
+      if (parseOkfScope(name)) scopes.push(name);
+    }
+    return { scopes, isSuperAdmin, failed: false };
+  } catch (err) {
+    // A group that cannot be read grants NOTHING — and the caller asked for
+    // it, so it is worth saying out loud. It is NOT the same as the open
+    // context: the resolution refuses rather than widening.
+    logger.warn('eval_context.group_unreadable', { group_ref: ref, error: err.message });
+    return { scopes: [], isSuperAdmin: false, failed: true, reason: 'unreadable' };
   }
-  return { scopes, isSuperAdmin };
 }
 
 /**
  * The unioned effective scope list of a context's inputs.
+ *
+ * An explicit scope that is not a scope string contributes NOTHING — the
+ * authority ignores it, and the resolution must stay byte-identical to the
+ * authority's answer for the same list. It is REPORTED, though: a typo that
+ * silently granted nothing would leave the operator believing the context
+ * was narrower than it is.
+ *
  * @param {string[]} scopes - explicit scope strings
- * @param {string[]} principalRefs - Keycloak group ids or names
- * @returns {Promise<{scopes: string[], isSuperAdmin: boolean}>}
+ * @param {string[]} principalRefs - Keycloak group names or ids
+ * @returns {Promise<{scopes: string[], isSuperAdmin: boolean, unreadable: string[], invalid: string[]}>}
  */
 async function effectiveScopes(scopes = [], principalRefs = []) {
   const out = new Set();
+  const invalid = [];
+  const unreadable = [];
   let isSuperAdmin = false;
   for (const raw of Array.isArray(scopes) ? scopes : []) {
-    if (typeof raw === 'string' && raw.trim()) out.add(raw.trim());
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    const trimmed = raw.trim();
+    if (!parseOkfScope(trimmed)) {
+      invalid.push(trimmed);
+      continue;
+    }
+    out.add(trimmed);
   }
   for (const ref of Array.isArray(principalRefs) ? principalRefs : []) {
     if (typeof ref !== 'string' || !ref.trim()) continue;
     const group = await groupScopes(ref.trim());
+    if (group.failed) {
+      unreadable.push(ref.trim());
+      continue;
+    }
     for (const s of group.scopes) out.add(s);
     if (group.isSuperAdmin) isSuperAdmin = true;
   }
-  return { scopes: [...out].sort(), isSuperAdmin };
+  return { scopes: [...out].sort(), isSuperAdmin, unreadable, invalid };
 }
 
 /**
@@ -131,18 +184,38 @@ function repoSetHash(repos) {
  * verbatim — no recomposition.
  *
  * @param {{scopes?: string[], principal_refs?: string[]}} input
- * @returns {Promise<{scopes: string[], graph_names: string[], repos: Array, scope_mode: string, resolved_at: string, hash: string, warnings: string[], open_context: boolean}>}
+ * @returns {Promise<{scopes: string[], graph_names: string[], repos: Array, scope_mode: string, resolved_at: string, hash: string, warnings: string[], open_context: boolean, unreadable: string[], invalid: string[]}>}
  */
 async function resolveContext(input = {}) {
   return withSpan('okf.evalctx.resolve', async (span) => {
     const scopes = Array.isArray(input.scopes) ? input.scopes : [];
     const principalRefs = Array.isArray(input.principal_refs) ? input.principal_refs : [];
-    const { scopes: effective, isSuperAdmin } = await effectiveScopes(scopes, principalRefs);
+    const { scopes: effective, isSuperAdmin, unreadable, invalid } = await effectiveScopes(
+      scopes,
+      principalRefs
+    );
     const view = await resolveGraphSet({ okfScopes: effective, isSuperAdmin });
 
     const openContext = effective.length === 0 && principalRefs.length === 0;
     const warnings = [];
-    if (openContext && view.scope_mode === 'closed') {
+    if (unreadable.length) {
+      // The principal could not be read. The resolution below is whatever the
+      // authority answers for an empty scope list — the caller REFUSES this
+      // context (createContext / refreshContext), because the open corpus is
+      // never the fallback for an unreadable principal.
+      warnings.push(
+        `the principal reference(s) ${unreadable.join(', ')} could not be read, so the context ` +
+          'resolves NOTHING that can be trusted: the deployment\'s public set is NOT a fallback for ' +
+          'a principal that could not be read. Fix the reference, or refresh once the group resolves.'
+      );
+    }
+    if (invalid.length) {
+      warnings.push(
+        `the scope string(s) ${invalid.join(', ')} are not valid okf scope strings and granted ` +
+          'nothing. The resolution is the authority\'s answer for the remaining scopes.'
+      );
+    }
+    if (effective.length === 0 && view.scope_mode === 'closed') {
       // The default posture in a default-deny deployment resolves to NOTHING.
       // That is correct, and it must be LOUD: a context that silently scored
       // an empty universe would look like a passing run.
@@ -152,6 +225,15 @@ async function resolveContext(input = {}) {
         'evaluation in open mode.';
       warnings.push(message);
       logger.warn('eval_context.open_context_empty', { scope_mode: view.scope_mode });
+    } else if (effective.length === 0 && principalRefs.length) {
+      // The group resolved and carries NO scope role. In open mode that
+      // principal still traverses the PUBLIC set — which is a true answer,
+      // but not the one an operator naming a "restricted" group expects.
+      warnings.push(
+        'the referenced group(s) carry no okf scope, so this context resolves the deployment\'s ' +
+          'DEFAULT (public) set — not a restricted one. If that is not what you meant, the group ' +
+          'holds no scope.'
+      );
     }
 
     span.setAttribute('okf.evalctx.open_context', openContext);
@@ -164,7 +246,9 @@ async function resolveContext(input = {}) {
       resolved_at: view.generated_at,
       hash: repoSetHash(view.repos),
       warnings,
-      open_context: openContext
+      open_context: openContext,
+      unreadable,
+      invalid
     };
   });
 }
@@ -197,13 +281,30 @@ function validateInput(payload = {}) {
  */
 async function createContext(payload = {}, opts = {}) {
   const input = validateInput(payload);
+  const resolved = await resolveContext(input);
+  if (resolved.unreadable.length) {
+    // REFUSE, rather than store a context that measures the public corpus
+    // under a principal's name.
+    throw new EvalContextError(
+      'PRINCIPAL_UNREADABLE',
+      `the principal reference(s) ${resolved.unreadable.join(', ')} could not be read, so the context ` +
+        'cannot be resolved. The deployment\'s public set is not a fallback for a principal that ' +
+        'could not be read.',
+      422
+    );
+  }
+  const warnings = [...resolved.warnings];
   if (input.filters.length) {
     // The resolver's output is the AUTHORITY's, byte-identical to
     // resolveGraphSet — so it cannot also apply a filter. An inert field
-    // would be a promise the resolution does not keep; say so out loud.
+    // would be a promise the resolution does not keep; say so out loud, ON
+    // THE WIRE as well as in the log.
+    warnings.push(
+      `the ${input.filters.length} filter(s) were NOT applied: the resolution is the authority's ` +
+        'answer for the scope list, and it applies no filter. The filters are stored as given.'
+    );
     logger.warn('eval_context.filters_not_applied', { name: input.name, filters: input.filters.length });
   }
-  const resolved = await resolveContext(input);
   const db = await dbService.getConnection();
   const col = await ensureCollection(db);
   const now = new Date().toISOString();
@@ -226,7 +327,7 @@ async function createContext(payload = {}, opts = {}) {
       resolved_at: resolved.resolved_at,
       hash: resolved.hash
     },
-    warnings: resolved.warnings,
+    warnings,
     version: 1,
     // The snapshot is immutable: the ONLY way to change what a context
     // resolves to is a refresh, which bumps the version and is audited.
@@ -297,6 +398,18 @@ async function listContexts() {
 async function refreshContext(id, opts = {}) {
   const doc = await getContext(id);
   const resolved = await resolveContext({ scopes: doc.scopes, principal_refs: doc.principal_refs });
+  if (resolved.unreadable.length) {
+    // The refresh FAILS and the stored snapshot stands: a context whose
+    // principal became unreadable must not silently re-resolve to the
+    // public corpus, and it must not lose its version history either.
+    throw new EvalContextError(
+      'PRINCIPAL_UNREADABLE',
+      `the principal reference(s) ${resolved.unreadable.join(', ')} could not be read, so the context ` +
+        'could not be refreshed. Its stored snapshot stands; the deployment\'s public set is not a ' +
+        'fallback for a principal that could not be read.',
+      422
+    );
+  }
   const next = {
     ...doc,
     resolved: {
@@ -313,7 +426,9 @@ async function refreshContext(id, opts = {}) {
     refreshed_by: (opts.actor && opts.actor.user_id) || 'system'
   };
   delete next._id;
-  delete next._rev;
+  // `_rev` STAYS: the replace is then revision-checked, so two concurrent
+  // refreshes cannot silently clobber each other — the loser gets a
+  // conflict instead of an overwritten snapshot.
   const db = await dbService.getConnection();
   const col = await ensureCollection(db);
   await col.replace(id, next);
@@ -338,7 +453,7 @@ async function refreshContext(id, opts = {}) {
  * version N, and CI resolves from snapshots with no Keycloak at all.
  *
  * @param {string} contextId
- * @returns {Promise<{context: {id, version, hash, name}, repo_ids: string[], graph_names: string[]}>}
+ * @returns {Promise<{context: {id, version, hash, name}, repo_ids: string[], graph_names: string[], repos: Array}>}
  */
 async function carrierOf(contextId) {
   const doc = await getContext(contextId);
@@ -351,7 +466,55 @@ async function carrierOf(contextId) {
       hash: resolved.hash || null
     },
     repo_ids: (resolved.repos || []).map((r) => r.repo_id),
-    graph_names: resolved.graph_names || []
+    graph_names: resolved.graph_names || [],
+    // The serving ROWS, not only their ids: the caller's own per-repo gate
+    // (`callerMayTraverseRepo`) needs the row's `acl`, so the carrier
+    // boundary can narrow the carrier to what the caller may traverse.
+    repos: resolved.repos || []
+  };
+}
+
+/**
+ * The carrier as THIS CALLER may measure it.
+ *
+ * The catalogue is superadmin-gated because "a context names the
+ * repositories a PRINCIPAL traverses" — but the carrier is read on the RUN
+ * routes, which are repo-scoped-admin, and the run RECORDS are read-scoped.
+ * So the carrier is filtered through the CALLER's own authority, resolved
+ * the same way a live caller's is: `resolveGraphSet` (mode + scope + acl,
+ * one rule). A superadmin's carrier stands; a repo-scoped admin's carrier is
+ * narrowed to what that admin may traverse; an empty intersection is
+ * REFUSED rather than answered with the deployment.
+ *
+ * The snapshot is not rewritten — the stored context still says what it
+ * resolved. This is the CARRIER, i.e. what this caller's run measures.
+ *
+ * @param {string} contextId
+ * @param {{okfScopes?: string[], isSuperAdmin?: boolean}} caller
+ */
+async function carrierFor(contextId, caller = {}) {
+  const carrier = await carrierOf(contextId);
+  const okfScopes = Array.isArray(caller.okfScopes) ? caller.okfScopes : [];
+  const isSuperAdmin = !!caller.isSuperAdmin;
+  const view = await resolveGraphSet({ okfScopes, isSuperAdmin });
+  const allowed = new Set((view.repos || []).map((r) => r.repo_id));
+  const rows = (carrier.repos || []).filter((r) => allowed.has(r.repo_id));
+  if (!rows.length) {
+    throw new EvalContextError(
+      'CARRIER_NOT_TRAVERSABLE',
+      allowed.size
+        ? `this caller may traverse ${allowed.size} serving repository(ies) and the evaluation context ` +
+          'names none of them, so the run would measure nothing this caller may read'
+        : 'this caller may traverse no serving repository, so the evaluation context measures ' +
+          'nothing it can read',
+      403
+    );
+  }
+  return {
+    ...carrier,
+    repo_ids: rows.map((r) => r.repo_id),
+    graph_names: rows.map((r) => r.graph_name).filter(Boolean),
+    repos: rows
   };
 }
 
@@ -365,5 +528,6 @@ module.exports = {
   getContext,
   listContexts,
   refreshContext,
-  carrierOf
+  carrierOf,
+  carrierFor
 };

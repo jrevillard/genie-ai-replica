@@ -150,4 +150,20 @@ describe('graph-retract-service.dropRepoGraphsForRepo (retract teardown, D-C #98
     expect(dropped).toEqual([]);
     expect(mockDb.route).not.toHaveBeenCalled();
   });
+
+  test('the orphan sweep FINDS a draft graph left behind by a mid-drain retract', async () => {
+    // The sweep used to ask ArangoDB for the collection names through an
+    // `aql` template whose `@@collections` bind parameter was NEVER bound:
+    // an aql template takes its bind variables from the template, not from
+    // the second argument, so the engine refused the query ("no value
+    // specified for declared bind parameter '@collections'"), the error was
+    // swallowed, and the sweep silently never ran (measured live, 2026-11-22).
+    // A DRAFT graph (OKF_<slug>_v<N+1>, not stamped on the repo doc) is
+    // exactly what the sweep exists to catch.
+    seedRepo(GRAPH);
+    seedGraphCollections();
+    mockDb.graph('OKF_r_v2'); // the draft the sweep must find (repo name is 'R')
+    const dropped = await dropRepoGraphsForRepo(REPO);
+    expect(dropped.some((d) => d.includes('OKF_r_v2'))).toBe(true);
+  });
 });

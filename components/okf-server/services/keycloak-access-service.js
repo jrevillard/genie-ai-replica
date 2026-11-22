@@ -227,7 +227,12 @@ async function ensureRole(scope) {
  */
 async function groupRealmRoles(groupId) {
   const roles = await jsonOrThrow(
-    await adminApi('GET', `/groups/${groupId}/role-mappings/realm`),
+    // ENCODED: the group id reaches this path from a caller-supplied
+    // principal reference. Unencoded, a reference like `../roles` escapes the
+    // `/groups/{id}` segment and reads a different admin-API collection
+    // (measured 2026-11-22). The id is an opaque Keycloak uuid, so
+    // encoding costs nothing and closes the traversal.
+    await adminApi('GET', `/groups/${encodeURIComponent(groupId)}/role-mappings/realm`),
     'group role mappings'
   );
   return Array.isArray(roles) ? roles : [];

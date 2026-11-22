@@ -34,7 +34,24 @@ jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolv
 // realm roles each referenced group carries. The mock answers per group id.
 jest.mock('../services/keycloak-access-service', () => ({
   isConfigured: jest.fn(() => true),
+  // The real service resolves a principal reference by NAME first (the
+  // reference may also be a uuid-shaped group id).
+  findGroupByName: jest.fn(async (name) => {
+    const known = {
+      'g-a': 'g-a',
+      'g-b': 'g-b',
+      'g-fence-a': 'g-fence-a',
+      'g-fence-b': 'g-fence-b',
+      'g-wild': 'g-wild',
+      'g-admin': 'g-admin',
+      'g-none': 'g-none',
+      'g-broken': 'g-broken'
+    };
+    return known[name] ? { id: known[name], name } : null;
+  }),
   groupRealmRoles: jest.fn(async (groupId) => {
+    // A Keycloak that cannot answer for a group it knows.
+    if (groupId === 'g-broken') throw new Error('keycloak unreachable');
     const groups = {
       'g-a': [{ id: 'r1', name: 'okf:t:r-a:read' }],
       'g-b': [{ id: 'r2', name: 'okf:t:r-b:read' }],
@@ -274,5 +291,130 @@ describe('#2061 E-1: the context is a named, versioned, immutable object', () =>
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({ details: expect.objectContaining({ scopes: 1 }) })
     );
+  });
+});
+
+describe('#2061 E-1: a principal that CANNOT be read is refused, never widened', () => {
+  beforeEach(() => {
+    mockDb._reset();
+    retrievalConfigService._resetServingCache();
+    keycloakAccess.groupRealmRoles.mockClear();
+    keycloakAccess.findGroupByName.mockClear();
+    writeAudit.mockClear();
+    delete process.env.OKF_SCOPE_MODE;
+  });
+
+  test('a group Keycloak cannot answer for REFUSES the context (422)', async () => {
+    // The failure mode this closes: an unreadable principal resolved to an
+    // EMPTY scope list, which in the default OPEN mode resolves to the WHOLE
+    // public corpus — so a context that could not be measured the group
+    // measured the deployment, silently, and the run was scored as if it had
+    // measured the group.
+    seedServing([servingRow({ repo_id: 'r-public' })]);
+    await expect(
+      evalCtx.createContext({ name: 'analysts', principal_refs: ['g-broken'] }, { actor: { user_id: 'admin-1' } })
+    ).rejects.toThrow(/could not be read/i);
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
+  test('a group that does not exist REFUSES the context (never the open corpus)', async () => {
+    seedServing([servingRow({ repo_id: 'r-public' })]);
+    await expect(
+      evalCtx.createContext({ name: 'analysts', principal_refs: ['g-nope'] }, { actor: { user_id: 'admin-1' } })
+    ).rejects.toThrow(/could not be read/i);
+  });
+
+  test('a refresh whose principal became unreadable FAILS and the snapshot stands', async () => {
+    seedServing([servingRow({ repo_id: 'r-fence-a', acl: { restricted: true } })]);
+    const created = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: ['g-fence-a'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    keycloakAccess.groupRealmRoles.mockImplementationOnce(async () => {
+      throw new Error('keycloak unreachable');
+    });
+    await expect(evalCtx.refreshContext(created._key, { actor: { user_id: 'admin-1' } })).rejects.toThrow(
+      /could not be read/i
+    );
+    // The stored context still says what it resolved, at its own version.
+    const stored = await evalCtx.getContext(created._key);
+    expect(stored.version).toBe(1);
+    expect(stored.resolved.graph_names).toEqual(['OKF_fence-a_v1']);
+  });
+
+  test('a group that resolves but carries NO scope says so out loud', async () => {
+    // The truth here is the PUBLIC set (in open mode), which is a real
+    // answer — but not the one an operator naming a "restricted" group
+    // expects, so it is stated on the wire.
+    seedServing([servingRow({ repo_id: 'r-public' })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: ['g-none'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    expect(ctx.warnings.join(' ')).toMatch(/no okf scope/i);
+  });
+
+  test('a scope string that is not a scope is REPORTED (the authority still ignores it)', async () => {
+    seedServing([servingRow({ repo_id: 'r-a' })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', scopes: ['okf:t:r-a:read', 'not-a-scope'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    // The resolution is the authority's answer for the same list: the typo
+    // grants nothing.
+    expect(ctx.resolved.scopes).toEqual(['okf:t:r-a:read']);
+    expect(ctx.warnings.join(' ')).toMatch(/not valid okf scope/i);
+  });
+
+  test('a filter the resolution does not apply is reported ON THE WIRE', async () => {
+    seedServing([servingRow({ repo_id: 'r-a' })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', scopes: ['okf:t:r-a:read'], filters: [{ field: 'domain', equals: 'x' }] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    expect(ctx.warnings.join(' ')).toMatch(/filter/i);
+  });
+});
+
+describe('#2061 E-1/E-2: the carrier is narrowed to what the CALLER may traverse', () => {
+  beforeEach(() => {
+    mockDb._reset();
+    retrievalConfigService._resetServingCache();
+    writeAudit.mockClear();
+    delete process.env.OKF_SCOPE_MODE;
+  });
+
+  test('a caller may not measure a repository it may not traverse', async () => {
+    // The catalogue is superadmin-gated, but the CARRIER is read on the run
+    // routes, which are repo-scoped-admin. Without this, naming a context
+    // id was a way to have a restricted repository measured and persisted
+    // into a record the caller can read.
+    seedServing([
+      servingRow({ repo_id: 'r-public' }),
+      servingRow({ repo_id: 'r-fence-a', acl: { restricted: true } })
+    ]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: ['g-fence-a'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    // A superadmin's carrier stands.
+    const asAdmin = await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: true });
+    expect(asAdmin.repo_ids).toEqual(expect.arrayContaining(['r-fence-a']));
+    // A caller with no scope traverses the public set only — the fenced
+    // repository is NOT in its carrier.
+    const asReader = await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: false });
+    expect(asReader.repo_ids).not.toContain('r-fence-a');
+    expect(asReader.repo_ids).toContain('r-public');
+  });
+
+  test('a caller that may traverse nothing the context names is REFUSED (403)', async () => {
+    seedServing([servingRow({ repo_id: 'r-fence-a', acl: { restricted: true } })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: ['g-fence-a'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    await expect(
+      evalCtx.carrierFor(ctx._key, { okfScopes: ['okf:t:r-other:read'], isSuperAdmin: false })
+    ).rejects.toThrow(/may traverse/i);
   });
 });

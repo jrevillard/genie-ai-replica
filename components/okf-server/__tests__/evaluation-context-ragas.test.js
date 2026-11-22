@@ -36,11 +36,12 @@ describe('#2061 E-4: the carrier decides the served set', () => {
     expect(serveGraphNames(null, ['OKF_suite_v1'])).toEqual(['OKF_suite_v1']);
   });
 
-  test('an EMPTY carrier falls back to the suite repositories (never an empty serve)', () => {
-    // An empty carrier is a measurement that was not taken, not a demand to
-    // serve nothing — an empty carrier would abort the run with NO_GRAPH and
-    // look like a broken deployment.
-    expect(serveGraphNames({ graph_names: [] }, ['OKF_suite_v1'])).toEqual(['OKF_suite_v1']);
+  test('an EMPTY carrier serves NOTHING (the suite repositories are not a fallback)', () => {
+    // A carrier that resolves to no serving repository means the principal
+    // traverses none. Serving the suite's repositories instead would serve a
+    // corpus the carrier does not name — while the run record still said the
+    // carrier was used. The run is REFUSED by the caller, not served.
+    expect(serveGraphNames({ graph_names: [] }, ['OKF_suite_v1'])).toEqual([]);
   });
 });
 

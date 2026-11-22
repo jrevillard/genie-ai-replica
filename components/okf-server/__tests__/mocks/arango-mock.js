@@ -12,6 +12,7 @@
 function createMockDb() {
   const stores = {}; // collectionName -> { key: doc }
   const handles = {}; // collectionName -> cached handle (stable across calls)
+  const graphNames = new Set(); // the named graphs the database knows
 
   function handleFor(name) {
     stores[name] = stores[name] || {};
@@ -120,6 +121,14 @@ function createMockDb() {
   // collection scan, which the mock now really runs (below).
   function defaultQuery(q, bindVars) {
     const text = typeof q === 'string' ? q : q && q.query ? String(q.query) : '';
+    // arangojs's OWN rule (node_modules/arangojs/database.js:1524-1526):
+    // for an `aql` TEMPLATE the second argument is the OPTIONS and the bind
+    // variables come from the template's own `bindVars`. Reading the second
+    // argument as bind vars would let through a query the engine REFUSES
+    // (an unbound `@@name`) — which is exactly how the graph-retract
+    // service's orphan sweep reached production broken and stayed green
+    // here (measured live, 2026-11-22).
+    const vars = q && q.query ? q.bindVars : bindVars;
     if (text.includes('UPDATE r WITH') && text.includes('settle_claimed_at')) {
       return Promise.resolve({ all: async () => [{ _key: 'settle-lease' }] });
     }
@@ -127,7 +136,7 @@ function createMockDb() {
     // resolves it — and refused the way the engine refuses it. A wrong key
     // used to pass every unit test here and answer HTTP 500 in production
     // (measured live, 2026-11-22: the evaluation-context list endpoint).
-    const missing = missingCollectionBindParams(text, bindVars);
+    const missing = missingCollectionBindParams(text, vars);
     if (missing.length) {
       return Promise.reject(new Error(`no value specified for declared bind parameter '${missing[0]}'`));
     }
@@ -139,7 +148,7 @@ function createMockDb() {
     // query is exactly that case).
     const scan = text.match(/FOR\s+\w+\s+IN\s+@@([A-Za-z_][A-Za-z0-9_]*)/i);
     if (scan && !/\bfilter\b/i.test(text)) {
-      const rows = Object.values(stores[bindVars[`@${scan[1]}`]] || {});
+      const rows = Object.values(stores[vars[`@${scan[1]}`]] || {});
       if (/created_at/i.test(text) && /\bdesc\b/i.test(text)) {
         rows.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
       }
@@ -165,20 +174,34 @@ function createMockDb() {
     createCollection: jest.fn(async (n) => {
       stores[n] = stores[n] || {};
     }),
+    /**
+     * The NAMED GRAPHS — the same route the teardown drops through
+     * (`_api/gharial`). A graph name is not a collection: the member
+     * collections are `NAME_SOURCE` / `NAME_ENTITY`, so a graph inventory
+     * cannot be derived from the collection store.
+     */
+    listGraphs: jest.fn(async () => [...graphNames].map((n) => ({ name: n }))),
     /** Named-graph handles: existence derived from member collections. */
-    graph: jest.fn((n) => ({
-      exists: jest.fn(async () => {
-        const src = stores[n + '_SOURCE'];
-        const ent = stores[n + '_ENTITY'];
-        return !!((src && Object.keys(src).length) || (ent && Object.keys(ent).length));
-      }),
-      drop: jest.fn(async () => ({}))
-    })),
-    createGraph: jest.fn(async () => ({})),
+    graph: jest.fn((n) => {
+      graphNames.add(n);
+      return {
+        exists: jest.fn(async () => {
+          const src = stores[n + '_SOURCE'];
+          const ent = stores[n + '_ENTITY'];
+          return !!((src && Object.keys(src).length) || (ent && Object.keys(ent).length));
+        }),
+        drop: jest.fn(async () => ({}))
+      };
+    }),
+    createGraph: jest.fn(async (n) => {
+      graphNames.add(n);
+      return {};
+    }),
     /** Clear all stored docs + reset call history + drop cached handles (call in beforeEach). */
     _reset() {
       for (const k of Object.keys(stores)) delete stores[k];
       for (const k of Object.keys(handles)) delete handles[k];
+      graphNames.clear();
       collection.mockClear();
       route.mockClear();
       this.graph.mockClear();

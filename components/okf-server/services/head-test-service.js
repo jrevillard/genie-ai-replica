@@ -327,7 +327,12 @@ function qualifyProbes(scored /* [{graph, repo_id, top_scores}] */, knobs = rout
  * A narrowed universe is a SUBSET: the carrier never widens the race.
  */
 async function loadSiblings(db, underTestId, opts = {}) {
-  const scoped = Array.isArray(opts.repoIds) && opts.repoIds.length ? opts.repoIds : null;
+  // A carrier that is PRESENT narrows the universe — INCLUDING when it is
+  // EMPTY. An empty carrier means the principal traverses NOTHING, and
+  // falling back to the whole deployment would be the exact opposite of
+  // what the carrier says (and the record would then claim a zero-repo
+  // universe over a deployment-wide score).
+  const scoped = Array.isArray(opts.repoIds) ? opts.repoIds : null;
   const aql =
     'FOR r IN okf_repositories FILTER r._key != @me FILTER r.head != null ' +
     (scoped ? 'FILTER r._key IN @ids ' : '') +

@@ -644,14 +644,21 @@ function wrongSourceRate(attribution, carrierGraphNames) {
 }
 
 /**
- * The graphs the served run is measured over: the CARRIER's when it names
- * any (the group the benchmark asks about), else the suite's own
+ * The graphs the served run is measured over: the CARRIER's when one is
+ * given (the group the benchmark asks about), else the suite's own
  * repositories. A carrier never WIDENS the set — it is the authority's
  * resolved set, which is already a subset of what serves.
+ *
+ * A carrier that is given decides the served set EVEN WHEN IT IS EMPTY: an
+ * empty carrier means the principal traverses no serving repository, and
+ * falling back to the suite's repositories would serve a corpus the carrier
+ * does not name while the run record still said the carrier was used. The
+ * empty case is refused by the caller, not served.
  */
 function serveGraphNames(carrier, suiteGraphNames) {
-  const carrierGraphs = carrier && Array.isArray(carrier.graph_names) ? carrier.graph_names : null;
-  if (carrierGraphs && carrierGraphs.length) return carrierGraphs;
+  if (carrier) {
+    return Array.isArray(carrier.graph_names) ? carrier.graph_names : [];
+  }
   return Array.isArray(suiteGraphNames) ? suiteGraphNames : [];
 }
 
@@ -2216,8 +2223,15 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     const carrierGraphNames = carrier && carrier.graph_names ? carrier.graph_names : null;
     const graphNames = serveGraphNames(carrier, await graphNamesFor(db, repoIds));
     if (!graphNames.length) {
-      const err = new Error('no ingested graphs for the selected repositories — publish and wait for the drain first');
-      err.code = 'NO_GRAPH';
+      // Two different emptinesses, two different messages: a carrier that
+      // resolves NOTHING (the principal traverses no serving repository) is
+      // not a suite whose repositories are still draining.
+      const err = new Error(
+        carrier
+          ? 'the evaluation context resolves no serving repository — the principal traverses none, so there is nothing to serve'
+          : 'no ingested graphs for the selected repositories — publish and wait for the drain first'
+      );
+      err.code = carrier ? 'EMPTY_CARRIER' : 'NO_GRAPH';
       err.status = 409;
       throw err;
     }

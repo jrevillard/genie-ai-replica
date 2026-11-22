@@ -2252,7 +2252,15 @@ async function carrierFromRequest(req) {
   const body = req.body || {};
   const contextId = body.context_id || (req.query && req.query.context_id);
   if (!contextId) return null;
-  return evaluationContextService.carrierOf(contextId);
+  // The carrier is narrowed to what THIS CALLER may traverse: the catalogue
+  // is superadmin-gated, but the run routes are repo-scoped-admin and the
+  // run records are read-scoped. Without this, naming a context id was a
+  // way to have a foreign (possibly restricted) repository set measured and
+  // persisted into a record this caller can read.
+  return evaluationContextService.carrierFor(contextId, {
+    okfScopes: req.okfScopes,
+    isSuperAdmin: req.okfIsSuperAdmin
+  });
 }
 
 const routingTest = call(async (req) =>

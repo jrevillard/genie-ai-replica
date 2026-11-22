@@ -90,6 +90,25 @@ test.describe('sseBody — the agentic extension (story 2.9)', () => {
     const onlyVerdict = parseFrames(sseBody(['x'], null, { verdict: GROUNDED_VERDICT }));
     expect(onlyVerdict.map((f) => f.type)).toEqual(['chunk', 'agent_verdict', 'done']);
   });
+
+  test('a verdict payload cannot override the frame discriminator or version', () => {
+    // The BFF frame writer deletes its payload's type/version before
+    // spreading — the mock mirrors the rule, so a raw upstream payload copy
+    // can never mint a frame the real BFF cannot send.
+    const frames = parseFrames(sseBody(['x'], null, { verdict: { ...GROUNDED_VERDICT, type: 'chunk', version: 2 } }));
+    expect(frames[1]).toEqual({ type: 'agent_verdict', version: 1, ...GROUNDED_VERDICT });
+  });
+
+  test('an activity array that does not match the chunk count throws', () => {
+    // No silent misalignment: a spec scripting 3 lifecycle entries for 2
+    // chunks must fail loudly, not assert against a stream it did not write.
+    expect(() => sseBody(['a', 'b'], null, { activity: [{ status: 'started' }] })).toThrow(
+      /1 activity entries for 2 chunks/
+    );
+    expect(() => sseBody(['a'], null, { activity: [{ status: 'started' }, null] })).toThrow(
+      /2 activity entries for 1 chunks/
+    );
+  });
 });
 
 test.describe('sseFulfill — the shared envelope', () => {

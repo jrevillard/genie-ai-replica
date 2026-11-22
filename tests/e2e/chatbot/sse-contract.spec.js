@@ -50,7 +50,9 @@ test.describe('SSE contract — graceful degradation (story 2.9)', () => {
   // and nothing else does.
   test('an extended stream renders exactly as a legacy one and no activity line appears', async ({ browser }) => {
     await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
-      await mockChatStream(page, ['GENIE.AI answers from the library documents.'], GROUNDED_METADATA, {
+      // Two chunks, one lifecycle entry riding before each: the wire shape
+      // the BFF writes for a tool call between two text events.
+      await mockChatStream(page, ['GENIE.AI answers from the library', ' documents.'], GROUNDED_METADATA, {
         activity: ACTIVITY,
         verdict: VERDICT_GROUNDED
       });
@@ -78,7 +80,7 @@ test.describe('SSE contract — graceful degradation (story 2.9)', () => {
     await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await mockChatStream(
         page,
-        ['GENIE.AI answers from its own knowledge when no document supports the point.'],
+        ['GENIE.AI answers from its own knowledge', ' when no document supports the point.'],
         { is_grounded: false, confidence_score: 0.78 },
         { activity: ACTIVITY, verdict: VERDICT_UNGROUNDED }
       );

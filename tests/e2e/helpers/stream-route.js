@@ -48,6 +48,12 @@ const CORS_HEADERS = { 'access-control-allow-origin': '*' };
  * five existing event types keep their dialect by construction.
  */
 function sseBody(chunks, metadata, options = {}) {
+  // One activity entry per chunk, no silent misalignment: a longer (or
+  // shorter) array would absorb the mismatch and a spec would then assert
+  // against a stream it did not script.
+  if (options.activity && options.activity.length !== chunks.length) {
+    throw new Error(`sseBody: ${options.activity.length} activity entries for ${chunks.length} chunks`);
+  }
   const frames = [];
   chunks.forEach((c, i) => {
     const a = options.activity?.[i];
@@ -59,7 +65,13 @@ function sseBody(chunks, metadata, options = {}) {
     frames.push(`data: ${JSON.stringify({ type: 'chunk', content: c })}`);
   });
   if (options.verdict) {
-    frames.push(`data: ${JSON.stringify({ type: 'agent_verdict', version: 1, ...options.verdict })}`);
+    // A verdict payload cannot override the frame's discriminator or
+    // version — the same rule the BFF frame writer applies
+    // (agent-frame-writer.js deletes its own type/version before spreading).
+    const verdictProjection = { ...options.verdict };
+    delete verdictProjection.type;
+    delete verdictProjection.version;
+    frames.push(`data: ${JSON.stringify({ type: 'agent_verdict', version: 1, ...verdictProjection })}`);
   }
   if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
   return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');

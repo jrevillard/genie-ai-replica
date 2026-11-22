@@ -28,7 +28,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import fastapi
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -233,7 +233,17 @@ async def _run_stream(orchestrator: RequestOrchestrator, request: AgentRunReques
         yield _usage_frame(record)
     finally:
         if not run_task.done():
+            # The cancellation reaches the in-flight model call through the
+            # loop's cancellation hooks; the admission claim covers that
+            # whole teardown, so the slot is released only once the
+            # cancelled task has finished unwinding — freeing it earlier
+            # would admit the successor run while the dying run's work is
+            # still in flight. A CancelledError here is the cancelled run
+            # answering its own cancellation, never a failure of the
+            # stream's exit path.
             run_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await run_task
         # The getter future: cancelled here too, or a client disconnect
         # mid-stream (GeneratorExit at the yield while a re-armed getter
         # still awaits the queue) leaves the pending task on the loop

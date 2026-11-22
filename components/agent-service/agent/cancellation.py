@@ -20,6 +20,7 @@ run whose outcome is "stopped".
 
 import asyncio
 from collections.abc import Coroutine
+from contextlib import suppress
 from typing import Any, TypeVar
 
 T = TypeVar("T")
@@ -89,4 +90,13 @@ async def run_cancellable(token: CancellationToken, work: Coroutine[Any, Any, T]
     finally:
         fired.cancel()
         if not task.done():
+            # This finally runs while the caller's cancellation is already
+            # unwinding through this frame. Cancelling the work is not the
+            # end of it: the cancelled task must FINISH unwinding before
+            # the CancelledError propagates, so a caller that ends on this
+            # path (the run whose slot or usage record is still open) ends
+            # only when its in-flight call has truly stopped — not while
+            # that call is still aborting.
             task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task

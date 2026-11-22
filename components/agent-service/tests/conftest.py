@@ -328,6 +328,27 @@ class HangingLoopModel:
         await hang_until_cancelled(self._recorder)  # never returns
 
 
+class SlowUnwindLoopModel:
+    """A ``LoopModelClient`` double whose cancellation unwinds across a
+    controlled window: the in-flight call aborts (records ``unwinding``)
+    and stays suspended on ``recorder["release_unwind"]`` until the test
+    opens it (records ``unwound`` before propagating). The test observes
+    the lane slot's state WHILE the cancelled run is still unwinding."""
+
+    def __init__(self, recorder: dict):
+        self._recorder = recorder
+
+    async def complete(self, messages, tool_definitions, *, max_output_tokens):
+        self._recorder["started"] = True
+        try:
+            await asyncio.Event().wait()  # forever, until the disconnect
+        except asyncio.CancelledError:
+            self._recorder["unwinding"] = True
+            await self._recorder["release_unwind"].wait()
+            self._recorder["unwound"] = True
+            raise
+
+
 def cancel_when_started(recorder: dict, token, key: str = "started"):
     """A coroutine that fires the token once the recorded work has started;
     hand it to ``create_task``."""

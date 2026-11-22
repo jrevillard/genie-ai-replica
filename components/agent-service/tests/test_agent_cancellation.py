@@ -107,3 +107,40 @@ def test_the_caller_being_cancelled_cancels_the_in_flight_call_too():
 
     asyncio.run(outer())
     assert recorder["cancelled_in_flight"] is True
+
+
+def test_the_caller_being_cancelled_waits_for_the_works_unwinding_to_finish():
+    """A run whose in-flight call is still aborting is not yet terminated:
+    the caller's CancelledError propagates out of run_cancellable only once
+    the cancelled work has finished unwinding — the layers above it release
+    their per-run claims (the admission lane's slot) against a run that has
+    truly ended, never one mid-teardown."""
+    recorder: dict = {"release_unwind": asyncio.Event()}
+    token = CancellationToken()
+
+    async def work():
+        recorder["started"] = True
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            recorder["unwinding"] = True
+            await recorder["release_unwind"].wait()
+            recorder["unwound"] = True
+            raise
+
+    async def scenario():
+        task = asyncio.get_running_loop().create_task(run_cancellable(token, work()))
+        while "started" not in recorder:
+            await asyncio.sleep(0)
+        task.cancel()
+        while "unwinding" not in recorder:
+            await asyncio.sleep(0)
+        # Mid-teardown: the CancelledError has not propagated yet.
+        assert not task.done()
+        recorder["release_unwind"].set()
+        while "unwound" not in recorder:
+            await asyncio.sleep(0)
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())

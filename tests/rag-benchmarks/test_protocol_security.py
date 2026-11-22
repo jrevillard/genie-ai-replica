@@ -1054,3 +1054,7 @@ def test_verdicts_cli_created_utc_pins_the_digest(tmp_path):
     digest_a = report_digest(json.loads(out_a.read_text(encoding="utf-8")))
     digest_b = report_digest(json.loads(out_b.read_text(encoding="utf-8")))
     assert digest_a == digest_b
+    # Direct pin assertion: two unpinned runs can land in the same second and
+    # match vacuously — the stored timestamp proves the wiring, not the
+    # coincidence.
+    assert json.loads(out_a.read_text(encoding="utf-8"))["created_utc"] == "2026-01-01T00:00:00+00:00"

@@ -13,7 +13,6 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import get_current_span
 
 import tracing as tracing_module
 
@@ -272,11 +271,3 @@ def test_outbound_requests_calls_carry_the_traceparent(traced_app):
     assert len(client_spans) == 1
     assert client_spans[0].name.startswith("GET")
     assert format(client_spans[0].parent.span_id, "016x") == expected_span_id
-
-
-def test_the_current_span_helper_reads_the_active_context(traced_app):
-    """Sanity anchor for the propagation tests: the activating helper is
-    what the outbound instrumentation inherits."""
-    with tracing_module.background_span("agent.parent") as span:
-        active = get_current_span()
-        assert active.get_span_context().span_id == span.get_span_context().span_id

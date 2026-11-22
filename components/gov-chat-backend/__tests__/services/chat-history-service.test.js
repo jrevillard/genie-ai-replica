@@ -222,9 +222,7 @@ describe('ChatHistoryService', () => {
           source_documents: []
         }
       };
-      mockDb.query
-        .mockResolvedValueOnce(createMockCursor([agenticMessage]))
-        .mockResolvedValue(createMockCursor([]));
+      mockDb.query.mockResolvedValueOnce(createMockCursor([agenticMessage])).mockResolvedValue(createMockCursor([]));
       const result = await chatHistoryService.getConversation('conv-1');
       const msg = result.messages.find((m) => m._key === 'm-9');
       expect(msg.metadata.grounding_status).toBe('grounded');

@@ -39,6 +39,15 @@ jest.mock('path', () => ({
   join: jest.fn((...parts) => parts.join('/'))
 }));
 
+// The shared routing module (the component's single AGENT_ENABLED read) is
+// mocked so the routing suite drives the flag at its own boundary; the
+// module's own suite (agent-routing.test.js) pins the real read semantics.
+jest.mock('../../services/agent-routing', () => ({
+  isAgentPathEnabled: jest.fn(),
+  agentServiceUrl: jest.fn(() => 'http://agent-service:8010')
+}));
+const routingFlag = require('../../services/agent-routing');
+
 function createMockCollection() {
   return {
     save: jest.fn().mockResolvedValue({ _key: 'query-1' }),
@@ -1966,26 +1975,27 @@ describe('QueryService', () => {
 describe('query routing — one flag, both entries', () => {
   beforeEach(async () => {
     await queryService.init();
+    routingFlag.isAgentPathEnabled.mockReturnValue(false);
+    routingFlag.agentServiceUrl.mockReturnValue('http://agent-service:8010');
   });
 
   const LEGACY_URL = 'http://chatqna-xeon-backend-server:8888/v1/chatqna';
-  const AGENTIC_URL = 'http://agent-service:8010';
   const REFUSAL = 'AGENTIC_PATH_NOT_SERVED';
 
-  it('flag off: both entries route legacy and resolve the SAME target', async () => {
-    // The stream entry's target is the unchanged legacy construction.
-    await withEnv({ AGENT_ENABLED: undefined, CONTEXT_OPTION: undefined }, async () => {
-      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-1' });
-      const result = await queryService.initStreamQuery(createMockQueryData(), {});
-      expect(result.opeaUrl).toBe(LEGACY_URL);
-      expect(queryService.resolveQueryRoute()).toEqual({ agentic: false, url: LEGACY_URL });
-    });
+  it('flag off: the streaming entry is branch-neutral and returns the legacy target', async () => {
+    // The streaming entry does NOT read the flag itself — its agentic branch
+    // is served by the frame writer in the route handler. The entry serves
+    // both branches: flag off or on, it validates, persists and returns the
+    // legacy chatqna target for the legacy relay.
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-1' });
+    const result = await queryService.initStreamQuery(createMockQueryData(), {});
+    expect(result.opeaUrl).toBe(LEGACY_URL);
+    expect(mockQueriesCollection.save).toHaveBeenCalled();
+  });
 
-    // The non-stream entry — the worker must receive the same target the
-    // stream entry resolved above: one construction source, no per-entry
-    // drift. This is the "cannot disagree" assertion at the observable
-    // boundary: same environment, both entries, one decision.
-    await withEnv({ AGENT_ENABLED: undefined, CONTEXT_OPTION: undefined }, async () => {
+  it('flag off: the non-stream entry routes legacy and the worker receives the helper target', async () => {
+    await withEnv({ CONTEXT_OPTION: undefined }, async () => {
       mockDb.query.mockResolvedValue(createMockCursor([]));
       const workerSpy = jest
         .spyOn(queryService, 'runOPEAWorker')
@@ -1993,6 +2003,8 @@ describe('query routing — one flag, both entries', () => {
       try {
         await queryService.createQuery(createMockQueryData());
         expect(workerSpy.mock.calls[0][0]).toBe(LEGACY_URL);
+        // The worker URL is the routing helper's own decision — one
+        // construction source, no per-entry drift.
         expect(workerSpy.mock.calls[0][0]).toBe(queryService.resolveQueryRoute().url);
       } finally {
         workerSpy.mockRestore();
@@ -2001,101 +2013,162 @@ describe('query routing — one flag, both entries', () => {
   });
 
   it('flag off: the legacy target still honors the deployment overrides', async () => {
-    await withEnv(
-      { AGENT_ENABLED: '0', OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899', CONTEXT_OPTION: undefined },
-      async () => {
-        mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-2' });
-        const result = await queryService.initStreamQuery(createMockQueryData(), {});
-        expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
-      }
-    );
-  });
-
-  it("flag vocabulary is strict '1': true / yes / 2 stay legacy", async () => {
-    for (const value of ['true', 'yes', '2', '0', '']) {
-      await withEnv({ AGENT_ENABLED: value }, () => {
-        expect(queryService.resolveQueryRoute()).toEqual({ agentic: false, url: LEGACY_URL });
-      });
-    }
-  });
-
-  it('flag on: both entries refuse with the same marker, before any persistence or upstream call', async () => {
-    // Stream entry: the refusal fires before the query record is written,
-    // and carries the code/status the routes map to a 503.
-    let streamError = null;
-    await withEnv({ AGENT_ENABLED: '1' }, async () => {
-      try {
-        await queryService.initStreamQuery(createMockQueryData(), {});
-      } catch (error) {
-        streamError = error;
-      }
-      expect(streamError).not.toBeNull();
-      expect(streamError.message).toContain(REFUSAL);
-      expect(streamError.code).toBe('AGENTIC_PATH_NOT_SERVED');
-      expect(streamError.statusCode).toBe(503);
-      expect(mockQueriesCollection.save).not.toHaveBeenCalled();
-    });
-
-    // Non-stream entry: same refusal — asserted here as FULL cross-entry
-    // equality of message and code, not just a per-entry marker match — the
-    // worker is never called, nothing persisted. Two genuinely separate
-    // entry points, one decision.
-    await withEnv({ AGENT_ENABLED: '1', CONTEXT_OPTION: undefined }, async () => {
-      mockDb.query.mockResolvedValue(createMockCursor([]));
-      const workerSpy = jest
-        .spyOn(queryService, 'runOPEAWorker')
-        .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
-      try {
-        let nonStreamError = null;
-        try {
-          await queryService.createQuery(createMockQueryData());
-        } catch (error) {
-          nonStreamError = error;
-        }
-        expect(nonStreamError).not.toBeNull();
-        expect(nonStreamError.message).toBe(streamError.message);
-        expect(nonStreamError.code).toBe(streamError.code);
-        expect(nonStreamError.statusCode).toBe(streamError.statusCode);
-        expect(workerSpy).not.toHaveBeenCalled();
-        expect(mockQueriesCollection.save).not.toHaveBeenCalled();
-      } finally {
-        workerSpy.mockRestore();
-      }
+    await withEnv({ OPEA_HOST: 'chatqna.internal', OPEA_PORT: '8899', CONTEXT_OPTION: undefined }, async () => {
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-2' });
+      const result = await queryService.initStreamQuery(createMockQueryData(), {});
+      expect(result.opeaUrl).toBe('http://chatqna.internal:8899/v1/chatqna');
     });
   });
 
-  it('flag on: test-mode refuses too — the routing decision precedes the mock bypass', async () => {
-    await withEnv({ AGENT_ENABLED: '1', CONTEXT_OPTION: 'test-mode' }, async () => {
-      await expect(queryService.createQuery(createMockQueryData())).rejects.toThrow(REFUSAL);
-      expect(mockQueriesCollection.save).not.toHaveBeenCalled();
-      expect(mockQueriesCollection.update).not.toHaveBeenCalled();
-    });
-  });
-
-  it('flag on: the agentic target is the agent service and never the chatqna/OPEA URL', async () => {
+  it('resolveQueryRoute: the flag on resolves the agent service, never the chatqna/OPEA URL', async () => {
     // The behavioral never-OPEA assertion (the CI dependency gate cannot see
     // the BFF runtime call graph, so no grep enforces this). The adversarial
     // configuration: the legacy leg's own host/port NAME the agent host —
     // the agentic route still resolves to the agent service, never to the
     // chatqna URL that configuration would produce.
-    await withEnv(
-      {
-        AGENT_ENABLED: '1',
-        AGENT_SERVICE_URL: 'http://agent.internal:9999',
-        OPEA_HOST: 'agent.internal',
-        OPEA_PORT: '9999'
-      },
-      () => {
-        const route = queryService.resolveQueryRoute();
-        expect(route.agentic).toBe(true);
-        expect(route.url).toBe('http://agent.internal:9999');
-        expect(route.url.includes('/v1/chatqna')).toBe(false);
-      }
-    );
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    routingFlag.agentServiceUrl.mockReturnValue('http://agent.internal:9999');
+    const route = queryService.resolveQueryRoute();
+    expect(route.agentic).toBe(true);
+    expect(route.url).toBe('http://agent.internal:9999');
+    expect(route.url.includes('/v1/chatqna')).toBe(false);
+  });
 
-    // The default target is the documented compose topology.
-    await withEnv({ AGENT_ENABLED: '1', AGENT_SERVICE_URL: undefined }, () => {
-      expect(queryService.resolveQueryRoute()).toEqual({ agentic: true, url: AGENTIC_URL });
+  it('resolveQueryRoute: the flag off resolves the legacy chatqna target', () => {
+    routingFlag.isAgentPathEnabled.mockReturnValue(false);
+    expect(queryService.resolveQueryRoute()).toEqual({ agentic: false, url: LEGACY_URL });
+  });
+
+  it('flag on: the non-stream entry refuses with the marker before any persistence or upstream call', async () => {
+    // The refusal rides the shared routing module's flag (the same single
+    // read the streaming entry's branch consumes — the two entries cannot
+    // disagree), fires before the query record is written, and carries the
+    // code/status the routes map to a 503.
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    mockDb.query.mockResolvedValue(createMockCursor([]));
+    const workerSpy = jest
+      .spyOn(queryService, 'runOPEAWorker')
+      .mockResolvedValue({ responseTime: 5, response: 'answer', metadata: null });
+    let refusal = null;
+    try {
+      await queryService.createQuery(createMockQueryData());
+    } catch (error) {
+      refusal = error;
+    } finally {
+      workerSpy.mockRestore();
+    }
+    expect(refusal).not.toBeNull();
+    expect(refusal.message).toContain(REFUSAL);
+    expect(refusal.code).toBe('AGENTIC_PATH_NOT_SERVED');
+    expect(refusal.statusCode).toBe(503);
+    expect(workerSpy).not.toHaveBeenCalled();
+    expect(mockQueriesCollection.save).not.toHaveBeenCalled();
+  });
+
+  it('flag on: test-mode refuses too — the routing decision precedes the mock bypass', async () => {
+    routingFlag.isAgentPathEnabled.mockReturnValue(true);
+    mockDb.query.mockResolvedValue(createMockCursor([]));
+    await expect(queryService.createQuery(createMockQueryData(), null)).rejects.toThrow(REFUSAL);
+    expect(mockQueriesCollection.save).not.toHaveBeenCalled();
+    expect(mockQueriesCollection.update).not.toHaveBeenCalled();
+  });
+});
+// ============================================================
+// Story 2.4 — the agent CallerContext builder: the REAL method (the graph-set
+// rule is one home shared with the fan-out carrier; the repos mapping
+// enforces the contract's own invariant — a repo may never name a graph
+// outside the authorized set, and may appear once).
+// ============================================================
+describe('buildAgentCallerContext (story 2.4)', () => {
+  const queryData = {
+    userId: 'user-1',
+    context: { serviceLabels: ['taxes', 'taxes', '', 42, 'health'] }
+  };
+
+  it('a null posture (no bearer / failed resolution) yields the empty-authorization context', () => {
+    expect(queryService.buildAgentCallerContext(queryData, null)).toEqual({
+      user_id: 'user-1',
+      authorized_graph_names: [],
+      authorized_repos: [],
+      requested_labels: ['taxes', 'health']
     });
+  });
+
+  it('hybrid engaged: the legacy graph is prepended first, the OKF graphs after', () => {
+    const posture = {
+      available: true,
+      mode: 'hybrid',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1', 'OKF_b_v2'],
+      legacyGraph: 'GRAPH',
+      authz: { repos: [{ repo_id: 'r1', graph_name: 'OKF_a_v1' }] }
+    };
+    const context = queryService.buildAgentCallerContext(queryData, posture);
+    expect(context.authorized_graph_names).toEqual(['GRAPH', 'OKF_a_v1', 'OKF_b_v2']);
+    expect(context.authorized_repos).toEqual([{ repo_id: 'r1', graph_name: 'OKF_a_v1' }]);
+  });
+
+  it('okf_only engaged: the legacy graph is never in the set', () => {
+    const posture = {
+      available: true,
+      mode: 'okf_only',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1'],
+      legacyGraph: 'GRAPH',
+      authz: { repos: [] }
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_graph_names).toEqual(['OKF_a_v1']);
+  });
+
+  it('a repo row naming a graph outside the authorized set is dropped', () => {
+    const posture = {
+      available: true,
+      mode: 'okf_only',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1'],
+      legacyGraph: 'GRAPH',
+      authz: {
+        repos: [
+          { repo_id: 'r-in', graph_name: 'OKF_a_v1' },
+          { repo_id: 'r-out', graph_name: 'OKF_not_authorized' }
+        ]
+      }
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_repos).toEqual([
+      { repo_id: 'r-in', graph_name: 'OKF_a_v1' }
+    ]);
+  });
+
+  it('a duplicate repo_id appears once (the first row wins)', () => {
+    const posture = {
+      available: true,
+      mode: 'okf_only',
+      engaged: true,
+      authorizedGraphs: ['OKF_a_v1'],
+      legacyGraph: 'GRAPH',
+      authz: {
+        repos: [
+          { repo_id: 'r-in', graph_name: 'OKF_a_v1' },
+          { repo_id: 'r-in', graph_name: 'OKF_a_v1' }
+        ]
+      }
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_repos).toEqual([
+      { repo_id: 'r-in', graph_name: 'OKF_a_v1' }
+    ]);
+  });
+
+  it('an unengaged posture yields the empty set (the legacy corpus answers a hybrid caller)', () => {
+    const posture = {
+      available: true,
+      mode: 'hybrid',
+      engaged: false,
+      authorizedGraphs: [],
+      legacyGraph: 'GRAPH',
+      authz: null
+    };
+    const context = queryService.buildAgentCallerContext(queryData, posture);
+    expect(context.authorized_graph_names).toEqual([]);
+    expect(context.authorized_repos).toEqual([]);
   });
 });

@@ -38,9 +38,7 @@ jest.mock('../../services/query-service', () => ({
   searchQueries: jest.fn(),
   getConversationsForQuery: jest.fn(),
   createConversationFromQuery: jest.fn(),
-  linkQueryToMessage: jest.fn(),
-  // The refusal marker the routes' SSE branch compares against.
-  AGENTIC_REFUSAL_CODE: 'AGENTIC_PATH_NOT_SERVED'
+  linkQueryToMessage: jest.fn()
 }));
 
 // Mock axios (used directly by query-routes for streaming)
@@ -301,19 +299,19 @@ describe('POST /stream', () => {
     expect(response.body.error).toBe('STREAM_ERROR');
   });
 
-  it('maps the intentional agentic refusal to 503 with the marker as the code', async () => {
-    // An activated flag without a serving path is a named, operator-chosen
-    // state — not a server fault. 503 + the machine-readable code keep
-    // monitors and retry clients from reading it as a crash.
-    const refusal = new Error('AGENTIC_PATH_NOT_SERVED: the agentic path is activated');
-    refusal.code = 'AGENTIC_PATH_NOT_SERVED';
-    refusal.statusCode = 503;
-    queryService.initStreamQuery.mockRejectedValue(refusal);
+  it('maps a typed error through its own statusCode and code', async () => {
+    // The general typed-error passthrough: an error that declares its own
+    // status and machine-readable code renders as that status — a named,
+    // intentional state, never the 500 unexpected-fault class below.
+    const typed = new Error('the named condition');
+    typed.code = 'NAMED_CONDITION';
+    typed.statusCode = 503;
+    queryService.initStreamQuery.mockRejectedValue(typed);
 
     const response = await authPost('/api/queries/stream', { sessionId: 's1' });
 
     expect(response.status).toBe(503);
-    expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
+    expect(response.body.error).toBe('NAMED_CONDITION');
   });
 
   it('should return 504 on timeout/abort', async () => {
@@ -1946,6 +1944,10 @@ describe('query id correlation on the server span', () => {
     const res = {
       writableEnded: false,
       headersSent: false,
+      // The handler registers its disconnect listener on the response
+      // (story 2.4 hoists it before the chatqna await) — a real res is an
+      // EventEmitter; the fake carries the same seam.
+      on: jest.fn(),
       writeHead: jest.fn(() => {
         res.headersSent = true;
       }),
@@ -2173,5 +2175,237 @@ describe('POST /:queryId/link/:messageId', () => {
     const response = await authPost('/api/queries/q1/link/m1', {});
 
     expect(response.status).toBe(500);
+  });
+});
+
+// ============================================================
+// Story 2.4 — the guarded agentic branch: with AGENT_ENABLED off (the flag
+// this suite's module graph loaded with), the legacy chatqna relay serves
+// the streaming entry byte-identically and the agent leg is never called.
+// The ON side of the wiring lives in agent-frame-writer.test.js.
+// ============================================================
+describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
+  // A local stream setup: the SSE helpers above are scoped to their describe.
+  function setupLegacyStream() {
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+    return mockStream;
+  }
+
+  it('the routing helper resolved OFF for this module graph', () => {
+    const { isAgentPathEnabled } = require('../../services/agent-routing');
+    expect(isAgentPathEnabled()).toBe(false);
+  });
+
+  it('a streaming request is served by the legacy chatqna relay, the agent leg never called', async () => {
+    const mockStream = setupLegacyStream();
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"legacy answer"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('"type":"chunk","content":"legacy answer"');
+
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    const [url] = axios.post.mock.calls[0];
+    expect(url).toBe('http://chatqna:8888/v1/chatqna');
+  });
+
+  // The dead `req.on('close')` listener is now live on `res` (story 2.4): a
+  // REAL client disconnect mid-stream must abort the upstream and partial-save
+  // the answer (the dead code's documented intent). A real socket close — the
+  // client aborts its request — is the signal that fires server-side `close`.
+  it('a real client disconnect mid-stream partial-saves the answer (the dead listener, now live)', async () => {
+    const mockStream = setupLegacyStream();
+
+    // supertest requests start lazily; keep the Request handle to abort it.
+    const req = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+    const settled = req.then(
+      (response) => ({ response }),
+      (error) => ({ error })
+    );
+
+    // Wait until the server handler attached its upstream listeners, then
+    // stream a partial answer the client has received.
+    for (let i = 0; i < 500 && mockStream.listenerCount('data') === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+    mockStream.push('data: {"type":"chunk","content":"legacy answer"}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    // The client leaves: the socket closes, the server `res` emits 'close'.
+    req.abort();
+    await settled;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // The partial answer was saved with the empty-stream metadata (nothing
+    // was captured yet) — the dead code's documented intent, now live.
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      'legacy answer',
+      expect.any(Number),
+      expect.objectContaining({ source_documents: [], is_grounded: false, abstained: null })
+    );
+  });
+
+  it('a normal completion is NOT partial-saved by the close event (doneState guard)', async () => {
+    const mockStream = setupLegacyStream();
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"legacy answer"}\n\n');
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    await responsePromise;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Exactly ONE finalize — the terminal's, not the close listener's.
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('a disconnect during the chatqna connect window aborts the call (listener armed before the POST)', async () => {
+    // The listener is registered BEFORE `await axios.post` — a client that
+    // leaves while chatqna is still connecting aborts the upstream leg, it
+    // does not run to full cost behind a dead response. A raw http server we
+    // own (not supertest): an aborted supertest request leaves its ephemeral
+    // server listening — the handle this test must be able to close.
+    const http = require('http');
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    let capturedSignal = null;
+    axios.post.mockImplementation((_url, _body, options) => {
+      capturedSignal = options.signal;
+      // chatqna never answers; the abort rejects (what the real adapter does
+      // with the signal).
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          const error = new Error('canceled');
+          error.code = 'ERR_CANCELED';
+          reject(error);
+        });
+      });
+    });
+
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    const nodeReq = http.request({
+      host: '127.0.0.1',
+      port: server.address().port,
+      path: '/api/queries/stream',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${validToken}`
+      }
+    });
+    nodeReq.end(JSON.stringify({ sessionId: 's1', messages: [{ role: 'user', content: 'hello' }] }));
+    // The destroy below surfaces as ECONNRESET on the request — an expected
+    // part of the scenario, swallowed here.
+    nodeReq.on('error', () => {});
+
+    try {
+      for (let i = 0; i < 100 && axios.post.mock.calls.length === 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(axios.post.mock.calls.length).toBe(1);
+      // The route handler is parked INSIDE the POST await — no stream
+      // listeners exist yet; only the hoisted close listener can catch this.
+      expect(capturedSignal).not.toBeNull();
+
+      // The client leaves: the socket is destroyed → the server `res` emits
+      // 'close' → the hoisted listener aborts the controller.
+      nodeReq.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(capturedSignal.aborted).toBe(true);
+      // Nothing was streamed: nothing to partial-save (the silent branch of
+      // the same listener the late-registration disconnect path exercises).
+      expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
+// ============================================================
+// Story 2.4 — the mid-stream error contract under the now-live
+// res.on('close') listener: the error frame IS the terminal, and the
+// `doneState.handled` mark in the stream-error branch keeps the close
+// listener from turning an errored stream into a partial save.
+// ============================================================
+describe('SSE stream error mid-stream (story 2.4 — the close-guard contract)', () => {
+  it('an errored stream ends with the error frame and is NOT partial-saved', async () => {
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+    // supertest starts lazily (on .then) — kick it off, then wait for the
+    // relay's stream listeners before driving the stream (an 'error' event
+    // with no listener crashes the worker instead of failing the test).
+    responsePromise.catch(() => {});
+    for (let i = 0; i < 100 && mockStream.listenerCount('data') === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+
+    mockStream.push('data: {"type":"chunk","content":"partial"}\n\n');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    mockStream.emit('error', new Error('socket hang up'));
+
+    const response = await responsePromise;
+    const frames = response.text
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(frames[frames.length - 1]).toEqual({
+      type: 'error',
+      message: 'socket hang up',
+      code: 'CHATQNA_STREAM_ERROR'
+    });
+    expect(frames.find((f) => f.type === 'done')).toBeUndefined();
+    expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
   });
 });

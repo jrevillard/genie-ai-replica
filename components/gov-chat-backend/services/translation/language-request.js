@@ -38,4 +38,35 @@ function normalizeRequestedLanguage(value) {
   return value.trim().slice(0, MAX_LANGUAGE_LENGTH).toLowerCase();
 }
 
-module.exports = { normalizeRequestedLanguage };
+/**
+ * Whether an answer has to be translated into the requested language.
+ *
+ * English is the language the answer is written in: there is no translation
+ * to make, and nothing to refuse. "auto" is not a language either — it asks
+ * the service to detect the language the conversation is written in, which
+ * the chatqna service does on its own. Every decision that depends on "is a
+ * translation wanted here" — the refusal check, the streaming translation,
+ * the post-stream translation — reads this one rule, so the paths cannot
+ * disagree about the same request (legacy relay and agentic frame writer
+ * alike).
+ *
+ * @param {string} targetLanguage - The normalized language the caller asked for.
+ * @returns {boolean} True when the answer has to be translated.
+ */
+function wantsTranslation(targetLanguage) {
+  return Boolean(targetLanguage) && targetLanguage !== 'en' && targetLanguage !== 'auto';
+}
+
+/**
+ * Whether unit-by-unit streaming translation is enabled for this deployment
+ * (issue #829, `STREAMING_TRANSLATION_ENABLED`). One home for the flag's
+ * vocabulary: a future value or config-object move updates this parse and
+ * both consuming paths (legacy relay, agentic frame writer) with it.
+ *
+ * @returns {boolean} True when the deployment streams translations.
+ */
+function streamingTranslationEnabled() {
+  return ['1', 'true'].includes((process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase());
+}
+
+module.exports = { normalizeRequestedLanguage, wantsTranslation, streamingTranslationEnabled };

@@ -7,10 +7,17 @@ const { trace } = require('@opentelemetry/api');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger, spanAttrs, tracingBaggage } = require('../shared-lib');
 const translationService = require('../services/translation-service');
-const { extractCommittableUnit } = require('../services/translation/stream-boundary');
+const { createStreamUnitRelay } = require('../services/translation/stream-unit-relay');
 const { languageForLog } = require('../services/translation/language-log');
 const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/translation/unsupported-language');
-const { normalizeRequestedLanguage } = require('../services/translation/language-request');
+const { isAgentPathEnabled } = require('../services/agent-routing');
+const { proxyAgentRun } = require('../services/agent-frame-writer');
+const {
+  normalizeRequestedLanguage,
+  wantsTranslation,
+  streamingTranslationEnabled
+} = require('../services/translation/language-request');
+const { writeSSEFrame } = require('../services/sse-frame');
 const { parsePositiveInt } = require('../shared-lib');
 
 /**
@@ -27,24 +34,6 @@ const { parsePositiveInt } = require('../shared-lib');
  */
 function requestedTargetLanguage(queryData) {
   return normalizeRequestedLanguage(queryData?.context?.language);
-}
-
-/**
- * Whether an answer has to be translated into the requested language.
- *
- * English is the language the answer is written in: there is no translation
- * to make, and nothing to refuse. "auto" is not a language either — it asks
- * the service to detect the language the conversation is written in, which
- * the chatqna service does on its own. Every decision that depends on "is a
- * translation wanted here" — the refusal check, the streaming translation,
- * the post-stream translation — reads this one rule, so the three cannot
- * disagree about the same request.
- *
- * @param {string} targetLanguage - The normalized language the caller asked for.
- * @returns {boolean} True when the answer has to be translated.
- */
-function wantsTranslation(targetLanguage) {
-  return Boolean(targetLanguage) && targetLanguage !== 'en' && targetLanguage !== 'auto';
 }
 
 /**
@@ -343,8 +332,82 @@ module.exports = (queryService) => {
     }
 
     try {
-      const { queryId, opeaUrl, opeaPayload, authHeaders } = await queryService.initStreamQuery(queryData, {
-        authorization: req.headers.authorization
+      // Story 2.4 — the agentic entry resolves the fan-out posture ONCE, in
+      // the frame writer (the CallerContext assembly): initStreamQuery skips
+      // the carrier there, so the posture is never read twice for one
+      // request. The legacy entry keeps the carrier attach, unchanged.
+      const agenticBranch = isAgentPathEnabled();
+      const { queryId, opeaUrl, opeaPayload, authHeaders } = await queryService.initStreamQuery(
+        queryData,
+        { authorization: req.headers.authorization },
+        agenticBranch ? { skipFanoutCarrier: true } : undefined
+      );
+
+      // Story 2.4 — the guarded agentic branch. The shared routing helper is
+      // the ONLY way the agentic endpoint is exposed (AD-9): when the flag is
+      // off, the legacy chatqna relay below serves byte-identically. The
+      // branch sits AFTER initStreamQuery — the `queries` doc exists with the
+      // legacy shape and the same queryId completes it at finalize (queryId
+      // continuity) — and BEFORE any SSE byte: the frame writer answers a
+      // saturated lane (429) or an unconfigured run surface (503) as plain
+      // JSON. handleStreamDone below is REUSED verbatim as the agentic
+      // terminal, so the terminal order is preserved by construction.
+      if (agenticBranch) {
+        await proxyAgentRun({
+          res,
+          queryService,
+          queryId,
+          queryData,
+          authHeaders,
+          targetLanguage,
+          translator,
+          streamStartTime,
+          handleStreamDone,
+          emptyStreamMetadata
+        });
+        return;
+      }
+
+      // Stream state the disconnect listener reads — declared BEFORE the
+      // listener registration and before the chatqna await: a client that
+      // leaves during the connect / time-to-first-byte window must find the
+      // listener already armed, with no temporal-dead-zone bindings behind it.
+      const doneState = { handled: false };
+      let fullResponseText = '';
+      // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
+      // forwarded to the client instead of running a separate backend-side retrieval.
+      let capturedMetadata = null;
+      opeaController = new AbortController();
+
+      // Client disconnect. `req.on('close')` does not fire here — express.json()
+      // consumes the request body before the route handler runs, so `req` has
+      // already emitted 'close' by the time the first `await` resolves; the
+      // signal is `res.on('close')`. The dead `req` listener this replaces
+      // carried exactly the cleanup below (story 2.4 put it on the living
+      // object, armed BEFORE the upstream call so the connect window is
+      // covered); `close` fires on EVERY response end, so the
+      // `doneState.handled` guard keeps a normally completed stream from being
+      // re-finalized as a partial save, and the stream-error branch marks
+      // itself handled to keep the error contract (error frame then end — no
+      // metadata, no done).
+      res.on('close', () => {
+        cleanupKeepalive();
+        if (doneState.handled) return;
+        doneState.handled = true;
+        if (opeaController && !opeaController.signal.aborted) {
+          opeaController.abort();
+          logger.info('QueryService.stream_client_disconnected', { queryId });
+          if (fullResponseText) {
+            queryService
+              .finalizeStreamQuery(
+                queryId,
+                fullResponseText,
+                Date.now() - streamStartTime,
+                capturedMetadata || emptyStreamMetadata()
+              )
+              .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
+          }
+        }
       });
 
       // SSE response headers
@@ -356,7 +419,6 @@ module.exports = (queryService) => {
       });
 
       const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
-      opeaController = new AbortController();
 
       // Stamp the correlation id on the span covering THIS handler — the server
       // span for the incoming request — so a trace whose chatqna side never got
@@ -405,12 +467,7 @@ module.exports = (queryService) => {
         : await axios.post(opeaUrl, opeaPayload, opeaRequestOptions); // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
 
       const stream = opeaResponse.data;
-      let fullResponseText = '';
       let buffer = '';
-      const doneState = { handled: false };
-      // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
-      // forwarded to the client instead of running a separate backend-side retrieval.
-      let capturedMetadata = null;
 
       function cleanupKeepalive() {
         if (keepalive !== null) {
@@ -422,129 +479,30 @@ module.exports = (queryService) => {
       // Streaming translation (issue #829): when enabled and the UI language is not
       // English, buffer the EN answer and stream-translate complete units (sentence/
       // paragraph boundaries) so the user sees the target language WHILE streaming,
-      // instead of an English stream that flips at the end.
-      const streamingTranslationEnabled = ['1', 'true'].includes(
-        (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
-      );
+      // instead of an English stream that flips at the end. The unit machinery
+      // (buffer, ordered chain, failure latch) lives in the shared relay module
+      // — one home, consumed by this path and by the agentic frame writer.
       // The language was resolved above, before the stream opened: the
       // translator behind it works in the language the caller asked for.
-      const useStreamingTranslation = streamingTranslationEnabled && wantsTranslation(targetLanguage);
-
-      let pendingEn = '';
-      let translationChain = Promise.resolve();
-      // A language that was accepted but has no translator behind it — the
-      // translation service was not ready when the request arrived — cannot be
-      // translated at all: the answer stays in English for its whole length,
-      // and the failure is reported on `done` like any other one.
-      let streamingTranslationFailed = useStreamingTranslation && !translator;
-      let loggedStreamTranslateActive = false;
-
-      // Translate one COMPLETE unit (see services/translation/stream-boundary.js)
-      // using the AST-based markdown translator the request resolved. The
-      // translator parses the unit as markdown, translates ONLY the text leaf
-      // nodes, and reassembles the AST — so structure WITHIN the unit (bold,
-      // lists, inner paragraphs) is preserved by the skeleton, never left to the
-      // model. `separator` is the exact trailing whitespace that followed the
-      // unit in the source; we pass it through verbatim, so structure BETWEEN
-      // units (the "\n\n" paragraph breaks, line breaks) survives too. This is
-      // what keeps formatting intact during streaming translation (issue #829).
-      const scheduleUnitTranslation = (content, separator) => {
-        translationChain = translationChain.then(async () => {
-          if (res.writableEnded) return;
-          if (streamingTranslationFailed) {
-            // The translation failed for an earlier unit: the answer stays in
-            // English for the remainder, so the unit goes out as it is. The
-            // translator is not asked again — from here on the answer is the
-            // English stream, and a unit that came back translated would
-            // disagree with the ones around it.
-            if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
-            }
-            return;
-          }
-          try {
-            const translated = await translator.translate(content);
-            // An empty translation is a failed translation: the answer stays
-            // in English, and the client is told so on `done`. Handing back the
-            // English unit as if it were the translation would present an
-            // untranslated answer as a translated one — the failure the flag
-            // exists for. From here on the answer is the English stream: the
-            // units that were translated keep their translation, and the ones
-            // that follow stay in English.
-            const empty = !translated || !translated.trim();
-            if (empty) {
-              logger.warn(
-                `QueryService.stream_translation_empty: (lang=${languageForLog(targetLanguage)}, unitLen=${content.length})`,
-                { queryId }
-              );
-              streamingTranslationFailed = true;
-            }
-            const body = empty ? `${content}${separator}` : `${translated.trim()}${separator}`;
-            // Debug instrumentation for the streaming-translation path: the unit
-            // content the real chatqna stream produced, its separator, and the
-            // translator's output (head/tail). Emitted at debug level only —
-            // silent in production (LOG_LEVEL=info), toggle debug to investigate
-            // formatting/structure issues without a redeploy.
-            logger.debug(
-              `[STREAM-TRANSLATE] IN=${JSON.stringify(content)} sep=${JSON.stringify(separator)} OUT_head=${JSON.stringify(
-                (translated || '').slice(0, 60)
-              )} OUT_tail=${JSON.stringify((translated || '').slice(-60))}`,
-              { queryId }
-            );
-            if (!res.writableEnded) {
-              // An SSE frame, never an HTML document: JSON.stringify escapes
-              // quotes and newlines, so a value cannot terminate the `data:`
-              // frame or inject a second event. The client renders message
-              // content through DOMPurify (ChatBotComponent.vue).
-              // nosemgrep: nodejs_scan.javascript-xss-rule-express_xss
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: body })}\n\n`);
-            }
-          } catch (error) {
-            // The language is caller-controlled: the log carries a bounded,
-            // printable form of it, never the raw value.
-            logger.warn(
-              `QueryService.stream_translation_unit_failed: ${error.message} (lang=${languageForLog(targetLanguage)}, unitLen=${content.length}, unitPreview=${content.slice(0, 80)})`,
-              { queryId }
-            );
-            if (!res.writableEnded) {
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: `${content}${separator}` })}\n\n`);
-            }
-            streamingTranslationFailed = true;
-          }
-        });
-      };
+      const useStreamingTranslation = streamingTranslationEnabled() && wantsTranslation(targetLanguage);
+      const streamRelay = useStreamingTranslation
+        ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
+        : null;
 
       const doHandleStreamDone = async () => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
         try {
-          if (useStreamingTranslation) {
-            if (streamingTranslationFailed) {
-              // Degraded: the units already queued are emitted first, in the
-              // order they were committed, then the remaining English directly
-              // (bypass translation). The chain is awaited before the flush: a
-              // queued unit that has not run yet would otherwise write its
-              // content after the remainder — and after the response ended, which
-              // drops it.
-              await translationChain;
-              if (pendingEn && !res.writableEnded) {
-                res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
-                pendingEn = '';
-              }
-            } else {
-              if (pendingEn.trim()) {
-                scheduleUnitTranslation(pendingEn, '');
-                pendingEn = '';
-              }
-              // Each scheduled unit swallows its own errors (see scheduleUnitTranslation),
-              // so the chain never rejects; awaiting it just orders completion before 'done'.
-              await translationChain;
-            }
+          if (streamRelay) {
+            // Degraded or not: flush() orders every queued unit BEFORE the
+            // terminal and returns the failure latch AFTER the flush — the
+            // value `alreadyFailedTranslation` rides on `done` with.
+            const alreadyFailedTranslation = await streamRelay.flush();
             await handleStreamDone(queryId, fullResponseText, streamStartTime, res, capturedMetadata, {
               targetLanguage,
               translator,
               skipPostStreamTranslation: true,
-              alreadyFailedTranslation: streamingTranslationFailed
+              alreadyFailedTranslation
             });
           } else {
             // The post-stream translation runs here, and the client may be
@@ -576,36 +534,13 @@ module.exports = (queryService) => {
 
           if (parsed.type === 'chunk') {
             fullResponseText += parsed.content;
-            if (useStreamingTranslation && !streamingTranslationFailed) {
-              // Buffer EN; commit complete units to the translator at boundaries.
-              // A language the models do not cover does NOT change this: the
-              // units keep being committed and written in order (the chain
-              // writes them in English), so the buffered tail stays in place
-              // and cannot overtake the units that precede it.
-              if (!loggedStreamTranslateActive) {
-                loggedStreamTranslateActive = true;
-                // Debug: confirms the streaming-translation path is active for
-                // this request (absent => flag/path not triggering).
-                logger.debug(`[STREAM-TRANSLATE] active lang=${languageForLog(targetLanguage)}`, { queryId });
-              }
-              pendingEn += parsed.content;
-              let extracted = extractCommittableUnit(pendingEn);
-              while (extracted) {
-                pendingEn = extracted.remainder;
-                scheduleUnitTranslation(extracted.content, extracted.separator);
-                extracted = extractCommittableUnit(pendingEn);
-              }
+            if (streamRelay) {
+              // Buffer EN; commit complete units to the translator at
+              // boundaries (the relay owns the buffer, the ordered chain and
+              // the failure latch).
+              streamRelay.onChunk(parsed.content);
             } else {
-              // The answer is English for the remainder (the translation
-              // failed). The English that is already buffered is OLDER than
-              // this chunk: it goes out first, because flushed at the end of
-              // the stream it would land after the chunks that follow it, and
-              // the answer would read out of order.
-              if (pendingEn) {
-                res.write(`data: ${JSON.stringify({ type: 'chunk', content: pendingEn })}\n\n`);
-                pendingEn = '';
-              }
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
+              writeSSEFrame(res, { type: 'chunk', content: parsed.content });
             }
           } else if (parsed.type === 'metadata') {
             // Forward the parser's object whole (minus the event discriminator).
@@ -633,6 +568,11 @@ module.exports = (queryService) => {
         if (!res.headersSent) {
           res.status(502).json({ error: 'CHATQNA_STREAM_ERROR', message: error.message });
         } else {
+          // Marked handled: the error frame IS the terminal (error frame then
+          // end — no metadata, no done), and the `res.on('close')` listener
+          // above must not turn the already-errored stream into a partial
+          // save.
+          doneState.handled = true;
           res.write(
             `data: ${JSON.stringify({ type: 'error', message: error.message, code: 'CHATQNA_STREAM_ERROR' })}\n\n`
           );
@@ -646,30 +586,6 @@ module.exports = (queryService) => {
         }
       });
 
-      // NOTE: this listener does not fire. express.json() consumes the request body
-      // before the route handler runs, so `req` has already emitted 'close' by
-      // the time the first `await` resolves and this is registered. The
-      // disconnect signal is `res.on('close')`. Tracked separately — nothing in
-      // here runs today, so do not read the metadata handling below as the
-      // client-disconnect path.
-      req.on('close', () => {
-        cleanupKeepalive();
-        if (opeaController && !opeaController.signal.aborted) {
-          opeaController.abort();
-          logger.info('QueryService.stream_client_disconnected', { queryId });
-          if (fullResponseText) {
-            queryService
-              .finalizeStreamQuery(
-                queryId,
-                fullResponseText,
-                Date.now() - streamStartTime,
-                capturedMetadata || emptyStreamMetadata()
-              )
-              .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
-          }
-        }
-      });
-
       keepalive = setInterval(() => {
         if (res.writableEnded) {
           cleanupKeepalive();
@@ -680,6 +596,12 @@ module.exports = (queryService) => {
     } catch (error) {
       if (keepalive !== null) clearInterval(keepalive);
       logger.error('QueryService.stream_setup_error', { error: error.message });
+      if (res.writableEnded || res.destroyed) {
+        // The client is already gone (e.g. it disconnected during the chatqna
+        // connect window and the close listener aborted the leg): the answer
+        // would be written to a destroyed socket — an error nobody reads.
+        return;
+      }
       if (!res.headersSent) {
         if (error.statusCode === 401) {
           // Story 1.1: an expired/invalid bearer caught during fan-out
@@ -688,10 +610,9 @@ module.exports = (queryService) => {
           res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
         } else if (error.statusCode && error.code) {
           // Typed-error passthrough, the repo's general contract: the error
-          // declares its own status and machine-readable code (the agentic
-          // refusal declares 503 + AGENTIC_PATH_NOT_SERVED), so an
-          // intentional, configuration-driven state never renders as the
-          // 500 unexpected-fault class below.
+          // declares its own status and machine-readable code, so an
+          // intentional, named state never renders as the 500
+          // unexpected-fault class below.
           res.status(error.statusCode).json({ error: error.code, message: error.message });
         } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
           res.status(504).json({ error: 'CHATQNA_UNAVAILABLE', message: 'ChatQnA service unavailable or timed out' });
@@ -699,9 +620,7 @@ module.exports = (queryService) => {
           res.status(500).json({ error: 'STREAM_ERROR', message: error.message });
         }
       } else {
-        const sseErrorCode =
-          error.code && error.code === queryService.AGENTIC_REFUSAL_CODE ? error.code : 'STREAM_ERROR';
-        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: sseErrorCode })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message, code: 'STREAM_ERROR' })}\n\n`);
         res.end();
       }
     }
@@ -916,8 +835,9 @@ module.exports = (queryService) => {
       }
       // Typed-error passthrough (the streaming path applies the same
       // mapping): the error declares its own status and machine-readable
-      // code — the agentic refusal declares 503 + AGENTIC_PATH_NOT_SERVED —
-      // never the 500 "unexpected server fault" class.
+      // code — the non-streaming agentic refusal declares
+      // 503 + AGENTIC_PATH_NOT_SERVED — never the 500 "unexpected server
+      // fault" class.
       if (error.statusCode && error.code) {
         return res.status(error.statusCode).json({ error: error.code, message: error.message });
       }

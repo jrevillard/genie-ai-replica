@@ -7,10 +7,14 @@
 vocabulary (:mod:`.events`), the server-side tool registry that is the
 authorization surface (:mod:`.registry`), the run budget and its monitor
 (:mod:`.budget`), the cancellation hook (:mod:`.cancellation`), the
-provisional custom minimal loop (:mod:`.loop`) and the bounded smoke probe
-(:mod:`.probe`). A runtime swap adapts its native events to this seam's
-vocabulary — it never renames it; nothing here ever speaks the BFF's client
-frame names.
+provisional custom minimal loop (:mod:`.loop`), the governed production
+prompt (:mod:`.prompt`), the registered toolset (:mod:`.toolset`), the
+taint scan (:mod:`.taint`), the citation verification pipeline
+(:mod:`.verification`) and the bounded smoke probe (:mod:`.probe`). A
+runtime swap adapts its native events to this seam's vocabulary — it never
+renames it; nothing here ever speaks the BFF's client frame names. The
+``source_documents`` projection lives across the port boundary
+(:mod:`capabilities.citations`) — both lanes import it from there.
 """
 
 from .budget import BudgetExhausted, RunBudget, RunBudgetMonitor
@@ -36,10 +40,11 @@ from .probe import (
     ProbeEvidence,
     ProbeModelClient,
     ProbeTransientError,
-    document_toolset,
     run_probe,
 )
+from .prompt import PRODUCTION_SYSTEM_PROMPT
 from .registry import ToolDefinition, ToolExecutor, ToolRegistry, UnregisteredToolError
+from .toolset import document_toolset
 
 __all__ = [
     "BFF_FRAME_NAMES",
@@ -48,6 +53,7 @@ __all__ = [
     "OUTCOME_CANCELLED",
     "OUTCOME_ERROR",
     "PROBE_QUESTION",
+    "PRODUCTION_SYSTEM_PROMPT",
     "QUESTION_ID",
     "RUNTIME_ID",
     "TOOLSET",

@@ -22,6 +22,28 @@ Two checks, one pipeline, in a fixed order:
   required timeout knob. Absence, timeout, budget exhaustion and malformed
   output all yield ``unverified`` — never ``grounded``.
 
+* **Insufficiency and degradation — mechanical, decided before the judge.**
+  The ledger also records what kind of retrieval actually ran: a SUCCESS
+  outcome (successful retrieval), a ``degraded_availability`` outcome (the
+  capability ran degraded — partial availability, a fallback strategy), an
+  insufficiency outcome, an error envelope, or an unprepared-query answer.
+  When NO successful retrieval is recorded, or ANY retrieval ran degraded,
+  the response is an insufficiency response (FR-12): the loop replaces the
+  drafted answer text with :data:`INSUFFICIENCY_RESPONSE` and the verdict
+  carries ``insufficient_evidence: {required: true, reasons: [...]}`` —
+  decided by the ledger's state at finalize, never by the model's own
+  claim. A degraded run cannot deliver a confident answer even with valid
+  citations and a ``grounded`` judge: the mechanical decision precedes the
+  judge, whose outcome is skipped, and the citations ride the payload for
+  diagnostics. Retrieval that succeeded but yielded no valid citation is
+  NOT an insufficiency — it stays the ``ungrounded`` claims-without-support
+  path below.
+
+* **Injection findings (AD-13).** The ledger also records the taint scan's
+  findings (:mod:`agent.taint` — an instruction pattern in retrieved
+  content is an attempt, recorded, with the content still passing as
+  data); the verdict payload projects them under ``findings``.
+
 The mechanical outcome decides before the judge: when NO citable evidence
 reached the model — an insufficiency outcome, an error envelope, a malformed
 result, an empty ledger — the answer claims nothing supported, so it is
@@ -37,10 +59,13 @@ metadata frame's ``grounding_status`` and derived legacy ``is_grounded``
 (true iff grounded), the recorded translation mode (``"none"`` at finalize —
 the verdict certifies the SOURCE-language text it evaluated; the BFF
 overwrites the mode when it delivers a translation), the delivered citation
-set for ``source_documents``, the judge outcome, and the persisted marking
-(``marking.required`` true iff policy is ``verdict-marked`` AND the status
-is ``ungrounded`` — a failed verification is never silent, an incomplete one
-is surfaced through the metadata tri-state without the correction marking).
+set for ``source_documents`` (projected onto the frontend envelope by
+:func:`capabilities.citations.source_documents_from_citations`), the judge
+outcome, the recorded injection findings, the insufficiency decision, and
+the persisted marking (``marking.required`` true iff policy is
+``verdict-marked`` AND the status is ``ungrounded`` — a failed verification
+is never silent, an incomplete one is surfaced through the metadata
+tri-state without the correction marking).
 
 Nothing here writes a client frame: the pipeline emits through the seam
 vocabulary (the ``verdict`` kind), and the BFF owns every client frame —
@@ -53,6 +78,8 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
+
+from capabilities.citations import source_documents_from_citations
 
 from .budget import BudgetExhausted, RunBudgetMonitor
 
@@ -84,6 +111,22 @@ JUDGE_OUTCOME_TIMEOUT = "timeout"
 JUDGE_OUTCOME_BUDGET_EXHAUSTED = "budget_exhausted"
 JUDGE_OUTCOME_ERROR = "error"
 
+# The standard explicit insufficiency response (FR-12/FR-13): the delivered
+# answer when the ledger's state at finalize requires insufficiency — the
+# model's drafted text is discarded and replaced by this constant. The
+# message is the source-language (English) text; display-language
+# translation is the BFF leg's job on the same terms as any answer. SINGLE
+# SOURCE: the decision site owns the message, the loop imports it.
+INSUFFICIENCY_RESPONSE = "I could not find supporting evidence in the knowledge base to answer this question."
+
+# The mechanical insufficiency reasons, derived from the ledger's recorded
+# retrieval outcomes — never from the model's claim. The degraded reason is
+# the capability's own outcome code (the capability layer's degradation
+# signal); the no-retrieval reason is the ledger's honest statement that no
+# search or read ever succeeded.
+REASON_DEGRADED_RETRIEVAL = "degraded_availability"
+REASON_NO_SUCCESSFUL_RETRIEVAL = "no_successful_retrieval"
+
 
 def citation_identity(provenance: dict) -> tuple:
     """The stable identity key of one provenance dict — the no-agent
@@ -107,11 +150,27 @@ class RetrievalLedger:
     so nothing was claimed and nothing can be marked). Dedup keeps the
     FIRST occurrence of an identity (the same convention the no-agent
     mapping uses).
+
+    The ledger also records what KIND of retrieval ran, which is what the
+    finalize insufficiency decision reads mechanically:
+
+    * ``successful_retrievals`` — the dispatches that actually grew the
+      citable entries (a success whose hits were all duplicates, or whose
+      content was blank, contributed nothing and counts as none);
+    * ``degradation_count`` — the dispatches whose result reported
+      ``degraded_availability`` (partial availability, a fallback
+      strategy): any one of them makes the response an insufficiency
+      response, never a confident answer (FR-12), citations notwithstanding;
+    * ``findings`` — the taint scan's injection attempts
+      (:mod:`agent.taint`), recorded, content untouched.
     """
 
     def __init__(self) -> None:
         self._entries: list[dict] = []
         self._seen: set[tuple] = set()
+        self._successful_retrievals = 0
+        self._degradation_count = 0
+        self._findings: list[dict] = []
 
     @property
     def entries(self) -> list[dict]:
@@ -119,33 +178,49 @@ class RetrievalLedger:
         ``{"provenance": {...}, "text": str, "score": float | None}``."""
         return list(self._entries)
 
+    @property
+    def successful_retrievals(self) -> int:
+        """How many dispatches actually grew the citable entries."""
+        return self._successful_retrievals
+
+    @property
+    def degradation_count(self) -> int:
+        """How many dispatches reported ``degraded_availability``."""
+        return self._degradation_count
+
+    @property
+    def findings(self) -> list[dict]:
+        """The recorded injection attempts (the taint scan's findings)."""
+        return list(self._findings)
+
     def record(self, name: str, payload: dict) -> None:
         """Record one dispatched tool result: its citations, or its failure.
 
         ``payload`` is the loop's result envelope — ``{"result": {...}}`` on
         success, ``{"error": {...}}`` when the declared error surface fired.
-        Both shapes are recorded; only the success shapes contribute
-        citation candidates.
+        Both shapes are recorded; only the retrieved texts contribute
+        citation candidates (blank text cites nothing). A dispatch counts as
+        a SUCCESSFUL retrieval only when it actually GREW the citable
+        entries: a success that contributed nothing citable (a read whose
+        content is blank, hits that are all duplicates) is retrieval that
+        yielded nothing — the insufficiency decision must not mistake it for
+        served evidence. ``degraded_availability`` records a degradation
+        (the retrieved content still cites — a degraded result may carry
+        hits).
         """
         result = payload.get("result")
-        if not isinstance(result, dict):
-            return  # an error envelope: cites nothing
-        if name == "search_knowledge":
-            for hit in result.get("hits") or []:
-                self._add_hit(hit)
-        elif name == "read_source":
-            provenance = result.get("provenance")
-            content = result.get("content")
-            if isinstance(provenance, dict) and isinstance(content, str) and content.strip():
-                self._add({"provenance": provenance, "text": content, "score": None})
+        before = len(self._entries)
+        for text, provenance, score in retrieved_texts(name, payload):
+            if text.strip():
+                self._add({"provenance": provenance, "text": text, "score": score})
+        if isinstance(result, dict) and result.get("outcome") == "degraded_availability":
+            self._degradation_count += 1
+        if len(self._entries) > before:
+            self._successful_retrievals += 1
 
-    def _add_hit(self, hit: dict) -> None:
-        provenance = hit.get("provenance")
-        text = hit.get("text")
-        if not isinstance(provenance, dict) or not isinstance(text, str) or not text.strip():
-            return
-        score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
-        self._add({"provenance": provenance, "text": text, "score": score})
+    def record_finding(self, finding: dict) -> None:
+        """Record one injection attempt (the taint scan's structured finding)."""
+        self._findings.append(dict(finding))
 
     def _add(self, entry: dict) -> None:
         identity = citation_identity(entry["provenance"])
@@ -153,6 +228,38 @@ class RetrievalLedger:
             return
         self._seen.add(identity)
         self._entries.append(entry)
+
+
+def retrieved_texts(name: str, payload: dict) -> list[tuple[str, dict, float | None]]:
+    """The retrieved-content channel of one dispatched tool result: the
+    ``(text, provenance, score)`` triples its served texts carry.
+
+    The ONE extraction both readers share (the ledger's citation
+    candidates, the taint scan's scan surface): the ``search_knowledge``
+    hits' passage texts and the ``read_source`` resolved content. An error
+    envelope, a malformed result, an unregistered tool name, a hit without
+    a provenance dict, or a non-string text contributes nothing — the
+    channel carries only what the capability actually served as text.
+    """
+    result = payload.get("result")
+    if not isinstance(result, dict):
+        return []
+    if name == "search_knowledge":
+        triples = []
+        for hit in result.get("hits") or []:
+            provenance = hit.get("provenance") if isinstance(hit, dict) else None
+            text = hit.get("text") if isinstance(hit, dict) else None
+            if isinstance(provenance, dict) and isinstance(text, str):
+                score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
+                triples.append((text, provenance, score))
+        return triples
+    if name == "read_source":
+        provenance = result.get("provenance")
+        content = result.get("content")
+        if isinstance(provenance, dict) and isinstance(content, str):
+            return [(content, provenance, None)]
+        return []
+    return []
 
 
 @dataclass(frozen=True)
@@ -303,7 +410,16 @@ class Verdict:
     the clients that predate the tri-state), ``marking.required`` is derived
     from the policy and the status, and the payload dict is what the BFF
     projects — verbatim onto the metadata fields, the citation set onto
-    ``source_documents``.
+    ``source_documents`` (projected through the shared FR-13 module, so the
+    delivered entries carry exactly the fields the frontend citation
+    mapping reads).
+
+    ``insufficient_evidence`` is the mechanical insufficiency decision:
+    ``{"required": bool, "reasons": [...]}`` — required when the ledger
+    holds no successful retrieval or any degraded one, in which case the
+    loop replaces the drafted answer with the standard message before the
+    text events emit. ``findings`` are the run's recorded injection
+    attempts (empty on a clean run).
     """
 
     status: str  # VERDICT_GROUNDED | VERDICT_UNGROUNDED | VERDICT_UNVERIFIED
@@ -311,10 +427,18 @@ class Verdict:
     judge: dict
     delivered_citations: list[dict] = field(default_factory=list)
     invalid_citations: list[dict] = field(default_factory=list)
+    insufficient_evidence: dict = field(default_factory=lambda: {"required": False, "reasons": []})
+    findings: list[dict] = field(default_factory=list)
 
     @property
     def is_grounded(self) -> bool:
         return self.status == VERDICT_GROUNDED
+
+    @property
+    def insufficient_required(self) -> bool:
+        """Whether finalize required the insufficiency response — the loop's
+        replacement trigger, decided by the ledger, never by the model."""
+        return self.insufficient_evidence.get("required") is True
 
     @property
     def marking_required(self) -> bool:
@@ -330,6 +454,9 @@ class Verdict:
             "judge": dict(self.judge),
             "citations": list(self.delivered_citations),
             "invalid_citations": list(self.invalid_citations),
+            "insufficient_evidence": dict(self.insufficient_evidence),
+            "findings": list(self.findings),
+            "source_documents": source_documents_from_citations(self.delivered_citations),
             "marking": {"required": self.marking_required, "reason": self.status if self.marking_required else None},
         }
 
@@ -366,8 +493,55 @@ class VerificationPipeline:
 
     def record_tool_result(self, name: str, payload: dict) -> None:
         """Feed one dispatched tool result into the ledger (every result —
-        the ledger classifies successes and error envelopes itself)."""
+        the ledger classifies successes, degradations and error envelopes
+        itself)."""
         self.ledger.record(name, payload)
+
+    def record_finding(self, finding: dict) -> None:
+        """Record one injection attempt (the loop's taint scan feeds it here)."""
+        self.ledger.record_finding(finding)
+
+    def _verdict(self, status: str, judge: dict, delivered=None, invalid=None, insufficient_evidence=None) -> Verdict:
+        """One construction home for every verdict this pipeline emits.
+
+        The policy and the recorded findings are read HERE — a verdict
+        always carries the run's recorded injection attempts and the
+        governing policy; a new additive verdict field is a one-site edit,
+        not a sweep over construction sites. ``insufficient_evidence``
+        carries the mechanical decision when one is live (the early-return
+        insufficiency verdict, the defensive catch); every site past the
+        early-return relies on the not-required default, because past it
+        the decision is always not-required.
+        """
+        return Verdict(
+            status=status,
+            policy=self.policy,
+            judge=judge,
+            delivered_citations=[] if delivered is None else delivered,
+            invalid_citations=[] if invalid is None else invalid,
+            insufficient_evidence={"required": False, "reasons": []}
+            if insufficient_evidence is None
+            else insufficient_evidence,
+            findings=self.ledger.findings,
+        )
+
+    def insufficiency_decision(self) -> dict:
+        """The mechanical insufficiency decision, read off the ledger.
+
+        CHEAP and JUDGE-FREE: pure ledger reads, callable before the text
+        events emit (the loop's time-to-first-chunk must not absorb the
+        judge latency). ``required`` is true when NO retrieval grew the
+        citable entries (the answer can claim nothing served) OR any
+        retrieval ran degraded (a degraded run never delivers a confident
+        answer — FR-12, even with valid citations). The reasons name the
+        mechanical facts; they are never the model's words.
+        """
+        reasons: list[str] = []
+        if self.ledger.degradation_count:
+            reasons.append(REASON_DEGRADED_RETRIEVAL)
+        if self.ledger.successful_retrievals == 0:
+            reasons.append(REASON_NO_SUCCESSFUL_RETRIEVAL)
+        return {"required": bool(reasons), "reasons": reasons}
 
     async def finalize(self, answer_text: str) -> Verdict:
         """Verify the drafted answer; return the tri-state verdict.
@@ -377,7 +551,9 @@ class VerificationPipeline:
         survive the validity check → ``ungrounded`` (the judge skipped);
         otherwise the judge runs and its verdict — or its failure, which is
         ``unverified`` — decides. A defensive catch converts an unexpected
-        pipeline defect into ``unverified`` too: verification can fail, it
+        pipeline defect into ``unverified`` too — carrying the mechanical
+        insufficiency decision and the recorded findings, which are ledger
+        reads a pipeline defect must not bury: verification can fail, it
         can never fabricate ``grounded``.
         """
         try:
@@ -386,24 +562,33 @@ class VerificationPipeline:
             raise
         except Exception as failed:  # noqa: BLE001 — verification degrades, never fabricates
             logger.warning("verification pipeline failed; verdict unverified: %s: %s", type(failed).__name__, failed)
-            return Verdict(
-                status=VERDICT_UNVERIFIED,
-                policy=self.policy,
-                judge={"ran": False, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None},
+            return self._verdict(
+                VERDICT_UNVERIFIED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None},
+                insufficient_evidence=self.insufficiency_decision(),
             )
 
     async def _finalize(self, answer_text: str) -> Verdict:
-        if not self.ledger.entries:
-            # No CITABLE evidence reached the model: an answer over an
-            # insufficiency outcome, an error envelope or an empty ledger
-            # claims nothing supported — there is nothing to ground and
-            # nothing to mark. (An attempt that failed to surface anything
-            # citable is verification that could not complete, never a
-            # claim without support.)
-            return Verdict(
-                status=VERDICT_UNVERIFIED,
-                policy=self.policy,
-                judge={"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
+        # The insufficiency decision runs FIRST — before the judge, before
+        # the grounded claim is surfaced (FR-12: degraded beats grounded).
+        # The judge is skipped on this path: the answer it would evaluate is
+        # not the delivered answer. (An empty ledger necessarily lands here:
+        # entries can only grow through a dispatch that would have counted
+        # as a successful retrieval, so empty entries ⇒ required.)
+        insufficiency = self.insufficiency_decision()
+        if insufficiency["required"]:
+            # The delivered citations still ride the payload for diagnostics
+            # (a degraded search may have surfaced valid passages), and the
+            # mechanical validity check still classifies them — but the
+            # verdict is unverified and the loop replaces the drafted text
+            # with the standard insufficiency response.
+            validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
+            return self._verdict(
+                VERDICT_UNVERIFIED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
+                delivered=[dict(entry) for entry in validity.delivered],
+                invalid=[dict(entry) for entry in validity.invalid],
+                insufficient_evidence=insufficiency,
             )
         validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
         delivered = [dict(entry) for entry in validity.delivered]
@@ -411,24 +596,13 @@ class VerificationPipeline:
             # Citable evidence existed but none of it survived the mechanical
             # check (or entries were dropped as unauthorized): an unsupported
             # assertion — not grounded, mechanically, before any judge runs.
-            return Verdict(
-                status=VERDICT_UNGROUNDED,
-                policy=self.policy,
-                judge={"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
-                delivered_citations=delivered,
-                invalid_citations=[dict(entry) for entry in validity.invalid],
+            return self._verdict(
+                VERDICT_UNGROUNDED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
+                delivered=delivered,
+                invalid=[dict(entry) for entry in validity.invalid],
             )
         judge_result = await self._judge.judge(answer_text, delivered)
         if judge_result["outcome"] != JUDGE_OUTCOME_COMPLETED:
-            return Verdict(
-                status=VERDICT_UNVERIFIED,
-                policy=self.policy,
-                judge=judge_result,
-                delivered_citations=delivered,
-            )
-        return Verdict(
-            status=judge_result["verdict"],
-            policy=self.policy,
-            judge=judge_result,
-            delivered_citations=delivered,
-        )
+            return self._verdict(VERDICT_UNVERIFIED, judge_result, delivered=delivered)
+        return self._verdict(judge_result["verdict"], judge_result, delivered=delivered)

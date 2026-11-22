@@ -52,7 +52,8 @@ from .budget import BudgetExhausted, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
 from .events import EventEmitter, EventKind
 from .registry import ToolRegistry, UnregisteredToolError
-from .verification import VerificationPipeline
+from .taint import scan_tool_result
+from .verification import INSUFFICIENCY_RESPONSE, VerificationPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -221,26 +222,42 @@ class AgentLoop:
     # -- the model turn ------------------------------------------------------
 
     async def _finish(self, turn: ModelTurn) -> RunResult:
-        """A final (text) turn: the text-message lifecycle, the verdict
-        (when the run carries a verification pipeline), then the terminal
-        event."""
+        """A final (text) turn: the mechanical insufficiency decision, the
+        text-message lifecycle, the verification verdict, the terminal.
+
+        The finalize is SPLIT around the text events, per the spec's pinned
+        window (verification between the text events and the terminal):
+
+        * BEFORE the text events: the CHEAP mechanical insufficiency
+          decision (pure ledger reads, no judge) — its verdict owns the
+          delivered text, so when the ledger's state requires the
+          insufficiency response (no retrieval that grew the citations, or
+          a degraded one), the model's drafted text is discarded and the
+          standard explicit message is what streams. Time-to-first-chunk
+          never absorbs the judge latency.
+        * AFTER the text events, BEFORE the verdict event: the validity
+          check and the judged grounding over the EMITTED text — the
+          verdict event lands after the last text event and before the
+          terminal, exactly the pinned position (the BFF projects the text
+          events onto chunks and the verdict onto client agent_verdict).
+          The finalize is the verification pipeline's own budgeted scope —
+          its failures degrade to unverified inside it, never into the
+          run's terminal state.
+        """
         text = turn.content if isinstance(turn.content, str) and turn.content.strip() else None
         if text is None:
             # Neither a tool call nor a final text is a protocol anomaly;
             # the run ends honestly instead of answering with nothing.
             return self._fail(OUTCOME_ERROR, "the model returned neither a tool call nor a final text")
+        if self.verifier is not None and self.verifier.insufficiency_decision()["required"]:
+            # Insufficiency by mechanism, not prose: the ledger decided,
+            # the drafted text is discarded, the standard message is the
+            # delivered answer.
+            text = INSUFFICIENCY_RESPONSE
         self.emitter.emit(EventKind.TEXT_MESSAGE_STARTED, {"role": "assistant"})
         self.emitter.emit(EventKind.TEXT_MESSAGE_CONTENT, {"text": text})
         self.emitter.emit(EventKind.TEXT_MESSAGE_FINISHED, {})
         if self.verifier is not None:
-            # The verdict is pinned AFTER the last text event and BEFORE the
-            # terminal: the BFF projects the text events onto chunks and the
-            # verdict onto client agent_verdict, so the client sees the
-            # correction event after the last chunk and before metadata. The
-            # finalize is the verification pipeline's own budgeted scope
-            # (mechanical validity first, one judged call) — its failures
-            # degrade to unverified inside it, never into the run's
-            # terminal state.
             verdict = await self.verifier.finalize(text)
             self.emitter.emit(EventKind.VERDICT, verdict.payload())
         self.emitter.emit(EventKind.RUN_FINISHED, {"outcome": OUTCOME_ANSWERED})
@@ -290,6 +307,17 @@ class AgentLoop:
             # success shapes contribute their citations, error envelopes
             # record the attempt (the ledger classifies both itself).
             self.verifier.record_tool_result(request.name, result_payload)
+            # The taint scan (AD-13): retrieved content is data, never
+            # instructions. An instruction pattern in a retrieved text is a
+            # recorded finding — ledger, verdict payload and usage record —
+            # and the content STILL passes as data: the same payload feeds
+            # the model's role-tool message either way, no behavior change
+            # from content.
+            findings = scan_tool_result(request.name, result_payload)
+            for finding in findings:
+                self.verifier.record_finding(finding)
+            if findings:
+                self.monitor.record_injection_findings(len(findings))
         self.emitter.emit(EventKind.TOOL_CALL_FINISHED, result_payload, call_id=request.call_id)
         return result_payload
 

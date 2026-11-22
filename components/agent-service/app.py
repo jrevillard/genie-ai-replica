@@ -41,6 +41,7 @@ from agent.orchestrator import (
     MissingKnobsError,
     OrchestratorConfig,
     RequestOrchestrator,
+    build_preparer_factory,
 )
 from agent.probe import ProbeConfig, ProbeModelClient, build_stateless_adapters
 from capabilities.contract import CallerContext
@@ -71,9 +72,11 @@ _TERMINAL_EVENT_KINDS = frozenset({EventKind.RUN_FINISHED, EventKind.RUN_ERROR})
 class RunRequestBody(BaseModel):
     """One run request's body: the question, the agent-phase deadline
     (a REMAINING duration in milliseconds — the orchestrator caps it with
-    the deployment ceiling) and the trusted caller context the BFF
-    assembled. No budget value rides the request: budgets are server
-    configuration."""
+    the deployment ceiling), the trusted caller context the BFF assembled,
+    and the optional UI locale the answer is displayed in (the orchestrator
+    records it on the usage record; the BFF's translation leg translates
+    on the same terms as any answer). No budget value rides the request:
+    budgets are server configuration."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -81,6 +84,7 @@ class RunRequestBody(BaseModel):
     deadline_ms: int = Field(gt=0)
     context: CallerContext
     bearer: str | None = None
+    language: str | None = Field(default=None, max_length=32)
 
     @field_validator("question")
     @classmethod
@@ -89,11 +93,19 @@ class RunRequestBody(BaseModel):
             raise ValueError("the question must carry text")
         return value
 
+    @field_validator("language")
+    @classmethod
+    def _language_is_a_locale_code_or_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
 
 def _build_orchestrator(env=None) -> RequestOrchestrator:
     """The per-process run assembly: the expensive, stateless parts built
-    once (adapters, model client, lane, orchestrator wiring), the
-    authorization executor built per request by the port factory.
+    once (adapters, model client, lane, preparation wiring, orchestrator),
+    the authorization executor built per request by the port factory.
 
     :class:`MissingKnobsError` names every required budget knob that is
     missing or unusable; an assembly ``ValueError`` names the knob the
@@ -107,6 +119,10 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     adapters = build_stateless_adapters(probe_config, env)
     model_client = ProbeModelClient(probe_config)
     lane = AdmissionLane.from_config(noagent)
+    # The preparation wiring (the preparation module): one per-run
+    # preparer over the run's budget monitor; the discovery caches are
+    # process-wide.
+    preparer_factory = build_preparer_factory(env)
 
     def port_factory(context: CallerContext, bearer: str | None):
         # Per request: one executor binds ONE trusted context to the
@@ -119,6 +135,7 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         lane=lane,
         model_client=model_client,
         port_factory=port_factory,
+        preparer_factory=preparer_factory,
     )
 
 
@@ -274,6 +291,7 @@ async def runs(body: RunRequestBody):
             deadline_ms=body.deadline_ms,
             context=body.context,
             bearer=body.bearer,
+            language=body.language,
         )
         return StreamingResponse(
             _run_stream(runtime, request, admit_ctx),

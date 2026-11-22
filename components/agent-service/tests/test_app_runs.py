@@ -29,11 +29,12 @@ from fastapi.testclient import TestClient
 import app as app_module
 from agent.events import BFF_FRAME_NAMES
 from agent.orchestrator import RequestOrchestrator
-from capabilities.contract import CallerContext
+from capabilities.contract import CallerContext, PreparedQuery, QueryPreparationStatus
 from noagent.lane import AdmissionLane
+from preparation.prepare import PreparationResult
 
 CONTEXT = {"user_id": "u-1", "authorized_graph_names": ["GRAPH"]}
-BODY = {"question": "How are complaints handled?", "deadline_ms": 5000, "context": CONTEXT}
+BODY = {"question": "How are complaints handled?", "deadline_ms": 5000, "context": CONTEXT, "language": "fr"}
 
 
 def _runtime(model, tmp_path):
@@ -138,6 +139,7 @@ def test_an_unimplemented_verdict_policy_answers_503_naming_the_knob(monkeypatch
         {"question": "q", "deadline_ms": -1, "context": CONTEXT},
         {"question": "  ", "deadline_ms": 5000, "context": CONTEXT},
         {"question": "q", "deadline_ms": 5000},  # context absent
+        {"question": "q", "deadline_ms": 5000, "context": CONTEXT, "language": "x" * 33},  # over-length locale
     ],
 )
 def test_a_malformed_request_answers_422(monkeypatch, broken_body):
@@ -203,10 +205,104 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
         "completion_tokens",
         "wall_clock_seconds",
         "error",
+        "language",
+        "preparation_status",
+        "injection_findings",
     }
     assert usage["outcome"] == "answered"
     assert usage["run_id"] == frames[0]["run_id"]
     assert usage["aux_model_calls"] == 1  # the grounding judge, tallied separately
+    assert usage["language"] == "fr"  # the request's UI locale rides the record
+    assert usage["injection_findings"] == 0  # a clean run records no attempt
+
+
+def test_the_verdict_projects_citations_onto_the_frontend_source_documents_shape(tmp_path, monkeypatch):
+    """FR-13: the delivered citations ride the verdict payload projected
+    onto the exact envelope variants the frontend citation mapping reads —
+    the run surface serves them, the BFF's frame writer forwards them."""
+    grounded_script = multihop_turns(judge_reply='{"verdict": "grounded"}')
+    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(grounded_script), tmp_path))
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json={key: value for key, value in BODY.items() if key != "language"})
+    frames = _frames(response)
+
+    verdict = frames[-3]["payload"]
+    assert verdict["grounding_status"] == "grounded"
+    assert verdict["source_documents"] == [
+        {
+            "document_id": "f-1",
+            "document_name": "f-1",
+            "url": "",
+            "categoryLabels": [],
+            "serviceLabels": [],
+            "score": 0.9,
+        }
+    ]
+    # No language on the request: the record says so, never a guessed locale.
+    assert frames[-1]["usage_record"]["language"] is None
+    assert frames[-1]["usage_record"]["preparation_status"] is None
+
+
+def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monkeypatch):
+    """The real `_build_orchestrator` assembly carries the preparer factory:
+    a run through POST /v1/runs searches THROUGH preparation (the prepared
+    query reaches the port) and the usage record carries the preparation
+    status — deleting the wiring reds here, not silently."""
+    for knob in REQUIRED_KNOBS:
+        monkeypatch.setenv(knob, "5000")
+
+    class ScriptedPreparer:
+        def __init__(self):
+            self.calls: list = []
+
+        async def prepare(self, text, source_language=None):
+            self.calls.append(text)
+            return PreparationResult(
+                status=QueryPreparationStatus.TRANSLATED,
+                query=PreparedQuery(
+                    text="the prepared english query", preparation_status=QueryPreparationStatus.TRANSLATED
+                ),
+                history_text="the prepared english query",
+                language="FR",
+            )
+
+    preparer = ScriptedPreparer()
+
+    def fake_factory(env=None):
+        return lambda monitor, language=None: preparer
+
+    monkeypatch.setattr(app_module, "build_preparer_factory", fake_factory)
+    port = fake_port()
+    monkeypatch.setattr(
+        app_module,
+        "build_stateless_adapters",
+        lambda config, env=None: type("Adapters", (), {"bind_executor": staticmethod(lambda context, bearer: port)})(),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "ProbeModelClient",
+        lambda config: ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "grounded"}')),
+    )
+    monkeypatch.setattr(app_module, "_RUNTIME", None)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 200
+    frames = _frames(response)
+    assert frames[-1]["usage_record"]["outcome"] == "answered"
+    assert frames[-1]["usage_record"]["preparation_status"] == "translated"
+    assert preparer.calls == ["q"]  # the search's query went through preparation
+    assert port.search_calls[0]["request"].query.text == "the prepared english query"
+    assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.TRANSLATED
+
+
+def test_a_whitespace_only_language_records_none(tmp_path, monkeypatch):
+    grounded_script = multihop_turns(judge_reply='{"verdict": "grounded"}')
+    monkeypatch.setattr(app_module, "_RUNTIME", _runtime(ScriptedLoopModel(grounded_script), tmp_path))
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json={**BODY, "language": "   "})
+    frames = _frames(response)
+    assert frames[-1]["usage_record"]["language"] is None  # trimmed to nothing, never a blank locale
 
 
 def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, monkeypatch):

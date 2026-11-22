@@ -94,10 +94,22 @@ class QueryPreparer:
     endpoint probe, the registry owns the read-once file cache.
     """
 
-    def __init__(self, config: PreparationConfig, registry: LanguageRegistry, translator: TranslationClient):
+    def __init__(
+        self,
+        config: PreparationConfig,
+        registry: LanguageRegistry,
+        translator: TranslationClient,
+        default_source_language: str | None = None,
+    ):
         self._config = config
         self._registry = registry
         self._translator = translator
+        # The caller's default for "nothing named": the language the
+        # surrounding conversation is in (the deployed semantics — a named
+        # language beats detection). An explicit per-call
+        # ``source_language`` still wins; None keeps the old behavior
+        # (detection decides when nothing is named anywhere).
+        self._default_source_language = default_source_language
 
     @classmethod
     def create(cls, env=None) -> "QueryPreparer":
@@ -121,7 +133,7 @@ class QueryPreparer:
         the input does not fit the translation budget or window.
         """
         with tracing.with_span("preparation.prepare") as span:
-            result = await self._prepare(history, source_language)
+            result = await self._prepare(history, source_language or self._default_source_language)
             span.set_attribute("query_translation_status", result.status.value)
             return result
 

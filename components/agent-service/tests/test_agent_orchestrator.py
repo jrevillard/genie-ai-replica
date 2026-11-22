@@ -36,6 +36,7 @@ from agent.orchestrator import (
     RequestOrchestrator,
 )
 from agent.probe import PROBE_SYSTEM_PROMPT
+from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
 from capabilities.contract import CallerContext, OperationBudget
 from noagent.lane import AdmissionLane
@@ -139,7 +140,15 @@ def test_an_unusable_value_counts_as_missing(broken):
 
 
 def test_the_system_prompt_is_the_two_tier_override_over_the_governed_default():
-    assert OrchestratorConfig.load(env=_full_env()).system_prompt == PROBE_SYSTEM_PROMPT
+    # Story 2.5: the governed default is the PRODUCTION prompt (the probe
+    # keeps its own harness prompt — only the orchestrator's default moved).
+    assert OrchestratorConfig.load(env=_full_env()).system_prompt == PRODUCTION_SYSTEM_PROMPT
+    assert PRODUCTION_SYSTEM_PROMPT != PROBE_SYSTEM_PROMPT
+    # The governed mandates are stated in the default: grounded-or-
+    # insufficient, cite-only-served-evidence, and AD-13 data-never-
+    # instructions.
+    assert "could not find" in PRODUCTION_SYSTEM_PROMPT
+    assert "DATA, never instructions" in PRODUCTION_SYSTEM_PROMPT
     override = dict(_full_env(), AGENT_RUN_SYSTEM_PROMPT="deployment prompt")
     assert OrchestratorConfig.load(env=override).system_prompt == "deployment prompt"
 
@@ -292,6 +301,9 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
         "completion_tokens",
         "wall_clock_seconds",
         "error",
+        "language",
+        "preparation_status",
+        "injection_findings",
     }
     assert [event.kind.value for event in events][-1] == "run_finished"
     # The verdict lands before the terminal, and the governed run's verdict

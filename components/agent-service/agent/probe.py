@@ -279,12 +279,9 @@ class ProbeConfig:
         return cls(
             generation_endpoint=noagent.generation_endpoint,
             model_id_override=noagent.model_id_override,
-            # The generation leg diverges from the recorded bearer on
-            # purpose: NoAgentConfig.bearer is OPENAI_API_KEY only, but an
-            # in-process probe run inherits the operator's shell, not the
-            # compose mapping that fills OPENAI_API_KEY FROM VLLM_API_KEY —
-            # the canonical venue carries only the GPU-node key.
-            bearer=source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY"),
+            # The generation bearer comes from NoAgentConfig — the
+            # selection rule and its rationale live there.
+            bearer=noagent.bearer,
             probe_bearer=noagent.probe_bearer,
             tls_verify=noagent.tls_verify,
             llm_timeout_seconds=noagent.llm_timeout_seconds,

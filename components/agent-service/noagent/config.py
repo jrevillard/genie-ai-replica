@@ -160,7 +160,12 @@ class NoAgentConfig:
             answer_tokens=_env_int(source, "AGENT_ANSWER_MAX_TOKENS", 0),
             fallback_window_tokens=_env_int(source, "MAX_MODEL_LEN_TEXTGEN", 65536),
             window_override_tokens=_env_int(source, "AGENT_WINDOW_OVERRIDE_TOKENS", 0),
-            bearer=source.get("OPENAI_API_KEY"),
+            # The data-call bearer: an explicit OPENAI_API_KEY wins, and
+            # the GPU-node key backs it up — an in-process run inherits the
+            # operator's shell, not the compose mapping that fills
+            # OPENAI_API_KEY from VLLM_API_KEY, and the canonical venue
+            # carries only the GPU-node key.
+            bearer=source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY"),
             probe_bearer=source.get("VLLM_API_KEY"),
             tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",
             probe_timeout_seconds=_env_float(source, "MODEL_PROBE_TIMEOUT_SECONDS", 10.0),

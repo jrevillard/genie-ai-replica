@@ -292,6 +292,30 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
     assert "max_tokens" not in payload  # the bound was None: the field is omitted
 
 
+@pytest.mark.parametrize(
+    ("served", "expected"),
+    [
+        ({"prompt_tokens": 101, "completion_tokens": 23}, (101, 23)),  # the plain ints
+        ({"prompt_tokens": 101.0, "completion_tokens": 23.0}, (101, 23)),  # proxy float serialization
+        ({"prompt_tokens": "101", "completion_tokens": "23"}, (101, 23)),  # proxy digit-string serialization
+        ({"prompt_tokens": 101.5, "completion_tokens": 23}, (None, 23)),  # a fractional float is garbage
+        ({"prompt_tokens": True, "completion_tokens": 23}, (None, 23)),  # a boolean is never a count
+        ({"prompt_tokens": "many", "completion_tokens": 23}, (None, 23)),  # a non-numeric string is garbage
+    ],
+)
+def test_complete_accepts_the_numeric_forms_proxies_serve_for_usage(served, expected):
+    # The coerce_int convention (preparation/translation.py): proxies
+    # serialize numbers as floats or digit strings; a usage record served
+    # in either form is a complete record, not an incomplete one — the
+    # old isinstance(int) gate flagged every such run "incomplete" and
+    # left the token budget unbounded for the whole run.
+    transport = _transport((200, _chat_body(content="a", usage=served)))
+    client = ProbeModelClient(verifier_config(), transport=transport)
+    turn = asyncio.run(client.complete([{"role": "user", "content": "q"}], (), max_output_tokens=None))
+
+    assert (turn.prompt_tokens, turn.completion_tokens) == expected
+
+
 def test_complete_omits_the_tool_fields_when_no_tools_are_declared():
     """The aux callers (the grounding judge) speak without a toolset: an
     empty `tools: []` is not portable across OpenAI-compatible endpoints

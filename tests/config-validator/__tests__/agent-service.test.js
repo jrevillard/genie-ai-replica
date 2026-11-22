@@ -81,9 +81,11 @@ describe('agent service (story 1.3)', () => {
     const contract = contracts.find((entry) => entry.service === 'agent-service');
 
     expect(contract).toBeDefined();
-    // No compose profile: the flag alone decides whether the service runs
-    // (one deployment-level flag for the whole agentic stack).
-    expect(contract.profiles).toEqual([]);
+    // One compose profile, paired with the replicas gate (the okf-server and
+    // certbot precedents): the `agent` profile keeps the service dark under
+    // plain `docker compose up -d` on supported compose semantics, and the
+    // AGENT_ENABLED flag decides the replica count (Swarm ignores profiles).
+    expect(contract.profiles).toEqual(['agent']);
     expect(contract.replicas).toBe('${AGENT_ENABLED:-0}');
     expect(contract.envVars).toContain('AGENT_ENABLED');
   });

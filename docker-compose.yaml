@@ -29,6 +29,9 @@
 #     (VictoriaMetrics, VictoriaTraces, tempo-proxy, Grafana) in compose up;
 #     Swarm ignores profiles and uses ENABLE_OBSERVABILITY env var instead
 #     (default: 0 = disabled)
+#   - profiles: [agent] controls the agent-service (Epic 1) in compose up;
+#     Swarm ignores profiles and uses AGENT_ENABLED env var instead
+#     (default: 0 = parked)
 #   - the admin-logs substrate (VictoriaLogs + OTel Collector + otel-collector-init)
 #     is always-on — no profile label, starts by default in compose up and runs
 #     unconditionally in Swarm so admin endpoints stay functional regardless of
@@ -891,9 +894,11 @@ services:
       # AGENT_ENABLED through the shared routing helper; these entries carry
       # the operator-visible knobs). AGENT_ENABLED must reach the backend
       # explicitly (same no-passthrough rule as OKF_ENABLED above): flipping
-      # the flag only starts the agent-service; without this entry the BFF
-      # branch stays parked silently. The flag is read once at backend start —
-      # a flip requires a backend recreate, not just an agent-service start.
+      # the flag only starts the agent-service (compose mode: pair it with
+      # the `agent` profile, the OKF_ENABLED rule above); without this entry
+      # the BFF branch stays parked silently. The flag is read once at backend
+      # start — a flip requires a backend recreate, not just an agent-service
+      # start.
       - AGENT_ENABLED=${AGENT_ENABLED:-0}
       # AGENT_UPSTREAM_TIMEOUT_MS is the
       # upstream timeout on POST /v1/runs; the run's deadline_ms derives from
@@ -1456,7 +1461,13 @@ services:
   # DARK: AGENT_ENABLED=0 parks it (zero replicas), it declares no host port
   # and no gateway route, so nothing agentic is reachable until the flag is
   # on. The capability tools land in the following stories.
+  # The dark state rests on a profile + replicas PAIR (same shape as
+  # okf-server and certbot): the `agent` profile keeps the service out of a
+  # plain `docker compose up -d` on supported compose semantics, and
+  # AGENT_ENABLED decides the replica count (Swarm ignores profiles, so there
+  # the replicas gate is the activation).
   agent-service:
+    profiles: [agent]
     logging: *fluent-logging
     # least-privilege hardening (same convention as the other Python
     # sidecars): no capabilities at all — uvicorn binds a high port and
@@ -1577,6 +1588,8 @@ services:
       - genieai_network
     deploy:
       # The activation gate: 0 (the default) parks the service, 1 runs it.
+      # (Swarm only — compose mode pairs the `agent` profile above; Compose v2
+      # also honors this value, so both gates must agree to run one replica.)
       replicas: ${AGENT_ENABLED:-0}
       placement:
         constraints:

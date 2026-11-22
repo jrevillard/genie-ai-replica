@@ -153,8 +153,8 @@ stays #2052's acceptance.
    workaround, deployment-level only: the path rides the env
    (`AGENT_SERVICE_URL=http://v08-rehearsal-agent-hl:8080/v1/runs` — axios
    posts the full URL verbatim). A code-side fix (the helper appends the run
-   path, or the agent mounts a root alias) is a follow-up change outside this
-   story's no-code boundary.
+   path, or the agent mounts a root alias) is filed as issue #2072
+   (`status::backlog`) — outside this story's no-code boundary.
 2. **The component NetworkPolicy egress list has no agent-port row.** The
    rehearsal backend's `component=backend` egress rules (which the chatqna
    hop requires) admit only specific ports — 8010 is not one, and this k3s
@@ -164,7 +164,8 @@ stays #2052's acceptance.
    8080 (in the egress allow-list) and is exposed through a HEADLESS Service
    (DNS → pod IP). Flat compose networks (the shipped deployment shape) have
    no such restriction — this is a k8s-chart adoption item for the operator
-   (the read-only `feat/k8s-migration` branch).
+   (the read-only `feat/k8s-migration` branch), filed as issue #2073
+   (`status::backlog`).
 
 ## 8. Stage-gate FR-21 check (executed)
 

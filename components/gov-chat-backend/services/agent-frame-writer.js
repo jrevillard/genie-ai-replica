@@ -16,6 +16,10 @@ const {
   _internals: contractInternals
 } = require('./agent-run-contract');
 const { writeSSEFrame } = require('./sse-frame');
+// Cross-mode abstention parity: the completed terminal derives the same V05
+// vocabulary the JSON consumer derives. Safe direction — agent-json-result
+// requires the contract module, never this file.
+const { applyAbstentionOverlay } = require('./agent-json-result');
 const { wantsTranslation, streamingTranslationEnabled } = require('./translation/language-request');
 const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
 
@@ -159,12 +163,16 @@ async function proxyAgentRun({
     // close path does — the agent-service cancels its in-flight work (its
     // contract; a cancelled run emits no terminal event). The save carries
     // the `answer_interrupted` honesty marker (ADR agentic-003): a truncated
-    // answer must never persist indistinguishable from a complete one. A
-    // disconnect before any text chunk leaves the at-start doc unanswered —
-    // nothing is fabricated.
+    // answer must never persist indistinguishable from a complete one, and
+    // `abstained` reads NULL — an interrupted turn's decision is not final
+    // (the verdict was never terminaled; 3.2's `false` rationale covers
+    // COMPLETED turns only, and `answer_interrupted` already distinguishes
+    // interrupted-ness). A disconnect before any text chunk leaves the
+    // at-start doc unanswered — nothing is fabricated.
     if (fullResponseText) {
       const metadata = assembleMetadata();
       metadata.answer_interrupted = true;
+      metadata.abstained = null;
       queryService
         .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, metadata, {
           // The agentic answer cannot name routed graphs — the sticky set is
@@ -348,7 +356,13 @@ async function proxyAgentRun({
         delete verdictProjection.version;
         writeSSEFrame(res, { type: 'agent_verdict', version: 1, ...verdictProjection });
       }
-      const metadata = assembleMetadata();
+      // CROSS-MODE ABSTENTION PARITY: the completed terminal derives the
+      // V05 abstention vocabulary from the verdict — exactly what the JSON
+      // consumer applies — so an insufficiency run persists
+      // `abstained: true` + reason on BOTH entries, an answered run false,
+      // and a stream with NO verdict restores null ("decision never
+      // reported"; the base's null rides untouched).
+      const metadata = applyAbstentionOverlay(assembleMetadata(), capturedVerdict);
       await handleStreamDone(queryId, fullResponseText, streamStartTime, res, metadata, {
         targetLanguage,
         translator,

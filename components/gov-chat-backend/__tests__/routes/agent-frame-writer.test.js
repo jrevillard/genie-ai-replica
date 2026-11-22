@@ -193,6 +193,8 @@ function authPost(path, body) {
 const {
   USAGE_RECORD,
   GROUNDED_VERDICT,
+  INSUFFICIENCY_VERDICT,
+  INSUFFICIENCY_RESPONSE,
   legacyPosture,
   envelope,
   seamStream,
@@ -672,6 +674,17 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     const frames = parseSSEEvents(response.text);
     expect(frames.map((f) => f.type)).toEqual(['chunk', 'metadata', 'done']);
     expect(frames.find((f) => f.type === 'metadata').grounding_status).toBe('unverified');
+    // CROSS-MODE ABSTENTION PARITY: no verdict → the overlay does not run —
+    // the persisted metadata keeps the base null ("decision never reported"),
+    // matching the JSON entry exactly.
+    expect(frames.find((f) => f.type === 'metadata').abstained).toBeNull();
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      'an answer',
+      expect.any(Number),
+      expect.objectContaining({ abstained: null, abstention_reason: null }),
+      expect.anything()
+    );
     expect(frames.find((f) => f.type === 'metadata').is_grounded).toBe(false);
     // No verdict frame on the wire either.
     expect(frames.find((f) => f.type === 'agent_verdict')).toBeUndefined();
@@ -696,6 +709,50 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     const metadata = frames.find((f) => f.type === 'metadata');
     expect(metadata.grounding_status).toBe('ungrounded');
     expect(metadata.is_grounded).toBe(false);
+  });
+
+  it('a completed insufficiency run persists the V05 abstention vocabulary (cross-mode parity)', async () => {
+    // The same outcome POST /api/queries persists: the verdict-bearing
+    // insufficiency terminal derives `abstained: true` + the mechanical
+    // reason — the streaming entry can never answer the same run with the
+    // JSON entry's abstention shape differing.
+    setupAgentQuery();
+    // The agent loop delivers the INSUFFICIENCY text (the BFF aggregates,
+    // never substitutes).
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q' }, { seq: 0 }),
+        envelope('text_message_content', { text: INSUFFICIENCY_RESPONSE }, { seq: 1 }),
+        envelope('verdict', INSUFFICIENCY_VERDICT, { seq: 2 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 3 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+
+    // The wire metadata frame AND the persisted doc carry the overlay.
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.abstained).toBe(true);
+    expect(metadata.abstention_reason).toBe('degraded_availability,no_successful_retrieval');
+    expect(metadata.grounding_status).toBe('unverified');
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      INSUFFICIENCY_RESPONSE,
+      expect.any(Number),
+      expect.objectContaining({
+        abstained: true,
+        abstention_reason: 'degraded_availability,no_successful_retrieval',
+        grounding_status: 'unverified',
+        is_grounded: false
+      }),
+      expect.anything()
+    );
   });
 
   it('a payload carrying the service-side source_documents forwards THOSE rows (the service owns the mapping)', async () => {
@@ -1107,7 +1164,10 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
         // The honesty marker: a partial save is never indistinguishable
         // from a completion (ADR agentic-003).
         answer_interrupted: true,
-        abstained: false
+        // Interrupted turns read NULL, never false: the decision was never
+        // terminaled (`answer_interrupted` already marks interrupted-ness;
+        // the completed terminal derives `abstained` from the verdict).
+        abstained: null
       }),
       // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
       expect.anything()

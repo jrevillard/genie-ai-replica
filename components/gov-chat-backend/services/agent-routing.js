@@ -4,9 +4,10 @@
 // module is the ONLY place in the component that reads AGENT_ENABLED (the
 // invariant is pinned by a test in __tests__/services/agent-routing.test.js),
 // and the only way either agentic query entry is exposed routes through it —
-// the streaming entry wires it in this story, the non-streaming one (2.4b)
-// calls the same helper. The cross-entry disagreement guard is Epic 3's 3.1;
-// this module pins the single-read invariant that guard builds on.
+// BOTH entries are wired now: the streaming one in story 2.4, the
+// non-streaming JSON one in 2.4b (both call this same helper). The
+// cross-entry disagreement guard is Epic 3's 3.1; this module pins the
+// single-read invariant that guard builds on.
 
 /**
  * OKF_ENABLED pattern (see retrieval-config-client.js): the flag is read ONCE

@@ -10,8 +10,11 @@ const translationService = require('../services/translation-service');
 const { createStreamUnitRelay } = require('../services/translation/stream-unit-relay');
 const { languageForLog } = require('../services/translation/language-log');
 const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/translation/unsupported-language');
+const { translateWholeAnswer } = require('../services/translation/whole-answer');
 const { isAgentPathEnabled } = require('../services/agent-routing');
 const { proxyAgentRun } = require('../services/agent-frame-writer');
+const { AgentJsonTurnError } = require('../services/agent-json-result');
+const { emptyStreamMetadata } = require('../services/agent-run-contract');
 const {
   normalizeRequestedLanguage,
   wantsTranslation,
@@ -133,33 +136,10 @@ async function refuseUnsupportedLanguage(targetLanguage) {
 // Metadata persisted when chatqna never sent a metadata event (stream error,
 // or the answer ended before the envelope). One factory, so the two call sites
 // cannot drift into storing different key sets for the same kind of query.
-//
-// "Not recorded" is encoded per field, following the parser convention in
-// query-service.js (parseChatQnASSELine):
-// - Presence-keyed fields (self_confidence, query_translation_status) stay
-//   ABSENT. The Inspector renders the self-confidence block on
-//   hasOwnProperty, so an explicit null here would claim "feature was on,
-//   no sentinel" on a turn chatqna never answered; absence reads as
-//   "never reported" — the same meaning absence carries on the streamed
-//   path. "chatqna never answered" itself is what `abstained: null` below
-//   marks: no streamed path ever sets it to null.
-// - Value-keyed fields carry the explicit null (or the value default) the
-//   parser normalizes them to: `abstained` is null here, not false — false
-//   would mean "chatqna answered and chose not to abstain" (a clean
-//   low-confidence miss), this is "we never got an answer", and a post-hoc
-//   AQL counting abstentions has to be able to tell them.
-const emptyStreamMetadata = () => ({
-  source_documents: [],
-  confidence_score: 0,
-  is_grounded: false,
-  retrieval_confidence_score: null,
-  abstained: null,
-  abstention_reason: null,
-  // No metadata event means the turn never reported a scope — null (the
-  // Inspector's "not recorded" dash), not an empty list, which would claim
-  // the query ran unfiltered.
-  filter_labels: null
-});
+// Story 2.4b: the factory's ONE home is the shared agent-run contract module
+// (services/agent-run-contract.js) — the non-streaming JSON consumer
+// assembles the same base shape, so the definition moved there and this file
+// imports it. The field conventions are documented beside the definition.
 
 // The partial-save metadata: the captured fields (or the empty-stream base
 // when nothing arrived) plus the interrupted marker — one composition, both
@@ -368,8 +348,7 @@ module.exports = (queryService) => {
           targetLanguage,
           translator,
           streamStartTime,
-          handleStreamDone,
-          emptyStreamMetadata
+          handleStreamDone
         });
         return;
       }
@@ -651,7 +630,13 @@ module.exports = (queryService) => {
     startTime,
     res,
     capturedMetadata,
-    { targetLanguage = '', translator = null, skipPostStreamTranslation = false, alreadyFailedTranslation = false } = {}
+    {
+      targetLanguage = '',
+      translator = null,
+      skipPostStreamTranslation = false,
+      alreadyFailedTranslation = false,
+      skipRoutedGraphs = false
+    } = {}
   ) {
     if (res.writableEnded || res.destroyed) return;
 
@@ -670,15 +655,21 @@ module.exports = (queryService) => {
     // A translation was asked for and the answer was not already delivered in
     // the target language: the whole answer is translated here. The translator
     // is the one the request resolved — the languages cannot change between
-    // the start of a request and the end of its answer.
+    // the start of a request and the end of its answer. The translate →
+    // empty-check → catch core is the shared whole-answer helper; the frame
+    // write and the logging stay here (delivery-mode specific).
     const translationExpected = wantsTranslation(targetLanguage);
     if (!skipPostStreamTranslation && translationExpected && fullResponseText) {
-      try {
-        if (!translator) {
-          throw new Error('no translator was prepared for the requested language');
-        }
-        const translated = await translator.translate(fullResponseText);
-        if (!translated || !translated.trim()) {
+      const result = await translateWholeAnswer(translator, fullResponseText);
+      if (result.failed) {
+        if (result.error) {
+          // Not an `error` frame. The client treats that as terminal and stops
+          // reading, and reports the whole system as down — neither is true when
+          // only the translator failed and the answer is complete in English.
+          // The outcome travels on `done` instead, where the client already
+          // expects the stream to end.
+          logger.warn('QueryService.stream_translation_failed', { queryId, error: result.error.message });
+        } else {
           // The model returned nothing. The answer the client already has is
           // the English one; writing an empty translation frame would replace
           // it with nothing. The failure travels on `done` instead.
@@ -686,25 +677,26 @@ module.exports = (queryService) => {
             `QueryService.stream_translation_empty: (lang=${languageForLog(targetLanguage)}, answerLen=${fullResponseText.length})`,
             { queryId }
           );
-          translationFailed = true;
-        } else if (!res.writableEnded && !res.destroyed) {
-          // The client may have gone while the translation ran: a frame
-          // written to a response that is over is an error nobody reads.
-          res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
         }
-      } catch (error) {
-        // Not an `error` frame. The client treats that as terminal and stops
-        // reading, and reports the whole system as down — neither is true when
-        // only the translator failed and the answer is complete in English.
-        // The outcome travels on `done` instead, where the client already
-        // expects the stream to end.
-        logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
         translationFailed = true;
+      } else if (!res.writableEnded && !res.destroyed) {
+        // The client may have gone while the translation ran: a frame
+        // written to a response that is over is an error nobody reads.
+        res.write(`data: ${JSON.stringify({ type: 'translation', content: result.text })}\n\n`);
       }
     }
 
     try {
-      await queryService.finalizeStreamQuery(queryId, fullResponseText, responseTime, metadata);
+      // The options object rides only when the skip is set — the legacy
+      // terminal's call keeps its exact legacy arity (the flag-off surface
+      // stays byte-parity, mocks included).
+      await queryService.finalizeStreamQuery(
+        queryId,
+        fullResponseText,
+        responseTime,
+        metadata,
+        ...(skipRoutedGraphs ? [{ skipRoutedGraphs }] : [])
+      );
     } catch (error) {
       logger.error('QueryService.stream_finalize_failed', { queryId, error: error.message });
     }
@@ -831,16 +823,33 @@ module.exports = (queryService) => {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
       }
       const queryData = { ...req.body, userId };
-      // The language the client asked for, checked before the query is
-      // created: a language the deployment cannot serve is refused, not
-      // answered in another language. The answer of this path is translated
-      // by the chatqna service, so the backend only checks the language.
-      const refusal = await refuseUnsupportedLanguage(requestedTargetLanguage(queryData));
+      const targetLanguage = requestedTargetLanguage(queryData);
+      // Story 2.4b — the guarded agentic branch decides the language
+      // resolution: the agentic JSON path translates the WHOLE ANSWER here,
+      // post-run (the request-resolved translator rides into createQuery),
+      // while the legacy path only checks the language (chatqna translates
+      // the answer server-side). The routing helper is the ONLY way this
+      // second entry is exposed (AD-9) — the flag-off resolution and the
+      // flag-off createQuery call stay byte-identical.
+      const agenticEntry = isAgentPathEnabled();
+      let refusal;
+      let translator = null;
+      if (agenticEntry) {
+        ({ refusal, translator } = await resolveRequestLanguage(targetLanguage));
+      } else {
+        // The answer of this path is translated by the chatqna service, so
+        // the backend only checks the language — a translator built here
+        // would be one the path never uses.
+        refusal = await refuseUnsupportedLanguage(targetLanguage);
+      }
       if (refusal) {
         return res.status(400).json(refusal);
       }
       logger.info(`Creating query for user ${userId}`);
-      const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization });
+      // ONE call: the options exist only on the agentic entry (undefined = no
+      // options — the flag-off call reads exactly as before).
+      const options = agenticEntry ? { targetLanguage, translator } : undefined;
+      const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization }, options);
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
@@ -852,11 +861,25 @@ module.exports = (queryService) => {
       if (error.statusCode === 401) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
       }
-      // Typed-error passthrough (the streaming path applies the same
-      // mapping): the error declares its own status and machine-readable
-      // code — the non-streaming agentic refusal declares
-      // 503 + AGENTIC_PATH_NOT_SERVED — never the 500 "unexpected server
-      // fault" class.
+      // Story 2.4b — the agentic JSON errors are typed (AgentJsonTurnError):
+      // the passthrough statuses (429/503/422), the 504 upstream-timeout
+      // answer and the 502s carry their exact JSON error contract in `body`
+      // and are answered verbatim. The CLASS gate, not a statusCode+body
+      // shape check: a future legacy typed error carrying statusCode+body
+      // (the VlUnavailableError pattern) must keep the legacy 500 shape, not
+      // be answered verbatim by accident.
+      if (error instanceof AgentJsonTurnError) {
+        for (const [header, value] of Object.entries(error.headers || {})) {
+          res.set(header, String(value));
+        }
+        return res.status(error.statusCode).json(error.body);
+      }
+      // Story 3.1's general typed-error passthrough (the streaming path
+      // applies the same mapping): the error declares its own status and
+      // machine-readable code — an intentional, named state never renders
+      // as the 500 "unexpected server fault" class below. Second, after the
+      // class gate: the two captures are disjoint (AgentJsonTurnError
+      // carries `body`, never `code`).
       if (error.statusCode && error.code) {
         return res.status(error.statusCode).json({ error: error.code, message: error.message });
       }

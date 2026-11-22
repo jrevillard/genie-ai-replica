@@ -1273,18 +1273,21 @@ describe('POST /', () => {
     expect(response.body.message).toBe('Create failed');
   });
 
-  it('maps the intentional agentic refusal to 503 with the marker as the code', async () => {
-    // The same mapping the streaming path applies: the refusal is a named,
-    // configuration-driven state, never the 500 unexpected-fault class.
-    const refusal = new Error('AGENTIC_PATH_NOT_SERVED: the agentic path is activated');
-    refusal.code = 'AGENTIC_PATH_NOT_SERVED';
-    refusal.statusCode = 503;
-    queryService.createQuery.mockRejectedValue(refusal);
+  it('maps a typed error through its own statusCode and code', async () => {
+    // The same mapping the streaming path applies: an intentional, named,
+    // configuration-driven state is never rendered as the 500
+    // unexpected-fault class. (Story 3.1's AGENTIC_PATH_NOT_SERVED refusal
+    // was removed when story 2.4b served the path it guarded — the general
+    // statusCode+code passthrough stays, any named state rides it.)
+    const typed = new Error('the named condition');
+    typed.code = 'NAMED_CONDITION';
+    typed.statusCode = 503;
+    queryService.createQuery.mockRejectedValue(typed);
 
     const response = await authPost('/api/queries', { sessionId: 's1' });
 
     expect(response.status).toBe(503);
-    expect(response.body.error).toBe('AGENTIC_PATH_NOT_SERVED');
+    expect(response.body.error).toBe('NAMED_CONDITION');
   });
 
   // Review 2026-10-29 round 3: a bearer failure caught during OKF fan-out
@@ -1301,6 +1304,98 @@ describe('POST /', () => {
     expect(response.status).toBe(401);
     expect(response.body.error).toBe('UNAUTHENTICATED');
     expect(response.body.message).toBe('token expired');
+  });
+
+  // Story 2.4b — the verbatim-answer gate is the AgentJsonTurnError CLASS,
+  // not the statusCode+body shape: a typed error from any other source (the
+  // VlUnavailableError pattern) keeps the legacy 500 shape, never an
+  // accidental verbatim passthrough.
+  it('a plain statusCode+body error still answers the legacy 500 shape (only AgentJsonTurnError is verbatim)', async () => {
+    const err = Object.assign(new Error('vl down'), { statusCode: 503, body: { error: 'vl_unreachable' } });
+    queryService.createQuery.mockRejectedValue(err);
+
+    const response = await authPost('/api/queries', { sessionId: 's1' });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: 'vl down' });
+  });
+
+  // Story 2.4b — the flag-off wiring pin: the legacy entry only CHECKS the
+  // language (chatqna translates the answer server-side — no translator is
+  // built) and calls createQuery with EXACTLY the legacy two arguments (no
+  // options object, no third parameter). Together with the flag-on test
+  // below, the routing helper is provably the only diff between the two
+  // wirings of POST /.
+  it('with the agentic branch off: no translator is built and createQuery gets exactly the legacy arguments', async () => {
+    // An earlier test in the language suite leaves init REJECTING (its own
+    // scenario) — mockClear in beforeEach keeps implementations. This path
+    // needs the service READY: only the refusal check runs.
+    translationService.init.mockResolvedValue(undefined);
+    translationService.resolveLanguagePair.mockImplementation(() => ({
+      sourceLang: 'en',
+      targetLang: 'fr'
+    }));
+    queryService.createQuery.mockResolvedValue({ queryId: 'q1', response: 'r', metadata: {} });
+
+    const response = await authPost('/api/queries', {
+      sessionId: 's1',
+      text: 'hola',
+      context: { language: 'fr' }
+    });
+
+    expect(response.status).toBe(201);
+    expect(translationService.resolveLanguagePair).toHaveBeenCalledWith('en', 'fr');
+    expect(translationService.createMarkdownTranslator).not.toHaveBeenCalled();
+    expect(queryService.createQuery).toHaveBeenCalledTimes(1);
+    const [calledData, calledHeaders, thirdArg] = queryService.createQuery.mock.calls[0];
+    expect(calledData).toMatchObject({ sessionId: 's1', text: 'hola' });
+    expect(calledHeaders).toEqual({ authorization: `Bearer ${validToken}` });
+    expect(thirdArg).toBeUndefined();
+  });
+
+  // Story 2.4b — the flag-on wiring pin. This file loads with AGENT_ENABLED
+  // unset (the routing helper reads it once at module load: flag OFF for the
+  // whole file above), so the flag-on wiring runs through a FRESH module
+  // registry — the isolated require reads the flag ON and the route factory
+  // wires the agentic branch: the language resolution BUILDS the translator
+  // (the whole answer is translated here, post-run) and createQuery receives
+  // the {targetLanguage, translator} options. The mock factories re-run
+  // inside the isolation, so the fresh instances are captured from there;
+  // the file-level mocks stay untouched.
+  it('with the agentic branch on: the language resolution builds the translator and createQuery gets the options', async () => {
+    process.env.AGENT_ENABLED = '1';
+    let freshApp;
+    let freshQueryService;
+    let freshTranslation;
+    try {
+      jest.isolateModules(() => {
+        freshTranslation = require('../../services/translation-service');
+        freshTranslation.init.mockResolvedValue(undefined);
+        freshQueryService = require('../../services/query-service');
+        freshQueryService.createQuery.mockResolvedValue({ queryId: 'q1', response: 'r', metadata: {} });
+        freshApp = require('../../index').createApp({ services: { queryService: freshQueryService } });
+      });
+
+      const response = await request(freshApp)
+        .post('/api/queries')
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({ sessionId: 's1', text: 'hola', context: { language: 'fr' } });
+
+      expect(response.status).toBe(201);
+      // The agentic language resolution prepared the translator for the
+      // post-run whole-answer translation.
+      expect(freshTranslation.createMarkdownTranslator).toHaveBeenCalledWith('en', 'fr');
+      expect(freshQueryService.createQuery).toHaveBeenCalledTimes(1);
+      const [calledData, calledHeaders, options] = freshQueryService.createQuery.mock.calls[0];
+      expect(calledData).toMatchObject({ sessionId: 's1', text: 'hola' });
+      expect(calledHeaders).toEqual({ authorization: `Bearer ${validToken}` });
+      expect(options).toEqual({
+        targetLanguage: 'fr',
+        translator: expect.objectContaining({ translate: expect.any(Function) })
+      });
+    } finally {
+      delete process.env.AGENT_ENABLED;
+    }
   });
 });
 

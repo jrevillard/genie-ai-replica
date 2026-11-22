@@ -188,54 +188,18 @@ function authPost(path, body) {
   return request(app).post(path).set('Authorization', `Bearer ${validToken}`).send(body);
 }
 
-// ── fixtures ────────────────────────────────────────────────────────────────
+// ── fixtures (the shared seam fixtures live in __tests__/fixtures/) ─────────
 
-function legacyPosture() {
-  return {
-    available: true,
-    mode: 'legacy',
-    engaged: false,
-    warnings: [],
-    postureUnknown: false,
-    authorizedGraphs: [],
-    authz: null,
-    stickyGraphs: [],
-    legacyGraph: 'GRAPH',
-    correlationId: 'cid-1'
-  };
-}
-
-const USAGE_RECORD = {
-  run_id: 'run-abc',
-  outcome: 'answered',
-  steps: 2,
-  model_calls: 2,
-  aux_model_calls: 1,
-  tool_calls: 1,
-  evidence_bytes: 1024,
-  prompt_tokens: 90,
-  completion_tokens: 30,
-  wall_clock_seconds: 4.2,
-  error: null
-};
-
-const GROUNDED_VERDICT = {
-  grounding_status: 'grounded',
-  is_grounded: true,
-  translation_mode: 'none',
-  policy: 'verdict-marked',
-  judge: { model: 'judge', score: null },
-  citations: [
-    { provenance: { file_id: 'doc_bee_knowledge' }, text: 'bees pollinate', score: 0.9 },
-    {
-      provenance: { source: 'okf-concept', concept_id: 'kenya_tax_rules', repo_id: 'r-kenya', bundle_version: 3 },
-      text: 'taxes apply',
-      score: 0.8
-    }
-  ],
-  invalid_citations: [],
-  marking: { required: false, reason: null }
-};
+const {
+  USAGE_RECORD,
+  GROUNDED_VERDICT,
+  INSUFFICIENCY_VERDICT,
+  INSUFFICIENCY_RESPONSE,
+  legacyPosture,
+  envelope,
+  seamStream,
+  dataStream
+} = require('../fixtures/agent-seam');
 
 const UNGROUNDED_VERDICT = {
   ...GROUNDED_VERDICT,
@@ -243,26 +207,6 @@ const UNGROUNDED_VERDICT = {
   is_grounded: false,
   marking: { required: true, reason: 'ungrounded' }
 };
-
-function envelope(kind, payload, { seq = 0, call_id = null } = {}) {
-  return { run_id: 'run-abc', call_id, seq, kind, payload };
-}
-
-function seamStream(frames) {
-  const mockStream = new Readable({ read() {} });
-  for (const frame of frames) {
-    mockStream.push(`data: ${JSON.stringify(frame)}\n\n`);
-  }
-  mockStream.push(null);
-  return mockStream;
-}
-
-function dataStream(text) {
-  const mockStream = new Readable({ read() {} });
-  mockStream.push(text);
-  mockStream.push(null);
-  return mockStream;
-}
 
 // The answered-run seam script: a tool call between two text events, then the
 // verdict, the run terminal and the usage record.
@@ -394,7 +338,10 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
       'q1',
       'Hello world.',
       expect.any(Number),
-      expect.objectContaining({ grounding_status: 'grounded', is_grounded: true, agent_run: metadata.agent_run })
+      expect.objectContaining({ grounding_status: 'grounded', is_grounded: true, agent_run: metadata.agent_run }),
+      // Story 3.2 merged reality: the agentic finalize carries the
+      // branch-driven sticky-set skip as the trailing options argument.
+      expect.anything()
     );
   });
 
@@ -431,6 +378,25 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(options.signal).toBeInstanceOf(AbortSignal);
     // The pair-rule inputs are operator-visible knobs.
     expect(options.timeout).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
+  });
+
+  it('the run request carries the language: the requested locale, null when none asked', async () => {
+    setupAgentQuery();
+    // A fresh stream per call — one Readable is consumed by one request.
+    axios.post.mockImplementation(() => Promise.resolve({ status: 200, headers: {}, data: answeredRunStream() }));
+
+    await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'What is the tax rate?' }],
+      context: { language: 'FR' }
+    });
+    expect(axios.post.mock.calls[0][1].language).toBe('fr');
+
+    await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'What is the tax rate?' }]
+    });
+    expect(axios.post.mock.calls[1][1].language).toBeNull();
   });
 
   it('derives a smaller deadline from a configured timeout and forwards the labels narrowing', async () => {
@@ -489,7 +455,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(_internals.resolveUpstreamTimeoutMs()).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
     expect(_internals.deriveDeadlineMs(_internals.resolveUpstreamTimeoutMs())).toBe(3600000 - 30000 - 5000);
     expect(logger.warn).toHaveBeenCalledWith(
-      'AgentFrameWriter.upstream_timeout_below_reserves',
+      'AgentRunContract.upstream_timeout_below_reserves',
       expect.objectContaining({ knob: 'AGENT_UPSTREAM_TIMEOUT_MS', configured: 20000, applied: 3600000 })
     );
   });
@@ -592,7 +558,7 @@ describe('POST /api/queries/stream — pre-stream refusals (JSON, before any SSE
     // size that breached the cap.
     const { logger } = require('../mocks/shared-lib');
     expect(logger.warn).toHaveBeenCalledWith(
-      'AgentFrameWriter.upstream_body_truncated',
+      'AgentRunContract.upstream_body_truncated',
       expect.objectContaining({ status: 503, bytes: expect.any(Number) })
     );
   });
@@ -708,6 +674,17 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     const frames = parseSSEEvents(response.text);
     expect(frames.map((f) => f.type)).toEqual(['chunk', 'metadata', 'done']);
     expect(frames.find((f) => f.type === 'metadata').grounding_status).toBe('unverified');
+    // CROSS-MODE ABSTENTION PARITY: no verdict → the overlay does not run —
+    // the persisted metadata keeps the base null ("decision never reported"),
+    // matching the JSON entry exactly.
+    expect(frames.find((f) => f.type === 'metadata').abstained).toBeNull();
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      'an answer',
+      expect.any(Number),
+      expect.objectContaining({ abstained: null, abstention_reason: null }),
+      expect.anything()
+    );
     expect(frames.find((f) => f.type === 'metadata').is_grounded).toBe(false);
     // No verdict frame on the wire either.
     expect(frames.find((f) => f.type === 'agent_verdict')).toBeUndefined();
@@ -732,6 +709,50 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     const metadata = frames.find((f) => f.type === 'metadata');
     expect(metadata.grounding_status).toBe('ungrounded');
     expect(metadata.is_grounded).toBe(false);
+  });
+
+  it('a completed insufficiency run persists the V05 abstention vocabulary (cross-mode parity)', async () => {
+    // The same outcome POST /api/queries persists: the verdict-bearing
+    // insufficiency terminal derives `abstained: true` + the mechanical
+    // reason — the streaming entry can never answer the same run with the
+    // JSON entry's abstention shape differing.
+    setupAgentQuery();
+    // The agent loop delivers the INSUFFICIENCY text (the BFF aggregates,
+    // never substitutes).
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q' }, { seq: 0 }),
+        envelope('text_message_content', { text: INSUFFICIENCY_RESPONSE }, { seq: 1 }),
+        envelope('verdict', INSUFFICIENCY_VERDICT, { seq: 2 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 3 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+
+    // The wire metadata frame AND the persisted doc carry the overlay.
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.abstained).toBe(true);
+    expect(metadata.abstention_reason).toBe('degraded_availability,no_successful_retrieval');
+    expect(metadata.grounding_status).toBe('unverified');
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      INSUFFICIENCY_RESPONSE,
+      expect.any(Number),
+      expect.objectContaining({
+        abstained: true,
+        abstention_reason: 'degraded_availability,no_successful_retrieval',
+        grounding_status: 'unverified',
+        is_grounded: false
+      }),
+      expect.anything()
+    );
   });
 
   it('a payload carrying the service-side source_documents forwards THOSE rows (the service owns the mapping)', async () => {
@@ -794,6 +815,36 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     // The client was told the run failed: the agent leg must not keep
     // working behind the dead response.
     expect(capturedSignal.aborted).toBe(true);
+  });
+
+  it('a stream destroyed with only a close emission still ends the response (no keepalive hang)', async () => {
+    // A destroyed stream can report 'close' WITHOUT 'end' or 'error': the
+    // 'close' terminal is what ends the SSE response honestly — without it
+    // the response hangs on keepalives and the admission slot stays held.
+    setupAgentQuery();
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+    responsePromise.catch(() => {});
+    for (let i = 0; i < 500 && mockStream.listenerCount('data') === 0; i++) {
+      await flush(10);
+    }
+    expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+    mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'partial' }, { seq: 0 }))}\n\n`);
+    await flush();
+    mockStream.emit('close'); // close ALONE — no 'end', no 'error'
+
+    const response = await responsePromise;
+    const frames = parseSSEEvents(response.text);
+    expect(frames[frames.length - 1].type).toBe('error');
+    expect(frames[frames.length - 1].code).toBe('AGENT_STREAM_ERROR');
+    expect(frames[frames.length - 1].message).toBe('the agent stream terminated');
+    expect(frames.find((f) => f.type === 'done')).toBeUndefined();
+    expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
   });
 
   it('a stream that trickles past the wall-clock bound is aborted and ends with the error contract', async () => {
@@ -884,6 +935,30 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     const frames = parseSSEEvents(response.text);
     expect(frames.map((f) => f.type)).toEqual(['chunk', 'metadata', 'done']);
   });
+
+  it('the trailing line without its newline is still a frame (remainder flush)', async () => {
+    // The last frame arrives WITHOUT its closing newline: the buffer split
+    // leaves it in the remainder — the terminal flush must run it through
+    // the parser (prefix stripped), or the final usage record is silently
+    // lost from the persisted metadata.
+    setupAgentQuery();
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+    await flush();
+    mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'ok' }, { seq: 0 }))}\n\n`);
+    mockStream.push(`data: ${JSON.stringify(envelope('run_finished', { outcome: 'answered' }, { seq: 1 }))}\n\n`);
+    mockStream.push(`data: ${JSON.stringify({ usage_record: USAGE_RECORD })}`); // NO trailing \n\n
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.agent_run).toEqual({ run_id: 'run-abc', usage_record: USAGE_RECORD });
+  });
 });
 
 describe('POST /api/queries/stream — translation on the agentic path (the shared relay)', () => {
@@ -927,7 +1002,9 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
       'q1',
       'First sentence. Second one.',
       expect.any(Number),
-      expect.any(Object)
+      expect.any(Object),
+      // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
+      expect.anything()
     );
   });
 
@@ -1012,15 +1089,6 @@ function directRun(res, { queryId = 'q1' } = {}) {
     handleStreamDone: jest.fn(async (qId, text, start, resArg, metadata) => {
       await queryService.finalizeStreamQuery(qId, text, Date.now() - start, metadata);
       resArg.end();
-    }),
-    emptyStreamMetadata: () => ({
-      source_documents: [],
-      confidence_score: 0,
-      is_grounded: false,
-      retrieval_confidence_score: null,
-      abstained: null,
-      abstention_reason: null,
-      filter_labels: null
     })
   });
 }
@@ -1096,8 +1164,13 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
         // The honesty marker: a partial save is never indistinguishable
         // from a completion (ADR agentic-003).
         answer_interrupted: true,
-        abstained: false
-      })
+        // Interrupted turns read NULL, never false: the decision was never
+        // terminaled (`answer_interrupted` already marks interrupted-ness;
+        // the completed terminal derives `abstained` from the verdict).
+        abstained: null
+      }),
+      // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
+      expect.anything()
     );
     // No frames after the disconnect.
     expect(res.writes.some((w) => w.includes('"type":"done"'))).toBe(false);
@@ -1167,7 +1240,9 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
         is_grounded: true,
         agent_run: { run_id: 'run-abc' },
         answer_interrupted: true
-      })
+      }),
+      // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
+      expect.anything()
     );
     // The verdict frame was never written — the client was gone.
     expect(res.writes.some((w) => w.includes('"type":"agent_verdict"'))).toBe(false);

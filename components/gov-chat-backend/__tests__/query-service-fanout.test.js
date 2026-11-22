@@ -520,6 +520,28 @@ describe('QueryService fan-out carrier — createQuery non-stream path (Story 1.
     expect(payload.context.mode).toBe('okf_only');
     expect(payload.context.exclude_legacy).toBe(true);
   });
+
+  it('the worker result completes the minted doc through the persist tail (Story 2.4b: one tail)', async () => {
+    retrievalConfigClient.getRetrievalConfig.mockResolvedValue(okfConfig({ config: { mode: 'legacy' } }));
+
+    await queryService.createQuery(makeQueryData(), BEARER);
+
+    // The legacy non-stream branch answers through the SAME persist tail the
+    // agentic branch uses: the doc `save` minted is completed with the
+    // worker's response + metadata, answered, and the sticky routed set
+    // rides the update payload.
+    expect(queryService.queries.save).toHaveBeenCalledTimes(1);
+    expect(queryService.queries.update).toHaveBeenCalledWith(
+      'query-1',
+      expect.objectContaining({
+        response: 'ok',
+        responseTime: 5,
+        isAnswered: true,
+        metadata: {},
+        okfRoutedGraphs: []
+      })
+    );
+  });
 });
 
 describe('QueryService sticky routing (Story 1.3 — conversation continuity)', () => {

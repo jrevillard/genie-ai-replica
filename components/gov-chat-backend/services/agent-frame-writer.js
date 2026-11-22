@@ -66,7 +66,6 @@ const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
  * @param {Function} params.handleStreamDone - The route's terminal writer
  *   (metadata frame → optional translation → finalize → done + end), REUSED
  *   verbatim so the terminal order is preserved by construction.
- * @param {Function} params.emptyStreamMetadata - The route's metadata factory.
  */
 async function proxyAgentRun({
   res,
@@ -77,8 +76,7 @@ async function proxyAgentRun({
   targetLanguage,
   translator,
   streamStartTime,
-  handleStreamDone,
-  emptyStreamMetadata
+  handleStreamDone
 }) {
   // The EFFECTIVE timeout — resolved once here, so the deadline derivation
   // and the wire-level timeout (and the stream wall-clock bound below) all
@@ -141,8 +139,7 @@ async function proxyAgentRun({
     }, effectiveTimeoutMs);
   };
 
-  const assembleMetadata = () =>
-    assembleAgentMetadata({ emptyStreamMetadata, verdict: capturedVerdict, runId, usageRecord });
+  const assembleMetadata = () => assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord });
 
   // The disconnect signal: `res.on('close')`. Registered before any await, so
   // a client that leaves during the posture resolution or the agent-leg wait

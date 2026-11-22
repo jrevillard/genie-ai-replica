@@ -10,6 +10,7 @@ const translationService = require('../services/translation-service');
 const { createStreamUnitRelay } = require('../services/translation/stream-unit-relay');
 const { languageForLog } = require('../services/translation/language-log');
 const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/translation/unsupported-language');
+const { translateWholeAnswer } = require('../services/translation/whole-answer');
 const { isAgentPathEnabled } = require('../services/agent-routing');
 const { proxyAgentRun } = require('../services/agent-frame-writer');
 const { emptyStreamMetadata } = require('../services/agent-run-contract');
@@ -340,8 +341,7 @@ module.exports = (queryService) => {
           targetLanguage,
           translator,
           streamStartTime,
-          handleStreamDone,
-          emptyStreamMetadata
+          handleStreamDone
         });
         return;
       }
@@ -623,15 +623,21 @@ module.exports = (queryService) => {
     // A translation was asked for and the answer was not already delivered in
     // the target language: the whole answer is translated here. The translator
     // is the one the request resolved — the languages cannot change between
-    // the start of a request and the end of its answer.
+    // the start of a request and the end of its answer. The translate →
+    // empty-check → catch core is the shared whole-answer helper; the frame
+    // write and the logging stay here (delivery-mode specific).
     const translationExpected = wantsTranslation(targetLanguage);
     if (!skipPostStreamTranslation && translationExpected && fullResponseText) {
-      try {
-        if (!translator) {
-          throw new Error('no translator was prepared for the requested language');
-        }
-        const translated = await translator.translate(fullResponseText);
-        if (!translated || !translated.trim()) {
+      const result = await translateWholeAnswer(translator, fullResponseText);
+      if (result.failed) {
+        if (result.error) {
+          // Not an `error` frame. The client treats that as terminal and stops
+          // reading, and reports the whole system as down — neither is true when
+          // only the translator failed and the answer is complete in English.
+          // The outcome travels on `done` instead, where the client already
+          // expects the stream to end.
+          logger.warn('QueryService.stream_translation_failed', { queryId, error: result.error.message });
+        } else {
           // The model returned nothing. The answer the client already has is
           // the English one; writing an empty translation frame would replace
           // it with nothing. The failure travels on `done` instead.
@@ -639,20 +645,12 @@ module.exports = (queryService) => {
             `QueryService.stream_translation_empty: (lang=${languageForLog(targetLanguage)}, answerLen=${fullResponseText.length})`,
             { queryId }
           );
-          translationFailed = true;
-        } else if (!res.writableEnded && !res.destroyed) {
-          // The client may have gone while the translation ran: a frame
-          // written to a response that is over is an error nobody reads.
-          res.write(`data: ${JSON.stringify({ type: 'translation', content: translated })}\n\n`);
         }
-      } catch (error) {
-        // Not an `error` frame. The client treats that as terminal and stops
-        // reading, and reports the whole system as down — neither is true when
-        // only the translator failed and the answer is complete in English.
-        // The outcome travels on `done` instead, where the client already
-        // expects the stream to end.
-        logger.warn('QueryService.stream_translation_failed', { queryId, error: error.message });
         translationFailed = true;
+      } else if (!res.writableEnded && !res.destroyed) {
+        // The client may have gone while the translation ran: a frame
+        // written to a response that is over is an error nobody reads.
+        res.write(`data: ${JSON.stringify({ type: 'translation', content: result.text })}\n\n`);
       }
     }
 
@@ -807,16 +805,10 @@ module.exports = (queryService) => {
         return res.status(400).json(refusal);
       }
       logger.info(`Creating query for user ${userId}`);
-      let query;
-      if (agenticEntry) {
-        query = await queryService.createQuery(
-          queryData,
-          { authorization: req.headers.authorization },
-          { targetLanguage, translator }
-        );
-      } else {
-        query = await queryService.createQuery(queryData, { authorization: req.headers.authorization });
-      }
+      // ONE call: the options exist only on the agentic entry (undefined = no
+      // options — the flag-off call reads exactly as before).
+      const options = agenticEntry ? { targetLanguage, translator } : undefined;
+      const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization }, options);
       res.status(201).json(query);
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`, { stack: error.stack });

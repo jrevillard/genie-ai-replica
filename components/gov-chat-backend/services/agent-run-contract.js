@@ -257,10 +257,13 @@ function readUpstreamBody(data, status) {
     });
     // The body's termination: 'end' for a fully consumed stream, 'close' for
     // a destroyed one (a destroyed body can report 'close' ALONE — settling
-    // only on 'end'/'error' would leave this promise pending forever).
-    // resolve is idempotent, so the double settle on end-then-close is a
-    // no-op.
+    // only on 'end'/'error' would leave this promise pending forever). The
+    // flag makes the concat+parse run ONCE — resolve alone is idempotent,
+    // but the work before it is not.
+    let settled = false;
     const finish = () => {
+      if (settled) return;
+      settled = true;
       const text = Buffer.concat(chunks).toString('utf8');
       let parsed;
       try {
@@ -272,7 +275,10 @@ function readUpstreamBody(data, status) {
     };
     data.on('end', finish);
     data.on('close', finish);
-    data.on('error', () => resolve({ text: '', parsed: null }));
+    data.on('error', () => {
+      settled = true;
+      resolve({ text: '', parsed: null });
+    });
   });
 }
 

@@ -135,97 +135,21 @@ beforeAll(() => {
   app = createApp({ services: { queryService } });
 });
 
-// ── fixtures ────────────────────────────────────────────────────────────────
+// ── fixtures (the shared seam fixtures live in __tests__/fixtures/) ─────────
 
-function legacyPosture() {
-  return {
-    available: true,
-    mode: 'legacy',
-    engaged: false,
-    warnings: [],
-    postureUnknown: false,
-    authorizedGraphs: [],
-    authz: null,
-    stickyGraphs: [],
-    legacyGraph: 'GRAPH',
-    correlationId: 'cid-1'
-  };
-}
+const {
+  USAGE_RECORD,
+  GROUNDED_VERDICT,
+  INSUFFICIENCY_VERDICT,
+  INSUFFICIENCY_RESPONSE,
+  legacyPosture,
+  envelope,
+  seamStream,
+  dataStream
+} = require('../fixtures/agent-seam');
 
-const USAGE_RECORD = {
-  run_id: 'run-abc',
-  outcome: 'answered',
-  steps: 2,
-  model_calls: 2,
-  aux_model_calls: 1,
-  tool_calls: 1,
-  evidence_bytes: 1024,
-  prompt_tokens: 90,
-  completion_tokens: 30,
-  wall_clock_seconds: 4.2,
-  error: null
-};
-
-const GROUNDED_VERDICT = {
-  grounding_status: 'grounded',
-  is_grounded: true,
-  translation_mode: 'none',
-  policy: 'verdict-marked',
-  judge: { model: 'judge', score: null },
-  citations: [
-    { provenance: { file_id: 'doc_bee_knowledge' }, text: 'bees pollinate', score: 0.9 },
-    {
-      provenance: { source: 'okf-concept', concept_id: 'kenya_tax_rules', repo_id: 'r-kenya', bundle_version: 3 },
-      text: 'taxes apply',
-      score: 0.8
-    }
-  ],
-  invalid_citations: [],
-  insufficient_evidence: { required: false, reasons: [] },
-  marking: { required: false, reason: null }
-};
-
-// The insufficiency verdict the verification pipeline emits on the
-// early-return path: unverified / not grounded, the mechanical decision and
-// its reasons riding verbatim (verification.py Verdict.payload()).
-const INSUFFICIENCY_VERDICT = {
-  grounding_status: 'unverified',
-  is_grounded: false,
-  translation_mode: 'none',
-  policy: 'verdict-marked',
-  judge: { ran: false, outcome: 'skipped', verdict: null },
-  citations: [],
-  invalid_citations: [],
-  insufficient_evidence: { required: true, reasons: ['degraded_availability', 'no_successful_retrieval'] },
-  findings: [],
-  source_documents: [],
-  marking: { required: false, reason: null }
-};
-
-// verification.py INSUFFICIENCY_RESPONSE — the text the agent loop delivers
-// when the ledger requires insufficiency (the BFF never substitutes text).
-const INSUFFICIENCY_RESPONSE = 'I could not find supporting evidence in the knowledge base to answer this question.';
-
-function envelope(kind, payload, { seq = 0, call_id = null } = {}) {
-  return { run_id: 'run-abc', call_id, seq, kind, payload };
-}
-
-function seamStream(frames) {
-  const mockStream = new Readable({ read() {} });
-  for (const frame of frames) {
-    mockStream.push(`data: ${JSON.stringify(frame)}\n\n`);
-  }
-  mockStream.push(null);
-  return mockStream;
-}
-
-function dataStream(text) {
-  const mockStream = new Readable({ read() {} });
-  mockStream.push(text);
-  mockStream.push(null);
-  return mockStream;
-}
-
+// The JSON suite's own run script: plain text → verdict → terminal, no tool
+// call (frame-order pinning is the frame-writer suite's answeredRunStream).
 function answeredRunStream({ verdict = GROUNDED_VERDICT, answer = 'Hello world.' } = {}) {
   return seamStream([
     envelope('run_started', { question: 'What is the tax rate?' }, { seq: 0 }),
@@ -623,7 +547,11 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     expect(collections.update).not.toHaveBeenCalled();
   });
 
-  it('a stream error after the headers arrived answers 504 too (the wall-clock bound)', async () => {
+  // The wall-clock-abort driver: one chunk trickles in, the deadline fires,
+  // the leg is aborted — then `terminate` emits the stream's end-of-life
+  // event (a real adapter errors an aborted socket; a destroyed one can
+  // report 'close' alone). Returns the answered response.
+  async function driveWallClockAbort(terminate) {
     process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
     jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
     try {
@@ -641,23 +569,25 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       }
       expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
 
-      // The stream trickles: one chunk arrives, the leg never ends — the
-      // wall-clock bound fires, aborts the leg, and the (real adapter's)
-      // stream error ends the turn with the typed 504.
       mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'slow' }, { seq: 0 }))}\n\n`);
       await new Promise(setImmediate);
       jest.advanceTimersByTime(40000);
       expect(capturedSignal.aborted).toBe(true);
-      mockStream.emit('error', new Error('aborted'));
+      terminate(mockStream);
 
-      const response = await responsePromise;
-      expect(response.status).toBe(504);
-      expect(response.body.error).toBe('AGENT_SERVICE_UNAVAILABLE');
-      expect(collections.update).not.toHaveBeenCalled();
+      return await responsePromise;
     } finally {
       jest.useRealTimers();
       delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
     }
+  }
+
+  it('a stream error after the headers arrived answers 504 too (the wall-clock bound)', async () => {
+    const response = await driveWallClockAbort((stream) => stream.emit('error', new Error('aborted')));
+
+    expect(response.status).toBe(504);
+    expect(response.body.error).toBe('AGENT_SERVICE_UNAVAILABLE');
+    expect(collections.update).not.toHaveBeenCalled();
   });
 
   it('unparsable 429/503/422 bodies degrade to the documented error names, never raw passthrough', async () => {
@@ -678,45 +608,15 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
   });
 
   it('a wall-clock abort whose stream ends via close alone answers 504 — never a truncated 201', async () => {
-    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
-    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
-    try {
-      const mockStream = new Readable({ read() {} });
-      let capturedSignal = null;
-      axios.post.mockImplementation((_url, _body, opts) => {
-        capturedSignal = opts.signal;
-        return Promise.resolve({ status: 200, headers: {}, data: mockStream });
-      });
+    const response = await driveWallClockAbort((stream) => stream.emit('close'));
 
-      const responsePromise = postQuery();
-      responsePromise.catch(() => {});
-      for (let i = 0; i < 200 && mockStream.listenerCount('data') === 0; i++) {
-        await new Promise(setImmediate);
-      }
-      expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
-
-      // The stream trickles, the wall-clock bound fires and aborts the leg —
-      // and the destroyed stream reports 'close' WITHOUT an 'error' event.
-      mockStream.push(
-        `data: ${JSON.stringify(envelope('text_message_content', { text: 'truncated' }, { seq: 0 }))}\n\n`
-      );
-      await new Promise(setImmediate);
-      jest.advanceTimersByTime(40000);
-      expect(capturedSignal.aborted).toBe(true);
-      mockStream.emit('close');
-
-      const response = await responsePromise;
-      expect(response.status).toBe(504);
-      expect(response.body).toEqual({
-        error: 'AGENT_SERVICE_UNAVAILABLE',
-        message: 'Agent service unavailable or timed out'
-      });
-      // The truncated text never became a complete answer.
-      expect(collections.update).not.toHaveBeenCalled();
-    } finally {
-      jest.useRealTimers();
-      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
-    }
+    expect(response.status).toBe(504);
+    expect(response.body).toEqual({
+      error: 'AGENT_SERVICE_UNAVAILABLE',
+      message: 'Agent service unavailable or timed out'
+    });
+    // The truncated text never became a complete answer.
+    expect(collections.update).not.toHaveBeenCalled();
   });
 
   it('a posture 401 propagates as 401 UNAUTHENTICATED — no run starts', async () => {

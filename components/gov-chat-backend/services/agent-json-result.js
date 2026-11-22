@@ -9,12 +9,12 @@ const { parseAgentSeamLine } = require('./agent-seam-parser');
 const {
   resolveUpstreamTimeoutMs,
   deriveDeadlineMs,
-  emptyStreamMetadata,
   assembleAgentMetadata,
   readUpstreamBody,
   passthroughBody
 } = require('./agent-run-contract');
 const { wantsTranslation } = require('./translation/language-request');
+const { translateWholeAnswer } = require('./translation/whole-answer');
 
 // Story 2.4b — the non-streaming JSON consumer of the agent-service seam.
 // The streaming entry (agent-frame-writer.js) projects the seam onto client
@@ -92,6 +92,15 @@ function applyAbstentionOverlay(metadata, verdict) {
   }
   return metadata;
 }
+
+// The pre-run refusals that pass the upstream answer through: the status →
+// the documented fallback body name (when the upstream body does not parse)
+// and the log event. The 429 additionally carries the lane's Retry-After.
+const RUN_REFUSALS = {
+  429: { fallback: 'admission_refused', event: 'AgentJsonResult.admission_refused' },
+  503: { fallback: 'budget_configuration_missing', event: 'AgentJsonResult.run_surface_unconfigured' },
+  422: { fallback: 'invalid_run_request', event: 'AgentJsonResult.run_request_invalid' }
+};
 
 /**
  * Run one agentic turn for the non-streaming entry and aggregate its result.
@@ -190,30 +199,20 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   }
 
   const status = response.status;
-  if (status === 429) {
+  // ── the upstream refusals (429 / 503 / 422): the upstream's JSON answer
+  // passes through verbatim; a body that did not parse (or is not an object)
+  // falls back to the documented error name. A malformed run request is a
+  // request problem, not an outage; the 429's lane hint rides the
+  // Retry-After header (the caller retries on it).
+  const refusal = RUN_REFUSALS[status];
+  if (refusal) {
     const { parsed } = await readUpstreamBody(response.data, status);
-    // The lane hint passes through (the caller retries on it); a body that
-    // did not parse (or is not an object) falls back to the documented error
-    // name.
+    logger.warn(refusal.event, { queryId, body: parsed });
     const headersOut = {};
-    if (response.headers?.['retry-after'] !== undefined) {
+    if (status === 429 && response.headers?.['retry-after'] !== undefined) {
       headersOut['Retry-After'] = String(response.headers['retry-after']);
     }
-    logger.warn('AgentJsonResult.admission_refused', { queryId });
-    throw new AgentJsonTurnError(429, passthroughBody(parsed) || { error: 'admission_refused' }, headersOut);
-  }
-  if (status === 503) {
-    const { parsed } = await readUpstreamBody(response.data, status);
-    logger.warn('AgentJsonResult.run_surface_unconfigured', { queryId, body: parsed });
-    throw new AgentJsonTurnError(503, passthroughBody(parsed) || { error: 'budget_configuration_missing' });
-  }
-  if (status === 422) {
-    // A malformed run request is a request problem, not an outage — the
-    // upstream's validation answer passes through (the fallback names it as
-    // the BFF's own invalid request).
-    const { parsed } = await readUpstreamBody(response.data, status);
-    logger.warn('AgentJsonResult.run_request_invalid', { queryId, body: parsed });
-    throw new AgentJsonTurnError(422, passthroughBody(parsed) || { error: 'invalid_run_request' });
+    throw new AgentJsonTurnError(status, passthroughBody(parsed) || { error: refusal.fallback }, headersOut);
   }
   if (status !== 200 || !response.data) {
     const { parsed } = await readUpstreamBody(response.data, status);
@@ -252,9 +251,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   deadline = setTimeout(() => {
     deadline = null;
     logger.warn('AgentJsonResult.upstream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
-    if (!controller.signal.aborted) {
-      controller.abort();
-    }
+    controller.abort();
   }, effectiveTimeoutMs);
 
   stream.setEncoding('utf8');
@@ -296,9 +293,8 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
               : 'the agent run failed';
           failure = new AgentJsonTurnError(502, { error: 'AGENT_RUN_ERROR', message });
           clearDeadline();
-          if (!controller.signal.aborted) {
-            controller.abort();
-          }
+          // Idempotent: the leg must not keep working behind a dead consumer.
+          controller.abort();
           break;
         }
         default:
@@ -349,17 +345,12 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // the stream, never per chunk (setEncoding above). The settle point covers
   // every termination: 'end' (fully consumed), 'error' (the leg failed or the
   // wall-clock abort destroyed it) — 'close' rides along for a destroyed
-  // stream that reports neither. First one wins; the rest are no-ops.
+  // stream that reports neither. resolve is idempotent: the first wins, the
+  // rest are no-ops.
   await new Promise((resolve) => {
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-    stream.on('end', settle);
-    stream.on('error', settle);
-    stream.on('close', settle);
+    stream.on('end', resolve);
+    stream.on('error', resolve);
+    stream.on('close', resolve);
   });
   clearDeadline();
   if (!failure && buffer.trim()) {
@@ -386,20 +377,19 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   }
 
   // ── whole-answer translation: the `handleStreamDone` non-relay branch's
-  // semantics (post-run, request-resolved translator, fail-soft). The agent
-  // always answers English (the run body's `language` is the preparation
-  // hint, not an answer-language request); a translator that is missing or
-  // fails never drops the answer — the English text stands and the failure
-  // travels as the additive latch.
+  // semantics (post-run, request-resolved translator, fail-soft — the shared
+  // whole-answer core). The agent always answers English (the run body's
+  // `language` is the preparation hint, not an answer-language request); a
+  // translator that is missing or fails never drops the answer — the English
+  // text stands and the failure travels as the additive latch.
   let deliveredText = fullResponseText;
   let translationFailed = false;
   if (wantsTranslation(targetLanguage) && fullResponseText) {
-    try {
-      if (!translator) {
-        throw new Error('no translator was prepared for the requested language');
-      }
-      const translated = await translator.translate(fullResponseText);
-      if (!translated || !translated.trim()) {
+    const result = await translateWholeAnswer(translator, fullResponseText);
+    if (result.failed) {
+      if (result.error) {
+        logger.warn('AgentJsonResult.translation_failed', { queryId, error: result.error.message });
+      } else {
         // The model returned nothing — replacing the answer with nothing is
         // not a translation. The English original stands.
         logger.warn('AgentJsonResult.translation_empty', {
@@ -407,15 +397,10 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
           targetLanguage,
           answerLen: fullResponseText.length
         });
-        translationFailed = true;
-      } else {
-        deliveredText = translated;
       }
-    } catch (error) {
-      // Fail-soft: only the translator failed, the answer is complete in
-      // English. The latch reports it; no error is thrown.
-      logger.warn('AgentJsonResult.translation_failed', { queryId, error: error.message });
       translationFailed = true;
+    } else {
+      deliveredText = result.text;
     }
   }
 
@@ -423,7 +408,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // plus THIS story's own derivation: the V05 abstention vocabulary, mapped
   // from the verdict (no verdict → `abstained` stays null).
   const metadata = applyAbstentionOverlay(
-    assembleAgentMetadata({ emptyStreamMetadata, verdict: capturedVerdict, runId, usageRecord }),
+    assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord }),
     capturedVerdict
   );
 

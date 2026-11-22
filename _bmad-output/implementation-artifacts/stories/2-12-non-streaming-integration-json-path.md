@@ -178,6 +178,27 @@ context:
   query-service module, so the real `_persistRoutedGraphs` behavior is only
   observable through the real service.
 
+- **Quality round (/simplify, coordinator 2026-11-22) — applied**: one
+  createQuery call with an options ternary (flag-off pin green unchanged);
+  settle promise registers resolve directly; bare idempotent `abort()` calls;
+  the 429/503/422 branches collapsed onto a status→{fallback, log-event} map
+  (Retry-After lines kept); `emptyStreamMetadata` no longer threaded through
+  `proxyAgentRun`/`runAgentJsonTurn` (the contract module's default IS that
+  function — the route keeps its import for the legacy error paths); the
+  upstream-body reader parses once (settled flag — resolve is idempotent, the
+  concat+parse before it was not); the two wall-clock tests share one driver
+  helper; the whole-answer translate→empty→catch core extracted ONCE into
+  `services/translation/whole-answer.js`, consumed by `handleStreamDone`'s
+  non-relay branch AND the JSON consumer (frame writes, latching and logging
+  stay at the call sites — the shared core was identical, the delivery
+  handling was not). Fixtures: the identical seam primitives (USAGE_RECORD,
+  envelope, seamStream, dataStream, legacyPosture, INSUFFICIENCY_VERDICT/
+  RESPONSE) moved to `__tests__/fixtures/agent-seam.js`; GROUNDED_VERDICT
+  unified on the faithful payload() shape (with `insufficient_evidence`);
+  `answeredRunStream` NOT unified — the two run scripts differ materially
+  (tool-call interleaving vs plain aggregation), each suite keeps its own.
+  No translation-output logic change → no TRANSLATION_LOGIC_VERSION bump.
+
 ## Spec Change Log
 
 <!-- Append-only. Populated by step-04 during review loops. Do not modify or delete existing entries. -->

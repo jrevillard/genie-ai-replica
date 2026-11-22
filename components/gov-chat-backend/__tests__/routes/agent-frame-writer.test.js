@@ -188,54 +188,16 @@ function authPost(path, body) {
   return request(app).post(path).set('Authorization', `Bearer ${validToken}`).send(body);
 }
 
-// ── fixtures ────────────────────────────────────────────────────────────────
+// ── fixtures (the shared seam fixtures live in __tests__/fixtures/) ─────────
 
-function legacyPosture() {
-  return {
-    available: true,
-    mode: 'legacy',
-    engaged: false,
-    warnings: [],
-    postureUnknown: false,
-    authorizedGraphs: [],
-    authz: null,
-    stickyGraphs: [],
-    legacyGraph: 'GRAPH',
-    correlationId: 'cid-1'
-  };
-}
-
-const USAGE_RECORD = {
-  run_id: 'run-abc',
-  outcome: 'answered',
-  steps: 2,
-  model_calls: 2,
-  aux_model_calls: 1,
-  tool_calls: 1,
-  evidence_bytes: 1024,
-  prompt_tokens: 90,
-  completion_tokens: 30,
-  wall_clock_seconds: 4.2,
-  error: null
-};
-
-const GROUNDED_VERDICT = {
-  grounding_status: 'grounded',
-  is_grounded: true,
-  translation_mode: 'none',
-  policy: 'verdict-marked',
-  judge: { model: 'judge', score: null },
-  citations: [
-    { provenance: { file_id: 'doc_bee_knowledge' }, text: 'bees pollinate', score: 0.9 },
-    {
-      provenance: { source: 'okf-concept', concept_id: 'kenya_tax_rules', repo_id: 'r-kenya', bundle_version: 3 },
-      text: 'taxes apply',
-      score: 0.8
-    }
-  ],
-  invalid_citations: [],
-  marking: { required: false, reason: null }
-};
+const {
+  USAGE_RECORD,
+  GROUNDED_VERDICT,
+  legacyPosture,
+  envelope,
+  seamStream,
+  dataStream
+} = require('../fixtures/agent-seam');
 
 const UNGROUNDED_VERDICT = {
   ...GROUNDED_VERDICT,
@@ -243,26 +205,6 @@ const UNGROUNDED_VERDICT = {
   is_grounded: false,
   marking: { required: true, reason: 'ungrounded' }
 };
-
-function envelope(kind, payload, { seq = 0, call_id = null } = {}) {
-  return { run_id: 'run-abc', call_id, seq, kind, payload };
-}
-
-function seamStream(frames) {
-  const mockStream = new Readable({ read() {} });
-  for (const frame of frames) {
-    mockStream.push(`data: ${JSON.stringify(frame)}\n\n`);
-  }
-  mockStream.push(null);
-  return mockStream;
-}
-
-function dataStream(text) {
-  const mockStream = new Readable({ read() {} });
-  mockStream.push(text);
-  mockStream.push(null);
-  return mockStream;
-}
 
 // The answered-run seam script: a tool call between two text events, then the
 // verdict, the run terminal and the usage record.
@@ -1050,15 +992,6 @@ function directRun(res, { queryId = 'q1' } = {}) {
     handleStreamDone: jest.fn(async (qId, text, start, resArg, metadata) => {
       await queryService.finalizeStreamQuery(qId, text, Date.now() - start, metadata);
       resArg.end();
-    }),
-    emptyStreamMetadata: () => ({
-      source_documents: [],
-      confidence_score: 0,
-      is_grounded: false,
-      retrieval_confidence_score: null,
-      abstained: null,
-      abstention_reason: null,
-      filter_labels: null
     })
   });
 }

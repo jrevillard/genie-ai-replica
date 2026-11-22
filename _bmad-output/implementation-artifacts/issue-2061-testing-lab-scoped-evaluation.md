@@ -333,7 +333,7 @@ holders and the union, through the carrier's own read.
 ## Phase 2 — E-1 + E-2 + E-4 (2026-11-22, branch `feat/okf-lab-eval-context`)
 
 **Status: code complete, verification green.** Stacked on the phase-1 branch;
-okf-server **98 suites / 2485 tests green** (27 new).
+okf-server **98 suites / 2487 tests green** (29 new).
 
 ### What landed
 
@@ -369,3 +369,68 @@ filed (**#2081**), on their own timeline.
   head claims (`genieai_retriever_arangodb.py:2644`), and the Lab still runs
   its probe leg. That is a real fidelity gap and it is the first thing
   phase 3 should close.
+
+### The live build found a defect the unit suite could not (2026-11-22)
+
+Phase 2 was deployed to the local build and driven against the RUNNING
+service, and the first run answered **HTTP 500 on the context LIST**:
+`no value specified for declared bind parameter '@collection'`.
+
+The AQL placeholder `@@collection` is a COLLECTION-NAME bind parameter, and
+ArangoDB reads its value under the key **`@collection`** — the sigil stays
+in the key. The key `collection` leaves the placeholder empty and the engine
+refuses the whole query. Three services in this repo already use the form the
+engine wants (`pii-service` `'@meta'`, `graph-lifecycle-service` `'@edge'`,
+`graph-retract-service` `'@collections'`); the new service was the only one
+that did not.
+
+**Every unit test was green because the mock never resolved a bind
+parameter** — the wrong key could not fail. The mock now refuses a query
+whose collection-name placeholder has no value, exactly as the engine refuses
+it, and it really runs a BARE collection scan so a LIST endpoint's rows are
+the ones it saved. A query with a FILTER is still not executed by the mock:
+it has no AQL engine, and pretending to filter would hand a caller rows the
+real database would never return.
+
+The snapshot also now records the **EFFECTIVE** scopes it resolved from, not
+only the input list. A context that names only groups has an empty INPUT
+scope list, and storing that alone under-reported the principal the snapshot
+was measured against — and the audit row counted zero scopes.
+
+### Phase 2 — the live build (2026-11-22, deployed)
+
+The local build carries phase 1 + phase 2 (`verify-local-build.sh`: 47 pass,
+0 fail). Measured against the RUNNING service, through the API:
+
+| Check | Result |
+|---|---|
+| A context naming ONE group | created (201); resolves to **13** repositories |
+| A context naming the OTHER group | created (201); resolves to **13** repositories |
+| A context naming BOTH groups | created (201); resolves to **14** repositories |
+| The union | **exactly** the union of the two single-group contexts (14 = 13 + 13 − 12 shared) |
+| The effective scopes | group A → `okf:t:<fence-a>:read`; group B → `okf:t:<fence-b>:read`; A+B → **both** |
+| The repo-set hash | differs between two different carriers; 32 chars, stable across a refresh |
+| The version | a new context is v1; a refresh answers 200 and **bumps to v2** |
+| The LIST | **200** with the created context in it (was 500 — see above) |
+| An unknown context | **404** — an honest refusal, not a crash |
+| A non-superadmin | **403** on the list AND on the create |
+| The carrier-scoped routing test | 200; the response carries the carrier: id, **version 2**, hash, **14 repositories** |
+
+The probe contexts were removed from the local build's Arango afterwards (six
+rows), so the fixture leaves nothing behind.
+
+### The phase issues the triage demands (2026-11-22)
+
+Jerome's triage note on the epic (2026-11-21) pins the dispatch scope to
+**Phase 1 only**: "Phases 2-5 must be split into their own issues (or
+re-scoped) before any of them is dispatched — this issue is the epic
+tracker, not a single work order." Each phase therefore now carries its own
+work issue, all related to the epic:
+
+| Phase | Issue | Work | Status |
+|---|---|---|---|
+| 2 | **#2101** | E-1 + E-2 + E-4 | `status::in-progress` (MR !1043) |
+| 3 | **#2102** | E-7 — context-native generation + suite binding | `status::backlog` |
+| 4 | **#2103** | E-5 — evidence-grade run records + the attribution metrics | `status::backlog` |
+| 5 | **#2104** | E-6 + the tenant decision | `status::backlog` |
+

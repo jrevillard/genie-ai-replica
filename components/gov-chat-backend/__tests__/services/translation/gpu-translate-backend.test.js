@@ -356,6 +356,44 @@ describe('GpuTranslateBackend startup probe', () => {
     await expect(new GpuTranslateBackend().fetchModelInfo()).resolves.toBeUndefined();
   });
 
+  // A /health answer that is not 2xx: `healthCheck` reads only `statusCode`.
+  const servingStatus = (statusCode) => {
+    http.request.mockImplementation((opts, cb) => {
+      const req = new EventEmitter();
+      req.write = () => {};
+      req.setTimeout = () => {};
+      req.destroy = jest.fn();
+      req.end = () => {
+        const res = new EventEmitter();
+        res.statusCode = statusCode;
+        res.setEncoding = () => {};
+        process.nextTick(() => {
+          cb(res);
+          // `healthCheck` reads only `statusCode`; `fetchModelInfo` reads
+          // data and waits for 'end', so the response finishes itself.
+          res.emit('end');
+        });
+      };
+      return req;
+    });
+  };
+
+  it.each([500, 503, 404])('rejects on health status %d — an unready service fails the gate', async (status) => {
+    servingStatus(status);
+
+    await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow(new RegExp(`status ${status}`));
+  });
+
+  it('keeps init from marking a 503-serving vLLM as initialized', async () => {
+    servingStatus(503);
+    const backend = new GpuTranslateBackend();
+
+    await expect(backend.init()).rejects.toThrow(/unhealthy/);
+
+    expect(backend.initialized).toBe(false);
+    expect(backend.healthCheckPassed).toBe(false);
+  });
+
   it('does not treat the in-cluster worker as a configured GPU API', () => {
     expect(new GpuTranslateBackend().endpointExplicit).toBe(false);
   });

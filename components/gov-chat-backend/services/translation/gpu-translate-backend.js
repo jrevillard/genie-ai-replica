@@ -174,7 +174,10 @@ class GpuTranslateBackend {
             resolve(true);
           } else {
             logger.warn(`[GPU-BACKEND] Health check returned status ${res.statusCode}`);
-            resolve(true);
+            // A non-2xx is the endpoint reporting itself not ready (vLLM
+            // serves 503 while loading). The gate refuses: resolving here
+            // would let `init` mark an unready service as initialized.
+            reject(new Error(`vLLM service unhealthy: status ${res.statusCode}`));
           }
         });
 

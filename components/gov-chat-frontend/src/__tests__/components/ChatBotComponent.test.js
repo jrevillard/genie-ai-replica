@@ -6700,7 +6700,7 @@ describe('W9 browse affordance (answer cards)', () => {
         wrapper.unmount();
       });
 
-      it('the caption falls back to the metadata row when no verdict property exists (the JSON path)', async () => {
+      it('the caption falls back to the metadata row when no verdict property exists (a restored answer or the JSON path)', async () => {
         const wrapper = await mountSettledAnswer();
         await mountAnswerWithMetadata(wrapper, {
           grounding_status: 'grounded',

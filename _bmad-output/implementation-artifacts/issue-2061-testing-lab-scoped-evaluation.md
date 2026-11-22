@@ -194,7 +194,79 @@ suite runs below.
 | 5 — the pair-level matrix | `head-suite-service.js` `buildConfusion` + the Suites & analytics tab (matrix beside the pass rate, with the universe) | 3 new backend tests + 1 new frontend test |
 | 6 — the universe is visible | the summary block, the run-history table's new *Universe* column | the frontend test asserts the rendered universe |
 | 7 — the docs stop claiming what the code lacks | `site/content/en/docs/knowledge-base/testing-lab.md`, `access-control.md`, `okf-studio.md`, `docs/configure/okf-variables.md` (the route thresholds are now documented), and the Test tab's own string in **all 14 locales** | — |
-| 8 — suites green, coverage up, CHANGELOG | okf-server **95 suites / 2448 tests green**; frontend **156 suites / 4577 tests green**; config-validator green except 5 PRE-EXISTING e2e failures (`tests/e2e` deps missing in this checkout + a class-selector violation in `tests/e2e/auth/g1-swagger-authorize.spec.js` — neither file is touched by this change) | coverage vs the base commit, measured the same way: component total **87.85% → 88.08%** statements, **89.35% → 89.55%** lines, **75.35% → 75.71%** branches; `head-suite-service.js` 82.78% → 83.65% statements; `head-test-service.js` 85.95% → 91.59% (the retry/timeout probe path is now covered by two new tests); `route-knobs.js` 100% |
+| 8 — suites green, coverage up, CHANGELOG | okf-server **95 suites / 2456 tests green**; frontend **156 suites / 4580 tests green**; config-validator green except 5 PRE-EXISTING e2e failures (`tests/e2e` deps missing in this checkout + a class-selector violation in `tests/e2e/auth/g1-swagger-authorize.spec.js` — neither file is touched by this change) | coverage vs the base commit, measured the same way: component total **87.85% → 88.12%** statements, **89.35% → 89.59%** lines, **75.35% → 75.76%** branches; `head-suite-service.js` 82.78% → 83.78% statements; `head-test-service.js` 85.95% → 91.59% (the retry/timeout probe path is now covered by two new tests); `route-knobs.js` 100% |
+
+### Phase 1 — the live build (2026-11-22)
+
+The phase was deployed to the local build BEFORE the merge, because a deploy is
+part of MR readiness. The tree was synced to the branch, `frontend` and
+`okf-server` were rebuilt and recreated, and `verify-local-build.sh` reported
+**47 pass / 0 fail** with both containers healthy.
+
+**The delivery leg (F6) — proven on the running containers.** The knobs now
+reach BOTH containers with identical values, where the Lab previously received
+none of them:
+
+```
+RETRIEVER_ROUTE_ENABLED=true            RETRIEVER_ROUTE_HEAD_FLOOR=0.55
+RETRIEVER_ROUTE_TOP_K=40                RETRIEVER_ROUTE_HEAD_MARGIN=0.01
+RETRIEVER_ROUTE_MIN_CHUNKS=3            RETRIEVER_ROUTE_HEAD_WEIGHT=1.0
+RETRIEVER_ROUTE_PROBE_TIMEOUT_MS=2000   RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX=0.55
+RETRIEVER_ROUTE_RETRY=1                 RETRIEVER_ROUTE_HEADS_SUPERSEDE=true
+```
+
+(okf-server and the retriever print the same ten lines.)
+
+**The loader is live and reads per run.** Resolved inside the running
+okf-server container, not in a test harness:
+
+```
+knobs:  {"ROUTE_ENABLED":true,"ROUTE_TOP_K":40,...,"ROUTE_HEADS_SUPERSEDE":true}
+parity: {"production_equivalent":true,"reasons":[]}
+```
+
+**The routing-test response carries the knobs it was scored under** —
+`fidelity.knobs` holds all ten, so a stored run can say which thresholds
+produced it. Before the change the response carried no knobs at all.
+
+**The run summary, as the deployed service computed it.** A suite of two
+positives and two negatives (the negatives naming a sibling repository as
+their intended owner) was run against the live corpus. The stored run doc
+carries, verbatim from the service:
+
+```
+sibling_count            13      <- the FULL competitor universe, not the truncated list
+avg_margin               -0.044  with avg_margin_n 2   <- the denominator travels with the mean
+steals                   [{by_repo: "f5bedc82-…", by_name: "emulator-walk", count: 2}]
+lost_no_winner           0
+negative_wrongly_claimed 2
+parity                   {"production_equivalent": true, "reasons": []}
+knobs                    {…all ten…}
+```
+
+and the pair matrix:
+
+```
+confusion.n_queries 4   claim_accuracy 0   n_unresolved 0
+rows:     [Bali (2), www-gov-uk-full-crawl (2)]      <- two resolved intended owners
+columns:  [emulator-walk (4)]
+cells:    intended=Bali              actual=emulator-walk  count 2  correct false
+          intended=www-gov-uk-full-crawl actual=emulator-walk count 2 correct false
+```
+
+A second live run named the intended owner by an identifier the deployment
+does not carry: the matrix kept the row, marked it **unresolved**, and kept it
+OUT of the accuracy rate (`n_unresolved: 2`) instead of folding it into
+another row — the unresolved path proven on the running service, not only in a
+unit test.
+
+Both live suites and their run docs were deleted afterwards; the deployment
+holds no scratch state from this work.
+
+**Not proven live:** the browser rendering of the matrix (the Suites &
+analytics tab) was verified by the frontend suite and by the rebuild, not by
+driving the UI — the matrix's DOM is covered by the component test, and the
+deployed frontend serves it.
 
 ### The security baseline that Phase 2 inherits
 

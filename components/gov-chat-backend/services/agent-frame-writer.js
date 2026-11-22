@@ -4,9 +4,17 @@ const axios = require('axios');
 const http = require('http');
 const https = require('https');
 const { trace } = require('@opentelemetry/api');
-const { logger, spanAttrs, parsePositiveInt } = require('../shared-lib');
+const { logger, spanAttrs } = require('../shared-lib');
 const { agentServiceUrl } = require('./agent-routing');
 const { parseAgentSeamLine } = require('./agent-seam-parser');
+const {
+  resolveUpstreamTimeoutMs,
+  deriveDeadlineMs,
+  assembleAgentMetadata,
+  readUpstreamBody,
+  passthroughBody,
+  _internals: contractInternals
+} = require('./agent-run-contract');
 const { writeSSEFrame } = require('./sse-frame');
 const { wantsTranslation, streamingTranslationEnabled } = require('./translation/language-request');
 const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
@@ -28,207 +36,11 @@ const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
 //     frame then end, no `done`, no metadata.
 //
 // Clients that ignore the two additive types behave exactly as today.
-
-// ─── the deadline derivation (docs/agent-budget-deadline-pairs.md) ──────────
 //
-// The pair rule (`AGENT_UPSTREAM_TIMEOUT_MS >= deadline_ms + reserves`) holds
-// by construction: the deadline the BFF communicates is the timeout MINUS the
-// named reserves. The reserves are module constants, not knobs — 2.10
-// revisits them when translation allowances land. The judge-overrun ceiling
-// (AGENT_VERDICT_JUDGE_TIMEOUT_MS, story 2.6) is not part of this derivation
-// yet: the run surface bounds its own wall clock and answers honestly, so a
-// long run surfaces as the agent's own budget_exhausted/run_error, never as
-// a BFF timeout.
-const DEFAULT_UPSTREAM_TIMEOUT_MS = 3600000;
-const TRANSLATION_RESERVE_MS = 30000; // the GPU translator's own hard timeout
-const FINALIZATION_MARGIN_MS = 5000; // metadata persistence + frame write + SSE teardown
-const DEADLINE_FLOOR_MS = 1000;
-
-/**
- * The EFFECTIVE upstream timeout — the one value BOTH consumers of the pair
- * read (the deadline derivation and the axios `timeout` option). A configured
- * timeout that cannot cover the reserves plus the floor would break the pair
- * rule (`deadline_ms + reserves > timeout`) and turn a bounded run into a
- * BFF-attributed abort — the misattribution the pairs doc forbids — so it is
- * absorbed: one warning names the knob (configured vs applied) and the
- * default applies to everything downstream.
- * @returns {number}
- */
-function resolveUpstreamTimeoutMs() {
-  const configured = parsePositiveInt(process.env.AGENT_UPSTREAM_TIMEOUT_MS, DEFAULT_UPSTREAM_TIMEOUT_MS, { min: 1 });
-  if (configured <= TRANSLATION_RESERVE_MS + FINALIZATION_MARGIN_MS + DEADLINE_FLOOR_MS) {
-    logger.warn('AgentFrameWriter.upstream_timeout_below_reserves', {
-      knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
-      configured,
-      applied: DEFAULT_UPSTREAM_TIMEOUT_MS
-    });
-    return DEFAULT_UPSTREAM_TIMEOUT_MS;
-  }
-  return configured;
-}
-
-/**
- * The agent-phase deadline the run request communicates: the upstream timeout
- * minus the translation and finalization reserves. The caller passes the
- * EFFECTIVE timeout (`resolveUpstreamTimeoutMs()` — the absorption happens
- * there, once, so the deadline and the wire-level timeout can never read two
- * different values).
- * @param {number} timeoutMs - The effective upstream timeout.
- * @returns {number}
- */
-function deriveDeadlineMs(timeoutMs) {
-  return Math.max(DEADLINE_FLOOR_MS, timeoutMs - TRANSLATION_RESERVE_MS - FINALIZATION_MARGIN_MS);
-}
-
-// ─── verdict projection ─────────────────────────────────────────────────────
-//
-// The verdict payload is the verification pipeline's projection contract
-// (agent/verification.py Verdict.payload()): grounding_status, is_grounded,
-// translation_mode, policy, judge, citations, invalid_citations, marking. The
-// frame carries it verbatim; the METADATA keeps its existing shape and takes
-// only the additive fields the client metadata contract names:
-// `grounding_status` (tri-state) + the derived `is_grounded`, plus the
-// source_documents mapped from the citations into the deployed envelope
-// variants.
-
-/**
- * Map one verdict citation (`{provenance, text, score}`) to the deployed
- * source_documents row shape — the mapping noagent/pipeline.py's
- * `source_document_envelope` performs server-side for the no-agent path:
- * a legacy corpus source carries `document_id` and no source marker; an OKF
- * concept carries the `concept_id`/`repo_id`/`bundle_version` trio and
- * `source: 'okf-concept'`. Identity-derived names, empty url/labels — the
- * deployed shape, no per-answer metadata round-trip.
- * @param {Object} citation
- * @returns {Object|null} The source_documents row, or null for a citation
- *   whose provenance is not an object (nothing invented for it).
- */
-function citationToSourceDocument(citation) {
-  const provenance = citation && citation.provenance;
-  if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance)) {
-    return null;
-  }
-  // The row fields both variants share; the variant adds its identity keys.
-  const identity = provenance.source === 'okf-concept' ? provenance.concept_id : provenance.file_id;
-  const entry = {
-    document_id: identity,
-    document_name: String(identity ?? '')
-      .replace(/_/g, ' ')
-      .trim(),
-    url: '',
-    categoryLabels: [],
-    serviceLabels: [],
-    score: typeof citation.score === 'number' ? citation.score : null
-  };
-  if (provenance.source === 'okf-concept') {
-    entry.concept_id = provenance.concept_id;
-    entry.source = 'okf-concept';
-    if (provenance.repo_id) {
-      entry.repo_id = provenance.repo_id;
-    }
-    if (provenance.bundle_version !== undefined && provenance.bundle_version !== null) {
-      entry.bundle_version = provenance.bundle_version;
-    }
-  }
-  return entry;
-}
-
-/**
- * Assemble the metadata object one agentic turn persists and streams.
- *
- * Base: the legacy empty-stream shape (`emptyStreamMetadata()` — abstained
- * null, filter_labels null), so an agentic doc is indistinguishable in shape
- * from a legacy one. The verdict overlays the additive grounding fields and
- * the citation set; a run WITHOUT a verdict event defaults to `unverified` —
- * never a confident default. The `agent_run` block (run_id + the terminal
- * usage record when one arrived) rides additively on the wire and into the
- * persisted doc — the version-record persistence of this story.
- *
- * @param {Object} params
- * @param {Function} params.emptyStreamMetadata - The route's metadata factory.
- * @param {Object|null} params.verdict - The captured verdict payload.
- * @param {string|null} params.runId - The seam run id.
- * @param {Object|null} params.usageRecord - The terminal usage record.
- * @returns {Object}
- */
-function assembleAgentMetadata({ emptyStreamMetadata, verdict, runId, usageRecord }) {
-  const metadata = emptyStreamMetadata();
-  if (verdict) {
-    metadata.grounding_status = verdict.grounding_status;
-    metadata.is_grounded = verdict.is_grounded === true;
-    // The envelope rows are the AGENT SERVICE's projection when the payload
-    // carries them (capabilities/citations.py source_documents_from_citations
-    // — the one owner of the mapping, shared with the no-agent lane). The
-    // BFF-side derivation below is the fallback for an older payload that
-    // names only the raw citations.
-    metadata.source_documents = Array.isArray(verdict.source_documents)
-      ? verdict.source_documents
-      : (Array.isArray(verdict.citations) ? verdict.citations : []).map(citationToSourceDocument).filter(Boolean);
-  } else {
-    metadata.grounding_status = 'unverified';
-    metadata.is_grounded = false;
-  }
-  metadata.agent_run = { run_id: runId ?? null };
-  if (usageRecord) {
-    metadata.agent_run.usage_record = usageRecord;
-  }
-  return metadata;
-}
-
-/**
- * The upstream JSON body to forward to the client — only a real object passes
- * through; anything else (a string body, an array, garbage) falls back to the
- * documented error name at the caller.
- * @param {Object|null} parsed - The parsed upstream body.
- * @returns {Object|null}
- */
-const passthroughBody = (parsed) => (parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null);
-
-/**
- * Read an upstream non-2xx body (a stream under `responseType: 'stream'`) and
- * parse it as JSON, best-effort — the 429/503 answers are passed through to
- * the client verbatim when they parse, with a generic fallback when they do
- * not. A body beyond the 64 KiB cap stops buffering (the prefix still parses
- * when it can) and warns: an operator must know a real body was cut, not see
- * a silent degrade to the fallback.
- * @param {Object} data - The axios response data (a Node stream).
- * @param {number} [status] - The upstream status, for the truncation warning.
- * @returns {Promise<{text: string, parsed: Object|null}>}
- */
-function readUpstreamBody(data, status) {
-  return new Promise((resolve) => {
-    if (!data || typeof data.on !== 'function') {
-      resolve({ text: '', parsed: null });
-      return;
-    }
-    const chunks = [];
-    let size = 0;
-    let truncated = false;
-    data.on('data', (chunk) => {
-      size += chunk.length;
-      if (size <= 65536) {
-        chunks.push(chunk);
-      } else if (!truncated) {
-        truncated = true;
-        logger.warn('AgentFrameWriter.upstream_body_truncated', {
-          status,
-          bytes: size
-        });
-      }
-    });
-    data.on('end', () => {
-      const text = Buffer.concat(chunks).toString('utf8');
-      let parsed;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        parsed = null;
-      }
-      resolve({ text, parsed });
-    });
-    data.on('error', () => resolve({ text: '', parsed: null }));
-  });
-}
+// The deadline pair, the citation mapping, the metadata assembly and the
+// upstream body reader are the SHARED contract module's (agent-run-contract.js,
+// story 2.4b) — this file is the streaming consumer; the non-streaming JSON
+// consumer (agent-json-result.js) reads the same homes.
 
 /**
  * Proxy one agentic streaming turn: POST /v1/runs, project the seam stream
@@ -642,9 +454,13 @@ async function proxyAgentRun({
   stream.on('end', () => {
     if (streamFinished) return;
     // A trailing data line that never got its newline is still a frame —
-    // flush the remainder through the parser before the terminal.
-    if (buffer.trim()) {
-      handleSeamDataLine(buffer);
+    // flush the remainder through the parser before the terminal. The buffer
+    // carries the raw `data: ` prefix (the chunk handler strips it before
+    // dispatch); passing it raw fed the parser a non-JSON line and the last
+    // frame was silently dropped.
+    const remainder = buffer.trim();
+    if (remainder) {
+      handleSeamDataLine(remainder.startsWith('data: ') ? remainder.slice(6) : remainder);
       buffer = '';
     }
     doAgentTerminal();
@@ -654,11 +470,8 @@ async function proxyAgentRun({
 module.exports = {
   proxyAgentRun,
   // Exposed for the tests that pin them — production code reads nothing here.
-  _internals: {
-    DEFAULT_UPSTREAM_TIMEOUT_MS,
-    TRANSLATION_RESERVE_MS,
-    FINALIZATION_MARGIN_MS,
-    deriveDeadlineMs,
-    resolveUpstreamTimeoutMs
-  }
+  // The names are the shared contract module's (agent-run-contract.js, where
+  // the definitions moved in 2.4b); the re-export keeps the frame-writer
+  // suite's pin surface unchanged.
+  _internals: contractInternals
 };

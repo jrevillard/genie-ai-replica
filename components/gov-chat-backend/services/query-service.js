@@ -5,6 +5,8 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const { normalizeRequestedLanguage } = require('./translation/language-request');
+const { isAgentPathEnabled } = require('./agent-routing');
+const { runAgentJsonTurn } = require('./agent-json-result');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib');
 const retrievalConfigClient = require('./retrieval-config-client');
@@ -1070,9 +1072,15 @@ class QueryService {
   /**
    * Create a new query
    * @param {Object} queryData - Query data
+   * @param {Object|null} headers - `{authorization}` for the OPEA call and
+   *   (agentic branch) the posture resolution.
+   * @param {Object} [options] - Story 2.4b: the agentic branch's translation
+   *   inputs `{targetLanguage, translator}` — the route resolves them (the
+   *   same resolution that refuses an unsupported language). The legacy
+   *   branch (chatqna translates server-side) passes none.
    * @returns {Promise<Object>} The created query
    */
-  async createQuery(queryData, headers = null) {
+  async createQuery(queryData, headers = null, options = {}) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
@@ -1166,9 +1174,36 @@ class QueryService {
       let opeaMetadata = null;
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
+      // Story 2.4b — the additive JSON latch: `translationFailed: true` rides
+      // the 201 body ONLY when the whole-answer translation failed (the
+      // sibling of the streaming `done.translationFailed` flag). Legacy
+      // branches never set it, so the flag-off return stays byte-identical.
+      let jsonTranslationFailed = false;
 
       // *** START: TEST MODE LOGIC ***
-      if (backendMode === 'test-mode') {
+      // Story 2.4b — the guarded agentic branch sits FIRST (the routing
+      // helper is the only way the non-streaming entry is exposed, AD-9):
+      // the agent leg consumes the seam stream (posture resolved ONCE here —
+      // the fan-out carrier below stays inside the legacy OPEA branch, so it
+      // never runs twice), aggregates the answer and the result flows into
+      // the ONE persist/analytics/return tail below. A genuine failure is a
+      // thrown typed error — the tail never runs, the doc stays unanswered.
+      if (isAgentPathEnabled()) {
+        logger.info('QueryService.create_query_agentic_branch', { queryId });
+        const turn = await runAgentJsonTurn({
+          queryService: this,
+          queryData,
+          queryId,
+          headers,
+          targetLanguage: options.targetLanguage,
+          translator: options.translator,
+          startTime
+        });
+        opeaResponseContent = turn.response;
+        opeaMetadata = turn.metadata;
+        opeaResponseTime = turn.responseTime;
+        jsonTranslationFailed = turn.translationFailed === true;
+      } else if (backendMode === 'test-mode') {
         logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
@@ -1178,16 +1213,6 @@ class QueryService {
         logger.info(`[DEBUG] Mock response generated in ${opeaResponseTime}ms.`);
         logger.info(`[DEBUG] Mock Response Content: ${opeaResponseContent}`);
         logger.info(`[DEBUG] Mock Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
-
-        const updateData = {
-          response: opeaResponseContent,
-          responseTime: opeaResponseTime,
-          isAnswered: true,
-          metadata: opeaMetadata
-        };
-        // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
-        this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
-        await this.queries.update(queryId, updateData);
       } else {
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
         const opeaUrl = opeaChatQnaUrl();
@@ -1249,17 +1274,24 @@ class QueryService {
         logger.info(`[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`);
         logger.info(`[DEBUG] OPEA Response Content: ${opeaResponseContent}`);
         logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
-
-        const updateData = {
-          response: opeaResponseContent,
-          responseTime: opeaResponseTime,
-          isAnswered: true,
-          metadata: opeaMetadata
-        };
-        // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
-        this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
-        await this.queries.update(queryId, updateData);
       }
+
+      // Story 2.4b — ONE persist/analytics/return tail for every branch
+      // (agentic, test-mode, legacy OPEA): the doc the mint above created is
+      // completed with the branch's answer + the assembled metadata (the
+      // `agent_run` block rides into the doc on the agentic branch), the
+      // sticky routed-graph set persists with it (story 1.3), analytics
+      // records the completed doc, and the SAME queryId is returned —
+      // continuity by construction, not by convention.
+      const updateData = {
+        response: opeaResponseContent,
+        responseTime: opeaResponseTime,
+        isAnswered: true,
+        metadata: opeaMetadata
+      };
+      // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
+      this._persistRoutedGraphs(updateData, opeaMetadata, queryId);
+      await this.queries.update(queryId, updateData);
 
       // Record the query in analytics
       if (this.analyticsService) {
@@ -1274,12 +1306,17 @@ class QueryService {
         totalDuration
       });
 
-      return {
+      const result = {
         queryId,
         response: opeaResponseContent,
         metadata: opeaMetadata,
         responseTime: opeaResponseTime
       };
+      if (jsonTranslationFailed) {
+        // Additive only: the legacy branches never carry the key.
+        result.translationFailed = true;
+      }
+      return result;
     } catch (error) {
       const totalDuration = Date.now() - startTime;
       logger.error('QueryService.create_query_failed', {

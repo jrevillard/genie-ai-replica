@@ -759,6 +759,19 @@ describe('QueryService', () => {
       expect(result).toBeDefined();
       expect(result.queryId).toBe('q1');
       expect(result.response).toBeDefined();
+      // Story 2.4b — the ONE persist/analytics tail serves the legacy
+      // branches too: the minted doc is COMPLETED (isAnswered, the branch's
+      // metadata) and analytics records the completed document.
+      expect(mockQueriesCollection.update).toHaveBeenCalledWith(
+        'q1',
+        expect.objectContaining({
+          response: result.response,
+          responseTime: expect.any(Number),
+          isAnswered: true,
+          metadata: expect.objectContaining({ source_documents: expect.any(Array) })
+        })
+      );
+      expect(mockAnalyticsService.recordQuery).toHaveBeenCalledTimes(1);
       delete process.env.CONTEXT_OPTION;
     });
 

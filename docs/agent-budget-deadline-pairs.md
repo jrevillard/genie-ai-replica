@@ -89,10 +89,15 @@ deadline_ms = AGENT_UPSTREAM_TIMEOUT_MS − TRANSLATION_RESERVE_MS − FINALIZAT
 ```
 
 with the reserves as named module constants beside the derivation in
-`components/gov-chat-backend/services/agent-frame-writer.js`:
+`components/gov-chat-backend/services/agent-run-contract.js` (the shared
+agent-run vocabulary module; story 2.4b moved the derivation there so the
+streaming frame writer and the non-streaming JSON consumer read ONE home):
+
 `TRANSLATION_RESERVE_MS = 30000` (the GPU translator's own hard timeout in
 `gpu-translate-backend.js`) and `FINALIZATION_MARGIN_MS = 5000` (metadata
-persistence, frame write, SSE teardown). The pair rule holds whenever the
+persistence + frame write + SSE teardown on the streaming path; on the
+non-streaming JSON path the same margin covers metadata persistence + JSON
+response assembly — no SSE teardown there). The pair rule holds whenever the
 timeout exceeds the reserves; a configured timeout at or below the reserves
 plus the floor (≤ 36000 ms on the shipped numbers) cannot — the resolution
 absorbs it (one warning names `AGENT_UPSTREAM_TIMEOUT_MS`, the 3600000
@@ -104,7 +109,9 @@ the BFF-attributed abort. The judge-overrun ceiling
 run surface bounds its own wall clock and answers honestly, so a long run
 surfaces as the agent's own `budget_exhausted`/`run_error`, never as a BFF
 timeout. Story 2.10 revisits the reserves when the translation-leg
-allowances land.
+allowances land. Story 2.4b: the non-streaming JSON path consumes the SAME
+derivation — `resolveUpstreamTimeoutMs`/`deriveDeadlineMs` serve both query
+entries from the one home, so the pair cannot drift between them.
 
 ## The timeout/deadline pair — the V08 derivation
 

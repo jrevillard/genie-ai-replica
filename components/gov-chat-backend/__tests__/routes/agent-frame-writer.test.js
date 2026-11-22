@@ -879,6 +879,30 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     const frames = parseSSEEvents(response.text);
     expect(frames.map((f) => f.type)).toEqual(['chunk', 'metadata', 'done']);
   });
+
+  it('the trailing line without its newline is still a frame (remainder flush)', async () => {
+    // The last frame arrives WITHOUT its closing newline: the buffer split
+    // leaves it in the remainder — the terminal flush must run it through
+    // the parser (prefix stripped), or the final usage record is silently
+    // lost from the persisted metadata.
+    setupAgentQuery();
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
+    });
+    await flush();
+    mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'ok' }, { seq: 0 }))}\n\n`);
+    mockStream.push(`data: ${JSON.stringify(envelope('run_finished', { outcome: 'answered' }, { seq: 1 }))}\n\n`);
+    mockStream.push(`data: ${JSON.stringify({ usage_record: USAGE_RECORD })}`); // NO trailing \n\n
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.agent_run).toEqual({ run_id: 'run-abc', usage_record: USAGE_RECORD });
+  });
 });
 
 describe('POST /api/queries/stream — translation on the agentic path (the shared relay)', () => {

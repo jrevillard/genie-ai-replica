@@ -3120,3 +3120,7 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/2-5-the-governed-answer-path-integration-slice.md`
   summary: Tool-name coupling duplicated — `taint.scan_tool_result` and `RetrievalLedger.record` each hardcode `search_knowledge`/`read_source` separately, no shared guard.
   evidence: blind B11 — a third retrieval-shaped tool registered later is silently unscanned and unledgered; no third tool exists today, so the shared guard (registry-derived names or a shared constant) is machinery without a current consumer.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
+  summary: The per-request keepAlive http/https agents and the upstream-call + status-mapping idiom are now duplicated across the two agent consumers (frame writer + JSON runner); extracting a shared run client that owns the agents and the call skeleton remains open.
+  evidence: Blind-hunter round G1 of story 2-12; the per-request agents are the deployed legacy idiom whose shared-agent refactor story 2.4's quality round already deferred (see its quality-round notes) — story 2.4b copied the idiom for the second consumer, so the duplication is now two sites wide and the shared run client is the follow-up that closes both.

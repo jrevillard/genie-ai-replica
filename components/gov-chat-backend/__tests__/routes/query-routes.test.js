@@ -1273,6 +1273,84 @@ describe('POST /', () => {
     expect(response.body.error).toBe('UNAUTHENTICATED');
     expect(response.body.message).toBe('token expired');
   });
+
+  // Story 2.4b — the flag-off wiring pin: the legacy entry only CHECKS the
+  // language (chatqna translates the answer server-side — no translator is
+  // built) and calls createQuery with EXACTLY the legacy two arguments (no
+  // options object, no third parameter). Together with the flag-on test
+  // below, the routing helper is provably the only diff between the two
+  // wirings of POST /.
+  it('with the agentic branch off: no translator is built and createQuery gets exactly the legacy arguments', async () => {
+    // An earlier test in the language suite leaves init REJECTING (its own
+    // scenario) — mockClear in beforeEach keeps implementations. This path
+    // needs the service READY: only the refusal check runs.
+    translationService.init.mockResolvedValue(undefined);
+    translationService.resolveLanguagePair.mockImplementation(() => ({
+      sourceLang: 'en',
+      targetLang: 'fr'
+    }));
+    queryService.createQuery.mockResolvedValue({ queryId: 'q1', response: 'r', metadata: {} });
+
+    const response = await authPost('/api/queries', {
+      sessionId: 's1',
+      text: 'hola',
+      context: { language: 'fr' }
+    });
+
+    expect(response.status).toBe(201);
+    expect(translationService.resolveLanguagePair).toHaveBeenCalledWith('en', 'fr');
+    expect(translationService.createMarkdownTranslator).not.toHaveBeenCalled();
+    expect(queryService.createQuery).toHaveBeenCalledTimes(1);
+    const [calledData, calledHeaders, thirdArg] = queryService.createQuery.mock.calls[0];
+    expect(calledData).toMatchObject({ sessionId: 's1', text: 'hola' });
+    expect(calledHeaders).toEqual({ authorization: `Bearer ${validToken}` });
+    expect(thirdArg).toBeUndefined();
+  });
+
+  // Story 2.4b — the flag-on wiring pin. This file loads with AGENT_ENABLED
+  // unset (the routing helper reads it once at module load: flag OFF for the
+  // whole file above), so the flag-on wiring runs through a FRESH module
+  // registry — the isolated require reads the flag ON and the route factory
+  // wires the agentic branch: the language resolution BUILDS the translator
+  // (the whole answer is translated here, post-run) and createQuery receives
+  // the {targetLanguage, translator} options. The mock factories re-run
+  // inside the isolation, so the fresh instances are captured from there;
+  // the file-level mocks stay untouched.
+  it('with the agentic branch on: the language resolution builds the translator and createQuery gets the options', async () => {
+    process.env.AGENT_ENABLED = '1';
+    let freshApp;
+    let freshQueryService;
+    let freshTranslation;
+    try {
+      jest.isolateModules(() => {
+        freshTranslation = require('../../services/translation-service');
+        freshTranslation.init.mockResolvedValue(undefined);
+        freshQueryService = require('../../services/query-service');
+        freshQueryService.createQuery.mockResolvedValue({ queryId: 'q1', response: 'r', metadata: {} });
+        freshApp = require('../../index').createApp({ services: { queryService: freshQueryService } });
+      });
+
+      const response = await request(freshApp)
+        .post('/api/queries')
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({ sessionId: 's1', text: 'hola', context: { language: 'fr' } });
+
+      expect(response.status).toBe(201);
+      // The agentic language resolution prepared the translator for the
+      // post-run whole-answer translation.
+      expect(freshTranslation.createMarkdownTranslator).toHaveBeenCalledWith('en', 'fr');
+      expect(freshQueryService.createQuery).toHaveBeenCalledTimes(1);
+      const [calledData, calledHeaders, options] = freshQueryService.createQuery.mock.calls[0];
+      expect(calledData).toMatchObject({ sessionId: 's1', text: 'hola' });
+      expect(calledHeaders).toEqual({ authorization: `Bearer ${validToken}` });
+      expect(options).toEqual({
+        targetLanguage: 'fr',
+        translator: expect.objectContaining({ translate: expect.any(Function) })
+      });
+    } finally {
+      delete process.env.AGENT_ENABLED;
+    }
+  });
 });
 
 // ============================================================

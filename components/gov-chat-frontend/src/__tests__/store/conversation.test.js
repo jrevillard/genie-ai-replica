@@ -718,6 +718,45 @@ describe('CAP-3 okf concept sources', () => {
     expect(row.type).toBe('LINK');
   });
 
+  // The snapshot rows the backend now writes for okf-concept
+  // citations arrive in the HISTORY payload's camelCase display shape plus
+  // the snake_case stable ids; translateSources must identify the row
+  // directly (no graft, no dead /api/files/<concept_id> URL).
+  it('translateSources: a snapshot files row carrying the okf stable ids resolves as okf-concept', () => {
+    const [row] = translateSources([
+      {
+        id: 'kenya_tax_rules',
+        documentName: 'kenya tax rules',
+        fileName: 'kenya_tax_rules',
+        url: null,
+        labels: [],
+        categoryLabel: '',
+        score: 0.8,
+        source: 'okf-concept',
+        concept_id: 'kenya_tax_rules',
+        repo_id: 'r-kenya',
+        bundle_version: 3
+      }
+    ]);
+    expect(row.id).toBe('kenya_tax_rules');
+    expect(row.url).toBe('');
+    expect(row.type).toBe('MD');
+    expect(row.source).toBe('okf-concept');
+    expect(row.conceptId).toBe('kenya_tax_rules');
+    expect(row.repoId).toBe('r-kenya');
+    expect(row.bundleVersion).toBe(3);
+  });
+
+  it('translateSources: a legacy snapshot files row (no okf identity) keeps the download-URL shape', () => {
+    const [row] = translateSources([
+      { id: 'doc-9', documentName: 'Report.pdf', fileName: 'Report.pdf', url: null, labels: [], score: 0.7 }
+    ]);
+    expect(row.url).toBe('/api/files/doc-9/download');
+    expect(row.source).toBeUndefined();
+    expect(row.repoId).toBeUndefined();
+    expect(row.conceptId).toBeNull();
+  });
+
   it('rehydrate grafts okf identity onto persisted concept rows and clears the dead URL', () => {
     sessionStorage.setItem(
       STORAGE_KEY,

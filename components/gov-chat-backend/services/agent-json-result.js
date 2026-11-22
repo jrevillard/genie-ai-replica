@@ -387,9 +387,10 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
 
   // ── whole-answer translation: the `handleStreamDone` non-relay branch's
   // semantics (post-run, request-resolved translator, fail-soft). The agent
-  // always answers English (the run body carries no language); a translator
-  // that is missing or fails never drops the answer — the English text
-  // stands and the failure travels as the additive latch.
+  // always answers English (the run body's `language` is the preparation
+  // hint, not an answer-language request); a translator that is missing or
+  // fails never drops the answer — the English text stands and the failure
+  // travels as the additive latch.
   let deliveredText = fullResponseText;
   let translationFailed = false;
   if (wantsTranslation(targetLanguage) && fullResponseText) {

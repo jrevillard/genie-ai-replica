@@ -3134,3 +3134,7 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
   summary: A legacy chatqna stream that ends with neither a `done` event nor any chunk text leaves the SSE response open forever (keepalive comment frames until the client gives up; the queries doc stays unanswered with no terminal state).
   evidence: Global review 1 (story 2-12), severity pre_existing — unchanged from origin/main (base line 643); adjacent to the V05 inventory §9 gap 3 (swallowed upstream error events). Fix: on `end` with no text and no handled done, still run the terminal (finalize empty + done) or end the response.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-12-non-streaming-integration-json-path.md`
+  summary: Test-mode precedence is asymmetric across the two query entries — on AGENT_ENABLED=1 + CONTEXT_OPTION=test-mode, POST /api/queries serves the deterministic mock (2.12's gate) while /api/queries/stream still serves the agent leg (it gates on the flag only).
+  evidence: FIX review of the 2.12 correction chain (non-blocking finding 2); the streaming entry has no test-mode concept anywhere today — the symmetric gate (or an explicit "test-mode deployments keep AGENT_ENABLED=0 for streaming" rule) belongs to story 2.9's SSE contract regression coverage.

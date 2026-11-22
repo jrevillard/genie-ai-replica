@@ -34,6 +34,7 @@
 const nodeCrypto = require('crypto');
 const dbService = require('../shared-lib/db-connection-service');
 const { resolveGraphSet } = require('./authz-resolver-service');
+const { servingRepos } = require('./retrieval-config-service');
 const { parseOkfScope } = require('./scope-authz-service');
 const keycloakAccess = require('./keycloak-access-service');
 const { writeAudit } = require('./audit-service');
@@ -190,10 +191,7 @@ async function resolveContext(input = {}) {
   return withSpan('okf.evalctx.resolve', async (span) => {
     const scopes = Array.isArray(input.scopes) ? input.scopes : [];
     const principalRefs = Array.isArray(input.principal_refs) ? input.principal_refs : [];
-    const { scopes: effective, isSuperAdmin, unreadable, invalid } = await effectiveScopes(
-      scopes,
-      principalRefs
-    );
+    const { scopes: effective, isSuperAdmin, unreadable, invalid } = await effectiveScopes(scopes, principalRefs);
     const view = await resolveGraphSet({ okfScopes: effective, isSuperAdmin });
 
     const openContext = effective.length === 0 && principalRefs.length === 0;
@@ -205,14 +203,14 @@ async function resolveContext(input = {}) {
       // never the fallback for an unreadable principal.
       warnings.push(
         `the principal reference(s) ${unreadable.join(', ')} could not be read, so the context ` +
-          'resolves NOTHING that can be trusted: the deployment\'s public set is NOT a fallback for ' +
+          "resolves NOTHING that can be trusted: the deployment's public set is NOT a fallback for " +
           'a principal that could not be read. Fix the reference, or refresh once the group resolves.'
       );
     }
     if (invalid.length) {
       warnings.push(
         `the scope string(s) ${invalid.join(', ')} are not valid okf scope strings and granted ` +
-          'nothing. The resolution is the authority\'s answer for the remaining scopes.'
+          "nothing. The resolution is the authority's answer for the remaining scopes."
       );
     }
     if (effective.length === 0 && view.scope_mode === 'closed') {
@@ -230,7 +228,7 @@ async function resolveContext(input = {}) {
       // principal still traverses the PUBLIC set — which is a true answer,
       // but not the one an operator naming a "restricted" group expects.
       warnings.push(
-        'the referenced group(s) carry no okf scope, so this context resolves the deployment\'s ' +
+        "the referenced group(s) carry no okf scope, so this context resolves the deployment's " +
           'DEFAULT (public) set — not a restricted one. If that is not what you meant, the group ' +
           'holds no scope.'
       );
@@ -288,7 +286,7 @@ async function createContext(payload = {}, opts = {}) {
     throw new EvalContextError(
       'PRINCIPAL_UNREADABLE',
       `the principal reference(s) ${resolved.unreadable.join(', ')} could not be read, so the context ` +
-        'cannot be resolved. The deployment\'s public set is not a fallback for a principal that ' +
+        "cannot be resolved. The deployment's public set is not a fallback for a principal that " +
         'could not be read.',
       422
     );
@@ -405,7 +403,7 @@ async function refreshContext(id, opts = {}) {
     throw new EvalContextError(
       'PRINCIPAL_UNREADABLE',
       `the principal reference(s) ${resolved.unreadable.join(', ')} could not be read, so the context ` +
-        'could not be refreshed. Its stored snapshot stands; the deployment\'s public set is not a ' +
+        "could not be refreshed. Its stored snapshot stands; the deployment's public set is not a " +
         'fallback for a principal that could not be read.',
       422
     );
@@ -452,6 +450,9 @@ async function refreshContext(id, opts = {}) {
  * recorded against version N stays comparable with the run recorded against
  * version N, and CI resolves from snapshots with no Keycloak at all.
  *
+ * NOT EXPORTED: an ungated read of the context document is exactly the
+ * side-door the carrier boundary closes. `carrierFor` is the only way in.
+ *
  * @param {string} contextId
  * @returns {Promise<{context: {id, version, hash, name}, repo_ids: string[], graph_names: string[], repos: Array}>}
  */
@@ -467,11 +468,61 @@ async function carrierOf(contextId) {
     },
     repo_ids: (resolved.repos || []).map((r) => r.repo_id),
     graph_names: resolved.graph_names || [],
-    // The serving ROWS, not only their ids: the caller's own per-repo gate
-    // (`callerMayTraverseRepo`) needs the row's `acl`, so the carrier
-    // boundary can narrow the carrier to what the caller may traverse.
+    // The frozen serving ROWS (repo_id + name + domain + graph_name — the
+    // projection resolveGraphSet makes; it does NOT carry `acl`, the per-repo
+    // gate having already been applied when the snapshot was resolved).
     repos: resolved.repos || []
   };
+}
+
+/**
+ * The STALENESS gate: the snapshot froze the serving graph NAMES, and a
+ * re-publish renames the serving graph (promoteGraph: `OKF_x_v1` ->
+ * `OKF_x_v2`). A frozen name that is no longer the live name for that
+ * repository names a corpus that does not exist — the retriever answers a
+ * missing graph with an empty result, so the run would be scored over
+ * nothing, or over a PARTLY stale corpus (the fail-open case: 13 of 14
+ * repositories re-published, the run completes and the record lists 14
+ * graph names while 13 corpora were measured).
+ *
+ * So the carrier is REFUSED, in total, with the remedy. The live name comes
+ * from `servingRepos()` — the SAME derivation the snapshot was built from —
+ * and the comparison is per REPOSITORY, never per name: a graph name is
+ * slug-derived, so a freed name can be re-minted by another repository and
+ * a name-only comparison would silently match the wrong corpus.
+ *
+ * A repository that no longer serves at all (retracted) is stale too.
+ *
+ * @param {{context: object, repos: Array}} carrier
+ */
+async function assertCarrierCurrent(carrier) {
+  const rows = Array.isArray(carrier.repos) ? carrier.repos : [];
+  if (!rows.length) return; // nothing frozen to check
+  const serving = await servingRepos();
+  const live = new Map(serving.map((r) => [r.repo_id, r.graph_name]));
+  const stale = [];
+  for (const row of rows) {
+    const liveName = live.get(row.repo_id);
+    if (!liveName) {
+      stale.push({ repo: row.name || row.repo_id, frozen: row.graph_name || null, live: null });
+    } else if (liveName !== row.graph_name) {
+      stale.push({ repo: row.name || row.repo_id, frozen: row.graph_name || null, live: liveName });
+    }
+  }
+  if (!stale.length) return;
+  const lines = stale.map((s) =>
+    s.live
+      ? `  repository "${s.repo}" now serves ${s.live}, but the context froze ${s.frozen}.`
+      : `  repository "${s.repo}" no longer serves anything, but the context froze ${s.frozen}.`
+  );
+  throw new EvalContextError(
+    'EVAL_CONTEXT_STALE',
+    `the evaluation context "${carrier.context.name}" (version ${carrier.context.version}) names serving ` +
+      `graphs that are no longer current:\n${lines.join('\n')}\n` +
+      'Refresh the evaluation context (POST /api/okf/eval-contexts/' +
+      `${carrier.context.id}/refresh) to measure the current corpus — ask a superadmin to refresh it.`,
+    409
+  );
 }
 
 /**
@@ -489,11 +540,17 @@ async function carrierOf(contextId) {
  * The snapshot is not rewritten — the stored context still says what it
  * resolved. This is the CARRIER, i.e. what this caller's run measures.
  *
+ * ORDER: the staleness gate runs over the carrier's FROZEN rows, BEFORE the
+ * narrowing. Narrowing first would drop the repositories this caller may not
+ * traverse, and the check would never see a stale one — and the context's
+ * hash (over the full frozen set) would no longer describe the measured set.
+ *
  * @param {string} contextId
  * @param {{okfScopes?: string[], isSuperAdmin?: boolean}} caller
  */
 async function carrierFor(contextId, caller = {}) {
   const carrier = await carrierOf(contextId);
+  await assertCarrierCurrent(carrier);
   const okfScopes = Array.isArray(caller.okfScopes) ? caller.okfScopes : [];
   const isSuperAdmin = !!caller.isSuperAdmin;
   const view = await resolveGraphSet({ okfScopes, isSuperAdmin });
@@ -504,9 +561,8 @@ async function carrierFor(contextId, caller = {}) {
       'CARRIER_NOT_TRAVERSABLE',
       allowed.size
         ? `this caller may traverse ${allowed.size} serving repository(ies) and the evaluation context ` +
-          'names none of them, so the run would measure nothing this caller may read'
-        : 'this caller may traverse no serving repository, so the evaluation context measures ' +
-          'nothing it can read',
+            'names none of them, so the run would measure nothing this caller may read'
+        : 'this caller may traverse no serving repository, so the evaluation context measures ' + 'nothing it can read',
       403
     );
   }
@@ -514,7 +570,12 @@ async function carrierFor(contextId, caller = {}) {
     ...carrier,
     repo_ids: rows.map((r) => r.repo_id),
     graph_names: rows.map((r) => r.graph_name).filter(Boolean),
-    repos: rows
+    repos: rows,
+    // The MEASURED set's own hash — over the repositories this caller may
+    // actually measure. The context's own hash is over its FULL frozen set,
+    // so the two are DIFFERENT populations after a narrowing, and the record
+    // carries both under names that say which is which.
+    measured_hash: repoSetHash(rows)
   };
 }
 
@@ -528,6 +589,5 @@ module.exports = {
   getContext,
   listContexts,
   refreshContext,
-  carrierOf,
   carrierFor
 };

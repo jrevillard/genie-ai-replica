@@ -416,7 +416,10 @@ describe('runSuite + summarizeRun', () => {
     const carrier = {
       context: { id: 'ec-9', name: 'analysts', version: 4, hash: 'hash9' },
       repo_ids: ['r-in', 'r-other'],
-      graph_names: ['OKF_in_v1', 'OKF_other_v1']
+      graph_names: ['OKF_in_v1', 'OKF_other_v1'],
+      // The MEASURED set's own hash — beside the context's hash, which
+      // identifies the version over the FULL frozen set.
+      measured_hash: 'measured9'
     };
     const run = await svc.runSuite('me', suite._key, { carrier });
     expect(headTestService.loadSiblings).toHaveBeenCalledWith(expect.anything(), 'me', {
@@ -426,6 +429,7 @@ describe('runSuite + summarizeRun', () => {
       context_id: 'ec-9',
       context_version: 4,
       context_hash: 'hash9',
+      measured_hash: 'measured9',
       repo_ids: ['r-in', 'r-other'],
       graph_names: ['OKF_in_v1', 'OKF_other_v1']
     });

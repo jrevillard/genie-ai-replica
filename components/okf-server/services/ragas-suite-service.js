@@ -2720,7 +2720,13 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           ? {
               context_id: carrier.context ? carrier.context.id : null,
               context_version: carrier.context ? carrier.context.version : null,
+              // The CONTEXT's hash (its FULL frozen set — it identifies the
+              // version) and the MEASURED set's own hash (the repositories
+              // this run actually served, after the carrier was narrowed to
+              // this caller's authority). Two runs are comparable when the
+              // measured hash matches.
               context_hash: carrier.context ? carrier.context.hash : null,
+              measured_hash: carrier.measured_hash || null,
               repo_ids: carrier.repo_ids || [],
               graph_names: carrier.graph_names || []
             }

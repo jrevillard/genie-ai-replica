@@ -622,7 +622,13 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         ? {
             context_id: carrier.context ? carrier.context.id : null,
             context_version: carrier.context ? carrier.context.version : null,
+            // The CONTEXT's hash — over its FULL frozen set: it identifies
+            // the version, not the measured set (which the carrier may have
+            // been narrowed to for this caller).
             context_hash: carrier.context ? carrier.context.hash : null,
+            // The MEASURED set's own hash — over the repositories this run
+            // actually raced. Two runs are comparable when this matches.
+            measured_hash: carrier.measured_hash || null,
             repo_count: carrier.repo_ids ? carrier.repo_ids.length : 0,
             graph_count: carrier.graph_names ? carrier.graph_names.length : 0
           }

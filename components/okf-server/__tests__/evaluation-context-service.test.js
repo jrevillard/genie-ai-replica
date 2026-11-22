@@ -389,10 +389,7 @@ describe('#2061 E-1/E-2: the carrier is narrowed to what the CALLER may traverse
     // routes, which are repo-scoped-admin. Without this, naming a context
     // id was a way to have a restricted repository measured and persisted
     // into a record the caller can read.
-    seedServing([
-      servingRow({ repo_id: 'r-public' }),
-      servingRow({ repo_id: 'r-fence-a', acl: { restricted: true } })
-    ]);
+    seedServing([servingRow({ repo_id: 'r-public' }), servingRow({ repo_id: 'r-fence-a', acl: { restricted: true } })]);
     const ctx = await evalCtx.createContext(
       { name: 'analysts', principal_refs: ['g-fence-a'] },
       { actor: { user_id: 'admin-1' } }
@@ -416,5 +413,88 @@ describe('#2061 E-1/E-2: the carrier is narrowed to what the CALLER may traverse
     await expect(
       evalCtx.carrierFor(ctx._key, { okfScopes: ['okf:t:r-other:read'], isSuperAdmin: false })
     ).rejects.toThrow(/may traverse/i);
+  });
+
+  test('the carrier carries the MEASURED set hash beside the context hash', async () => {
+    // The context hash is over its FULL frozen set; the measured hash is
+    // over the repositories this caller may actually measure. After a
+    // narrowing they are different populations, and the record must say
+    // which is which.
+    seedServing([
+      servingRow({ repo_id: 'r-public', name: 'public' }),
+      servingRow({ repo_id: 'r-fence-a', name: 'fencea', acl: { restricted: true } })
+    ]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: ['g-fence-a'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    const asAdmin = await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: true });
+    const asReader = await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: false });
+    expect(asAdmin.measured_hash).toEqual(expect.any(String));
+    expect(asReader.measured_hash).toEqual(expect.any(String));
+    // The two carriers measured different sets, so their measured hashes differ.
+    expect(asAdmin.measured_hash).not.toBe(asReader.measured_hash);
+    // The context's own hash is the SAME in both — it identifies the version.
+    expect(asAdmin.context.hash).toBe(asReader.context.hash);
+  });
+});
+
+describe('#2061 E-1/E-2: a STALE carrier is refused (the frozen graph name is gone)', () => {
+  beforeEach(() => {
+    mockDb._reset();
+    retrievalConfigService._resetServingCache();
+    writeAudit.mockClear();
+    delete process.env.OKF_SCOPE_MODE;
+  });
+
+  test('a repository re-published after the freeze REFUSES the carrier (409)', async () => {
+    // The snapshot froze the serving graph NAME. A re-publish renames the
+    // serving graph (OKF_alpha_v1 -> OKF_alpha_v2), so the frozen name names
+    // a corpus that no longer exists — the retriever answers a missing graph
+    // with nothing, and a PARTLY stale carrier is the fail-open case.
+    seedServing([servingRow({ repo_id: 'r-a', name: 'alpha', version: 1 })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    expect(ctx.resolved.graph_names).toEqual(['OKF_alpha_v1']);
+
+    seedServing([servingRow({ repo_id: 'r-a', name: 'alpha', version: 2 })]);
+    let error = null;
+    try {
+      await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: true });
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeTruthy();
+    expect(error.code).toBe('EVAL_CONTEXT_STALE');
+    expect(error.status).toBe(409);
+    // The message names BOTH names and the remedy.
+    expect(error.message).toContain('OKF_alpha_v1');
+    expect(error.message).toContain('OKF_alpha_v2');
+    expect(error.message).toMatch(/refresh/i);
+  });
+
+  test('a repository that no longer serves at all is stale too', async () => {
+    seedServing([servingRow({ repo_id: 'r-a', name: 'alpha', version: 1 })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    seedServing([]); // the repo was retracted
+    await expect(evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: true })).rejects.toThrow(
+      /no longer current/i
+    );
+  });
+
+  test('a carrier whose frozen names are still live is NOT refused', async () => {
+    seedServing([servingRow({ repo_id: 'r-a', name: 'alpha', version: 1 })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    seedServing([servingRow({ repo_id: 'r-a', name: 'alpha', version: 1 })]);
+    const carrier = await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: true });
+    expect(carrier.repo_ids).toEqual(['r-a']);
   });
 });

@@ -113,6 +113,9 @@ describe('#2061 E-2: the routing verdict says which carrier it was measured over
       context_id: 'ec-1',
       context_version: 3,
       context_hash: 'abc123',
+      // The MEASURED set's own hash, beside the context's hash (which
+      // identifies the version over the FULL frozen set).
+      measured_hash: null,
       repo_count: 2,
       graph_count: 2
     });

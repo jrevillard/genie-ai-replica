@@ -166,6 +166,23 @@ def case_is_non_latin(case: dict) -> bool:
     return has_non_latin_text(str(case.get("query", "")))
 
 
+def as_label_list(value) -> list[str]:
+    """The label shape a request carries: a LIST of labels, or a bare STRING
+    that is ONE label; an EMPTY value is no label at all.
+
+    The server's own rule (chatqna's ``core.label_contract``): a string is
+    one label (the legacy shape) and an empty label is not a scope. A string
+    split into characters would be a silent lie about the scope.
+    """
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    return []
+
+
 def base_case_id(case_id: str) -> str:
     """The case id behind a turn-indexed row id (``<case_id>#t<n>``) — the
     grammar :func:`turn_entries` owns, parsed in one place."""

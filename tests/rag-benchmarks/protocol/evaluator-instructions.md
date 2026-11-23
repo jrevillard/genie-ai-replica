@@ -219,8 +219,11 @@ manifest records it).
   (`filter_labels`, the noagent lane's requested labels). The report states
   whether the two match (`scope_matched`), names the cases whose effective
   scopes differ, records the labels the A capture SENT beside them, names the
-  cases whose requested labels never became an effective filter, and names the
-  cases that issued no request at all (a skipped capture). `scope_matched` is
-  `null` when at least one lane recorded no scope — the report never claims a
-  scope match it did not measure. For a case whose scopes differ, a retrieval
+  cases whose REQUESTED labels never became an effective filter (chatqna
+  collapses a category into its service, so a requested category can be
+  filtered out while the request carried it), and names the cases that issued
+  no request at all (a skipped capture). `scope_matched` is `null` when the
+  comparison was partial (a case scoped on one leg only) or absent, and
+  `false` when a mismatch was observed — the report never claims a scope match
+  it did not measure. For a case whose scopes differ, a retrieval
   or grounding difference reflects the SCOPE, not the pipeline.

@@ -1123,7 +1123,7 @@ def test_e01_names_the_cases_whose_requested_labels_never_reached_the_a_query():
     report = _build(captured_rows=captured)
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["scope_matched"] is None
-    assert scope["A"]["cases_whose_requested_labels_never_reached_the_A_query"] == ["c1"]
+    assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == ["c1"]
 
 
 def test_e01_m5_values_are_deep_redacted():
@@ -1462,7 +1462,7 @@ def test_e01_names_a_requested_label_that_never_became_a_filter():
     captured["c1"]["filter_labels"] = ["Timber"]
     report = _build(captured_rows=captured)
     scope = report["uncontrolled_differences"]["retrieval_scope"]
-    assert scope["A"]["cases_whose_requested_labels_never_reached_the_A_query"] == ["c1"]
+    assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == ["c1"]
 
 
 def test_e01_scope_match_is_null_when_the_comparison_is_partial():
@@ -1487,12 +1487,10 @@ def test_e01_scope_match_is_null_when_the_comparison_is_partial():
     assert scope["B"]["cases_without_a_recorded_scope"] == ["c2"]
 
 
-def test_capture_a_records_a_string_valued_label_as_one_label():
+def test_capture_a_records_a_string_valued_label_as_one_label(tmp_path):
     """The legacy string shape is ONE label — splitting it into characters
     would be a silent lie about the scope."""
-    workdir = Path("/tmp") / "e01-string-label"
-    workdir.mkdir(parents=True, exist_ok=True)
-    set_path = _set_file(workdir, extra_answerable=("c1",))
+    set_path = _set_file(tmp_path, extra_answerable=("c1",))
     entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
     for entry in entries:
         if entry["id"] == "c1":
@@ -1500,6 +1498,32 @@ def test_capture_a_records_a_string_valued_label_as_one_label():
     set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
     seam, _ = _seam({"c1": "a1"})
     result = drivers.run_config_a_capture(
-        set_path, workdir / "out", query=seam, corpus_fingerprint=CORPUS
+        set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS
     )
     assert result["rows"]["c1"]["retrieval_scope"]["sent_labels"]["category_labels"] == ["Tomato"]
+
+
+def test_capture_a_times_the_seam_call_only(tmp_path, monkeypatch):
+    """The A leg's wall_ms covers the seam call — the same work the B leg
+    times — not the row assembly around it."""
+
+    class _Clock:
+        """A monotonic clock that hands out the ticks in order and then holds
+        the last one (the capture reads it around the seam call)."""
+
+        def __init__(self, ticks):
+            self._ticks = list(ticks)
+            self._index = 0
+
+        def monotonic(self):
+            tick = self._ticks[min(self._index, len(self._ticks) - 1)]
+            self._index += 1
+            return tick
+
+    set_path = _set_file(tmp_path, extra_answerable=("c1",))
+    monkeypatch.setattr(drivers, "time", _Clock([100.0, 100.25]))
+    seam, _ = _seam({"c1": "a1"})
+    result = drivers.run_config_a_capture(
+        set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS
+    )
+    assert result["rows"]["c1"]["wall_ms"] == 250.0

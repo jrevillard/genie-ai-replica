@@ -54,7 +54,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from harness import write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
 
-from .evalset import turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
+from .evalset import as_label_list, turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -294,19 +294,6 @@ def _response_source_fields(body) -> dict:
     return fields
 
 
-def _as_label_list(value) -> list[str]:
-    """The label shape the request carries: a LIST of labels, or a bare
-    STRING that is ONE label (the legacy shape chatqna accepts — a string
-    split into characters would be a silent lie about the scope)."""
-    if value is None:
-        return []
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, (list, tuple)):
-        return [str(item) for item in value]
-    return []
-
-
 def _retrieval_scope(entry: dict) -> dict:
     """The label scope the A leg queried under, and the scope the case
     requested. The two legs' scopes are NOT the same construct — chatqna
@@ -318,10 +305,10 @@ def _retrieval_scope(entry: dict) -> dict:
     requested = context.get("requested_labels")
     return {
         "sent_labels": {
-            "category_labels": _as_label_list(entry.get("categoryLabels")),
-            "service_labels": _as_label_list(entry.get("serviceLabels")),
+            "category_labels": as_label_list(entry.get("categoryLabels")),
+            "service_labels": as_label_list(entry.get("serviceLabels")),
         },
-        "case_requested_labels": _as_label_list(requested),
+        "case_requested_labels": as_label_list(requested),
     }
 
 
@@ -403,14 +390,14 @@ def run_config_a_capture(
     recorded only on the rows that actually queried.
 
     The venue requirement: the seam drives chatqna through
-    ``run_eval.drive_query`` — the SAME call the anchor makes — so the capture
-    needs the bearer the anchor uses (``E2E_BEARER_TOKEN`` in the environment,
-    as ``run_eval``'s own loop refreshes it). The seam does not own the token
-    refresh/retry loop that ``run_eval`` runs around its queries (that loop
-    lives under ``eval/``, which this story must not edit — its ``harness_sha``
-    is the capture-artifact reuse identity); a venue that refuses an
-    unauthenticated query therefore fails the capture rows as 401s, exactly
-    as it would fail the anchor.
+    ``run_eval.drive_query`` — the SAME call the anchor makes — and mirrors
+    the anchor's own bearer path around it (a TTL-bounded refresh before the
+    drive, and a forced refresh plus ONE re-drive on a 401/403, both gated on
+    the anchor's refresh configuration). The anchor's three-attempt retry for
+    TRANSIENT failures is not mirrored: the capture records a per-case
+    failure row instead, and the report counts it. The bearer machinery lives
+    under ``eval/``, which this story must not edit — its ``harness_sha`` is
+    the capture-artifact reuse identity.
 
     The set's SECURITY cases are not queried: config A is the legacy fixed
     RAG — no authorization executor, no steerable agent — so they are

@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 64 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 65 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,7 +132,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 243 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 244 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
 the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
 ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
@@ -246,6 +246,24 @@ nit), every claim verified, all fixed.** The four important ones were holes in
 the report's own honesty: a credential-named key that survived the rule, a
 missing-label check that never fired, a capture that would 401 where the
 anchor answers, and a scope verdict published over a partial comparison.
+
+| F40' | The label-coercion test used a hardcoded `/tmp` path — the capture's resume reused the stale rows file, so the fix was defeated (and the correct code could fail) | important | **Fixed**: the test uses `tmp_path`, so the capture starts from an empty out-dir |
+| F41' | The capture's docstring still claimed the seam had no token refresh — the opposite of the code | important | **Fixed**: the docstring states the seam's TTL refresh, the forced refresh and the one re-drive, and the one thing it does NOT mirror (the anchor's transient retry) |
+| F42' | The redaction wrappers on the effective-label maps were a no-op (a list of strings) and implied protection they did not give | important | **Fixed**: the wrappers are gone; the comment states the real invariant (the effective filter is a list of label strings) |
+| F43' | The key `cases_whose_requested_labels_never_reached_the_A_query` overstated what it compares (the EFFECTIVE filter — chatqna collapses a category into its service) | important | **Fixed**: the key states what it compares, and the instructions explain the collapse |
+| F44' | The scope note said null means partial, while an observed mismatch published false over a partial comparison | important | **Fixed**: the note states that an observed mismatch publishes false even over a partial comparison |
+| F45' | The label coercion existed only on the write side — a string in a captured file was split into characters on the read | important | **Fixed**: one shared coercion (`evalset.as_label_list`) serves both sides |
+| F46' | The protocol's coercion returned `[""]` for an empty label, while the server treats an empty label as no scope at all | important | **Fixed**: the shared coercion mirrors the server's rule |
+| F47' | The wall-clock fix was uncovered | nit | **Fixed**: a test stubs the clock and pins the seam-only delta |
+| F48' | A bare `auth` / `session` key passed the credential rule (pre-existing, outside the diff) | nit | **Fixed**: the report's marker set covers them |
+
+**FIX-REVIEW (chain round 1) on the C2 correction diff — 8 findings (seven
+in-diff, one pre-existing residual), all confirmed, all fixed.** The
+reviewer's mutation matrix confirmed the C2 fixes themselves (the credential
+rule, the requested-label check, the bearer path, the scope comparison); the
+findings were the corrections' own edges — a stale-artifact test, a docstring
+that contradicted the code, a no-op "protection", an overstated key name, a
+note that contradicted the code, and a coercion that lived on only one side.
 
 ## Spec Change Log
 

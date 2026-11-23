@@ -57,7 +57,7 @@ from datetime import UTC, datetime
 
 from . import PROTOCOL_VERSION
 from . import pairs as pairs_mod
-from .evalset import base_case_id
+from .evalset import as_label_list, base_case_id
 from .manifest import SECRET_KEY_MARKERS, manifest_digest, sha256_json
 
 E01_REPORT_VERSION = "1.0.0"
@@ -152,7 +152,11 @@ _RESOURCE_KEY = "usage"
 # maps) — it never states two different things about the same datum.
 # The manifest's marker list (one spelling in the tree) plus the header name
 # the manifest's list does not carry.
-CREDENTIAL_MARKERS = tuple(marker.lower() for marker in SECRET_KEY_MARKERS) + ("authorization",)
+CREDENTIAL_MARKERS = (
+    tuple(marker.lower() for marker in SECRET_KEY_MARKERS)
+    # The names the manifest's list does not carry but a config map can.
+    + ("authorization", "auth", "session")
+)
 
 MEASUREMENT_KEY_NAMES = frozenset(
     {
@@ -738,11 +742,13 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
             without_scope.append(case_id)
             continue
         sent_labels = _redact_deep(scope.get("sent_labels") or {})
-        requested = [str(label) for label in (scope.get("case_requested_labels") or [])]
+        requested = as_label_list(scope.get("case_requested_labels"))
         sent[case_id] = sent_labels
         effective = _effective_filter_labels(row)
         if effective is not None:
-            a_effective[case_id] = _redact_deep(effective)
+            # The effective filter is a list of label STRINGS — there is no
+            # credential key in it to redact.
+            a_effective[case_id] = effective
         # The REQUESTED labels against the filter that was actually applied:
         # a requested label the filter never carried is the finding (not
         # merely an empty request).
@@ -752,7 +758,7 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     for case_id, row in sorted(b_rows.items()):
         effective = _effective_filter_labels(row)
         if effective is not None:
-            b_effective[case_id] = _redact_deep(effective)
+            b_effective[case_id] = effective
         elif isinstance(row, dict) and row.get("status") in ("ok", "http_error"):
             b_without_scope.append(case_id)
     compared = sorted(set(a_effective) & set(b_effective))
@@ -770,7 +776,7 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         "A": {
             "effective_filter_labels_per_case": a_effective,
             "labels_sent_per_case": sent,
-            "cases_whose_requested_labels_never_reached_the_A_query": differing,
+            "cases_whose_requested_labels_never_became_an_effective_filter": differing,
             "cases_that_never_queried": never_queried,
             "cases_without_a_recorded_scope": without_scope,
         },
@@ -785,9 +791,10 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         "cases_with_a_different_effective_scope": mismatched,
         "note": (
             "the comparison is the EFFECTIVE filter each lane applied (chatqna's response metadata"
-            " against the noagent row metadata); null means the comparison was partial (a case"
-            " scoped on one leg only) or absent — the report never claims a scope match it did not"
-            " measure (FR-27)"
+            " against the noagent row metadata); an observed mismatch publishes false even over a"
+            " partial comparison, and null means the comparison was partial (a case scoped on one"
+            " leg only) or absent — the report never claims a scope match it did not measure"
+            " (FR-27)"
         ),
     }
 

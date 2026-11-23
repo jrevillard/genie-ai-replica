@@ -31,15 +31,15 @@ Pour les équipes de service|Tenir les connaissances à jour en un seul endroit 
 ? VUES D’INTERFACE ILLUSTRATIVES
 Web · Vue 3|Consulter les réponses en continu et les documents associés, donner votre avis, puis conserver ou exporter la conversation.
 Mobile · Flutter|Consulter les réponses en continu et les documents associés sur Android et iOS. Retrouver vos sessions et partager une conversation au format PDF.
-= La langue, l’image de marque et les actions disponibles dépendent de la configuration du service.
+= La langue, l’identité visuelle et les actions disponibles dépendent de la configuration du service.
 ! Les clients web et mobile donnent accès aux mêmes connaissances et proposent des gestes familiers : poser une question, lire la réponse, consulter les documents associés et retrouver une conversation. Ces écrans illustrent une expérience possible ; ils ne garantissent pas une présentation ni des fonctions identiques dans chaque déploiement. L’essentiel est de pouvoir consulter les sources citées sur les différents canaux, selon la configuration du service.
 ~ web|mobile
 
 @rail|Une institution peut adapter l’assistant à ses services.|+light
-Image de marque et langues|Personnaliser l’apparence du site web et choisir les langues d’interface actives. La page de connexion de Keycloak possède son propre thème.
+Identité visuelle et langues|Personnaliser l’apparence du site web et choisir les langues d’interface actives. La page de connexion de Keycloak possède son propre thème.
 Connaissances|Choisir les documents, ou un dépôt OKF dont les connaissances sont préparées avant l’indexation. Restreindre les dépôts sensibles et accorder les droits de lecture nécessaires.
 Modèle et recherche|Sélectionner des modèles compatibles et ajuster la recherche, le reclassement et les instructions données au modèle. Valider l’effet avec des questions représentatives.
-! Certains choix sont visibles, d’autres se font en coulisses. L’image de marque et les langues actives façonnent l’accueil ; les documents, les modèles et les paramètres de recherche déterminent les réponses possibles ; les règles d’identité et d’accès définissent les informations que chacun peut consulter. Réutiliser l’application ne dispense pas de décisions locales : chaque service doit choisir ses contenus, définir les accès, préparer des questions représentatives et valider les résultats.
+! Certains choix sont visibles, d’autres se font en coulisses. L’identité visuelle et les langues actives façonnent l’accueil ; les documents, les modèles et les paramètres de recherche déterminent les réponses possibles ; les règles d’identité et d’accès définissent les informations que chacun peut consulter. Réutiliser l’application ne dispense pas de décisions locales : chaque service doit choisir ses contenus, définir les accès, préparer des questions représentatives et valider les résultats.
 ~ branding|locale|models|authz
 
 @flow|Plusieurs façons d’intégrer GENIE.AI à un écosystème existant.|+light

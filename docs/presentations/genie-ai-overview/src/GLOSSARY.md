@@ -59,6 +59,7 @@ point, and adjust the sentence around them so it reads naturally.
 | evidence in the permit example | justificatif | documento justificativo | подтверждающий документ | مستند داعم | 证明材料 |
 | knowledge available for serving | connaissances mises à disposition pour la recherche | conocimiento disponible para la búsqueda | знания, доступные для поиска | معرفة متاحة للبحث | 可供检索的知识 |
 | model endpoint | API du modèle | API del modelo | API модели | واجهة النموذج البرمجية | 模型 API |
+| branding | identité visuelle | identidad visual | оформление | الهوية البصرية | 品牌 |
 
 Keep `Pending` and `Ingest` unchanged when naming the exact interface states or
 actions. In explanatory prose, describe the document-ingestion workflow using

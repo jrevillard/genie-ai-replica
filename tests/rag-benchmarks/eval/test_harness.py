@@ -22,7 +22,6 @@ from unittest import mock
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import harness  # noqa: E402
 from harness import (  # noqa: E402
     HarnessError,
     docker_exec,
@@ -143,26 +142,37 @@ class TestKubectlExec:
 
 class TestResolveK8sPod:
     def test_operator_pin_wins(self, monkeypatch):
+        """A live pin is the resolution — the label path is not consulted."""
         monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-abc")
-        exists = mock.Mock(return_value=True)
-        with mock.patch("harness._pod_exists", exists):
-            assert resolve_k8s_pod("chatqna") == "chatqna-abc"
-        exists.assert_called_once_with("chatqna-abc", "genieai")
+        with mock.patch("harness._pod_exists", return_value=True):
+            with mock.patch("harness._run_kubectl") as labels:
+                assert resolve_k8s_pod("chatqna") == "chatqna-abc"
+        labels.assert_not_called()
 
     def test_stale_pin_falls_back_to_the_labels_with_a_warning(self, monkeypatch, capsys):
         """A pin naming a pod the rollout rotated away must not pin the run
-        to a corpse — it falls through to the label selectors."""
-        harness._warned_stale_pins.clear()
-        monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-dead")
-        fake = mock.Mock()
-        fake.returncode = 0
-        fake.stdout = "chatqna-live\n"
-        fake.stderr = ""
+        to a corpse — it falls through to the label selectors, and the
+        operator is told WHICH pin was dropped."""
+        # A pin name unique to this test: the once-only warning is per pin,
+        # so a name another test already warned about would say nothing here.
+        monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-stale-fallback")
         with mock.patch("harness._pod_exists", return_value=False):
             with mock.patch("harness._run_kubectl", return_value="chatqna-live\n"):
                 assert resolve_k8s_pod("chatqna") == "chatqna-live"
         out = capsys.readouterr().err
-        assert "chatqna-dead" in out and "falling back" in out
+        assert "chatqna-stale-fallback" in out
+
+    def test_the_stale_pin_warning_is_emitted_once_per_pin(self, monkeypatch, capsys):
+        """The fallback runs per exec — dozens of identical warning lines
+        would bury the run's own output, so the warning is once per pin."""
+        monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-stale-once")
+        with mock.patch("harness._pod_exists", return_value=False):
+            with mock.patch("harness._run_kubectl", return_value="chatqna-live\n"):
+                resolve_k8s_pod("chatqna")
+                resolve_k8s_pod("chatqna")
+                resolve_k8s_pod("chatqna")
+        out = capsys.readouterr().err
+        assert out.count("chatqna-stale-once") == 1
 
     def test_label_selector_resolves_the_live_pod(self, monkeypatch):
         monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)

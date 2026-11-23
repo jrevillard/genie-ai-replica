@@ -212,12 +212,15 @@ manifest records it).
   never as a like-for-like number. M-4 publishes no tolerance band: the
   thresholds are story 4.4's to sign. M-5 carries no surface unless the rows
   themselves record one (recorded, with the reason, in the report).
-- **The label scopes are different constructs — read the scope, never assume
-  it.** Config A's queries carry the entry's category/service labels; config
-  B's lane filters on the case context's `requested_labels`. The report
-  records the labels the A capture sent, names the cases whose
-  `requested_labels` never reached the A query, and names the cases that
-  never queried at all (a failed or skipped capture carries no scope): for
-  those cases, a retrieval or grounding difference reflects the SCOPE, not
-  the pipeline. The uncontrolled-differences section states the difference; it
-  never claims the legs retrieved the same scope.
+- **The label scopes are compared as EFFECTIVE filters — read the scope,
+  never assume it.** Each lane records the filter it actually applied:
+  config A's response metadata (`filter_labels`, after chatqna's
+  service-over-category collapse) and config B's row metadata
+  (`filter_labels`, the noagent lane's requested labels). The report states
+  whether the two match (`scope_matched`), names the cases whose effective
+  scopes differ, records the labels the A capture SENT beside them, names the
+  cases whose requested labels never became an effective filter, and names the
+  cases that issued no request at all (a skipped capture). `scope_matched` is
+  `null` when at least one lane recorded no scope — the report never claims a
+  scope match it did not measure. For a case whose scopes differ, a retrieval
+  or grounding difference reflects the SCOPE, not the pipeline.

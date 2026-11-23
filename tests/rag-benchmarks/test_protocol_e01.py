@@ -18,6 +18,7 @@ are fixture rows (no deployment case content). Proven here:
   lineage-mismatched ledger.
 """
 
+import argparse
 import json
 from pathlib import Path
 
@@ -67,8 +68,6 @@ def _set_file(tmp_path, extra_answerable=("c1", "c2", "c3", "c4")):
     fillers carry every other required class and security scenario)."""
     entries = [_case(i, f"q {i}", "answerable") for i in extra_answerable]
     entries.append(_case("_ans-restricted", "restricted q", "answerable", access="restricted"))
-    while sum(1 for e in entries if e["case_class"] == "answerable") < 2:
-        entries.append(_case("_ans-pad", "padding q", "answerable"))
     entries.append(_case("_unans", "the unanswerable question", "unanswerable"))
     entries.append(_case("_cite", "the citation question", "citation_check"))
     entries.append(_case("_lang-ru", "Как подать заявление?", "representative_language", script="non-latin"))
@@ -224,17 +223,20 @@ def _b_rows():
 
 
 def _build(reference=None, gated=None, **kw):
-    reference = reference if reference is not None else _manifests()[0]
-    gated = gated if gated is not None else _manifests()[1]
+    default_reference, default_gated = _manifests()
+    reference = reference if reference is not None else default_reference
+    gated = gated if gated is not None else default_gated
+    captured_rows = kw.pop("captured_rows", None)
+    capture_stamp = kw.pop("capture_stamp", _capture_stamp())
     args = dict(
         reference_manifest=reference,
         gated_manifest=gated,
         anchor_report=_anchor_report(),
-        captured_rows=_captured_rows(),
+        capture={"cases": captured_rows if captured_rows is not None else _captured_rows()},
         b_rows=_b_rows(),
-        capture_stamp=_capture_stamp(),
         created_utc=CREATED,
     )
+    args["capture"]["capture"] = capture_stamp
     args.update(kw)
     return build_e01_report(**args)
 
@@ -244,7 +246,7 @@ def _build(reference=None, gated=None, **kw):
 # ---------------------------------------------------------------------------
 
 
-def _seam(answers, *, statuses=None, failures=(), sources_by_id=None):
+def _seam(answers, *, statuses=None, failures=(), sources_by_id=None, filter_labels_by_id=None):
     """The fake seam (the contract the default wraps run_eval into):
     ``entry -> {"http_status", "body", "answer"}``; an id in ``failures``
     raises (the transport-death shape)."""
@@ -256,8 +258,14 @@ def _seam(answers, *, statuses=None, failures=(), sources_by_id=None):
             raise OSError("docker exec failed: transport down")
         status = (statuses or {}).get(entry["id"], 200)
         body = {"response": answers.get(entry["id"], "")}
+        metadata = {}
         if entry["id"] in (sources_by_id or {}):
-            body["metadata"] = {"source_documents": sources_by_id[entry["id"]], "citations": ["cit-1"]}
+            metadata["source_documents"] = sources_by_id[entry["id"]]
+            metadata["citations"] = ["cit-1"]
+        if entry["id"] in (filter_labels_by_id or {}):
+            metadata["filter_labels"] = filter_labels_by_id[entry["id"]]
+        if metadata:
+            body["metadata"] = metadata
         return {
             "http_status": status,
             "body": json.dumps(body),
@@ -550,9 +558,8 @@ def test_e01_inputs_are_digested_and_the_report_is_reproducible_under_the_pin():
         reference_manifest=reference,
         gated_manifest=gated,
         anchor_report=anchor,
-        captured_rows=captured,
+        capture={"cases": captured, "capture": _capture_stamp()},
         b_rows=b_rows,
-        capture_stamp=_capture_stamp(),
     )
     first = build_e01_report(created_utc=CREATED, **kw)
     second = build_e01_report(created_utc=CREATED, **kw)
@@ -766,15 +773,13 @@ def test_capture_a_cli_writes_the_rows_file(tmp_path, monkeypatch):
             set_path_arg, out_dir, entries=entries, query=seam, **kwargs
         ),
     )
-    args = type(
-        "Args",
-        (),
-        {
-            "set_path": str(set_path),
-            "out_dir": str(tmp_path / "out"),
-            "corpus_fingerprint": CORPUS,
-        },
-    )()
+    args = argparse.Namespace(
+        set_path=str(set_path),
+        out_dir=str(tmp_path / "out"),
+        corpus_fingerprint=CORPUS,
+        corpus_collection="COLL",
+        compute_fingerprint=False,
+    )
     assert cmd_capture_a(args) == 0
     assert (tmp_path / "out" / "config-a.captured.json").exists()
 
@@ -784,15 +789,13 @@ def test_capture_a_cli_refuses_an_under_composed_set(tmp_path):
         json.dumps({"_meta": {"provenance": "assessment"}, "entries": [_case("c1", "q", "answerable")]}),
         encoding="utf-8",
     )
-    args = type(
-        "Args",
-        (),
-        {
-            "set_path": str(tmp_path / "set.json"),
-            "out_dir": str(tmp_path / "out"),
-            "corpus_fingerprint": CORPUS,
-        },
-    )()
+    args = argparse.Namespace(
+        set_path=str(tmp_path / "set.json"),
+        out_dir=str(tmp_path / "out"),
+        corpus_fingerprint=CORPUS,
+        corpus_collection="COLL",
+        compute_fingerprint=False,
+    )
     assert cmd_capture_a(args) == 1
 
 
@@ -808,21 +811,17 @@ def test_e01_cli_builds_the_report_and_prints_the_digest(tmp_path, capsys):
     )
     (run_dir / "config-b.rows.json").write_text(json.dumps({"cases": _b_rows()}), encoding="utf-8")
     out = tmp_path / "e01.report.json"
-    args = type(
-        "Args",
-        (),
-        {
-            "reference_manifest": str(run_dir / "reference.manifest.json"),
-            "gated_manifest": str(run_dir / "config-b.manifest.json"),
-            "anchor_report": str(run_dir / "config-a.report.json"),
-            "captured_rows": str(run_dir / "config-a.captured.json"),
-            "b_rows": str(run_dir / "config-b.rows.json"),
-            "defects": None,
-            "out": str(out),
-            "created_utc": CREATED,
-            "seed": None,
-        },
-    )()
+    args = argparse.Namespace(
+        reference_manifest=str(run_dir / "reference.manifest.json"),
+        gated_manifest=str(run_dir / "config-b.manifest.json"),
+        anchor_report=str(run_dir / "config-a.report.json"),
+        captured_rows=str(run_dir / "config-a.captured.json"),
+        b_rows=str(run_dir / "config-b.rows.json"),
+        defects=None,
+        out=str(out),
+        created_utc=CREATED,
+        seed=None,
+    )
     assert cmd_e01(args) == 0
     report = json.loads(out.read_text(encoding="utf-8"))
     assert report["artifact"] == "e01-report"
@@ -854,21 +853,17 @@ def test_e01_cli_passes_the_ledger_through(tmp_path):
     )
     (run_dir / "reference.defects.json").write_text(json.dumps(ledger), encoding="utf-8")
     out = tmp_path / "e01.report.json"
-    args = type(
-        "Args",
-        (),
-        {
-            "reference_manifest": str(run_dir / "reference.manifest.json"),
-            "gated_manifest": str(run_dir / "config-b.manifest.json"),
-            "anchor_report": str(run_dir / "config-a.report.json"),
-            "captured_rows": str(run_dir / "config-a.captured.json"),
-            "b_rows": str(run_dir / "config-b.rows.json"),
-            "defects": str(run_dir / "reference.defects.json"),
-            "out": str(out),
-            "created_utc": CREATED,
-            "seed": None,
-        },
-    )()
+    args = argparse.Namespace(
+        reference_manifest=str(run_dir / "reference.manifest.json"),
+        gated_manifest=str(run_dir / "config-b.manifest.json"),
+        anchor_report=str(run_dir / "config-a.report.json"),
+        captured_rows=str(run_dir / "config-a.captured.json"),
+        b_rows=str(run_dir / "config-b.rows.json"),
+        defects=str(run_dir / "reference.defects.json"),
+        out=str(out),
+        created_utc=CREATED,
+        seed=None,
+    )
     assert cmd_e01(args) == 0
     report = json.loads(out.read_text(encoding="utf-8"))
     assert report["reference_defects"]["present"] is True
@@ -886,21 +881,17 @@ def test_e01_cli_refuses_a_missing_leg_artifact_naming_it(tmp_path, capsys):
         json.dumps({"cases": _captured_rows(), "capture": _capture_stamp()}), encoding="utf-8"
     )
     # config-b.rows.json deliberately absent.
-    args = type(
-        "Args",
-        (),
-        {
-            "reference_manifest": str(run_dir / "reference.manifest.json"),
-            "gated_manifest": str(run_dir / "config-b.manifest.json"),
-            "anchor_report": str(run_dir / "config-a.report.json"),
-            "captured_rows": str(run_dir / "config-a.captured.json"),
-            "b_rows": str(run_dir / "config-b.rows.json"),
-            "defects": None,
-            "out": str(tmp_path / "e01.report.json"),
-            "created_utc": CREATED,
-            "seed": None,
-        },
-    )()
+    args = argparse.Namespace(
+        reference_manifest=str(run_dir / "reference.manifest.json"),
+        gated_manifest=str(run_dir / "config-b.manifest.json"),
+        anchor_report=str(run_dir / "config-a.report.json"),
+        captured_rows=str(run_dir / "config-a.captured.json"),
+        b_rows=str(run_dir / "config-b.rows.json"),
+        defects=None,
+        out=str(tmp_path / "e01.report.json"),
+        created_utc=CREATED,
+        seed=None,
+    )
     assert cmd_e01(args) == 1
     assert "B rows" in capsys.readouterr().err
     assert not (tmp_path / "e01.report.json").exists()
@@ -983,11 +974,7 @@ def test_capture_a_skips_the_security_scenarios_and_records_them(tmp_path):
     set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
     seam, calls = _seam({"c1": "a1", "c2": "a2"})
     result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
-    security_ids = {
-        case_id
-        for case_id in result["rows"]
-        if case_id.startswith("_sec-") or "#t" in case_id and case_id.startswith("_sec-")
-    }
+    security_ids = {case_id for case_id in result["rows"] if case_id.startswith("_sec-")}
     assert security_ids, "the set carries security cases — the capture must record them"
     for case_id in security_ids:
         row = result["rows"][case_id]
@@ -1024,7 +1011,11 @@ def test_capture_a_stamps_the_set_digest_and_the_corpus(tmp_path):
     seam, _ = _seam({"c1": "a1", "c2": "a2"})
     result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
     expected = hashlib.sha256(set_path.read_bytes()).hexdigest()
-    assert result["capture"] == {"assessment_set_sha256": expected, "corpus_fingerprint": CORPUS}
+    assert result["capture"] == {
+        "assessment_set_sha256": expected,
+        "corpus_fingerprint": CORPUS,
+        "corpus_fingerprint_source": "pinned",
+    }
     written = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
     assert written["capture"] == result["capture"]
     # Without a corpus fingerprint the capture refuses — the stamp is mandatory.
@@ -1353,13 +1344,19 @@ def test_capture_a_writes_the_rows_file_only_through_the_case_loop(tmp_path):
 
 
 def test_e01_keeps_every_measurement_name_it_declares():
-    """The measurement-name allowlist is a CONTRACT with the judge — every
-    entry must survive the redaction."""
+    """The measurement rule is a CONTRACT with the judge — the declared names
+    survive, a token COUNT survives even outside the allowlist, and a token
+    CREDENTIAL does not."""
     from protocol.e01 import MEASUREMENT_KEY_NAMES
 
     for name in MEASUREMENT_KEY_NAMES:
         kept = e01_mod._redact_deep({name: 1})
         assert name in kept, f"{name} is allowlisted but the redaction drops it"
+    # A count the allowlist does not list (the rule covers the suffix).
+    assert "cached_tokens" in e01_mod._redact_deep({"cached_tokens": 1})
+    # A credential that ends like a count is still dropped.
+    assert "access_tokens" not in e01_mod._redact_deep({"access_tokens": "LEAK"})
+    assert "api_token" not in e01_mod._redact_deep({"api_token": "LEAK"})
 
 
 def test_e01_m5_keeps_the_token_counts_the_judge_reads():
@@ -1393,3 +1390,35 @@ def test_e01_compares_the_raw_maps_and_emits_the_redacted_ones():
     assert model_ids["identical"] is False
     assert "api_key" not in model_ids["B"]
     assert "B-KEY" not in json.dumps(report)
+
+
+def test_capture_a_records_the_effective_filter_labels(tmp_path):
+    """chatqna's response metadata carries the EFFECTIVE filter it applied —
+    the A side of the scope comparison. A response without it records none."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+    seam, _ = _seam({"c1": "a1", "c2": "a2"}, filter_labels_by_id={"c1": ["Forestry"]})
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    assert result["rows"]["c1"]["filter_labels"] == ["Forestry"]
+    assert "filter_labels" not in result["rows"]["c2"]
+
+
+def test_e01_compares_the_effective_scope_of_both_legs():
+    """Both lanes record the filter they ACTUALLY applied — the comparison is
+    a measured fact, not a proxy."""
+    captured = _captured_rows()
+    captured["c1"]["filter_labels"] = ["Forestry"]
+    rows = _b_rows()
+    rows["c1"]["metadata"] = {"filter_labels": ["Forestry"]}
+    report = _build(captured_rows=captured, b_rows=rows)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["scope_matched"] is True
+    assert scope["cases_with_a_different_effective_scope"] == []
+    assert scope["A"]["effective_filter_labels_per_case"]["c1"] == ["Forestry"]
+    assert scope["B"]["effective_filter_labels_per_case"]["c1"] == ["Forestry"]
+
+    # A different effective scope is named, not averaged away.
+    rows["c1"]["metadata"] = {"filter_labels": ["Other"]}
+    report = _build(captured_rows=captured, b_rows=rows)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["scope_matched"] is False
+    assert scope["cases_with_a_different_effective_scope"] == ["c1"]

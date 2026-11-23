@@ -3162,3 +3162,7 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/4-1-evaluation-harness-one-runway.md`
   summary: tests/rag-benchmarks/CLAUDE.md's Layout tree predates the story-4.1 protocol/ package and its five test files.
   evidence: Global code-review round 1 (confirmed — the Layout section enumerates eval/, scripts/, capture_baseline.py only). Deferred per protocol: the fix edits an agent-context file (CLAUDE.md). Next toucher of tests/rag-benchmarks extends the tree with protocol/ (evalset/manifest/pairs/gate/reuse/drivers/run_protocol/config_b_driver), the sample sets, the evaluator instructions and the test_protocol_*.py files.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/4-3-e01-behavior-preservation-a-vs-b.md`
+  summary: The run manifest records `model_ids` and `prompt_digests` unredacted — a credential-named key inside either map would reach the committed manifest (the E01 report redacts what it copies, the manifest itself does not).
+  evidence: Found by story 4.3's altitude review (the manifest's `redact()` covers `resolved_env` only, and is top-level-only). Story 4.1 owns the manifest's shape; deepening its redaction changes every manifest digest, which story 4.4's thresholds lineage references — so the fix belongs to the manifest's owner, not to this story.

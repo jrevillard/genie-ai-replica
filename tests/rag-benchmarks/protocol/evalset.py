@@ -166,6 +166,12 @@ def case_is_non_latin(case: dict) -> bool:
     return has_non_latin_text(str(case.get("query", "")))
 
 
+def base_case_id(case_id: str) -> str:
+    """The case id behind a turn-indexed row id (``<case_id>#t<n>``) — the
+    grammar :func:`turn_entries` owns, parsed in one place."""
+    return str(case_id).split("#", 1)[0]
+
+
 def turn_entries(case: dict) -> list[dict]:
     """The case's per-turn execution entries — ONE expansion, shared by the
     drivers and the verdict layer so the row ids and the verdict ids can never

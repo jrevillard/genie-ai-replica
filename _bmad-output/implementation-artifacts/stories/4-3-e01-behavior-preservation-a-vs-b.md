@@ -168,6 +168,50 @@ carries the judgment inputs, never verdicts. The V03 deployment record
 the venue; the report carries the deployment identity through the two legs'
 run manifests.
 
+**Quality phase — /simplify over the full story diff (four angles: reuse,
+simplification, efficiency, altitude; 35 raw findings, deduplicated): 19
+applied, 16 skipped with reasons.** The applied ones (all mechanical, all
+covered by the suite): the credential markers are derived from the manifest's
+list instead of a copy; the latency statistics reuse the capture machinery's
+`median`/`mad` (one 1.4826 scaling in the tree); the M-5 resource surface is a
+NAMED key (`usage`) instead of a substring zoo; the report's comparison runs
+on the RAW maps and only the emitted copies are redacted; the capture file is
+ONE input (its rows and its stamp cannot be paired from two captures); the
+turn-id grammar is parsed by one helper (`evalset.base_case_id`); the capture
+records the EFFECTIVE filter chatqna applied and the report compares the two
+legs' effective scopes (`scope_matched` is a measured fact now); the capture
+reuses the shared corpus arguments, so the corpus fingerprint can be MEASURED
+(`--compute-fingerprint`) instead of only declared; the row merge carries the
+envelope keys generically; the skip row is built in the capture's own
+vocabulary; the wall clock is measured once; the rows file is updated in place
+(no full-dict copy per case); the redaction no longer deep-copies twice; the
+report's lineage is derived by one helper; the dimensions are built from
+`M_DIMENSIONS`; the latency surfaces are two direct calls; the capture's
+refusal is one loop over the two stamp fields; the story's stale claims (the
+counts, the lint invocation, the CI-lane claim) are corrected.
+
+Skipped with reasons: the shared credential rule in `manifest.redact` (4.1's
+surface — deepening it changes every manifest digest, and the thresholds
+lineage story 4.4 signs against those digests); a shared lineage-artifact
+module (a third family belongs to story 4.4's decision, not this story's
+machinery); the capture inside `run_eval`'s own loop (it would change
+`harness_sha` — the reuse identity — so the venue requirement is documented
+in the capture's docstring instead); the shared test fixtures in a
+`conftest.py` (it would touch story 4.1's and 4.2's test files, outside this
+diff); the per-case JSON re-parse in the seam (the seam contract stays
+simple — the cost is microseconds per case); the repeated row passes in the
+dimension builders (readability over a few milliseconds at 1000 cases); the
+`available` flag, the refusal base class, the CLI loader table and the counter
+helpers (each would make the code less readable for no behavioural gain);
+the per-case rows-file rewrite (the same pattern the B and C drivers use — the
+write stays, the dict copy is gone).
+
+**Deferred (not this story's defect):** the run manifest records
+`model_ids` and `prompt_digests` unredacted (story 4.1's surface). The E01
+report redacts what it copies, but a credential-named key inside a manifest
+map would still reach the committed manifest — filed as an issue and recorded
+in `deferred-work.md`.
+
 ## Spec Change Log
 
 ## Review Triage Log

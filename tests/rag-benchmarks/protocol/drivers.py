@@ -156,18 +156,18 @@ def _read_rows_file(rows_path: Path) -> dict:
 
 
 def _merge_rows(prior: dict, new: dict) -> dict:
-    """Prior + new rows (new wins per case id) — the per-id invariant."""
+    """Prior + new rows (new wins per case id) — the per-id invariant, and the
+    ENVELOPE keys (``resolved``, ``capture``, …) ride along: the new value
+    wins, the prior's otherwise. A new envelope key needs no new branch here.
+    """
     merged = dict(prior.get("cases") or {})
     merged.update(new.get("cases") or {})
     out = {"cases": merged}
-    resolved = new.get("resolved") or prior.get("resolved")
-    if resolved is not None:
-        out["resolved"] = resolved
-    # The capture stamp rides the rows file (the E01 join verifies it against
-    # the manifests — a capture taken over another set/corpus never joins).
-    stamp = new.get("capture") or prior.get("capture")
-    if stamp is not None:
-        out["capture"] = stamp
+    for key in set(prior) | set(new):
+        if key == "cases":
+            continue
+        value = new.get(key)
+        out[key] = value if value is not None else prior.get(key)
     return out
 
 
@@ -246,6 +246,9 @@ _A_CAPTURE_KEY_TYPES = {
     "citations": list,
     "abstained": bool,
     "abstention_reason": str,
+    # The EFFECTIVE filter chatqna applied (its response metadata) — the A
+    # side of the scope comparison against the B lane's metadata.
+    "filter_labels": list,
 }
 
 
@@ -311,7 +314,6 @@ def _capture_one_entry(entry: dict, query) -> dict:
     row: dict[str, Any] = {"case_id": entry["id"]}
     try:
         result = query(entry)
-        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
         status = int(result.get("http_status") or 0)
         if 200 <= status < 300:
             row["status"] = "ok"
@@ -328,11 +330,10 @@ def _capture_one_entry(entry: dict, query) -> dict:
         # skipped) sent nothing, so it records no scope.
         row["retrieval_scope"] = _retrieval_scope(entry)
     except Exception as failed:  # noqa: BLE001 — a per-case failure is a row, not a crash
-        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
         row["status"] = "failure"
         row["error_type"] = type(failed).__name__
         row["error"] = _error_preview(failed)
-    row["wall_ms"] = wall_ms
+    row["wall_ms"] = round((time.monotonic() - started) * 1000.0, 1)
     row.update(_turn_field(entry))
     return row
 
@@ -344,6 +345,7 @@ def run_config_a_capture(
     entries: list[dict] | None = None,
     query=None,
     corpus_fingerprint: str | None = None,
+    corpus_fingerprint_source: str = "pinned",
 ) -> dict:
     """Capture config A's per-case answers over the assessment set (story 4.3).
 
@@ -374,6 +376,16 @@ def run_config_a_capture(
     CONTINUES — one broken case never loses the set. The retrieval scope is
     recorded only on the rows that actually queried.
 
+    The venue requirement: the seam drives chatqna through
+    ``run_eval.drive_query`` — the SAME call the anchor makes — so the capture
+    needs the bearer the anchor uses (``E2E_BEARER_TOKEN`` in the environment,
+    as ``run_eval``'s own loop refreshes it). The seam does not own the token
+    refresh/retry loop that ``run_eval`` runs around its queries (that loop
+    lives under ``eval/``, which this story must not edit — its ``harness_sha``
+    is the capture-artifact reuse identity); a venue that refuses an
+    unauthenticated query therefore fails the capture rows as 401s, exactly
+    as it would fail the anchor.
+
     The set's SECURITY cases are not queried: config A is the legacy fixed
     RAG — no authorization executor, no steerable agent — so they are
     recorded as skipped rows with story 4.2's reason, exactly like the A
@@ -399,6 +411,9 @@ def run_config_a_capture(
     stamp = {
         "assessment_set_sha256": sha256_file(set_path),
         "corpus_fingerprint": corpus_fingerprint,
+        # "computed" = the fingerprint was measured from the corpus content
+        # hashes; "pinned" = the operator's declaration. The report says so.
+        "corpus_fingerprint_source": corpus_fingerprint_source,
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set
@@ -432,15 +447,18 @@ def run_config_a_capture(
     prior = _merge_rows(prior, {"cases": {}, "capture": stamp})
 
     seam = query or _default_a_query
+    cases = prior.setdefault("cases", {})
     for entry in pending:
         skipped = skips.get(entry["id"])
         if skipped is not None:
-            row = dict(skipped)
-            row["status"] = "skipped"
-            row["wall_ms"] = 0.0
+            # The skip row in the CAPTURE's own vocabulary (status, not the
+            # config-C outcome of the reference run's rows).
+            row = {"case_id": entry["id"], "status": "skipped", "wall_ms": 0.0}
+            row["reason"] = skipped.get("reason", A_SECURITY_SKIP_REASON)
+            row.update(_turn_field(entry))
         else:
             row = _capture_one_entry(entry, seam)
-        prior = _merge_rows(prior, {"cases": {entry["id"]: row}})
+        cases[entry["id"]] = row
         write_json(rows_path, prior, ensure_ascii=False)
 
     return {

@@ -1,0 +1,8 @@
+# The gate's refusal — the gated config-B leg, verbatim
+# command: run_protocol.py assess --config B --set assessment-set.json --out-dir . --corpus-collection GRAPH_SOURCE --compute-fingerprint
+# date: 2026-11-23 (forge k3s); the A-leg reference manifest EXISTS in this directory
+# (reference.manifest.json, digest-stamped, same corpus + set) — the refusal that
+# remains is the SECOND predecessor: story 4.4's signed thresholds file.
+
+REFUSED: gated run refused (config B): reference manifest 8dc67fa1804e covers corpus 6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98, but no signed thresholds file references it. Thresholds are signed after the reference is measured (story 4.4); the harness refuses to gate on an unsigned predecessor.
+exit=1

@@ -9,7 +9,9 @@
   report path, atomic report writes, fail-fast on missed traces.
 * **Config B** — the story-1.9 no-agent pipeline, INVOKED never
   re-implemented: the harness ships ``config_b_driver.py`` into the
-  agent-service container over the docker-exec transport and runs it there
+  agent-service container over the venue's exec transport (``docker exec``,
+  or ``kubectl exec`` on a Kubernetes venue — ``EVAL_EXEC_BACKEND``) and
+  runs it there
   (where ``noagent.pipeline`` and the serving network position live); the
   driver consumes ``NoAgentResult`` unchanged. In tests the transport is a
   fake — the same calls, no docker.
@@ -53,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
-from harness import write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
+from harness import exec_in_container, write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
 
 from .evalset import as_label_list, turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
 
@@ -516,15 +518,15 @@ def run_config_a_capture(
 # ---------------------------------------------------------------------------
 
 
-class DockerExecBTransport:
-    """The docker-exec transport (the eval toolchain's established pattern):
+class ContainerExecBTransport:
+    """The container-exec transport (the eval toolchain's established pattern):
     every B operation is a ``sh -c`` command run inside the agent-service
-    container through ``harness.docker_exec``."""
+    container through ``harness.exec_in_container`` — docker on a
+    compose/swarm venue, ``kubectl exec`` on a Kubernetes venue (the venue
+    is selected by ``EVAL_EXEC_BACKEND``, never detected)."""
 
     def exec_cmd(self, container: str, cmd: str, timeout: float = 600, pass_env: tuple = ()) -> str:
-        from harness import docker_exec
-
-        return docker_exec(container, cmd, timeout=timeout, pass_env=pass_env)
+        return exec_in_container(container, cmd, timeout=timeout, pass_env=pass_env)
 
 
 def _b64(payload: bytes) -> str:
@@ -600,7 +602,7 @@ def run_config_b(
     ``transport`` is the seam the tests fake: anything with
     ``exec_cmd(container, cmd, timeout, pass_env) -> str``.
     """
-    transport = transport or DockerExecBTransport()
+    transport = transport or ContainerExecBTransport()
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows_path = out_dir / "config-b.rows.json"

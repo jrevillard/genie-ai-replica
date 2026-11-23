@@ -1,0 +1,7 @@
+# The E01 join's refusal — verbatim
+# command: run_protocol.py e01 --reference-manifest reference.manifest.json --gated-manifest config-b.manifest.json --anchor-report config-a.report.json --captured-rows config-a.captured.json --b-rows config-b.rows.json --out e01.report.json
+# date: 2026-11-23 (forge k3s); the A-leg artifacts EXIST — the missing leg is the B manifest,
+# which the gate refuses to produce before story 4.4 signs the thresholds.
+
+REFUSED: the B-leg gated manifest (_bmad-output/implementation-artifacts/e01-run-2026-11-23-forge/config-b.manifest.json): [Errno 2] No such file or directory: '_bmad-output/implementation-artifacts/e01-run-2026-11-23-forge/config-b.manifest.json'
+exit=1

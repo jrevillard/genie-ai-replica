@@ -1,0 +1,203 @@
+{
+  "cases": {
+    "e01-ans-purpose": {
+      "case_id": "e01-ans-purpose",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "The test document, named `test-document.md`, is created for end-to-end (E2E) upload validation. It serves to test the markdown formatting and upload process, ensuring that the document's structure, including sections, bullet points, and text formatting (such as italic and bold), is correctly handled during the upload. The document introduces its purpose and format in the first chunk, and subsequent sections demonstrate basic markdown features like lists and text styling.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 8931.7
+    },
+    "e01-ans-items": {
+      "case_id": "e01-ans-items",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "Section 1 of the Test Document lists the following three items:\n\n- Item one\n- Item two\n- Item three\n\nThese items are presented in a simple bullet-point list within the markdown structure of the document.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 6794.2
+    },
+    "e01-ans-formatting": {
+      "case_id": "e01-ans-formatting",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "Section 2 of the Test Document demonstrates italic (*italic*) and bold (**bold**) text formatting, which are examples of basic markdown styling capabilities.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 5850.3
+    },
+    "e01-unans-upload-count": {
+      "case_id": "e01-unans-upload-count",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "Based on the content provided in the knowledge base, there are at least two test documents mentioned:\n\n1. The first document is introduced as a markdown test file for end-to-end (E2E) upload validation, described in the initial chunk.\n2. The second document is referenced under \"Section 1\" of the Test Document, which lists three items in a bullet-point format.\n\nTherefore, **two test documents** have been uploaded to this system so far, as indicated by the retrieved documents.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 10196.7
+    },
+    "e01-cite-items": {
+      "case_id": "e01-cite-items",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "The items 'Item one', 'Item two', and 'Item three' appear in **Section 1** of the Test Document. Specifically, they are listed as bullet points in the second chunk under this section.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 5935.6
+    },
+    "e01-lang-es": {
+      "case_id": "e01-lang-es",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "El documento de prueba, denominado `test-document.md`, fue creado para la validación de carga completa (E2E). Sirve para probar el proceso de carga proporcionando un archivo Markdown que incluye varios elementos de formato, como texto en cursiva y en negrita, así como una lista con viñetas, para asegurar que estas características se manejen correctamente durante las etapas de carga y renderizado.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 11443.2
+    },
+    "e01-lang-zh": {
+      "case_id": "e01-lang-zh",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "测试文档，名为 `test-document.md`，用于端到端 (E2E) 上传验证。它作为 Markdown 测试文件，旨在确保上传过程能够正确运行，正如其介绍中所述：“这是一个 **Markdown** 测试文件，用于 E2E 上传验证。”该文档还包含 Markdown 格式的示例，例如斜体和粗体文本，以及带项目符号的列表，以展示 Markdown 结构在验证过程中所具备的能力。",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 9238.6
+    },
+    "e01-fail-saturation": {
+      "case_id": "e01-fail-saturation",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "To summarize the test document while considering the retrieval backend is saturated, we can focus on the key points provided in the knowledge base:\n\n1. **Purpose**: The document, named `test-document.md`, serves as a markdown test file specifically created for end-to-end (E2E) upload validation.\n\n2. **Section 1**: This section contains a simple bullet-point list with three items:\n   - Item one\n   - Item two\n   - Item three\n\n3. **Section 2**: This section includes a paragraph that demonstrates basic markdown styling with:\n   - *italic* text formatting\n   - **bold** text formatting\n\nIn summary, the test document is a straightforward markdown file designed to validate the upload process end-to-end. It includes a basic list in Section 1 and a paragraph showcasing italic and bold text formatting in Section 2.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 9680.3
+    },
+    "e01-cancel-checklist": {
+      "case_id": "e01-cancel-checklist",
+      "status": "ok",
+      "http_status": 200,
+      "answer": "Based on the content provided in the knowledge base, the long procurement checklist includes the following requirements:\n\n1. Item one\n2. Item two\n3. Item three\n\nThese items are listed under Section 1 of the Test Document.",
+      "source_documents": [],
+      "filter_labels": [],
+      "retrieval_scope": {
+        "sent_labels": {
+          "category_labels": [],
+          "service_labels": []
+        },
+        "case_requested_labels": []
+      },
+      "wall_ms": 8702.4
+    },
+    "e01-sec-restricted": {
+      "case_id": "e01-sec-restricted",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs"
+    },
+    "e01-sec-xuser-a": {
+      "case_id": "e01-sec-xuser-a",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs"
+    },
+    "e01-sec-xuser-b": {
+      "case_id": "e01-sec-xuser-b",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs"
+    },
+    "e01-sec-narrowed": {
+      "case_id": "e01-sec-narrowed",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs"
+    },
+    "e01-sec-permission#t1": {
+      "case_id": "e01-sec-permission#t1",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs",
+      "turn": 1
+    },
+    "e01-sec-permission#t2": {
+      "case_id": "e01-sec-permission#t2",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs",
+      "turn": 2
+    },
+    "e01-sec-injection-document": {
+      "case_id": "e01-sec-injection-document",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs"
+    },
+    "e01-sec-injection-tool": {
+      "case_id": "e01-sec-injection-tool",
+      "status": "skipped",
+      "wall_ms": 0.0,
+      "reason": "config A is the legacy fixed RAG: no agent surface to authorize or steer — the security scenario executes on the pair's B/C legs"
+    }
+  },
+  "capture": {
+    "assessment_set_sha256": "58850161afebad599234e5ef54b1122a17684e5de7b81e36b9b6c3867152a784",
+    "corpus_fingerprint": "6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98",
+    "corpus_fingerprint_source": "computed"
+  }
+}

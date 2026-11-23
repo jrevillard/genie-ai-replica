@@ -62,6 +62,28 @@ Confirm the deployment is healthy and capture the live reranker parameters
 **before** driving any query. The wrapper does not read these — they are
 needed only by Phase 5's `calibrate.py --check-baseline`.
 
+### The venue (read this first)
+
+Every command below is written for a **Docker compose/swarm** venue. The
+exec primitive itself is venue-dispatching — the backend is **selected**,
+never detected (`EVAL_EXEC_BACKEND`, default `docker`):
+
+| venue | `EVAL_EXEC_BACKEND` | container identity | how to resolve it |
+|---|---|---|---|
+| compose / swarm (the recipes below) | `docker` (default) | the docker container name | `docker ps --format '{{.Names}}' \| grep chatqna-xeon-backend-server \| head -1` → `export CHATQNA_CONTAINER=…` |
+| Kubernetes | `kubectl` | the deployment's **COMPONENT** name (e.g. `chatqna`) | the harness resolves it from the pod labels (`genieai.io/component=`, `app.kubernetes.io/component=`, running pods only); pin a pod with `EVAL_K8S_POD_CHATQNA=<pod>`; the namespace comes from `EVAL_K8S_NAMESPACE` (default `genieai`) |
+
+On a Kubernetes venue, replace the `ssh … docker service ls` / `docker ps`
+/ `docker exec` lines with their `kubectl` equivalents
+(`kubectl -n <ns> get pods,svc`, `kubectl -n <ns> logs`, and the harness's
+own exec). **The wrapper script (`run_anchor_with_cleanup.sh`, the TL;DR
+above) is docker-only**: it resolves `CHATQNA_CONTAINER` via `docker ps` and
+`VICTORIATRACES_SVC` via `docker service ls`, and aborts under `set -euo
+pipefail` on a host without docker — on a Kubernetes venue, pre-export both
+variables (the component name / the VT service name) before invoking the
+harness directly. The env-var table in `tests/rag-benchmarks/CLAUDE.md` is
+the authoritative list.
+
 ```bash
 # 0.1 Confirm OIDC, ArangoDB and chatqna are reachable
 ssh <user>@<host> '

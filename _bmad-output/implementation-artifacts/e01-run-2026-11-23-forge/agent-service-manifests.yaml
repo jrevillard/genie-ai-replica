@@ -1,0 +1,199 @@
+# The agentic side's agent-service, deployed on the forge k3s for the E01 run
+# (issue #2118). The umbrella chart has NO template for this service (the
+# chart carries okf-server only), so the workload is declared here, mirroring
+# the compose service block (docker-compose.yaml `agent-service:`) and the
+# V08 rehearsal record (docs/rollouts/v08-rollout.md §2) for the budget knobs
+# and the port assembly. Image: the umbrella-tip build
+# (feat/agentic-foundations/prd @ 820fc9d75).
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-service
+  namespace: genieai
+  labels:
+    genieai.io/component: agent-service
+    app.kubernetes.io/component: agent-service
+    app.kubernetes.io/part-of: genieai
+spec:
+  selector:
+    genieai.io/component: agent-service
+  ports:
+    - name: http
+      port: 8010
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-service
+  namespace: genieai
+  labels:
+    genieai.io/component: agent-service
+    app.kubernetes.io/component: agent-service
+    app.kubernetes.io/name: agent-service
+    app.kubernetes.io/part-of: genieai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      genieai.io/component: agent-service
+  template:
+    metadata:
+      labels:
+        genieai.io/component: agent-service
+        app.kubernetes.io/component: agent-service
+        app.kubernetes.io/name: agent-service
+        app.kubernetes.io/part-of: genieai
+    spec:
+      # No runAsNonRoot: the image's own USER is the non-numeric name
+      # `agentsvc`, and kubelet refuses to verify a named user against
+      # runAsNonRoot ("cannot verify user is non-root").
+      containers:
+        - name: agent-service
+          image: registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-agent-server:feat-agentic-foundations-prd-820fc9d7
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8010
+          env:
+            - name: AGENT_ENABLED
+              value: "1"
+            - name: LOG_LEVEL
+              value: INFO
+            - name: ENABLE_OBSERVABILITY
+              value: "1"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://genieai-collector-collector.genieai.svc.cluster.local:4318
+            - name: OTEL_SERVICE_NAME
+              value: agent-service
+            # The run budget (REQUIRED, read fail-closed) — the values the
+            # V08 rehearsal recorded (docs/rollouts/v08-rollout.md §2).
+            - name: AGENT_RUN_MAX_STEPS
+              value: "8"
+            - name: AGENT_RUN_MAX_MODEL_CALLS
+              value: "12"
+            - name: AGENT_RUN_MAX_TOOL_CALLS
+              value: "12"
+            - name: AGENT_RUN_MAX_TOTAL_TOKENS
+              value: "50000"
+            - name: AGENT_RUN_MAX_EVIDENCE_BYTES
+              value: "200000"
+            - name: AGENT_RUN_MAX_WALL_CLOCK_SECONDS
+              value: "240"
+            - name: AGENT_TOOL_TIMEOUT_MS
+              value: "30000"
+            - name: AGENT_TOOL_MAX_RESULTS
+              value: "10"
+            - name: AGENT_TOOL_MAX_RESULT_BYTES
+              value: "50000"
+            - name: AGENT_VERDICT_JUDGE_TIMEOUT_MS
+              value: "30000"
+            - name: AGENT_VERDICT_POLICY
+              value: verdict-marked
+            # The port assembly (the venue's own deployed endpoints).
+            - name: AGENT_DOCREPO_URL
+              value: http://document-repository.genieai.svc.cluster.local
+            - name: AGENT_OKF_URL
+              value: http://okf-server.genieai.svc.cluster.local:3002
+            - name: AGENT_AUTHORIZED_GRAPHS
+              value: GRAPH
+            - name: ARANGO_URL
+              value: http://arangodb-single.genieai.svc.cluster.local:8529
+            - name: ARANGO_DB
+              value: _system
+            - name: ARANGO_USERNAME
+              value: root
+            - name: ARANGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arango-root-secret
+                  key: password
+            - name: ARANGO_GRAPH_NAME
+              value: GRAPH
+            - name: GRAPH_SOURCE
+              value: GRAPH_SOURCE
+            - name: TEI_EMBEDDING_ENDPOINT
+              value: https://ai.assembly.govstack.global:444/embed
+            - name: TEI_RERANKING_ENDPOINT
+              value: https://ai.assembly.govstack.global:444/rerank
+            - name: TEI_EMBED_MODEL
+              value: BAAI/bge-large-en-v1.5
+            - name: VLLM_LLM_ENDPOINT
+              value: https://ai.assembly.govstack.global:444/llm
+            - name: VLLM_LLM_MODEL_ID
+              value: ibm-granite/granite-4.1-8b
+            - name: VLLM_TRANSLATION_ENDPOINT
+              value: https://ai.assembly.govstack.global:444/translation
+            - name: VLLM_TRANSLATION_MODEL_ID
+              value: google/gemma-3-4b-it
+            - name: AGENT_ANSWER_TRANSLATION_ENABLED
+              value: "1"
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-api-key
+                  key: VLLM_API_KEY
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-api-key
+                  key: VLLM_API_KEY
+            - name: OPEA_SSL_SKIP_VERIFY
+              value: "1"
+            - name: MODEL_LLM_TIMEOUT_SECONDS
+              value: "180"
+            - name: MODEL_PROBE_TIMEOUT_SECONDS
+              value: "10"
+            - name: MODEL_DETECT_TTL
+              value: "60"
+            - name: AGENT_LANE_SLOTS
+              value: "1"
+            - name: CHATQNA_ENFORCE_ABSTENTION
+              value: "true"
+            # The retriever's own knobs, mirrored from the deployed retriever
+            # (the capability reproduces its retrieval behaviour).
+            - name: RETRIEVER_ARANGO_K
+              value: "20"
+            - name: RETRIEVER_ARANGO_FETCH_K
+              value: "30"
+            - name: RETRIEVER_ARANGO_SCORE_THRESHOLD
+              value: "0.2"
+            - name: RETRIEVER_ARANGO_FILTER_STRATEGY
+              value: OR
+            - name: RETRIEVER_ARANGO_SEARCH_START
+              value: chunk
+            - name: RETRIEVER_ARANGO_DISTANCE_THRESHOLD
+              value: "1"
+            - name: RETRIEVER_ARANGO_LAMBDA_MULT
+              value: "0.5"
+            - name: RETRIEVER_ARANGO_TRAVERSAL_ENABLED
+              value: "true"
+            - name: RERANKING_STRATEGY
+              value: slice
+            - name: RERANKING_THRESHOLD
+              value: "0.75"
+            - name: RERANKER_TOP_N
+              value: "3"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

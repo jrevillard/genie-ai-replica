@@ -238,10 +238,9 @@ def run_config_a(
 # never invented. ``abstained``/``abstention_reason`` are chatqna's own
 # mechanical abstention facts (genieai_chatqna._mark_abstention) — config A
 # records them when the response carries them.
-_A_CAPTURE_SOURCE_KEYS = ("source_documents", "citations", "abstained", "abstention_reason")
-
 # The shape each captured key must have to be recorded — the lists are lists;
-# chatqna's abstention fact is a boolean and its reason a string.
+# chatqna's abstention fact is a boolean and its reason a string. ONE dict:
+# the key set and the expected types can never drift apart.
 _A_CAPTURE_KEY_TYPES = {
     "source_documents": list,
     "citations": list,
@@ -276,13 +275,9 @@ def _response_source_fields(body) -> dict:
     metadata = data.get("metadata")
     metadata = metadata if isinstance(metadata, dict) else {}
     fields = {}
-    for key in _A_CAPTURE_SOURCE_KEYS:
+    for key, expected in _A_CAPTURE_KEY_TYPES.items():
         value = metadata[key] if key in metadata else data.get(key)
-        expected = _A_CAPTURE_KEY_TYPES[key]
-        if expected is bool:
-            if isinstance(value, bool):
-                fields[key] = value
-        elif isinstance(value, expected):
+        if isinstance(value, expected):
             fields[key] = value
     return fields
 
@@ -334,7 +329,10 @@ def _capture_one_entry(entry: dict, query) -> dict:
         row["error_type"] = type(failed).__name__
         row["error"] = _error_preview(failed)
     row["wall_ms"] = wall_ms
-    row["retrieval_scope"] = _retrieval_scope(entry)
+    if row.get("status") == "ok":
+        # The scope is what the A leg QUERIED under — a failed or skipped row
+        # queried nothing, so it records no scope.
+        row["retrieval_scope"] = _retrieval_scope(entry)
     row.update(_turn_field(entry))
     return row
 
@@ -388,9 +386,6 @@ def run_config_a_capture(
 
     cases = entries if entries is not None else _load_entries(set_path)
     prior = _read_rows_file(rows_path)
-    done = set(prior.get("cases") or {})
-    skips = security_skip_rows(cases)
-    pending = _pending_in_order(cases, done)
 
     from .manifest import sha256_file
 
@@ -398,7 +393,27 @@ def run_config_a_capture(
         "assessment_set_sha256": sha256_file(set_path),
         "corpus_fingerprint": corpus_fingerprint,
     }
+    # The rows file certifies the SET it was captured over: resuming by case
+    # id across another set would certify set B's digest while carrying set
+    # A's answers. The prior file's stamp must match — otherwise refuse.
+    prior_stamp = prior.get("capture") if isinstance(prior, dict) else None
+    if isinstance(prior_stamp, dict):
+        for field in ("assessment_set_sha256", "corpus_fingerprint"):
+            if prior_stamp.get(field) != stamp[field]:
+                raise DriverError(
+                    f"the capture file {rows_path} was captured over another"
+                    f" {field} ({prior_stamp.get(field)!r} vs {stamp[field]!r}) — a capture over one"
+                    " set or corpus never resumes into another; use a fresh out-dir"
+                )
+
+    done = set(prior.get("cases") or {})
+    skips = security_skip_rows(cases)
+    pending = _pending_in_order(cases, done)
+
     prior = _merge_rows(prior, {"cases": {}, "capture": stamp})
+    # The stamp lands on disk BEFORE the first query: a converged resume (no
+    # pending case) must leave a stamped file, not a bare rows file.
+    write_json(rows_path, prior, ensure_ascii=False)
 
     seam = query or _default_a_query
     for entry in pending:
@@ -407,7 +422,6 @@ def run_config_a_capture(
             row = dict(skipped)
             row["status"] = "skipped"
             row["wall_ms"] = 0.0
-            row["retrieval_scope"] = _retrieval_scope(entry)
         else:
             row = _capture_one_entry(entry, seam)
         prior = _merge_rows(prior, {"cases": {entry["id"]: row}})

@@ -133,11 +133,14 @@ B_M5_REASON = (
 _RESOURCE_KEY_HINTS = ("usage", "resource", "cost")
 
 # The credential-named keys the report drops, at ANY depth. The marker set is
-# the manifest's, plus the names that carry the marker as a substring — the
-# manifest's own rule drops MEASUREMENT fields too (``chunk_key`` matches
-# "KEY", ``prompt_tokens`` matches "TOKEN"), and the report must not state two
-# different things about the same datum. The measurement names below are the
-# explicit exceptions.
+# the manifest's, plus the names that carry the marker as a substring. This
+# rule is the REPORT's own and it is deliberately narrower than the manifest's
+# (which drops every marker-named key, measurement names included): the report
+# records measurement fields the judge needs (``chunk_key``, the token
+# counts), so it keeps those and drops the credential names explicitly. The
+# two rules diverge ON PURPOSE and the report applies this one on every path
+# it writes (the per-case rows and the M-5 values) — it never states two
+# different things about the same datum.
 CREDENTIAL_MARKERS = (
     "password",
     "secret",
@@ -746,16 +749,18 @@ def _redact_deep(value):
 
 def _per_case(captured_rows: dict, b_rows: dict, defect_ids: set[str]) -> dict:
     """The judgment inputs per case — BOTH legs' rows verbatim (redacted of
-    credential-named keys, at any depth) and the reference-defect flag. No
-    verdicts."""
+    credential-named keys, at any depth), the reference-defect flag and the
+    skipped marker. No verdicts."""
     per_case = {}
     for case_id in sorted(set(captured_rows) | set(b_rows)):
         a_row = captured_rows.get(case_id)
         b_row = b_rows.get(case_id)
+        skipped = any(isinstance(row, dict) and row.get("status") == "skipped" for row in (a_row, b_row))
         per_case[case_id] = {
             "a": _redact_deep(dict(a_row)) if isinstance(a_row, dict) else None,
             "b": _redact_deep(dict(b_row)) if isinstance(b_row, dict) else None,
             "reference_defect": _is_defect_case(case_id, defect_ids),
+            "skipped": skipped,
         }
     return per_case
 
@@ -851,7 +856,18 @@ def build_e01_report(
             "anchor_report_sha256": sha256_json(anchor_report),
             "captured_rows_sha256": sha256_json(captured_rows),
             "b_rows_sha256": sha256_json(b_rows),
-            "capture_stamp": capture_stamp,
+            "capture_stamp": {
+                **capture_stamp,
+                "verified": {
+                    "assessment_set_sha256": True,
+                    "corpus_fingerprint": False,
+                },
+                "note": (
+                    "the assessment-set digest is computed from the capture's own set file; the"
+                    " corpus fingerprint is the operator's declaration (--corpus-fingerprint), not"
+                    " cross-checked against the corpus"
+                ),
+            },
             "reference_defects_sha256": ledger_record["sha256"],
             "corpus_fingerprint": corpus_fingerprint,
             "assessment_set_sha256": assessment_set_sha256,
@@ -867,6 +883,7 @@ def build_e01_report(
             "a_missing": sum(1 for record in per_case.values() if record["a"] is None),
             "b_missing": sum(1 for record in per_case.values() if record["b"] is None),
             "reference_defect_cases": sum(1 for record in per_case.values() if record["reference_defect"]),
+            "skipped_cases": sum(1 for record in per_case.values() if record["skipped"]),
         },
     }
     body["digest"] = e01_report_digest(body)

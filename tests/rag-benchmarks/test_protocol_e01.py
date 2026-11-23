@@ -352,6 +352,10 @@ def test_capture_a_resume_re_runs_only_the_missing_ids(tmp_path):
     result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=converged, corpus_fingerprint=CORPUS)
     assert converged_calls == []
     assert result["pending_ids"] == []
+    # The stamp is on disk — a converged resume must not leave a bare rows file.
+    on_disk = json.loads((tmp_path / "out" / "config-a.captured.json").read_text(encoding="utf-8"))
+    assert on_disk["capture"]["corpus_fingerprint"] == CORPUS
+    assert on_disk["capture"]["assessment_set_sha256"]
 
     # A partial prior file: ONLY the missing ids run.
     rows_path = tmp_path / "out" / "config-a.captured.json"
@@ -415,10 +419,18 @@ def test_e01_reports_all_five_dimensions_for_both_configs_with_named_surfaces():
     assert dimensions["M-1"]["B"]["values"]["n_rows_with_source_documents"] == 1
     assert dimensions["M-1"]["B"]["values"]["n_rows_with_empty_source_documents"] == 1
     assert any("chunk-level" in note for note in dimensions["M-1"]["B"]["notes"])
-    # M-3: A judged from the answer text, B mechanical fields.
+    # M-3: A judged from the answer text, B mechanical fields — and BOTH sides
+    # count their failed rows (a leg that produced no answer must not read as
+    # zeros).
     assert dimensions["M-3"]["A"]["values"]["n_empty_answers"] == 0
+    assert dimensions["M-3"]["A"]["values"]["n_ok_rows"] == 1
+    assert dimensions["M-3"]["A"]["values"]["n_http_error_rows"] == 1
+    assert dimensions["M-3"]["A"]["values"]["n_failure_rows"] == 1
+    assert dimensions["M-3"]["A"]["values"]["n_rows_with_abstention_fact"] == 1
+    assert dimensions["M-3"]["B"]["values"]["n_ok_rows"] == 2
     assert dimensions["M-3"]["B"]["values"]["n_abstained"] == 1
     assert dimensions["M-3"]["B"]["values"]["n_with_abstention_reason"] == 1
+    assert dimensions["M-3"]["B"]["values"]["n_failure_rows"] == 1
     # M-4: latency stats on both sides, in the metric's own unit, with NO
     # tolerance band (the thresholds are story 4.4's to sign).
     assert dimensions["M-4"]["A"]["values"]["median"] == 10.0
@@ -445,7 +457,8 @@ def test_e01_per_case_records_carry_judgment_inputs_and_never_verdicts():
     # No verdict anywhere in the per-case records — the report carries the
     # judgment INPUTS only.
     for record in per_case.values():
-        assert set(record) == {"a", "b", "reference_defect"}
+        assert set(record) == {"a", "b", "reference_defect", "skipped"}
+        assert record["skipped"] is False
         for row in (record["a"], record["b"]):
             assert row is None or not any(key == "verdict" for key in row)
     counts = report["counts"]
@@ -456,6 +469,7 @@ def test_e01_per_case_records_carry_judgment_inputs_and_never_verdicts():
         "a_missing": 0,
         "b_missing": 0,
         "reference_defect_cases": 0,
+        "skipped_cases": 0,
     }
 
 
@@ -548,6 +562,11 @@ def test_e01_inputs_are_digested_and_the_report_is_reproducible_under_the_pin():
     assert inputs["corpus_fingerprint"] == CORPUS
     assert inputs["assessment_set_sha256"] == SET_SHA
     assert inputs["reference_defects_sha256"] is None
+    assert inputs["capture_stamp"]["assessment_set_sha256"] == SET_SHA
+    assert inputs["capture_stamp"]["verified"]["assessment_set_sha256"] is True
+    # The corpus fingerprint is the operator's declaration — never a verified
+    # fact.
+    assert inputs["capture_stamp"]["verified"]["corpus_fingerprint"] is False
     # A different pin produces a different digest — the pin is part of the identity.
     assert build_e01_report(created_utc="2026-11-23T00:00:00+00:00", **kw)["digest"] != first["digest"]
     # A changed input changes the digest (the join is digest-pinned).
@@ -1100,3 +1119,47 @@ def test_e01_names_the_cases_whose_requested_labels_never_reached_the_a_query():
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["scope_matched"] is None
     assert scope["A"]["cases_whose_requested_labels_never_reached_the_A_query"] == ["c1"]
+
+
+def test_e01_m5_values_are_deep_redacted():
+    """The M-5 path writes its own copy of the value — a nested credential
+    must not survive on THAT path either."""
+    rows = _b_rows()
+    rows["c1"]["metadata"] = {"usage": {"api_key": "LEAK", "prompt_tokens": 3}}
+    report = _build(b_rows=rows)
+    values = report["dimensions"]["M-5"]["B"]["values"]
+    assert "api_key" not in values["usage"]
+    assert "LEAK" not in json.dumps(report)
+    # The measurement names survive (the judge needs them).
+    assert values["usage"]["prompt_tokens"] == 3
+
+
+def test_e01_refuses_a_capture_without_a_stamp():
+    """No stamp = no provenance: the join refuses before the report is built."""
+    with pytest.raises(E01Refusal) as failed:
+        _build(capture_stamp=None)
+    assert failed.value.reason == "missing_artifact"
+    assert "stamp" in str(failed.value)
+
+
+def test_e01_refuses_c_style_rows_on_the_a_leg():
+    """The A leg is checked too — config C's rows (outcome, no status) never
+    pass as captured A rows."""
+    c_rows = {"c1": {"case_id": "c1", "outcome": "answered", "wall_ms": 5.0}}
+    with pytest.raises(E01Refusal) as failed:
+        _build(captured_rows=c_rows)
+    assert failed.value.reason == "wrong_leg"
+
+
+def test_capture_a_refuses_to_resume_into_another_set(tmp_path):
+    """The rows file certifies the set it was captured over — resuming by case
+    id across another set would certify set B's digest over set A's answers."""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    set_a = _set_file(tmp_path / "a", extra_answerable=("c1", "c2"))
+    set_b = _set_file(tmp_path / "b", extra_answerable=("c1", "c2", "c3"))
+    seam, _ = _seam({"c1": "a1", "c2": "a2", "c3": "a3"})
+    drivers.run_config_a_capture(set_a, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    with pytest.raises(Exception) as failed:
+        drivers.run_config_a_capture(set_b, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    assert "another" in str(failed.value)

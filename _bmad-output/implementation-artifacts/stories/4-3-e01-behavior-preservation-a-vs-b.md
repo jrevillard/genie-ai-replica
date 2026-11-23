@@ -58,7 +58,7 @@ context:
 - `tests/rag-benchmarks/protocol/verdicts.py` — terminal-row reader `row.get("outcome", row.get("status"))` (:403); where abstention fields live.
 - `tests/rag-benchmarks/eval/run_eval.py` — `drive_query(entry) -> (start, body, status)` (:227), `_extract_answer` (:271) — imported verbatim.
 - `tests/rag-benchmarks/eval/harness.py` — atomic `write_json`.
-- `tests/rag-benchmarks/capture_baseline.py` — `compute_triples` (:139-159) reused for M-4 aggregates.
+- `tests/rag-benchmarks/capture_baseline.py` — the capture machinery (`compute_triples` :139-159) read for its statistics only: its tolerance band is clamped to [0, 1] (written for normalized metrics), so M-4 computes its own in-unit stats and publishes NO band.
 - `tests/rag-benchmarks/protocol/evalset.py` — `load_set(kind="assessment")`, `turn_entries`.
 - `tests/rag-benchmarks/protocol/run_protocol.py` — subcommand conventions (typed refusal exit 1, usage exit 2), `_validated_entries`.
 - `tests/rag-benchmarks/protocol/pairs.py` — `CONFIG_PAIR`: B=E01, C=E02 (the wrong-leg refusal reads this).
@@ -111,7 +111,7 @@ response carries them), per-case failure rows with the run continuing, resume
 over the missing ids only, atomic `config-a.captured.json`.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 28 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 43 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -129,7 +129,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 207 passed; `cd eval && pytest -q` → 196 passed;
+test_protocol_e01.py` → 222 passed; `cd eval && pytest -q` → 196 passed;
 `python3 -m py_compile protocol/*.py` clean; `ruff check --config
 components/agent-service/pyproject.toml protocol/ test_protocol_e01.py` clean.
 The test env needs `requests` (the `capabilities.contract` import chain) plus
@@ -179,6 +179,25 @@ a stated invariant rather than adding machinery.
 | 12 | A config-C rows file passed as the B leg was silently filtered to an empty leg | nit (real) | **Fixed**: the row vocabulary is checked per leg |
 | 13 | The redaction dropped measurement names (`chunk_key`, `prompt_tokens`) on one path while keeping them on another | nit (real) | **Fixed**: an explicit measurement-name allowlist, applied on every path |
 | 14 | The recorded seed was operator-declared and never cross-checked | nit | **Fixed**: the seed is recorded as declared-and-unverified |
+
+**FIX-REVIEW (f=0) on the C1 correction diff — 13 findings, every claim
+mutation-verified (the reviewer reverted each fix in isolation), all fixed.**
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F1 | The capture stamp certified the set FILE, not the rows' provenance — a capture over set B in a directory holding set A's rows joined set B's comparison carrying set A's answers | important | **Fixed**: a prior rows file stamped over another set or corpus refuses the resume |
+| F2 | A converged resume never persisted the stamp while the CLI printed one | important | **Fixed**: the stamp lands on disk before the first query |
+| F3 | The M-5 nested-credential fix had no test (the correction could be reverted with the suite green) | important | **Fixed**: a test asserts the M-5 values are deep-redacted and the measurement names survive |
+| F4 | The "capture carries no stamp" refusal was unreachable by test | important | **Fixed**: a stamp-less capture is tested |
+| F5 | The M-3 counters (and the A-side abstention counters) were unasserted — four mutations survived | important | **Fixed**: both sides' ok/failure/abstention counters are asserted |
+| F6 | The A-leg half of the row-vocabulary check was untested | important | **Fixed**: a config-C rows file passed as the A leg is tested |
+| F7 | The CLI synopsis omitted the now-required `--corpus-fingerprint` | low | **Fixed**: the synopsis carries it |
+| F8 | The story still claimed the `compute_triples` reuse the correction removed, and the old test count | low | **Fixed**: both updated |
+| F9 | The corpus half of the stamp was an operator declaration recorded as a verified fact (the seed got the opposite treatment) | important | **Fixed**: `inputs.capture_stamp.verified` states the set digest is computed and the corpus fingerprint is declared |
+| F10 | `labels_sent_per_case` recorded labels for rows that queried nothing (failed / skipped) | important | **Fixed**: the scope is recorded on the queried (ok) rows only |
+| F11 | Two credential vocabularies (manifest vs report) diverged in both directions | medium | **Fixed**: the divergence is deliberate and stated — the report keeps the measurement names the judge needs, and applies its own rule on every path it writes |
+| F12 | The capture's field typing had a dead branch (both arms identical) and two structures that could drift | low | **Fixed**: one dict drives both |
+| F13 | The instructions called a skipped A row "not a comparison case" while the report counted it | medium | **Fixed**: the report marks the skipped rows (`skipped` flag, `counts.skipped_cases`) and the instructions say the judge excludes them |
 
 ## Design Notes
 

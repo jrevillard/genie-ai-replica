@@ -32,10 +32,13 @@ reuse check REFUSE, they never warn)::
         re-running: the security verdict layer over the rows a previous run
         wrote.
 
-    capture-a --set <set_path> --out-dir <dir>
+    capture-a --set <set_path> --out-dir <dir> --corpus-fingerprint HEX
         The per-case config-A answer capture (story 4.3): the E01 judgment
-        inputs (answers, http_status, wall_ms, source/citation fields) the
-        anchor path cannot carry. Reuses run_eval's query driver verbatim.
+        inputs (answers, http_status, wall_ms, source/citation/abstention
+        fields) the anchor path cannot carry. Reuses run_eval's query driver
+        verbatim. The rows file is stamped with the assessment-set digest and
+        the corpus fingerprint it ran under; a capture over one set or corpus
+        never resumes into another.
 
     e01 --reference-manifest PATH --gated-manifest PATH --anchor-report PATH
         --captured-rows PATH --b-rows PATH --out PATH [--defects PATH]
@@ -408,10 +411,7 @@ def cmd_capture_a(args: argparse.Namespace) -> int:
     print(f"config A capture: {len(rows)} row(s) recorded ({n_ok} ok / {n_skipped} skipped / {n_non_ok} failed)")
     print(f"captured rows: {result['rows_path']}")
     stamp = result["capture"]
-    print(
-        f"capture stamp: set {stamp['assessment_set_sha256'][:12]},"
-        f" corpus {stamp['corpus_fingerprint'][:12]}"
-    )
+    print(f"capture stamp: set {stamp['assessment_set_sha256'][:12]}, corpus {stamp['corpus_fingerprint'][:12]}")
     return 0
 
 

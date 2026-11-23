@@ -188,8 +188,9 @@ manifest records it).
   status is not 2xx, or whose capture failed, is neither an answer nor an
   abstention: it is a failed capture, recorded as such, and the abstention
   dimension is not applicable to it. A row the capture SKIPPED (a security
-  scenario — config A has no agent surface to authorize or steer) is not a
-  comparison case at all.
+  scenario — config A has no agent surface to authorize or steer) is recorded
+  as skipped: the judge EXCLUDES it from the comparison, and the report
+  counts it apart (`counts.skipped_cases`, the per-case `skipped` flag).
 - **Answers are the judgment inputs, never pre-verdicted.** The report
   carries the per-case answers, abstention facts and sources for both legs;
   M-2/M-3 verdicts belong to this judge layer — the report computes no

@@ -34,11 +34,12 @@ const translationBackend = process.env.TRANSLATION_BACKEND || 'auto';
 // constant: backend init runs before the HTTP server listens, so every second
 // spent probing is a second of boot. 30s picks up an in-cluster worker that
 // becomes ready within low tens of seconds while keeping the worst boot
-// (window + CPU model load) inside the envelope the compose healthcheck
-// `start_period` (90s) and the chart startupProbe (~120s) were sized for. A
-// probe that hangs for its full TRANSLATION_PROBE_TIMEOUT_SECONDS budget
-// consumes the window in one attempt and lands on CPU after a single probe —
-// the one-shot behavior this window replaces, never worse.
+// (window + one in-flight probe budget + CPU model load) inside the envelope
+// the compose healthcheck `start_period` (90s) and the chart startupProbe
+// (~120s) were sized for. A probe that hangs for its full
+// TRANSLATION_PROBE_TIMEOUT_SECONDS budget consumes the window in one
+// attempt and lands on CPU after a single probe — the one-shot behavior this
+// window replaces, never worse.
 const AUTO_GPU_READINESS_WINDOW_MS = 30000;
 const AUTO_GPU_RETRY_BACKOFF_START_MS = 2000;
 const AUTO_GPU_RETRY_BACKOFF_MAX_MS = 10000;
@@ -161,10 +162,7 @@ class TranslationService {
         // process's life.
         //
         // The probe is retried inside the bounded readiness window (constants
-        // above): the strict health gate makes a still-loading vLLM answer
-        // non-2xx at boot, and a single probe would pin the CPU model for the
-        // life of the process even though the GPU becomes usable seconds
-        // later. Once the window elapses the CPU fallback below is final.
+        // above); the CPU fallback once it elapses is final.
         //
         // Each backend is assigned only after its init resolves. An instance
         // whose worker never started is not a backend, and `selectBackend`
@@ -184,7 +182,8 @@ class TranslationService {
             logger.info(`[TRANSLATION-SERVICE] Auto mode: GPU backend selected (probe ${probes} succeeded)`);
             return this.backend;
           } catch (gpuError) {
-            if (Date.now() >= readinessDeadline) {
+            const remainingMs = readinessDeadline - Date.now();
+            if (remainingMs <= 0) {
               logger.warn(
                 `[TRANSLATION-SERVICE] Auto mode: GPU unavailable (${gpuError.message}) after ${probes} probe(s) within the ${AUTO_GPU_READINESS_WINDOW_MS / 1000}s readiness window, selecting CPU`
               );
@@ -193,8 +192,7 @@ class TranslationService {
             logger.warn(
               `[TRANSLATION-SERVICE] Auto mode: GPU probe ${probes} failed (${gpuError.message}), retrying within the readiness window`
             );
-            const waitMs = Math.min(backoffMs, Math.max(0, readinessDeadline - Date.now()));
-            await new Promise((resolve) => setTimeout(resolve, waitMs));
+            await new Promise((resolve) => setTimeout(resolve, Math.min(backoffMs, remainingMs)));
             backoffMs = Math.min(backoffMs * 2, AUTO_GPU_RETRY_BACKOFF_MAX_MS);
           }
         }

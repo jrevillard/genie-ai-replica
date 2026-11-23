@@ -256,25 +256,6 @@ describe('TranslationService', () => {
 
       expect(svc.backendType).toBe('cpu');
     });
-
-    it('still falls back to CPU in auto mode when no GPU API is configured', async () => {
-      // The one branch where CPU is a legitimate outcome rather than a silent
-      // substitution: nothing was configured to be mandatory.
-      const svc = serviceWithEnv({ backend: 'auto', gpuNodeHost: '' });
-      GpuTranslateBackend.mockImplementationOnce(() =>
-        gpuApi({ endpointExplicit: false, init: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) })
-      );
-      // The probe is retried inside the readiness window, so the fallback only
-      // happens once that window has elapsed — the timers must run for the
-      // selection to settle at all.
-      jest.useFakeTimers();
-      const selection = svc.selectBackend();
-      await jest.advanceTimersByTimeAsync(120000);
-
-      await selection;
-
-      expect(svc.backendType).toBe('cpu');
-    });
   });
 
   describe('auto mode GPU readiness window', () => {

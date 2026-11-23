@@ -223,10 +223,11 @@ re-arms everything.
 Every published repository carries a **vectorized head** — the embedding of
 its frontmatter tags. At query time the retriever fans out across the
 caller's authorized repositories, weighting each by how well the query
-matches its head. The **Testing Lab** tests that routing against the live
-corpus — one-off queries, saved suites with pass rates and steal pairs, a
-guarded teaching loop with an advisor, and full **RAGAS** answer-quality
-benchmarks whose suites interchange with the offline
+matches its head. The **Testing Lab** scores those heads — every head in the
+deployment, which is a wider set than one caller's authorized fan-out —
+against the live corpus: one-off queries, saved suites with pass rates and
+steal pairs, a guarded teaching loop with an advisor, and full **RAGAS**
+answer-quality benchmarks whose suites interchange with the offline
 `tests/rag-benchmarks` harness.
 
 The complete walkthrough — the Head/Test/Suites tabs, what pass rates,

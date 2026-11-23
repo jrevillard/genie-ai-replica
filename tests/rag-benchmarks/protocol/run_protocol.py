@@ -32,13 +32,15 @@ reuse check REFUSE, they never warn)::
         re-running: the security verdict layer over the rows a previous run
         wrote.
 
-    capture-a --set <set_path> --out-dir <dir> --corpus-fingerprint HEX
+    capture-a --set <set_path> --out-dir <dir> --corpus-collection NAME
+        [--corpus-fingerprint HEX | --compute-fingerprint]
         The per-case config-A answer capture (story 4.3): the E01 judgment
         inputs (answers, http_status, wall_ms, source/citation/abstention
         fields) the anchor path cannot carry. Reuses run_eval's query driver
-        verbatim. The rows file is stamped with the assessment-set digest and
-        the corpus fingerprint it ran under; a capture over one set or corpus
-        never resumes into another.
+        verbatim (with the anchor's own bearer refresh). The rows file is
+        stamped with the assessment-set digest and the corpus fingerprint it
+        ran under; a capture over one set or corpus never resumes into
+        another.
 
     e01 --reference-manifest PATH --gated-manifest PATH --anchor-report PATH
         --captured-rows PATH --b-rows PATH --out PATH [--defects PATH]

@@ -255,12 +255,21 @@ _A_CAPTURE_KEY_TYPES = {
 def _default_a_query(entry: dict) -> dict:
     """The default query seam: ``run_eval.drive_query`` + ``_extract_answer``,
     imported VERBATIM and in-function (never edited, never forked —
-    ``harness_sha`` is the reuse identity). ``drive_query``'s own wall-clock
-    start is the anchor's business; the protocol layer times the seam call
-    itself (monotonic)."""
+    ``harness_sha`` is the reuse identity).
+
+    The bearer handling mirrors the anchor's own per-entry path: a
+    TTL-bounded refresh before the drive and, on a 401/403, a forced refresh
+    and ONE re-drive (both gated on the anchor's own refresh configuration).
+    Without it the capture would 401 where the anchor answers — the capture's
+    rows would read as an A-leg behaviour regression that is really an expired
+    token. ``drive_query``'s own wall-clock start is the anchor's business;
+    the protocol layer times the seam call itself (monotonic)."""
     import run_eval  # local import: the eval toolchain's query driver, reused verbatim
 
+    run_eval._maybe_refresh_token()
     _start, body, status = run_eval.drive_query(entry)
+    if status in (401, 403) and run_eval._refresh_configured() and run_eval._maybe_refresh_token(force=True):
+        _start, body, status = run_eval.drive_query(entry)
     return {"http_status": status, "body": body, "answer": run_eval._extract_answer(body)}
 
 
@@ -285,6 +294,19 @@ def _response_source_fields(body) -> dict:
     return fields
 
 
+def _as_label_list(value) -> list[str]:
+    """The label shape the request carries: a LIST of labels, or a bare
+    STRING that is ONE label (the legacy shape chatqna accepts — a string
+    split into characters would be a silent lie about the scope)."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    return []
+
+
 def _retrieval_scope(entry: dict) -> dict:
     """The label scope the A leg queried under, and the scope the case
     requested. The two legs' scopes are NOT the same construct — chatqna
@@ -296,10 +318,10 @@ def _retrieval_scope(entry: dict) -> dict:
     requested = context.get("requested_labels")
     return {
         "sent_labels": {
-            "category_labels": list(entry.get("categoryLabels") or []),
-            "service_labels": list(entry.get("serviceLabels") or []),
+            "category_labels": _as_label_list(entry.get("categoryLabels")),
+            "service_labels": _as_label_list(entry.get("serviceLabels")),
         },
-        "case_requested_labels": list(requested) if isinstance(requested, list) else [],
+        "case_requested_labels": _as_label_list(requested),
     }
 
 
@@ -314,6 +336,7 @@ def _capture_one_entry(entry: dict, query) -> dict:
     row: dict[str, Any] = {"case_id": entry["id"]}
     try:
         result = query(entry)
+        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
         status = int(result.get("http_status") or 0)
         if 200 <= status < 300:
             row["status"] = "ok"
@@ -330,10 +353,13 @@ def _capture_one_entry(entry: dict, query) -> dict:
         # skipped) sent nothing, so it records no scope.
         row["retrieval_scope"] = _retrieval_scope(entry)
     except Exception as failed:  # noqa: BLE001 — a per-case failure is a row, not a crash
+        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
         row["status"] = "failure"
         row["error_type"] = type(failed).__name__
         row["error"] = _error_preview(failed)
-    row["wall_ms"] = round((time.monotonic() - started) * 1000.0, 1)
+    # The wall clock covers the seam call only — the same work the B leg
+    # times — so the two M-4 surfaces measure the same thing.
+    row["wall_ms"] = wall_ms
     row.update(_turn_field(entry))
     return row
 

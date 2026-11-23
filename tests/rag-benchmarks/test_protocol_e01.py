@@ -385,18 +385,27 @@ def test_capture_a_default_seam_is_the_run_eval_reuse(monkeypatch):
     import types
 
     fake_run_eval = types.ModuleType("run_eval")
-    seen = {}
+    seen = {"refreshes": [], "drives": 0}
 
     def drive_query(entry):
         seen["entry"] = entry
+        seen["drives"] += 1
+        if seen["drives"] == 1:
+            return 0.0, '{"response": "parsed"}', 401
         return 0.0, '{"response": "parsed"}', 200
 
     fake_run_eval.drive_query = drive_query
     fake_run_eval._extract_answer = lambda body: "parsed"
+    fake_run_eval._maybe_refresh_token = lambda force=False: seen["refreshes"].append(force) or True
+    fake_run_eval._refresh_configured = lambda: True
     monkeypatch.setitem(sys.modules, "run_eval", fake_run_eval)
     result = drivers._default_a_query({"id": "c1", "query": "q"})
     assert seen["entry"]["id"] == "c1"
     assert result == {"http_status": 200, "body": '{"response": "parsed"}', "answer": "parsed"}
+    # The bearer handling mirrors the anchor's: a TTL refresh before the drive,
+    # and a forced refresh + ONE re-drive on a 401.
+    assert seen["refreshes"] == [False, True]
+    assert seen["drives"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -1427,3 +1436,70 @@ def test_e01_compares_the_effective_scope_of_both_legs():
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["scope_matched"] is False
     assert scope["cases_with_a_different_effective_scope"] == ["c1"]
+
+
+def test_e01_drops_a_credential_named_like_a_token_count():
+    """A `_tokens` name is a count only when it carries no credential
+    marker — "password_tokens" is not a count."""
+    rows = _b_rows()
+    rows["c1"]["metadata"] = {"password_tokens": "LEAK", "cached_tokens": 3}
+    report = _build(b_rows=rows)
+    recorded = report["per_case"]["c1"]["b"]["metadata"]
+    assert "password_tokens" not in recorded
+    assert recorded["cached_tokens"] == 3
+    assert "LEAK" not in json.dumps(report)
+
+
+def test_e01_names_a_requested_label_that_never_became_a_filter():
+    """The requested labels are checked against the filter that was applied —
+    a requested label the filter never carried is the finding, not merely an
+    empty request."""
+    captured = _captured_rows()
+    captured["c1"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
+        "case_requested_labels": ["Forestry"],
+    }
+    captured["c1"]["filter_labels"] = ["Timber"]
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["A"]["cases_whose_requested_labels_never_reached_the_A_query"] == ["c1"]
+
+
+def test_e01_scope_match_is_null_when_the_comparison_is_partial():
+    """A leg that recorded no scope for a case leaves the comparison
+    partial — the report says so instead of publishing a verdict over the
+    cases it never compared."""
+    captured = _captured_rows()
+    captured["c1"]["filter_labels"] = ["Forestry"]
+    captured["c2"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
+        "case_requested_labels": [],
+    }
+    captured["c2"]["filter_labels"] = ["Timber"]
+    rows = _b_rows()
+    rows["c1"]["metadata"] = {"filter_labels": ["Forestry"]}
+    # c2 is scoped on A but not on B → the comparison is partial.
+    report = _build(captured_rows=captured, b_rows=rows)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["n_compared_cases"] == 1
+    assert scope["n_scoped_cases"] == {"A": 2, "B": 1}
+    assert scope["scope_matched"] is None
+    assert scope["B"]["cases_without_a_recorded_scope"] == ["c2"]
+
+
+def test_capture_a_records_a_string_valued_label_as_one_label():
+    """The legacy string shape is ONE label — splitting it into characters
+    would be a silent lie about the scope."""
+    workdir = Path("/tmp") / "e01-string-label"
+    workdir.mkdir(parents=True, exist_ok=True)
+    set_path = _set_file(workdir, extra_answerable=("c1",))
+    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
+    for entry in entries:
+        if entry["id"] == "c1":
+            entry["categoryLabels"] = "Tomato"
+    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    seam, _ = _seam({"c1": "a1"})
+    result = drivers.run_config_a_capture(
+        set_path, workdir / "out", query=seam, corpus_fingerprint=CORPUS
+    )
+    assert result["rows"]["c1"]["retrieval_scope"]["sent_labels"]["category_labels"] == ["Tomato"]

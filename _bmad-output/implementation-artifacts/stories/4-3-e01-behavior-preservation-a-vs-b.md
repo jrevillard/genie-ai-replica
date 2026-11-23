@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 58 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 64 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,7 +132,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 237 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 243 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
 the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
 ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
@@ -229,6 +229,23 @@ path, so the fixture must satisfy it). The duplication of the case/set
 helpers with story 4.1's and 4.2's test files is real but belongs to a
 shared `conftest.py` extraction across those files — outside this diff, and
 recorded in the simplify phase's skipped list.
+
+| F30' | The credential rule kept any `_tokens` name — `password_tokens` reached the report | important | **Fixed**: a `_tokens` name is a count only when it carries no credential marker; the TOKEN marker itself is the suffix |
+| F31' | The "requested labels never reached the A query" check fired only on an EMPTY request, not on a label the filter never carried | important | **Fixed**: the requested labels are checked against the filter that was applied |
+| F32' | The capture's seam inherited NONE of run_eval's bearer handling, while the docstring claimed the anchor behaved the same | important | **Fixed**: the seam mirrors the anchor's path (a TTL refresh before the drive, a forced refresh + one re-drive on 401/403) |
+| F33' | `scope_matched` was published over the intersection only — a partial comparison read as a full one | important | **Fixed**: the compared and scoped counts are published, and the verdict is null unless every scoped case was scoped on both legs |
+| F34' | The label coercion split a string-valued `categoryLabels` into characters — the repo's documented pitfall | important | **Fixed**: a bare string is ONE label |
+| F35' | The A leg's wall clock covered the response parse, while B's covers the pipeline only | nit | **Fixed**: the clock covers the seam call, like the B leg's |
+| F36' | The effective-label maps were written unredacted | nit | **Fixed**: they go through the redaction like every other map |
+| F37' | The `capture-a` synopsis omitted the required `--corpus-collection` | nit | **Fixed**: the synopsis carries the full argument shape |
+| F38' | The story's counts were stale | nit | **Fixed**: 64 tests / 243 passed |
+| F39' | The benchmarks knowledge file's Layout tree did not mention the protocol package | nit | **Fixed**: the tree lists the package, its modules and the protocol test suite |
+
+**Global code-review (C2) on the delta since C1 — 10 findings (4 important, 6
+nit), every claim verified, all fixed.** The four important ones were holes in
+the report's own honesty: a credential-named key that survived the rule, a
+missing-label check that never fired, a capture that would 401 where the
+anchor answers, and a scope verdict published over a partial comparison.
 
 ## Spec Change Log
 

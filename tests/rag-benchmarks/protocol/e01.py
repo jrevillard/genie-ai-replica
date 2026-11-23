@@ -189,7 +189,12 @@ def _is_credential_key(key) -> bool:
     if name in MEASUREMENT_KEY_NAMES:
         return False
     if name.endswith(_TOKEN_COUNT_SUFFIXES):
-        return any(qualifier in name for qualifier in _CREDENTIAL_QUALIFIERS)
+        if any(qualifier in name for qualifier in _CREDENTIAL_QUALIFIERS):
+            return True
+        # A count — but only if the name carries no OTHER credential marker
+        # ("password_tokens" is not a count). The TOKEN marker itself is the
+        # suffix, so it does not count here.
+        return any(marker in name for marker in CREDENTIAL_MARKERS if marker != "token")
     return any(marker in name for marker in CREDENTIAL_MARKERS)
 
 
@@ -683,6 +688,17 @@ def _effective_filter_labels(row: dict) -> list | None:
     return None
 
 
+def _sent_label_set(sent_labels: dict) -> set[str]:
+    """The labels the A leg SENT, as one set (the sent labels are recorded
+    per dimension — category and service)."""
+    values = []
+    for key in ("category_labels", "service_labels"):
+        items = sent_labels.get(key) if isinstance(sent_labels, dict) else None
+        if isinstance(items, list):
+            values.extend(str(item) for item in items)
+    return set(values)
+
+
 def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     """The label scope EACH leg actually filtered on, and whether the two
     match.
@@ -691,7 +707,7 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     response metadata (after its service-over-category collapse), the noagent
     lane in the row metadata. The comparison is therefore a fact, not a
     proxy; the request-side intent stays recorded beside it, because a
-    requested label that never became an effective filter is itself a finding
+    REQUESTED label that never became an effective filter is itself a finding
     (FR-27).
     """
     sent: dict = {}
@@ -700,6 +716,7 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     differing: list = []
     never_queried: list = []
     without_scope: list = []
+    b_without_scope: list = []
     for case_id, row in sorted(captured_rows.items()):
         if not isinstance(row, dict):
             without_scope.append(case_id)
@@ -721,24 +738,33 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
             without_scope.append(case_id)
             continue
         sent_labels = _redact_deep(scope.get("sent_labels") or {})
-        requested = scope.get("case_requested_labels") or []
+        requested = [str(label) for label in (scope.get("case_requested_labels") or [])]
         sent[case_id] = sent_labels
         effective = _effective_filter_labels(row)
         if effective is not None:
-            a_effective[case_id] = effective
-        if requested and not (sent_labels.get("category_labels") or sent_labels.get("service_labels")):
+            a_effective[case_id] = _redact_deep(effective)
+        # The REQUESTED labels against the filter that was actually applied:
+        # a requested label the filter never carried is the finding (not
+        # merely an empty request).
+        applied = set(effective) if effective is not None else _sent_label_set(sent_labels)
+        if any(label not in applied for label in requested):
             differing.append(case_id)
     for case_id, row in sorted(b_rows.items()):
         effective = _effective_filter_labels(row)
         if effective is not None:
-            b_effective[case_id] = effective
-    shared = sorted(set(a_effective) & set(b_effective))
-    mismatched = [case_id for case_id in shared if sorted(a_effective[case_id]) != sorted(b_effective[case_id])]
-    if shared and not mismatched:
-        scope_matched: bool | None = True
-    elif shared:
-        scope_matched = False
+            b_effective[case_id] = _redact_deep(effective)
+        elif isinstance(row, dict) and row.get("status") in ("ok", "http_error"):
+            b_without_scope.append(case_id)
+    compared = sorted(set(a_effective) & set(b_effective))
+    mismatched = [case_id for case_id in compared if sorted(a_effective[case_id]) != sorted(b_effective[case_id])]
+    if mismatched:
+        scope_matched: bool | None = False
+    elif compared and len(compared) == len(a_effective) == len(b_effective):
+        # Every scoped case was scoped on BOTH legs and the scopes agree.
+        scope_matched = True
     else:
+        # A partial comparison: the report says so instead of publishing a
+        # verdict over the cases it never compared.
         scope_matched = None
     return {
         "A": {
@@ -751,13 +777,17 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         "B": {
             "effective_filter_labels_per_case": b_effective,
             "labels_source": "the row metadata's filter_labels (the noagent lane's requested labels)",
+            "cases_without_a_recorded_scope": b_without_scope,
         },
         "scope_matched": scope_matched,
+        "n_compared_cases": len(compared),
+        "n_scoped_cases": {"A": len(a_effective), "B": len(b_effective)},
         "cases_with_a_different_effective_scope": mismatched,
         "note": (
             "the comparison is the EFFECTIVE filter each lane applied (chatqna's response metadata"
-            " against the noagent row metadata); None means at least one lane recorded no scope —"
-            " the report never claims a scope match it did not measure (FR-27)"
+            " against the noagent row metadata); null means the comparison was partial (a case"
+            " scoped on one leg only) or absent — the report never claims a scope match it did not"
+            " measure (FR-27)"
         ),
     }
 

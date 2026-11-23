@@ -1,0 +1,119 @@
+# The threshold registry — the single home of the threshold decision.
+#
+# PRD §8 / issue #1980: a measured dimension gets an agreed threshold OR an
+# EXPLICITLY recorded absence. An absence BLOCKS promotion — it is never a
+# default, never a silent pass, never a value the loader invents.
+#
+# The measured reference is still being produced (issue #2118 — the E01 live
+# run on the forge k3s). Until it lands EVERY dimension ships as explicitly
+# absent, and the sign-off is UNSIGNED: the owner is recorded here, but the
+# operator has signed nothing yet. The agreed VALUES land in a separate
+# follow-up MR — the thresholds are agreed AFTER the reference is measured and
+# BEFORE the first gated B/C run (PRD §8), never before.
+#
+# This file is versioned with the protocol package. The gate-compatible
+# thresholds artifact is DERIVED from it (protocol/thresholds.py) — it is
+# never authored independently, so the decision has exactly one home.
+
+registry_version: "1.0.0"
+artifact: "evaluation-threshold-registry"
+
+description: >-
+  The agreed thresholds of the measured dimensions M-1..M-5 — one entry per
+  dimension, each an agreed value or an explicit absence with its reason.
+
+sign_off:
+  owner: "jrevillard (ITU)"
+  signed: false
+  agreed_on: null
+  signed_on: null
+  note: >-
+    The E01/E02 gate sign-off owner is the operator. No sign-off has been
+    given: the thresholds are agreed after the measured reference lands
+    (issue #2118), and until then no dimension carries an agreed value. A
+    missing or unsigned sign-off blocks promotion exactly like an absent
+    threshold.
+
+dimensions:
+  M-1:
+    dimension: retrieval_quality
+    surface: >-
+      config A: the chunk-level anchor metrics (recall, precision,
+      complete_recall, noise, retrieval_recall, recall@k, ndcg@k); config B:
+      the doc-level source_documents — the surfaces differ by construction
+      (pair E01), so the threshold applies per surface and never across them.
+    status: absent
+    value: null
+    absent_reason: >-
+      the measured reference is pending (issue #2118 — the E01 live run on the
+      forge k3s); no retrieval-quality threshold is agreed yet
+    rationale: >-
+      the threshold is agreed against the measured A-only reference, after that
+      reference lands and before the first gated B/C run (PRD §8)
+    agreement_date: null
+
+  M-2:
+    dimension: answer_grounding
+    surface: >-
+      the captured answers (config A) and the row answers + source_documents
+      (config B) — judged under the versioned evaluator instructions, never by
+      a heuristic computed here
+    status: absent
+    value: null
+    absent_reason: >-
+      the measured reference is pending (issue #2118 — the E01 live run on the
+      forge k3s); no answer-grounding threshold is agreed yet
+    rationale: >-
+      grounding is a judged dimension — the threshold bounds the judged
+      agreement rate, so it can only be agreed once the judged reference
+      exists (PRD §8)
+    agreement_date: null
+
+  M-3:
+    dimension: abstention_correctness
+    surface: >-
+      the mechanical abstention facts (abstained / abstention_reason) recorded
+      by the no-agent lane (config B), plus the judged abstention correctness
+      of the answers
+    status: absent
+    value: null
+    absent_reason: >-
+      the measured reference is pending (issue #2118 — the E01 live run on the
+      forge k3s); no abstention-correctness threshold is agreed yet
+    rationale: >-
+      the threshold separates the correct abstentions from the excessive ones;
+      the correctness baseline is a judge-layer fact, so the number is agreed
+      only after the judged reference exists (PRD §8)
+    agreement_date: null
+
+  M-4:
+    dimension: latency
+    surface: >-
+      the per-request wall_ms of the protocol layer — the capture-a rows
+      (config A) and the driver rows (config B / config C)
+    status: absent
+    value: null
+    absent_reason: >-
+      the measured reference is pending (issue #2118 — the E01 live run on the
+      forge k3s); no latency threshold is agreed yet
+    rationale: >-
+      the threshold is agreed against the measured reference's own latency
+      distribution — a band sized on another deployment's hardware would
+      approve a regression (PRD §8)
+    agreement_date: null
+
+  M-5:
+    dimension: resource_consumption
+    surface: >-
+      the agentic cost surface (the run's model_calls / aux_model_calls /
+      tool_calls / prompt_tokens / completion_tokens / wall_clock_seconds) and
+      the config-B rows' resource record
+    status: absent
+    value: null
+    absent_reason: >-
+      the measured reference is pending (issue #2118 — the E01 live run on the
+      forge k3s); no resource-consumption threshold is agreed yet
+    rationale: >-
+      the agent earns its cost within an agreed limit — the limit is agreed
+      against the measured reference, never invented here (PRD §8)
+    agreement_date: null

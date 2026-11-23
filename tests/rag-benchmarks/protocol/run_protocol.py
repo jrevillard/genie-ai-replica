@@ -50,6 +50,25 @@ reuse check REFUSE, they never warn)::
         lineage mismatch, a config-C manifest on the B leg, a missing leg
         artifact or a lineage-mismatched defects ledger.
 
+    thresholds --registry PATH [--reference-manifest PATH] [--out PATH]
+        [--report PATH] [--created-utc STAMP]
+        The threshold registry's promotion decision (story 4.4): every
+        measured dimension with its agreed value or its EXPLICIT absence, and
+        the sign-off owner. An absent dimension and an unsigned sign-off block
+        promotion exactly like a missing predecessor — a blocked registry
+        produces NO signed artifact. Only an allowed promotion derives the
+        gate-compatible thresholds artifact FROM the registry.
+
+    counters --reference-rows PATH --candidate-rows PATH --out PATH
+        [--reference-manifest PATH] [--correctness-ledger PATH]
+        [--created-utc STAMP]
+        The counter-metrics report (story 4.4): CM-1 (the per-request
+        cost/latency delta against the reference), CM-2 (the excessive-
+        abstention rate on the questions the reference answers correctly) and
+        CM-3 (the limit/cancellation rate) as first-class, top-level results.
+        An absent input is recorded as absent with its reason — a rate is
+        never reported as zero where nothing was measured.
+
 Exit codes: 0 success; 1 a typed refusal / validation failure; 2 usage.
 """
 
@@ -63,7 +82,12 @@ from pathlib import Path
 if __package__ in (None, ""):  # executed as a script: make the package importable
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from protocol import thresholds as thresholds_mod  # noqa: E402
 from protocol import verdicts as verdicts_mod  # noqa: E402
+from protocol.counter_metrics import (  # noqa: E402
+    CounterMetricsRefusal,
+    build_counter_metrics_report,
+)
 from protocol.drivers import (  # noqa: E402
     DriverError,
     discover_model_ids,
@@ -482,6 +506,123 @@ def cmd_e01(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_thresholds(args: argparse.Namespace) -> int:
+    """The threshold registry's promotion decision (story 4.4).
+
+    The registry is the single home of the threshold decision; this command
+    reports it and — only when every measured dimension carries an agreed
+    value AND the sign-off is signed — derives the gate-compatible thresholds
+    artifact from it. A blocked registry produces NO signed artifact: the
+    report records the blocking reasons and the command exits 1.
+    """
+    try:
+        registry = thresholds_mod.load_registry(args.registry)
+    except thresholds_mod.ThresholdsRefusal as refused:
+        print(f"REFUSED: {refused}", file=sys.stderr)
+        return 1
+    decision = thresholds_mod.promotion_decision(registry)
+    derived = None
+    if decision["promotion"] == "allowed":
+        if not args.reference_manifest:
+            print(
+                "usage: thresholds --reference-manifest PATH is required to bind the"
+                " thresholds to the measured reference they were agreed against",
+                file=sys.stderr,
+            )
+            return 2
+        reference_manifest = _load_json_refusing(args.reference_manifest, "the reference manifest")
+        if reference_manifest is None:
+            return 1
+        try:
+            derived = thresholds_mod.derive_thresholds_artifact(registry, reference_manifest=reference_manifest)
+        except thresholds_mod.ThresholdsRefusal as refused:
+            print(f"REFUSED: {refused}", file=sys.stderr)
+            return 1
+        if not args.out:
+            print(
+                "usage: thresholds --out PATH is required to write the signed thresholds"
+                " artifact (the promotion decision is allowed)",
+                file=sys.stderr,
+            )
+            return 2
+    report = thresholds_mod.build_thresholds_report(registry, created_utc=args.created_utc, derived=derived)
+    if args.report:
+        report_path = _write_manifest(Path(args.report).parent, Path(args.report).name, report)
+        print(f"thresholds report: {report_path}")
+    sign_off = decision["sign_off"]
+    print(f"threshold registry: {args.registry}")
+    print(
+        f"sign-off owner: {sign_off.get('owner')} — signed: {str(sign_off.get('signed')).lower()}"
+    )
+    print(f"promotion: {decision['promotion'].upper()}")
+    for code in sorted(decision["dimensions"]):
+        record = decision["dimensions"][code]
+        if record["status"] == thresholds_mod.STATUS_AGREED:
+            print(f"  - {code} ({record['dimension']}): agreed {record['value']!r}")
+        else:
+            print(f"  - {code} ({record['dimension']}): ABSENT — {record['absent_reason']}")
+    for reason in decision["blocking_reasons"]:
+        print(f"  ! {reason['message']}")
+    if derived is None:
+        print(
+            "REFUSED: the promotion decision is blocked — no signed thresholds artifact is"
+            " produced; an absent dimension and an unsigned sign-off block promotion exactly"
+            " like a missing predecessor",
+            file=sys.stderr,
+        )
+        return 1
+    path = _write_manifest(Path(args.out).parent, Path(args.out).name, derived)
+    print(f"signed thresholds: {path}")
+    return 0
+
+
+def cmd_counters(args: argparse.Namespace) -> int:
+    """The counter-metrics report (story 4.4): CM-1, CM-2 and CM-3 as
+    first-class, top-level results. An absent input is recorded as absent with
+    its reason — the rate is never reported as zero where nothing was measured.
+    """
+    reference_rows = _load_rows_refusing(args.reference_rows, "the reference rows")
+    if reference_rows is None:
+        return 1
+    candidate_rows = _load_rows_refusing(args.candidate_rows, "the candidate rows")
+    if candidate_rows is None:
+        return 1
+    reference_manifest = None
+    if args.reference_manifest:
+        reference_manifest = _load_json_refusing(args.reference_manifest, "the reference manifest")
+        if reference_manifest is None:
+            return 1
+    correctness_ledger = None
+    if args.correctness_ledger:
+        correctness_ledger = _load_json_refusing(
+            args.correctness_ledger, "the reference-correctness ledger"
+        )
+        if correctness_ledger is None:
+            return 1
+    try:
+        report = build_counter_metrics_report(
+            reference_rows=reference_rows,
+            candidate_rows=candidate_rows,
+            reference_manifest=reference_manifest,
+            correctness_ledger=correctness_ledger,
+            created_utc=args.created_utc,
+        )
+    except CounterMetricsRefusal as refused:
+        print(f"REFUSED: {refused}", file=sys.stderr)
+        return 1
+    path = _write_manifest(Path(args.out).parent, Path(args.out).name, report)
+    metrics = report["counter_metrics"]
+    for name in sorted(metrics):
+        record = metrics[name]
+        if record.get("available"):
+            print(f"{name} ({record['name']}): available")
+        else:
+            print(f"{name} ({record['name']}): NOT AVAILABLE — {record.get('not_available_reason')}")
+    print(f"counter-metrics digest: {report['digest'][:12]}")
+    print(f"counter-metrics report: {path}")
+    return 0
+
+
 def _add_corpus_args(p: argparse.ArgumentParser) -> None:
     """The corpus identity arguments — the shared derivation
     (:func:`_corpus_fingerprint`) behind every artifact that names a corpus."""
@@ -493,6 +634,16 @@ def _add_corpus_args(p: argparse.ArgumentParser) -> None:
         "--compute-fingerprint",
         action="store_true",
         help="collect the source collection's content hashes live (needs the eval env)",
+    )
+
+
+def _add_created_utc_arg(p: argparse.ArgumentParser) -> None:
+    """The report timestamp pin — the digest covers it, so pinning makes two
+    rebuilds of the same inputs digest-comparable."""
+    p.add_argument(
+        "--created-utc",
+        default=None,
+        help="pin the report timestamp (the digest covers it — the reproducibility pin)",
     )
 
 
@@ -572,13 +723,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="the reference-defects ledger (lineage-verified before application; absent = recorded absent)",
     )
     e.add_argument("--out", required=True, help="the e01.report.json path to write")
-    e.add_argument(
-        "--created-utc",
-        default=None,
-        help="pin the report timestamp (the digest covers it — the reproducibility pin)",
-    )
+    _add_created_utc_arg(e)
     e.add_argument("--seed", type=int, default=None, help="the runs' seed (recorded as an execution condition)")
     e.set_defaults(func=cmd_e01)
+
+    t = sub.add_parser("thresholds", help="the threshold registry's promotion decision (story 4.4)")
+    t.add_argument("--registry", required=True, help="the threshold registry (protocol/thresholds.yaml)")
+    t.add_argument(
+        "--reference-manifest",
+        default=None,
+        help="the measured reference the thresholds bind to (required to sign them)",
+    )
+    t.add_argument("--out", default=None, help="the signed thresholds artifact path (when the promotion is allowed)")
+    t.add_argument("--report", default=None, help="the threshold report path to write")
+    _add_created_utc_arg(t)
+    t.set_defaults(func=cmd_thresholds)
+
+    c = sub.add_parser("counters", help="the counter-metrics report (story 4.4)")
+    c.add_argument("--reference-rows", dest="reference_rows", required=True, help="the reference rows file")
+    c.add_argument("--candidate-rows", dest="candidate_rows", required=True, help="the candidate rows file")
+    c.add_argument(
+        "--reference-manifest",
+        default=None,
+        help="the measured reference manifest (lineage-verifies the correctness ledger)",
+    )
+    c.add_argument(
+        "--correctness-ledger",
+        default=None,
+        help="the reference-correctness ledger (CM-2's denominator; absent = recorded absent)",
+    )
+    c.add_argument("--out", required=True, help="the counter-metrics report path to write")
+    _add_created_utc_arg(c)
+    c.set_defaults(func=cmd_counters)
     return p
 
 
@@ -594,6 +770,8 @@ def main(argv: list[str] | None = None) -> int:
         ManifestError,
         PairError,
         E01Refusal,
+        thresholds_mod.ThresholdsRefusal,
+        CounterMetricsRefusal,
     ) as refused:
         print(f"REFUSED: {refused}", file=sys.stderr)
         return 1

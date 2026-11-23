@@ -1387,7 +1387,6 @@ def test_kubectl_backend_skips_the_docker_reresolution(monkeypatch):
         raise HarnessError("kubectl exec pod-1 failed: container not found")
 
     monkeypatch.setattr(run_eval, "exec_in_container", fake_exec)
-    resolver = types.SimpleNamespace(assert_not_called=lambda: None)
     resolve_calls = []
     def fake_resolve(force=False):
         resolve_calls.append(force)
@@ -1418,6 +1417,7 @@ def test_chatqna_identity_default_is_backend_aware(monkeypatch):
     cases = [
         ({}, "chatqna-xeon-backend-server"),          # docker default
         ({"EVAL_EXEC_BACKEND": "kubectl"}, "chatqna"),
+        ({"EVAL_EXEC_BACKEND": " KUBECTL "}, "chatqna"),   # normalized (strip+lower)
         ({"EVAL_EXEC_BACKEND": "kubectl", "CHATQNA_CONTAINER": "chatqna-prod"}, "chatqna-prod"),
         ({"CHATQNA_CONTAINER": "chatqna-prod"}, "chatqna-prod"),
     ]
@@ -1426,9 +1426,13 @@ def test_chatqna_identity_default_is_backend_aware(monkeypatch):
             "import sys; sys.path.insert(0, {evaldir!r});"
             "import run_eval; print(run_eval.CHATQNA_CONTAINER)"
         ).format(evaldir=eval_dir)
+        # The ambient CHATQNA_CONTAINER (an operator's exported pin, live-proven
+        # on this host) must not leak into the docker-default branch — the case
+        # env is the whole truth for this knob.
+        base_env = {k: v for k, v in os.environ.items() if k != "CHATQNA_CONTAINER"}
         out = subprocess.run(
             [sys.executable, "-c", code],
-            capture_output=True, text=True, env={**os.environ, **env}, timeout=60,
+            capture_output=True, text=True, env={**base_env, **env}, timeout=60,
         )
         assert out.returncode == 0, out.stderr
         assert out.stdout.strip() == expected, (env, out.stdout)

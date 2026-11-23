@@ -55,10 +55,14 @@ say "6. the agentic side (applied by this run) is removed"
 kubectl -n $NS delete deployment agent-service service agent-service 2>&1 | tail -3
 kubectl -n $NS delete deployment genieai-genieai-umbrella-okf-server service okf-server 2>&1 | tail -3
 
+say "6b. the run-scoped NetworkPolicy (chatqna -> VictoriaTraces egress) is removed"
+kubectl -n $NS delete networkpolicy e01-chatqna-vt-egress --ignore-not-found 2>&1 | tail -1
+
 say "7. the run's realm changes are reverted"
 export KC_ADMIN_USER=$(kubectl -n $NS get secret keycloak-admin-credentials -o jsonpath='{.data.username}' | base64 -d)
 export KC_ADMIN_PWD=$(kubectl -n $NS get secret keycloak-admin-credentials -o jsonpath='{.data.password}' | base64 -d)
-SAID=$(cat /tmp/sa.id)
+# the dataprep service account (the run granted it the 'admin' realm role)
+SAID=${SA_ID:-e33a4dd8-0856-4cce-be37-367267dece44}
 AT=$(curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -X POST "https://genieai-forge.local:4443/auth/realms/master/protocol/openid-connect/token" -d client_id=admin-cli -d "username=$KC_ADMIN_USER" -d "password=$KC_ADMIN_PWD" -d grant_type=password | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 # 7a. the 'admin' realm role the run granted to the dataprep service account
 RID=$(curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/roles/admin" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
@@ -77,8 +81,20 @@ d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 say "8. the secrets the run restored"
 # the keycloak-proxy-client-secret Secret was missing at the baseline (its
 # SealedSecret was synced but the Secret had been deleted) — the baseline is
-# restored by deleting it again.
+# restored by deleting it again. If the sealed-secrets controller re-syncs it,
+# the proof step reports it honestly rather than claiming a clean restore.
 kubectl -n $NS delete secret keycloak-proxy-client-secret 2>&1 | tail -1
+# the okf-internal-secret SealedSecret the run wired into the overlay's
+# kustomization (reverted in step 1) was APPLIED by this run — its absence is
+# the baseline, so both the SealedSecret and its materialized Secret go.
+kubectl -n $NS delete sealedsecret okf-internal-secret --ignore-not-found 2>&1 | tail -1
+kubectl -n $NS delete secret okf-internal-secret --ignore-not-found 2>&1 | tail -1
+sleep 5
+if kubectl -n $NS get secret keycloak-proxy-client-secret >/dev/null 2>&1; then
+  echo "  NOTE: keycloak-proxy-client-secret was RE-SYNCED by the sealed-secrets controller (baseline had it absent — flag in the report)"
+else
+  echo "  keycloak-proxy-client-secret absent (baseline restored)"
+fi
 kubectl -n $NS get secret 2>&1 | grep -E "okf|keycloak-proxy" || echo "  no okf/proxy secrets"
 
 say "9. the port-forwards go"
@@ -89,6 +105,8 @@ done
 say "10. the proof"
 kubectl -n $NS get pods 2>&1 | grep -E "agent-service|okf-server|vtraces|collector" || echo "  no run workload in the namespace"
 kubectl -n $NS get deploy 2>&1 | grep -E "agent-service|okf-server" || echo "  no run deployment in the namespace"
+kubectl -n $NS get networkpolicy e01-chatqna-vt-egress 2>&1 | tail -1
+kubectl -n $NS get sealedsecret okf-internal-secret 2>&1 | tail -1
 kubectl get crd 2>&1 | grep -i opentelemetry || echo "  no opentelemetry CRD"
 kubectl -n vmoperator-system get deploy,pod 2>&1 | tail -2
 kubectl -n $NS get secret 2>&1 | grep -E "okf|keycloak-proxy" || echo "  no okf/proxy secret"

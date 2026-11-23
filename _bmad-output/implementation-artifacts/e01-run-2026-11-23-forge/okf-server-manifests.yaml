@@ -1,6 +1,7 @@
 # A RECORD of what this run applied to the shared forge namespace, not a
-# manifest to re-apply: the objects were deleted when the run ended (see
-# restore-and-cleanup.md). The Helm ownership labels below were on the
+# manifest to re-apply: the objects were deleted when the run ended (the
+# deletion proof lands in restore-and-cleanup.md, committed before the MR
+# leaves draft). The Helm ownership labels below were on the
 # APPLIED objects (the chart's render carries them); without Helm's
 # meta.helm.sh annotations a future `helm upgrade` of an okf-enabled release
 # would refuse to adopt them — which is exactly why the run deletes them

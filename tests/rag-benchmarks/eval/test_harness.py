@@ -22,6 +22,7 @@ from unittest import mock
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness  # noqa: E402
 from harness import (  # noqa: E402
     HarnessError,
     docker_exec,
@@ -151,6 +152,7 @@ class TestResolveK8sPod:
     def test_stale_pin_falls_back_to_the_labels_with_a_warning(self, monkeypatch, capsys):
         """A pin naming a pod the rollout rotated away must not pin the run
         to a corpse — it falls through to the label selectors."""
+        harness._warned_stale_pins.clear()
         monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-dead")
         fake = mock.Mock()
         fake.returncode = 0

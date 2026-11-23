@@ -14,7 +14,7 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 8667.9
+      "wall_ms": 8931.7
     },
     "e01-ans-items": {
       "case_id": "e01-ans-items",
@@ -30,7 +30,7 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 6743.0
+      "wall_ms": 6794.2
     },
     "e01-ans-formatting": {
       "case_id": "e01-ans-formatting",
@@ -46,13 +46,13 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 6577.9
+      "wall_ms": 5850.3
     },
     "e01-unans-upload-count": {
       "case_id": "e01-unans-upload-count",
       "status": "ok",
       "http_status": 200,
-      "answer": "Based on the content provided in the knowledge base, there are at least two test documents mentioned:\n\n1. The first document is introduced as a markdown test file for end-to-end (E2E) upload validation, located under the main heading \"Test Document\".\n2. The second document is referenced within \"Test Document > Section 1\", which lists three items.\n\nTherefore, the system has uploaded at least **two test documents** so far. The information about the exact number of test documents is limited to these two explicitly mentioned documents within the provided content.",
+      "answer": "Based on the content provided in the knowledge base, there are at least two test documents mentioned:\n\n1. The first document is introduced as a markdown test file for end-to-end (E2E) upload validation, described in the initial chunk.\n2. The second document is referenced under \"Section 1\" of the Test Document, which lists three items in a bullet-point format.\n\nTherefore, **two test documents** have been uploaded to this system so far, as indicated by the retrieved documents.",
       "source_documents": [],
       "filter_labels": [],
       "retrieval_scope": {
@@ -62,13 +62,13 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 7764.6
+      "wall_ms": 10196.7
     },
     "e01-cite-items": {
       "case_id": "e01-cite-items",
       "status": "ok",
       "http_status": 200,
-      "answer": "The items 'Item one', 'Item two', and 'Item three' appear in **Section 1** of the Test Document. Specifically, they are listed as bullet points in the second chunk under Section 1.",
+      "answer": "The items 'Item one', 'Item two', and 'Item three' appear in **Section 1** of the Test Document. Specifically, they are listed as bullet points in the second chunk under this section.",
       "source_documents": [],
       "filter_labels": [],
       "retrieval_scope": {
@@ -78,13 +78,13 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 6020.0
+      "wall_ms": 5935.6
     },
     "e01-lang-es": {
       "case_id": "e01-lang-es",
       "status": "ok",
       "http_status": 200,
-      "answer": "El documento de prueba, denominado `test-document.md`, fue creado para la validación de carga completa (E2E). Sirve para probar el proceso de carga proporcionando un archivo Markdown que incluye varios elementos de formato, como texto en cursiva y negrita, así como una lista con viñetas, para asegurar que estas características se manejen correctamente durante las etapas de carga y renderizado.",
+      "answer": "El documento de prueba, denominado `test-document.md`, fue creado para la validación de carga completa (E2E). Sirve para probar el proceso de carga proporcionando un archivo Markdown que incluye varios elementos de formato, como texto en cursiva y en negrita, así como una lista con viñetas, para asegurar que estas características se manejen correctamente durante las etapas de carga y renderizado.",
       "source_documents": [],
       "filter_labels": [],
       "retrieval_scope": {
@@ -94,13 +94,13 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 10230.4
+      "wall_ms": 11443.2
     },
     "e01-lang-zh": {
       "case_id": "e01-lang-zh",
       "status": "ok",
       "http_status": 200,
-      "answer": "测试文档，名为 `test-document.md`，用于端到端 (E2E) 上传验证。它作为 Markdown 测试文件，旨在确保上传过程能够正确运行，正如其介绍中所述：“这是一个 **Markdown** 用于 E2E 上传验证的测试文件。”该文档还包含 Markdown 格式的示例，例如斜体和粗体文本，以及带项目符号的列表，以展示 Markdown 结构在验证过程中所具备的能力。",
+      "answer": "测试文档，名为 `test-document.md`，用于端到端 (E2E) 上传验证。它作为 Markdown 测试文件，旨在确保上传过程能够正确运行，正如其介绍中所述：“这是一个 **Markdown** 测试文件，用于 E2E 上传验证。”该文档还包含 Markdown 格式的示例，例如斜体和粗体文本，以及带项目符号的列表，以展示 Markdown 结构在验证过程中所具备的能力。",
       "source_documents": [],
       "filter_labels": [],
       "retrieval_scope": {
@@ -110,7 +110,7 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 8966.7
+      "wall_ms": 9238.6
     },
     "e01-fail-saturation": {
       "case_id": "e01-fail-saturation",
@@ -126,7 +126,7 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 7349.3
+      "wall_ms": 9680.3
     },
     "e01-cancel-checklist": {
       "case_id": "e01-cancel-checklist",
@@ -142,7 +142,7 @@
         },
         "case_requested_labels": []
       },
-      "wall_ms": 5210.0
+      "wall_ms": 8702.4
     },
     "e01-sec-restricted": {
       "case_id": "e01-sec-restricted",

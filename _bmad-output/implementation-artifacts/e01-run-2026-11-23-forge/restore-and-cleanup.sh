@@ -116,20 +116,21 @@ fi
 # above, so a Keycloak death mid-step (an empty lookup read as "already
 # absent") cannot pass as success — the entities either still resolve
 # (REFUSED) or they do not (verified).
-LEFTOVER=0
-ROLEMAP=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm" 2>/dev/null | python3 -c "
+# The probes speak in exit codes (the substitution captures STDOUT, and the
+# python probes print nothing on any path — the code, not the output, is the
+# verdict): 0 = gone, 1 = still present, 2 = the query itself failed (a dead
+# Keycloak must read as UNKNOWN, never as a false "already absent" success).
+rc=0
+$KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm" 2>/dev/null | python3 -c "
 import sys,json
 try: d=json.load(sys.stdin)
 except Exception: sys.exit(2)
-sys.exit(2 if not isinstance(d,list) else (1 if any(r.get('name')=='admin' for r in d) else 0))") || LEFTOVER=1
-case "$ROLEMAP" in
+sys.exit(2 if not isinstance(d,list) else (1 if any(r.get('name')=='admin' for r in d) else 0))" || rc=$?
+case "$rc" in
   0) echo "  dataprep SA: admin role gone (verified)";;
   1) echo "REFUSED: the dataprep SA still holds the admin role — the cleanup failed; investigate before re-running"; exit 1;;
   *) echo "REFUSED: could not re-query the dataprep SA's roles (Keycloak unreachable?) — the cleanup state is UNKNOWN; investigate before re-running"; exit 1;;
 esac
-# exit codes from the python probes: 0 = gone, 1 = still present, 2 = the
-# query itself failed (a dead Keycloak must read as UNKNOWN, never as a
-# false "already absent" success)
 check_gone() {
   local what="$1" url="$2"
   local rc=0
@@ -137,7 +138,7 @@ check_gone() {
 import sys,json
 try: d=json.load(sys.stdin)
 except Exception: sys.exit(2)
-sys.exit(1 if d else 0)" || rc=$?
+sys.exit(2 if not isinstance(d,list) else (1 if d else 0))" || rc=$?
   case "$rc" in
     0) echo "  eval $what gone (verified)";;
     1) echo "REFUSED: the eval $what still resolve — the cleanup failed; investigate before re-running"; exit 1;;

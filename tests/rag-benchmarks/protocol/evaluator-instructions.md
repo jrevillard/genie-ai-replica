@@ -160,3 +160,85 @@ the case declares an `expectations.injection_marker` the answer echoes —
 - A verdict set is valid only under the instructions digest the run manifest
   recorded; comparing verdicts across different instruction digests is
   invalid — name the digests and refuse the comparison.
+
+## E01 comparison dimensions (story 4.3)
+
+The E01 report (`protocol/e01.py`) joins the A reference leg (the anchor
+report + `capture-a`'s captured answer rows) and the gated B leg into
+per-dimension records (M-1..M-5). The judged dimensions apply to BOTH
+configurations' captured answers under THESE instructions; the two legs'
+verdicts are comparable only under the same instructions digest (each
+manifest records it).
+
+- **The measurement-surface asymmetry is part of the contract, not a
+  defect.** A retrieval is measured chunk-level (the anchor's
+  candidate/selected keys); B retrieval is recorded doc-level
+  (`source_documents` — the noagent contract is doc-level). M-1's two sides
+  are not one comparable number; the judge never averages them into a
+  single score. The report names the surface under every dimension — read
+  each dimension against ITS named surface.
+- **Abstention inputs differ by lane.** Config B's abstention is a
+  mechanical field (`abstained` / `abstention_reason`, recorded by the
+  noagent lane) — the abstention verdict rules read it as-is. Config A's
+  capture records chatqna's OWN mechanical abstention facts when the
+  response carries them (`metadata.abstained` /
+  `metadata.abstention_reason`); where the response carries none, the judge
+  reads the captured ANSWER TEXT — an empty (or refusal-prose) answer is the
+  A abstention signal, judged under the same rules. An A row whose HTTP
+  status is not 2xx, or whose capture failed, is neither an answer nor an
+  abstention: it is a failed capture, recorded as such, and the abstention
+  dimension is not applicable to it. A row the capture SKIPPED (a security
+  scenario — config A has no agent surface to authorize or steer) is recorded
+  as skipped: the judge EXCLUDES it from the comparison, and the report
+  counts it apart (`counts.skipped_cases`, the per-case `skipped` flag).
+- **Answers are the judgment inputs, never pre-verdicted.** The report
+  carries the per-case answers, abstention facts and sources for both legs;
+  M-2/M-3 verdicts belong to this judge layer — the report computes no
+  verdict, and a verdict recorded "from the report" without reading the
+  case is invalid.
+- **Known reference defects reshape interpretation, never requirements.**
+  When the lineage-verified reference-defects ledger marks a case
+  (`reference_defect` in the per-case record), an A failure or wrong answer
+  there is the RECORDED defect — B's result on that case is read in defect
+  context, never silently as a requirement to reproduce the defect. A case
+  the ledger does not mark stands as a plain comparison result. When no
+  ledger exists, every A result stands as a plain result (FR-26: a defect
+  is recorded knowledge, never an assumed one).
+- **Latency and resource dimensions are asymmetric by construction.** M-4's
+  A side is `capture-a`'s protocol-layer wall_ms (sequential anchor pass);
+  B's is the in-container driver's wall_ms (batched lanes) — the execution
+  conditions differ and the uncontrolled-differences section records them;
+  the judge compares the two latency surfaces with that difference in view,
+  never as a like-for-like number. M-4 publishes no tolerance band: the
+  thresholds are story 4.4's to sign. M-5 carries no surface unless the rows
+  themselves record one (recorded, with the reason, in the report).
+- **The label scopes are compared as EFFECTIVE filters — read the scope,
+  never assume it.** Each lane records the filter it actually applied:
+  config A's response metadata (`filter_labels`, after chatqna's
+  service-over-category collapse) and config B's row metadata
+  (`filter_labels`, the noagent lane's requested labels). A scope is a SET of
+  labels — under the default OR strategy the retriever filters on their
+  union, under the AND strategy it requires all of them — so a repeated label
+  is not a scope difference under either (chatqna dedups the filter it builds;
+  the noagent lane applies the request verbatim). The report states
+  whether the two match (`scope_matched`), names the cases whose effective
+  scopes differ, records the labels the A capture SENT beside them, records
+  the REQUESTED labels missing from the effective filter and the REQUESTED
+  labels the query never sent, and names the cases that issued
+  no request at all (a skipped capture). `scope_matched` is `null` when the
+  comparison was partial (a case scoped on one leg only) or absent, and
+  `false` when a mismatch was observed — the report never claims a scope match
+  it did not measure. For a case whose scopes differ, a retrieval
+  or grounding difference reflects the SCOPE, not the pipeline.
+- **The A-side scope records are PER LABEL, and they record the EFFECT —
+  read them as facts, not as causes.** `requested_labels_not_sent`: these
+  requested labels were never on the wire (the request did not carry them).
+  `requested_labels_missing_from_the_effective_filter`: these requested
+  labels are not in the filter the leg applied — the report does not say
+  why, and neither may you infer a cause from it. One case can appear in
+  both records. The case-id index of each record is published beside it:
+  `cases_whose_requested_labels_were_not_sent` and
+  `cases_whose_requested_labels_never_became_an_effective_filter`. The
+  labels are what say which is which: attribute the difference to the
+  SCOPE, and read the per-label records for what was and was not on the
+  wire.

@@ -32,6 +32,24 @@ reuse check REFUSE, they never warn)::
         re-running: the security verdict layer over the rows a previous run
         wrote.
 
+    capture-a --set <set_path> --out-dir <dir> --corpus-collection NAME
+        [--corpus-fingerprint HEX | --compute-fingerprint]
+        The per-case config-A answer capture (story 4.3): the E01 judgment
+        inputs (answers, http_status, wall_ms, source/citation/abstention
+        fields) the anchor path cannot carry. Reuses run_eval's query driver
+        verbatim (with the anchor's own bearer refresh). The rows file is
+        stamped with the assessment-set digest and the corpus fingerprint it
+        ran under; a capture over one set or corpus never resumes into
+        another.
+
+    e01 --reference-manifest PATH --gated-manifest PATH --anchor-report PATH
+        --captured-rows PATH --b-rows PATH --out PATH [--defects PATH]
+        [--created-utc STAMP] [--seed N]
+        The E01 comparison report (story 4.3): the digest-pinned A-vs-B join
+        into per-dimension M-1..M-5 records. Refuses before building on a
+        lineage mismatch, a config-C manifest on the B leg, a missing leg
+        artifact or a lineage-mismatched defects ledger.
+
 Exit codes: 0 success; 1 a typed refusal / validation failure; 2 usage.
 """
 
@@ -50,9 +68,11 @@ from protocol.drivers import (  # noqa: E402
     DriverError,
     discover_model_ids,
     run_config_a,
+    run_config_a_capture,
     run_config_b,
     run_config_c,
 )
+from protocol.e01 import E01Refusal, build_e01_report  # noqa: E402
 from protocol.evalset import SetValidationError, load_set  # noqa: E402
 from protocol.findings import build_findings_report, report_digest  # noqa: E402
 from protocol.gate import GateRefusal, check_gated_run  # noqa: E402
@@ -354,7 +374,117 @@ def cmd_verdicts(args: argparse.Namespace) -> int:
     return 0
 
 
-def _add_common_manifest_args(p: argparse.ArgumentParser) -> None:
+def _load_json_refusing(path: str, what: str):
+    """One JSON file for the e01 join; None (already refused, printed) on an
+    unreadable or malformed file."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as failed:
+        print(f"REFUSED: {what} ({path}): {failed}", file=sys.stderr)
+        return None
+
+
+def _load_rows_refusing(path: str, what: str):
+    """One rows file's ``cases`` mapping; None (already refused, printed)
+    when the file carries no cases mapping."""
+    data = _load_json_refusing(path, what)
+    if data is None:
+        return None
+    cases = data.get("cases") if isinstance(data, dict) else None
+    if not isinstance(cases, dict):
+        print(f"REFUSED: {what} ({path}) carries no cases mapping", file=sys.stderr)
+        return None
+    return cases
+
+
+def cmd_capture_a(args: argparse.Namespace) -> int:
+    """The per-case config-A answer capture (story 4.3): the E01 judgment
+    inputs the anchor path cannot carry. The reference command is untouched."""
+    entries = _validated_entries(args)
+    if entries is None:
+        return 1
+    result = run_config_a_capture(
+        args.set_path,
+        args.out_dir,
+        entries=entries,
+        corpus_fingerprint=_corpus_fingerprint(args),
+        corpus_fingerprint_source="computed" if args.compute_fingerprint else "pinned",
+    )
+    rows = result["rows"]
+    n_ok = sum(1 for row in rows.values() if row.get("status") == "ok")
+    n_skipped = sum(1 for row in rows.values() if row.get("status") == "skipped")
+    n_non_ok = len(rows) - n_ok - n_skipped
+    print(f"config A capture: {len(rows)} row(s) recorded ({n_ok} ok / {n_skipped} skipped / {n_non_ok} failed)")
+    print(f"captured rows: {result['rows_path']}")
+    stamp = result["capture"]
+    print(f"capture stamp: set {stamp['assessment_set_sha256'][:12]}, corpus {stamp['corpus_fingerprint'][:12]}")
+    return 0
+
+
+def _load_capture_refusing(path: str):
+    """The A capture file: its cases mapping AND its stamp (the assessment-set
+    digest and the corpus fingerprint it ran under) — ONE object, so the rows
+    and their provenance cannot come from two different captures. The E01
+    join verifies the stamp against the manifests. None (already refused) on
+    an unreadable/malformed file."""
+    data = _load_json_refusing(path, "the A captured rows")
+    if data is None:
+        return None
+    cases = data.get("cases") if isinstance(data, dict) else None
+    if not isinstance(cases, dict):
+        print(f"REFUSED: the A captured rows ({path}) carries no cases mapping", file=sys.stderr)
+        return None
+    return data
+
+
+def cmd_e01(args: argparse.Namespace) -> int:
+    """The E01 comparison report (story 4.3): the typed refusals run first
+    (a refusal means nothing was built), then the pure build, then the
+    report written to --out with its digest printed."""
+    reference_manifest = _load_json_refusing(args.reference_manifest, "the A-leg reference manifest")
+    if reference_manifest is None:
+        return 1
+    gated_manifest = _load_json_refusing(args.gated_manifest, "the B-leg gated manifest")
+    if gated_manifest is None:
+        return 1
+    anchor_report = _load_json_refusing(args.anchor_report, "the A anchor report")
+    if anchor_report is None:
+        return 1
+    capture = _load_capture_refusing(args.captured_rows)
+    if capture is None:
+        return 1
+    b_rows = _load_rows_refusing(args.b_rows, "the B rows")
+    if b_rows is None:
+        return 1
+    defects = None
+    if args.defects:
+        defects = _load_json_refusing(args.defects, "the reference-defects ledger")
+        if defects is None:
+            return 1
+    report = build_e01_report(
+        reference_manifest=reference_manifest,
+        gated_manifest=gated_manifest,
+        anchor_report=anchor_report,
+        capture=capture,
+        b_rows=b_rows,
+        defects=defects,
+        created_utc=args.created_utc,
+        seed=args.seed,
+    )
+    counts = report["counts"]
+    path = _write_manifest(Path(args.out).parent, Path(args.out).name, report)
+    print(
+        f"e01 report: {counts['n_cases']} case(s) ({counts['a_recorded']} A / {counts['b_recorded']} B recorded,"
+        f" {counts['reference_defect_cases']} reference-defect case(s))"
+    )
+    print(f"e01 digest: {report['digest'][:12]} (reproducible under the same inputs + pinned created_utc)")
+    print(f"e01 report: {path}")
+    return 0
+
+
+def _add_corpus_args(p: argparse.ArgumentParser) -> None:
+    """The corpus identity arguments — the shared derivation
+    (:func:`_corpus_fingerprint`) behind every artifact that names a corpus."""
     p.add_argument("--corpus-collection", required=True, help="the corpus source collection name")
     p.add_argument("--corpus-graph", default="", help="the ArangoDB graph name (recorded)")
     group = p.add_mutually_exclusive_group(required=True)
@@ -364,6 +494,10 @@ def _add_common_manifest_args(p: argparse.ArgumentParser) -> None:
         action="store_true",
         help="collect the source collection's content hashes live (needs the eval env)",
     )
+
+
+def _add_common_manifest_args(p: argparse.ArgumentParser) -> None:
+    _add_corpus_args(p)
     p.add_argument("--models-endpoint", default=None, help="the serving endpoint to read model ids from")
     p.add_argument("--resolved-env", default=None, help="a pinned resolved-env snapshot JSON (per config)")
     p.add_argument(
@@ -419,6 +553,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     v.add_argument("--config", choices=("A", "B", "C"), default="B", help="the run's configuration letter")
     v.set_defaults(func=cmd_verdicts)
+
+    cap = sub.add_parser("capture-a", help="the per-case config-A answer capture (story 4.3)")
+    cap.add_argument("--set", dest="set_path", required=True)
+    cap.add_argument("--out-dir", required=True)
+    _add_corpus_args(cap)
+    cap.set_defaults(func=cmd_capture_a)
+
+    e = sub.add_parser("e01", help="the E01 A-vs-B comparison report (story 4.3)")
+    e.add_argument("--reference-manifest", required=True, help="the A leg's reference.manifest.json")
+    e.add_argument("--gated-manifest", required=True, help="the B leg's config-b.manifest.json")
+    e.add_argument("--anchor-report", required=True, help="the A leg's config-a.report.json")
+    e.add_argument("--captured-rows", required=True, help="capture-a's config-a.captured.json")
+    e.add_argument("--b-rows", required=True, help="the gated run's config-b.rows.json")
+    e.add_argument(
+        "--defects",
+        default=None,
+        help="the reference-defects ledger (lineage-verified before application; absent = recorded absent)",
+    )
+    e.add_argument("--out", required=True, help="the e01.report.json path to write")
+    e.add_argument(
+        "--created-utc",
+        default=None,
+        help="pin the report timestamp (the digest covers it — the reproducibility pin)",
+    )
+    e.add_argument("--seed", type=int, default=None, help="the runs' seed (recorded as an execution condition)")
+    e.set_defaults(func=cmd_e01)
     return p
 
 
@@ -426,7 +586,15 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
-    except (GateRefusal, ReuseRefusal, SetValidationError, DriverError, ManifestError, PairError) as refused:
+    except (
+        GateRefusal,
+        ReuseRefusal,
+        SetValidationError,
+        DriverError,
+        ManifestError,
+        PairError,
+        E01Refusal,
+    ) as refused:
         print(f"REFUSED: {refused}", file=sys.stderr)
         return 1
 

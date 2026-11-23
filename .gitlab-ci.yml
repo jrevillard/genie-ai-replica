@@ -4486,7 +4486,7 @@ test:rag-benchmarks:
     # __init__, which pulls .contract (pydantic) and .executor → adapters
     # .chunks/.docrepo/.okf → adapters/http (requests). The search capability's
     # numpy/kneed live only in the in-container driver assembly, never in CI.
-    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests
+    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests pyyaml
   cache:
     - key: test-rag-benchmarks
       paths:
@@ -4496,11 +4496,12 @@ test:rag-benchmarks:
     - pytest -q --junitxml=../../../reports/rag-benchmarks-report.xml
     - cd ..
     - pytest test_capture_baseline.py -q --junitxml=../../reports/rag-benchmarks-capture-report.xml
-    # The evaluation-protocol suite (stories 4.1 + 4.2): set validation, run
-    # manifests, the partial-order gate, capture-artifact reuse checks, the
-    # three config drivers through fake transports (no live venue), and the
-    # security scenario suite (verdicts + findings).
-    - pytest test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py -q --junitxml=../../reports/rag-benchmarks-protocol-report.xml
+    # The evaluation-protocol suite (stories 4.1 + 4.2 + 4.3): set validation,
+    # run manifests, the partial-order gate, capture-artifact reuse checks, the
+    # three config drivers through fake transports (no live venue), the
+    # security scenario suite (verdicts + findings) and the E01 A-vs-B
+    # comparison (the A answer capture + the digest-pinned report).
+    - pytest test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py test_protocol_e01.py -q --junitxml=../../reports/rag-benchmarks-protocol-report.xml
   artifacts:
     when: always
     expire_in: 7 days
@@ -4513,6 +4514,9 @@ test:rag-benchmarks:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "tests/rag-benchmarks/**/*"
+        # The protocol mirrors the server's label rule and pins itself
+        # against it — a change to the server's rule must run this job.
+        - "genie-ai-overlay/core/label_contract.py"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

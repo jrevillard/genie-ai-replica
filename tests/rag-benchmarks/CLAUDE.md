@@ -40,6 +40,21 @@ tests/rag-benchmarks/
 ├── scripts/
 │   └── run_anchor_with_cleanup.sh  # Wrapper: ROPC enable + run + verified revert
 ├── capture_baseline.py        # Multi-run driver (N runs → tolerance baseline JSON)
+├── protocol/                  # The versioned evaluation protocol (Epic 4)
+│   ├── evalset.py             # Set schema, composition floor, tuning/assessment separation
+│   ├── manifest.py            # The run manifest (corpus, sets, config, prompts, lineage)
+│   ├── pairs.py               # The E01/E02 pair conditions (held fixed, intentional difference)
+│   ├── gate.py                # The partial order (A-only first → thresholds → B/C)
+│   ├── reuse.py               # Capture-artifact suitability (harness_sha/gold_sha256/stack)
+│   ├── drivers.py             # The config drivers (A, the A capture, B, C)
+│   ├── config_b_driver.py     # The script that runs INSIDE the agent-service container
+│   ├── verdicts.py / findings.py  # The security verdict layer and the findings report
+│   ├── e01.py                 # The E01 A-vs-B comparison report (story 4.3)
+│   ├── evaluator-instructions.md  # The versioned judge instructions (digested by every run)
+│   ├── sets/                  # The sample sets (CI fixtures, not deployment content)
+│   └── run_protocol.py        # The CLI: validate-set / reference / assess / check-reuse /
+│                              #   verdicts / capture-a / e01
+├── test_protocol_*.py         # The protocol suite (fake seams — no live venue)
 └── CLAUDE.md                  # this file
 ```
 

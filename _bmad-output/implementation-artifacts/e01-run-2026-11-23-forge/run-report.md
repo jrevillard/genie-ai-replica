@@ -173,10 +173,13 @@ granite instance accepted the request and never answered it, while the
 other two models on the same venue answered in under 0.3 s.
 
 The capture in §3 was produced **before** the venue broke (2026-11-23
-~15:05) and is unaffected. The wedge held for ~3 h (probe attempts 1–24,
-all `http=000`); on attempt 25 (~18:20) granite answered again, the whole
+~15:05) and is unaffected. The wedge held across probe attempts 1–24
+(all `http=000`) — between the 15:39:31 UTC chatqna failure and the
+reference's completion, so under ~67 minutes; on attempt 25 granite
+answered again, the whole
 anchor re-ran end-to-end, and `reference` completed clean at
-2026-11-23T16:46:07+00:00 (manifest `created_utc`). The venue needed no
+2026-11-23T16:46:07+00:00 (manifest `created_utc`, the authoritative
+completion datum). The venue needed no
 intervention from this run — no GPU-node change, no restart — so the
 recovery is the venue operator's, and the run simply resumed when the
 model came back.

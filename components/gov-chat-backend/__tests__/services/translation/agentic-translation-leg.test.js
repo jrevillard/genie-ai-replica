@@ -837,6 +837,20 @@ describe('agentic translation leg (story 2.10)', () => {
       );
     });
 
+    it('a leg resolving a non-object outcome maps onto the failed fallback, never raises', async () => {
+      // The contract resolves an outcome object; a null/primitive resolve is
+      // the same defect class as a rejection — the consumers carry no guard
+      // of their own, so the helper absorbs it.
+      const leg = { translateFullAnswer: jest.fn().mockResolvedValue(undefined) };
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.failed).toBe(true);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('fallback_error');
+      expect(r.accounting).toEqual(
+        expect.objectContaining({ outcome: 'failed', queryTranslationStatus: 'fallback_error' })
+      );
+    });
+
     it('a leg resolving without an accounting block still delivers a classifiable status', async () => {
       // The mapping never derefs a missing block: the fallback status keeps
       // the persisted metadata in the V05 vocabulary.

@@ -670,10 +670,12 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
  * The V05 latch rides `outcome` only: a `failed` translation is the
  * attempted-and-failed case (`translationFailed` true); `skipped` and
  * `cancelled` leave the English answer standing, never latched — a skip is
- * not a failure. A leg that rejects past its resolve-every-outcome contract
- * (or resolves without an accounting block) never raises past this helper:
- * the fallback delivery keeps the English answer, the latch and a V05
- * status, so the persisted metadata stays classifiable.
+ * not a failure. A defect (a rejection past the resolve-every-outcome
+ * contract, a non-object resolve, or a resolve whose accounting block is
+ * missing) never raises past this helper: the failed defect shapes map onto
+ * the failed fallback (the English answer stands, the latch rides), a
+ * missing block keeps the outcome's own delivery but reports the fallback
+ * V05 status — the persisted metadata stays classifiable either way.
  *
  * @param {Object} leg - A leg createAgenticTranslationLeg returned.
  * @param {Object} params - `{text, remainingMs, signal}` — passed through to
@@ -689,6 +691,13 @@ async function translateWholeAnswerWithLeg(leg, { text, remainingMs, signal }) {
     logger.warn(`[AGENTIC-TRANSLATION] Delivery defect: the leg rejected past its contract (${caught?.message})`);
     result = { outcome: 'failed', translated: null };
     error = caught instanceof Error ? caught : new Error(String(caught));
+  }
+  if (!result || typeof result !== 'object') {
+    // The same defect class as a rejection: the contract resolves an
+    // outcome object, so a null/primitive resolve maps onto the failed
+    // fallback too — nothing escapes this helper.
+    logger.warn('[AGENTIC-TRANSLATION] Delivery defect: the leg resolved a non-object outcome');
+    result = { outcome: 'failed', translated: null };
   }
   const accounting = result.accounting && typeof result.accounting === 'object' ? result.accounting : null;
   return {

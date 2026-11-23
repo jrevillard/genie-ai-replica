@@ -436,9 +436,10 @@ async function proxyAgentRun({
       // bounded by the run's residual budget — the terminal usage record —
       // and the remaining end-to-end deadline, fail-closed on the REQUIRED
       // knobs). The relay path skips the post-stream translation entirely
-      // (its units were the delivery) and never builds one; the writability
-      // check keeps a client-gone request from constructing anything (the
-      // construction is where a missing knob logs its ERROR).
+      // (its units were the delivery) and never builds one. The writability
+      // conditions are defense-in-depth — doAgentTerminal's entry guard
+      // covers them (and construction is where a missing knob logs its
+      // ERROR) — kept so the gate reads as one unit at the construction.
       let translateFullAnswer = null;
       if (
         !streamRelay &&

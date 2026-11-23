@@ -1294,9 +1294,9 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
   });
 
   it('a skipped leg translation (a missing knob) keeps the English answer, never latched', async () => {
-    // The default beforeEach translator stub IS the skip: the REQUIRED knobs
-    // are unread/unset, the translation cannot be bounded, so it never
-    // starts — V05: a skip is not a failure.
+    // The default beforeEach translator stub IS the skip (the fail-closed
+    // shape the leg resolves for an unbounded translation): the English
+    // answer stands and a skip is not a failure — V05.
     delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });

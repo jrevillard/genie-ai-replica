@@ -179,8 +179,10 @@ def as_label_list(value) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, (list, tuple)):
-        return [str(item) for item in value]
-    return []
+        # An empty element is not a label (the server drops it too).
+        return [str(item) for item in value if item not in (None, "")]
+    # Any other scalar is one label, stringified (the server's rule).
+    return [str(value)]
 
 
 def base_case_id(case_id: str) -> str:

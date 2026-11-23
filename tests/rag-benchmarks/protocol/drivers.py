@@ -43,6 +43,7 @@ from __future__ import annotations
 import base64
 import http.client
 import json
+import os
 import ssl
 import sys
 import time
@@ -252,6 +253,27 @@ _A_CAPTURE_KEY_TYPES = {
 }
 
 
+def _prepare_anchor_bearer() -> None:
+    """Mirror the anchor's own bearer bootstrap (``run_eval.main``): seed the
+    in-run refresh clock when the operator opted into the refresh, and force
+    ONE refresh when no static bearer was seeded.
+
+    The anchor seeds that clock inside ``main()``; the capture imports
+    ``run_eval`` as a module and never runs ``main()``, so without this the
+    capture's FIRST TTL check sees an elapsed time of zero and refreshes at
+    once — replacing a pre-minted service-account bearer with a realm token.
+    The A leg would then answer under a DIFFERENT identity than the
+    reference it is compared against.
+    """
+    import run_eval
+
+    if not run_eval._refresh_configured():
+        return
+    run_eval._token_ts = time.time()
+    if not os.getenv("E2E_BEARER_TOKEN"):
+        run_eval._maybe_refresh_token(force=True)
+
+
 def _default_a_query(entry: dict) -> dict:
     """The default query seam: ``run_eval.drive_query`` + ``_extract_answer``,
     imported VERBATIM and in-function (never edited, never forked —
@@ -391,9 +413,12 @@ def run_config_a_capture(
 
     The venue requirement: the seam drives chatqna through
     ``run_eval.drive_query`` — the SAME call the anchor makes — and mirrors
-    the anchor's own bearer path around it (a TTL-bounded refresh before the
-    drive, and a forced refresh plus ONE re-drive on a 401/403, both gated on
-    the anchor's refresh configuration). The anchor's three-attempt retry for
+    the anchor's own bearer path around it: the capture seeds the in-run
+    refresh clock exactly as ``run_eval.main`` does (so a pre-minted static
+    bearer survives, and a missing one is fetched once up front), then a
+    TTL-bounded refresh before the drive and a forced refresh plus ONE
+    re-drive on a 401/403, all gated on the anchor's refresh configuration.
+    The anchor's three-attempt retry for
     TRANSIENT failures is not mirrored: the capture records a per-case
     failure row instead, and the report counts it. The bearer machinery lives
     under ``eval/``, which this story must not edit — its ``harness_sha`` is
@@ -460,6 +485,10 @@ def run_config_a_capture(
     prior = _merge_rows(prior, {"cases": {}, "capture": stamp})
 
     seam = query or _default_a_query
+    if query is None:
+        # The default seam drives chatqna through the anchor's own query
+        # path — the bearer bootstrap belongs with it.
+        _prepare_anchor_bearer()
     cases = prior.setdefault("cases", {})
     for entry in pending:
         skipped = skips.get(entry["id"])
@@ -529,6 +558,24 @@ def _split_by_bytes(cases: list[dict], bound: int, max_count: int):
         yield chunk
 
 
+def _b_ready_case(case: dict) -> dict:
+    """The case as the in-container driver reads it: the requested labels in
+    the shared shape (a LIST of label strings).
+
+    The driver ships STANDALONE into the container, where the protocol
+    package is absent, so the coercion cannot live in it without a second
+    implementation of the rule. It lives HERE — at the write boundary the
+    protocol owns — so the driver reads one shape and the two legs cannot
+    disagree about the scope they applied.
+    """
+    context = case.get("context")
+    if not isinstance(context, dict) or "requested_labels" not in context:
+        return case
+    ready = dict(case)
+    ready["context"] = {**context, "requested_labels": as_label_list(context.get("requested_labels"))}
+    return ready
+
+
 def run_config_b(
     set_path: str | Path,
     out_dir: str | Path,
@@ -578,7 +625,8 @@ def run_config_b(
     batch = max(1, int(batch))
     payload_bound = max(1, int(payload_bound))
     for chunk in _split_by_bytes(pending, payload_bound, batch):
-        cases_b64 = _b64(json.dumps({"cases": chunk}, ensure_ascii=False).encode("utf-8"))
+        shipped = {"cases": [_b_ready_case(case) for case in chunk]}
+        cases_b64 = _b64(json.dumps(shipped, ensure_ascii=False).encode("utf-8"))
         transport.exec_cmd(
             container,
             f"printf %s '{cases_b64}' | base64 -d > {CONTAINER_TMP}/cases.json"
@@ -715,7 +763,9 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
                 for repo in (raw.get("authorized_repos") or [])
                 if isinstance(repo, dict) and repo.get("repo_id") and repo.get("graph_name")
             ],
-            "requested_labels": list(raw.get("requested_labels") or []),
+            # The shared coercion (evalset.as_label_list): a bare string is
+            # ONE label (the server's rule), never one character per label.
+            "requested_labels": as_label_list(raw.get("requested_labels")),
         },
     }
 

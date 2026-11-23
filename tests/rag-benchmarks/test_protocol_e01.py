@@ -198,7 +198,7 @@ def _b_rows():
             "abstained": False,
             "abstention_reason": None,
             "source_documents": [{"document_id": "d1"}],
-            "metadata": {},
+            "metadata": {"filter_labels": []},
             "wall_ms": 100.0,
         },
         "c2": {
@@ -208,7 +208,7 @@ def _b_rows():
             "abstained": True,
             "abstention_reason": "insufficient_evidence",
             "source_documents": [],
-            "metadata": {},
+            "metadata": {"filter_labels": []},
             "wall_ms": 200.0,
         },
         "c3": {
@@ -412,6 +412,151 @@ def test_capture_a_default_seam_is_the_run_eval_reuse(monkeypatch):
 # e01 — the consistent-legs build
 # ---------------------------------------------------------------------------
 
+
+def test_the_b_and_c_legs_read_the_same_label_scope():
+    """The shared coercion reaches BOTH write sides: a legacy bare-string
+    ``requested_labels`` is ONE label on the leg that ships the case into the
+    container AND on the leg that posts the payload — otherwise the two legs
+    disagree about the scope they applied and the comparison publishes a
+    difference that does not exist."""
+    case = {
+        "id": "c1",
+        "query": "q",
+        "context": {"requested_labels": "Forestry", "user_id": "u"},
+    }
+    # The C seam's payload.
+    payload = drivers.c_payload_for_case(case, deadline_ms=1000)
+    assert payload["context"]["requested_labels"] == ["Forestry"]
+    # The payload the B driver receives in the container.
+    ready = drivers._b_ready_case(case)
+    assert ready["context"]["requested_labels"] == ["Forestry"]
+    # The original case is untouched (the coercion does not mutate its input).
+    assert case["context"]["requested_labels"] == "Forestry"
+
+
+def test_e01_keeps_an_author_key_and_drops_the_credential_names():
+    """The credential rule matches credential NAMES on word boundaries: an
+    `author` key is evidence, not a secret, and must survive."""
+    from protocol.e01 import _is_credential_key
+
+    assert _is_credential_key("author") is False
+    assert _is_credential_key("authors") is False
+    assert _is_credential_key("auth") is True
+    assert _is_credential_key("auth_token") is True
+    assert _is_credential_key("authorization") is True
+    assert _is_credential_key("session") is True
+
+    rows = _b_rows()
+    rows["c1"]["metadata"] = {"author": "Jane Doe", "auth": "LEAK"}
+    report = _build(b_rows=rows)
+    recorded = report["per_case"]["c1"]["b"]["metadata"]
+    assert recorded["author"] == "Jane Doe"
+    assert "auth" not in recorded
+    assert "LEAK" not in json.dumps(report)
+
+
+def test_the_shared_label_coercion_mirrors_the_server_rule():
+    """The coercion is the ONE label rule the tree reads: a bare string is
+    ONE label (the legacy shape), an empty label is no scope at all, and a
+    non-string scalar is stringified. Every rule is asserted here because
+    the two legs read this helper — a divergence is a scope difference that
+    does not exist."""
+    from protocol.evalset import as_label_list
+
+    assert as_label_list("Forestry") == ["Forestry"]
+    assert as_label_list(["Timber", "Forestry"]) == ["Timber", "Forestry"]
+    # An empty label is not a scope (the server drops it too).
+    assert as_label_list(["Timber", "", None]) == ["Timber"]
+    # An empty value is no label at all.
+    assert as_label_list("") == []
+    assert as_label_list([]) == []
+    assert as_label_list(None) == []
+    # Any other scalar is one label, stringified (the server's rule).
+    assert as_label_list(5) == ["5"]
+
+
+def test_e01_redacts_the_auth_and_session_keys():
+    """The report's own credential markers cover the names the manifest's
+    list does not carry: a row's `auth`/`session` keys never reach the
+    report."""
+    rows = _b_rows()
+    rows["c1"]["metadata"] = {"auth": "LEAK", "session": "LEAK", "usage": {"prompt_tokens": 3}}
+    report = _build(b_rows=rows)
+    recorded = report["per_case"]["c1"]["b"]["metadata"]
+    assert "auth" not in recorded
+    assert "session" not in recorded
+    assert "LEAK" not in json.dumps(report)
+    # The measurement names survive (the judge needs them).
+    assert recorded["usage"]["prompt_tokens"] == 3
+
+
+def test_e01_reads_a_string_valued_requested_label_as_one_label():
+    """A captured file written before the coercion carried the bare string;
+    the report reads it as ONE label — a per-character split would publish a
+    scope finding that does not exist."""
+    captured = _captured_rows()
+    captured["c1"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": ["Forestry"], "service_labels": []},
+        "case_requested_labels": "Forestry",
+    }
+    captured["c1"]["filter_labels"] = ["Forestry"]
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == []
+    assert scope["A"]["cases_whose_requested_labels_were_not_sent"] == []
+
+
+def test_e01_names_the_cases_without_a_measured_effective_filter():
+    """A row that recorded a scope but measured no filter is named — it is
+    neither a scoped case nor an unanswered one, and the comparison over it
+    is partial."""
+    captured = _captured_rows()
+    captured["c1"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
+        "case_requested_labels": [],
+    }
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["A"]["cases_without_a_measured_effective_filter"] == ["c1"]
+    # The case is not a scoped one, and it is not a never-queried one.
+    assert "c1" not in scope["A"]["effective_filter_labels_per_case"]
+    assert "c1" not in scope["A"]["cases_that_never_queried"]
+
+
+def test_capture_a_seeds_the_bearer_clock_before_the_first_drive(tmp_path, monkeypatch):
+    """The capture mirrors the anchor's bearer bootstrap: the in-run refresh
+    clock is seeded ONCE, and a refresh is forced only when no static bearer
+    was seeded. Without the seed the capture's first TTL check refreshes at
+    once and replaces a pre-minted service-account bearer — the A leg would
+    then answer under a different identity than the reference it is compared
+    against."""
+    import sys
+    import types
+
+    fake_run_eval = types.ModuleType("run_eval")
+    fake_run_eval._token_ts = 0.0
+    fake_run_eval.drive_query = lambda entry: (0.0, '{"response": "parsed"}', 200)
+    fake_run_eval._extract_answer = lambda body: "parsed"
+    forced = []
+    fake_run_eval._maybe_refresh_token = lambda force=False: forced.append(force) or True
+    fake_run_eval._refresh_configured = lambda: True
+    monkeypatch.setitem(sys.modules, "run_eval", fake_run_eval)
+    monkeypatch.setenv("E2E_BEARER_TOKEN", "pre-minted")
+
+    set_path = _set_file(tmp_path, extra_answerable=("c1",))
+    # The DEFAULT seam (no injected query) — the path that drives chatqna.
+    drivers.run_config_a_capture(set_path, tmp_path / "out", corpus_fingerprint=CORPUS)
+    assert fake_run_eval._token_ts > 0.0, "the refresh clock was never seeded"
+    # No FORCED refresh: the pre-minted bearer survives (the per-entry TTL
+    # checks are the seam's own).
+    assert [f for f in forced if f] == [], "a pre-minted bearer must not be replaced"
+
+    # With no static bearer, the anchor forces ONE refresh up front.
+    fake_run_eval._token_ts = 0.0
+    forced.clear()
+    monkeypatch.delenv("E2E_BEARER_TOKEN")
+    drivers.run_config_a_capture(set_path, tmp_path / "out2", corpus_fingerprint=CORPUS)
+    assert [f for f in forced if f] == [True], "no static bearer means one forced refresh"
 
 def test_e01_reports_all_five_dimensions_for_both_configs_with_named_surfaces():
     report = _build()
@@ -1115,6 +1260,8 @@ def test_e01_never_claims_equality_from_absence():
 
 
 def test_e01_names_the_cases_whose_requested_labels_never_reached_the_a_query():
+    """A requested label the request never carried is named — and, because
+    the row measured no effective filter either, that is said apart."""
     captured = _captured_rows()
     captured["c1"]["retrieval_scope"] = {
         "sent_labels": {"category_labels": [], "service_labels": []},
@@ -1123,7 +1270,9 @@ def test_e01_names_the_cases_whose_requested_labels_never_reached_the_a_query():
     report = _build(captured_rows=captured)
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["scope_matched"] is None
-    assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == ["c1"]
+    assert scope["A"]["cases_whose_requested_labels_were_not_sent"] == ["c1"]
+    assert scope["A"]["cases_without_a_measured_effective_filter"] == ["c1"]
+    assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == []
 
 
 def test_e01_m5_values_are_deep_redacted():
@@ -1416,16 +1565,42 @@ def test_capture_a_records_the_effective_filter_labels(tmp_path):
     assert "filter_labels" not in result["rows"]["c2"]
 
 
+def _scoped_rows(case_id, labels):
+    """One ok row on each leg, both scoped on the given effective filter."""
+    captured = {
+        case_id: {
+            "case_id": case_id,
+            "status": "ok",
+            "answer": "an answer",
+            "wall_ms": 10.0,
+            "filter_labels": list(labels),
+            "retrieval_scope": {
+                "sent_labels": {"category_labels": list(labels), "service_labels": []},
+                "case_requested_labels": list(labels),
+            },
+        }
+    }
+    rows = {
+        case_id: {
+            "case_id": case_id,
+            "status": "ok",
+            "answer": "an answer",
+            "abstained": False,
+            "wall_ms": 100.0,
+            "metadata": {"filter_labels": list(labels)},
+        }
+    }
+    return captured, rows
+
+
 def test_e01_compares_the_effective_scope_of_both_legs():
     """Both lanes record the filter they ACTUALLY applied — the comparison is
     a measured fact, not a proxy."""
-    captured = _captured_rows()
-    captured["c1"]["filter_labels"] = ["Forestry"]
-    rows = _b_rows()
-    rows["c1"]["metadata"] = {"filter_labels": ["Forestry"]}
+    captured, rows = _scoped_rows("c1", ["Forestry"])
     report = _build(captured_rows=captured, b_rows=rows)
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["scope_matched"] is True
+    assert scope["n_compared_cases"] == 1
     assert scope["cases_with_a_different_effective_scope"] == []
     assert scope["A"]["effective_filter_labels_per_case"]["c1"] == ["Forestry"]
     assert scope["B"]["effective_filter_labels_per_case"]["c1"] == ["Forestry"]
@@ -1463,28 +1638,80 @@ def test_e01_names_a_requested_label_that_never_became_a_filter():
     report = _build(captured_rows=captured)
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == ["c1"]
+    # The row MEASURED a filter — the sent labels are not the comparison.
+    assert scope["A"]["cases_whose_requested_labels_were_not_sent"] == []
+
+
+def test_e01_names_a_requested_label_the_filter_dropped_but_the_request_carried():
+    """chatqna collapses a requested category into its service: the request
+    carried the label, the measured filter does not. The finding is the
+    filter's, not the request's."""
+    captured = _captured_rows()
+    captured["c1"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": ["Forestry"], "service_labels": ["ForestryService"]},
+        "case_requested_labels": ["Forestry"],
+    }
+    captured["c1"]["filter_labels"] = ["ForestryService"]
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == ["c1"]
+    assert scope["A"]["cases_whose_requested_labels_were_not_sent"] == []
 
 
 def test_e01_scope_match_is_null_when_the_comparison_is_partial():
     """A leg that recorded no scope for a case leaves the comparison
     partial — the report says so instead of publishing a verdict over the
     cases it never compared."""
-    captured = _captured_rows()
-    captured["c1"]["filter_labels"] = ["Forestry"]
-    captured["c2"]["retrieval_scope"] = {
-        "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
-        "case_requested_labels": [],
+    captured, rows = _scoped_rows("c1", ["Forestry"])
+    captured["c2"] = {
+        "case_id": "c2",
+        "status": "ok",
+        "answer": "an answer",
+        "wall_ms": 10.0,
+        "filter_labels": ["Timber"],
+        "retrieval_scope": {
+            "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
+            "case_requested_labels": [],
+        },
     }
-    captured["c2"]["filter_labels"] = ["Timber"]
-    rows = _b_rows()
-    rows["c1"]["metadata"] = {"filter_labels": ["Forestry"]}
     # c2 is scoped on A but not on B → the comparison is partial.
     report = _build(captured_rows=captured, b_rows=rows)
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["n_compared_cases"] == 1
     assert scope["n_scoped_cases"] == {"A": 2, "B": 1}
     assert scope["scope_matched"] is None
-    assert scope["B"]["cases_without_a_recorded_scope"] == ["c2"]
+    assert scope["B"]["cases_without_a_recorded_scope"] == []
+
+
+def test_e01_scope_mismatch_over_a_partial_comparison_publishes_false():
+    """An observed mismatch publishes false even over a partial comparison —
+    the report says so in its note, and the note is asserted.
+
+    The comparison here IS partial: c2 is scoped on the A leg only, so the
+    two legs never compared every scoped case — and the observed mismatch on
+    c1 still publishes false rather than null."""
+    captured, rows = _scoped_rows("c1", ["Forestry"])
+    rows["c1"]["metadata"] = {"filter_labels": ["Other"]}
+    captured["c2"] = {
+        "case_id": "c2",
+        "status": "ok",
+        "answer": "an answer",
+        "wall_ms": 10.0,
+        "filter_labels": ["Timber"],
+        "retrieval_scope": {
+            "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
+            "case_requested_labels": [],
+        },
+    }
+    report = _build(captured_rows=captured, b_rows=rows)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    # The comparison is partial (c2 has no B counterpart) …
+    assert scope["n_compared_cases"] == 1
+    assert scope["n_scoped_cases"] == {"A": 2, "B": 1}
+    # … and the observed mismatch still publishes false.
+    assert scope["scope_matched"] is False
+    assert scope["cases_with_a_different_effective_scope"] == ["c1"]
+    assert "an observed mismatch publishes false even over a partial comparison" in scope["note"]
 
 
 def test_capture_a_records_a_string_valued_label_as_one_label(tmp_path):
@@ -1508,22 +1735,27 @@ def test_capture_a_times_the_seam_call_only(tmp_path, monkeypatch):
     times — not the row assembly around it."""
 
     class _Clock:
-        """A monotonic clock that hands out the ticks in order and then holds
-        the last one (the capture reads it around the seam call)."""
+        """A monotonic clock that ADVANCES on every read (100.0, 100.25, ...).
 
-        def __init__(self, ticks):
-            self._ticks = list(ticks)
-            self._index = 0
+        A clock that holds its last tick cannot tell a moved measurement from
+        the right one; an advancing one makes every extra or moved read
+        change the measured delta.
+        """
+
+        def __init__(self, start=100.0, step=0.25):
+            self._value = start
+            self._step = step
 
         def monotonic(self):
-            tick = self._ticks[min(self._index, len(self._ticks) - 1)]
-            self._index += 1
-            return tick
+            value = self._value
+            self._value += self._step
+            return value
 
     set_path = _set_file(tmp_path, extra_answerable=("c1",))
-    monkeypatch.setattr(drivers, "time", _Clock([100.0, 100.25]))
+    monkeypatch.setattr(drivers, "time", _Clock())
     seam, _ = _seam({"c1": "a1"})
     result = drivers.run_config_a_capture(
         set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS
     )
+    # c1 is the first timed case: two reads (start, end) around the seam.
     assert result["rows"]["c1"]["wall_ms"] == 250.0

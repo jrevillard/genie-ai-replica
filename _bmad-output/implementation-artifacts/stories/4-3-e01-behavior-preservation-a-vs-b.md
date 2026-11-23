@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 65 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 74 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,7 +132,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 244 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 253 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
 the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
 ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
@@ -360,6 +360,26 @@ round was authorized because the f=2 corrections had never been re-reviewed.
 | F27' | The story presented the eval count as a measured fact (the suite is order-flaky) | confirmed | **Fixed**: both counts and the flake are stated |
 | F28' | The story claimed `py_compile` stands in CI — no compile job exists over this tree | confirmed | **Fixed**: the sentence states what CI actually runs |
 | F29' | The cwd-sensitivity sentence implied this story's own test file was clean under both invocations | confirmed | **Fixed**: the file is named in the root-dirty set |
+
+**FIX-REVIEW (chain round 2) on the chain-round-1 correction diff — 12 findings
+(all confirmed by the reviewer's mutation matrix), all fixed.** Four were
+defects in the code; the rest were coverage gaps — a fix the suite could not
+see. The chain is at f=2; the round below is the last of the F budget.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F49' | `as_label_list` kept an empty element in a label list — the server drops `""`/`None`, so a false scope finding was published | important | **Fixed**: the empty elements are dropped, and the rule is unit-tested |
+| F50' | `as_label_list` dropped a non-string scalar — the server stringifies it, so a scope finding was lost silently | important | **Fixed**: any other scalar is one stringified label |
+| F51' | The renamed scope key was wrong for its fallback branch — a row with a scope but no measured filter was published under the effective-filter key | important | **Fixed**: the two branches carry their own keys (a measured filter, and the sent labels) |
+| F52' | The capture's docstring claimed a bearer mirroring the code did not perform — the anchor seeds its refresh clock in `main()`, the capture never did, so the capture replaced a pre-minted service-account bearer with a realm token | important | **Fixed**: the capture mirrors `main()`'s block exactly (the clock is seeded once; a refresh is forced only when no static bearer exists) |
+| F53' | The `auth` marker swallowed `author` — a row's evidence key was dropped from the report | nit (latent) | **Fixed**: the marker matches on word boundaries (`auth`, `auth_token`), `author` survives |
+| F54' | The read-side coercion had no coverage — a captured file with a string-valued label would split per character with the suite green | important | **Fixed**: a captured file carrying the bare string is read as ONE label |
+| F55' | The empty-value rule had no coverage | important | **Fixed**: the coercion's rules are unit-tested |
+| F56' | The `auth`/`session` markers had no coverage | nit | **Fixed**: a row carrying them is asserted absent from the report |
+| F57' | The note's clause was unasserted, and a partial comparison with an observed mismatch was untested | important | **Fixed**: the note text is asserted, and a partial comparison WITH a mismatch publishes `false` |
+| F58' | The wall-clock test did not pin the seam-only delta — the fake clock held its last tick, so a moved or extra read was invisible | nit | **Fixed**: the clock advances on every read |
+| F59' | The A-side scope lists were not exhaustive — a row with a scope but no measured filter appeared in NO list | important | **Fixed**: the row is named, and it counts into the partial verdict |
+| F60' | The shared coercion was not applied to the B/C write side — a legacy string label made the two legs disagree about the scope they applied | important | **Fixed**: the coercion runs at both write boundaries (the payload the B driver ships, and the C seam's payload) |
 
 ## Design Notes
 

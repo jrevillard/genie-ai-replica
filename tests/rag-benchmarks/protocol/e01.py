@@ -155,8 +155,12 @@ _RESOURCE_KEY = "usage"
 CREDENTIAL_MARKERS = (
     tuple(marker.lower() for marker in SECRET_KEY_MARKERS)
     # The names the manifest's list does not carry but a config map can.
-    + ("authorization", "auth", "session")
+    + ("authorization", "session")
 )
+
+# "auth" matches on a WORD boundary: "author" and "authors" are evidence, not
+# credentials.
+_WORD_BOUNDARY_MARKERS = ("auth",)
 
 MEASUREMENT_KEY_NAMES = frozenset(
     {
@@ -192,6 +196,10 @@ def _is_credential_key(key) -> bool:
     name = str(key).lower()
     if name in MEASUREMENT_KEY_NAMES:
         return False
+    if any(marker in name for marker in _WORD_BOUNDARY_MARKERS):
+        parts = name.replace("-", "_").split("_")
+        if "auth" in parts:
+            return True
     if name.endswith(_TOKEN_COUNT_SUFFIXES):
         if any(qualifier in name for qualifier in _CREDENTIAL_QUALIFIERS):
             return True
@@ -713,11 +721,21 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     proxy; the request-side intent stays recorded beside it, because a
     REQUESTED label that never became an effective filter is itself a finding
     (FR-27).
+
+    Two A-side findings, kept apart because they compare DIFFERENT things: a
+    requested label the MEASURED effective filter never carried (chatqna
+    collapsed the category into its service — the request carried it, the
+    filter dropped it), and a requested label the query never SENT (the row
+    recorded a scope but carried no measured filter, so the sent labels are
+    the only comparison available). A row with no measured filter is counted
+    apart: nothing was measured, so nothing about its filter is asserted.
     """
     sent: dict = {}
     a_effective: dict = {}
     b_effective: dict = {}
-    differing: list = []
+    never_effective: list = []
+    not_sent: list = []
+    without_effective: list = []
     never_queried: list = []
     without_scope: list = []
     b_without_scope: list = []
@@ -745,16 +763,20 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         requested = as_label_list(scope.get("case_requested_labels"))
         sent[case_id] = sent_labels
         effective = _effective_filter_labels(row)
-        if effective is not None:
-            # The effective filter is a list of label STRINGS — there is no
-            # credential key in it to redact.
-            a_effective[case_id] = effective
-        # The REQUESTED labels against the filter that was actually applied:
-        # a requested label the filter never carried is the finding (not
-        # merely an empty request).
-        applied = set(effective) if effective is not None else _sent_label_set(sent_labels)
-        if any(label not in applied for label in requested):
-            differing.append(case_id)
+        if effective is None:
+            # The response carried no effective filter (an error row, or a
+            # capture that lost the field): nothing was measured, so nothing
+            # about the FILTER can be asserted — the requested labels are
+            # compared with the labels the query SENT instead.
+            without_effective.append(case_id)
+            if any(label not in _sent_label_set(sent_labels) for label in requested):
+                not_sent.append(case_id)
+            continue
+        # The effective filter is a list of label STRINGS — there is no
+        # credential key in it to redact.
+        a_effective[case_id] = effective
+        if any(label not in set(effective) for label in requested):
+            never_effective.append(case_id)
     for case_id, row in sorted(b_rows.items()):
         effective = _effective_filter_labels(row)
         if effective is not None:
@@ -765,8 +787,14 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     mismatched = [case_id for case_id in compared if sorted(a_effective[case_id]) != sorted(b_effective[case_id])]
     if mismatched:
         scope_matched: bool | None = False
-    elif compared and len(compared) == len(a_effective) == len(b_effective):
-        # Every scoped case was scoped on BOTH legs and the scopes agree.
+    elif (
+        compared
+        and len(compared) == len(a_effective) == len(b_effective)
+        and not without_effective
+        and not b_without_scope
+    ):
+        # Every scoped case was scoped on BOTH legs, every A scope row
+        # measured an effective filter, and the scopes agree.
         scope_matched = True
     else:
         # A partial comparison: the report says so instead of publishing a
@@ -776,7 +804,9 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         "A": {
             "effective_filter_labels_per_case": a_effective,
             "labels_sent_per_case": sent,
-            "cases_whose_requested_labels_never_became_an_effective_filter": differing,
+            "cases_whose_requested_labels_never_became_an_effective_filter": never_effective,
+            "cases_whose_requested_labels_were_not_sent": not_sent,
+            "cases_without_a_measured_effective_filter": without_effective,
             "cases_that_never_queried": never_queried,
             "cases_without_a_recorded_scope": without_scope,
         },
@@ -793,8 +823,8 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
             "the comparison is the EFFECTIVE filter each lane applied (chatqna's response metadata"
             " against the noagent row metadata); an observed mismatch publishes false even over a"
             " partial comparison, and null means the comparison was partial (a case scoped on one"
-            " leg only) or absent — the report never claims a scope match it did not measure"
-            " (FR-27)"
+            " leg only, or a scope recorded without a measured filter) or absent — the report never"
+            " claims a scope match it did not measure (FR-27)"
         ),
     }
 

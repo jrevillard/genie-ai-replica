@@ -73,6 +73,13 @@ def sha256_json(obj) -> str:
     return sha256_text(json.dumps(obj, sort_keys=True, ensure_ascii=False))
 
 
+def digest_without_embedded(record: dict) -> str:
+    """sha256 over the canonical JSON of a record MINUS its embedded ``digest``
+    key — the verifiable identity a rebuild must reproduce (a report digesting
+    itself would never terminate)."""
+    return sha256_json({key: value for key, value in record.items() if key != "digest"})
+
+
 def redact(mapping: dict) -> dict:
     """Drop every key whose name carries a credential marker (case-insensitive).
 
@@ -175,3 +182,11 @@ def build_manifest(
 def manifest_digest(manifest: dict) -> str:
     """The digest a thresholds file (or a gated run's lineage) references."""
     return sha256_json(manifest)
+
+
+def manifest_lineage(manifest: dict) -> tuple[str | None, str | None]:
+    """The (corpus fingerprint, assessment-set digest) a manifest records —
+    one derivation for every surface that verifies or states a lineage."""
+    corpus = (manifest.get("corpus") or {}).get("fingerprint")
+    assessment = ((manifest.get("sets") or {}).get("assessment") or {}).get("sha256")
+    return corpus, assessment

@@ -254,7 +254,7 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vllm_translation_model_id` | `google/gemma-3-4b-it` | Translation model |
+| `vllm_translation_model_id` | `google/gemma-3-4b-it` | Translation model. MANDATORY on the GPU node (no template default — `deploy-gpu.yml` asserts it, #2119); defined in `group_vars/all.yml` (NVIDIA) / `vars/rocm_gpu_nodes.yml` (ROCm). |
 | `vllm_translation_max_model_len` | `8192` | Maximum context length |
 | `vllm_translation_dtype` | `auto` | Data type |
 | `vllm_translation_gpu_utilization` | `0.9` | GPU memory fraction |

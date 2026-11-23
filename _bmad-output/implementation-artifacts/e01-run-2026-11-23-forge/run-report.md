@@ -184,6 +184,40 @@ intervention from this run — no GPU-node change, no restart — so the
 recovery is the venue operator's, and the run simply resumed when the
 model came back.
 
+### The TEI embedding change — the reference is CONFIRMED identical across both truncation behaviours
+
+Mid-run the venue's TEI embedding service moved from bare `--auto-truncate`
+(silent truncation of oversize inputs) to `--auto-truncate false`, and was
+recreated healthy. The capture and the anchor had both run under the OLD
+behaviour, so capture-a was re-run twice under the NEW behaviour, over the
+same corpus fingerprint (`6c9f73719c04…`) and assessment-set digest
+(`58850161afeb…`):
+
+| check | old (committed) | new run 1 | new run 2 |
+|---|---|---|---|
+| statuses | 9 ok / 8 skipped / 0 failed | identical | identical |
+| HTTP codes | 9 × 200 | identical — **no 4xx anywhere** | identical |
+| answers | — | 8 of 9 byte-identical | 7 of 9 byte-identical |
+
+The two deltas that appeared are generation variance, not a truncation
+effect — proven by running the new behaviour twice:
+
+- `e01-fail-saturation`'s answer tail differs between old and new-run-1 —
+  but new-run-2 reproduces the OLD answer **byte-for-byte**. The same
+  phrasing crosses the behaviour boundary, and a different tail appears
+  within one behaviour: the variation is the LLM's sampling, not the
+  embeddings.
+- `e01-unans-upload-count` and `e01-cite-items` match old on new-run-1 and
+  differ on new-run-2 (again in answer wording only).
+
+No case changed status, no 4xx appeared where there was an ok, and the
+fixture's chunks (~500 chars) sit far below any TEI input limit, so
+`--auto-truncate false` has nothing to truncate. **Outcome: the committed
+artifacts stand, and the reference is confirmed identical across both
+truncation behaviours.** One `wall_ms` moved outside the ±25 % band
+(`e01-cite-items` 5 936 → 9 405 ms) — latency noise on a shared venue, the
+same spread §3 already reports.
+
 ## 5. The gated config-B leg and the E01 join — the protocol's own refusals
 
 Both are recorded verbatim (with the reference manifest IN PLACE — these

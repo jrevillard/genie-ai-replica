@@ -21,7 +21,7 @@ say "1. the deploy overlay returns to the baseline (main @ 57879c0)"
 cd "$DEPLOY" || exit 1
 git checkout 57879c076102f794ee77e9cc2165b87b57ac09b3 -- overlays/jrevillard-forge/dev/values.yaml overlays/jrevillard-forge/dev/kustomization.yaml
 git diff --cached --stat
-git -c user.name="Jerome Revillard" -c user.email="jerome.revillard@wanadoo.fr" commit -q -m "ops(forge): restore the baseline overlay (the E01 run's temporary venue changes)"
+git commit -q -m "ops(forge): restore the baseline overlay (the E01 run's temporary venue changes)"
 git push origin HEAD:main 2>&1 | tail -2
 
 say "2. the release is unsuspended and reconciled back to main's render"
@@ -59,24 +59,49 @@ say "6b. the run-scoped NetworkPolicy (chatqna -> VictoriaTraces egress) is remo
 kubectl -n $NS delete networkpolicy e01-chatqna-vt-egress --ignore-not-found 2>&1 | tail -1
 
 say "7. the run's realm changes are reverted"
+# The Keycloak endpoint is resolved from the CURRENT keycloak pod IP — a
+# hardcoded pod IP goes stale on any reschedule and every later curl would
+# return empty (the json.loads then dies on the realm revert, silently).
+KC_POD=$(kubectl -n $NS get pod -l app=keycloak --field-selector status.phase=Running -o jsonpath='{.items[*].metadata.name}' | awk '{print $1}')
+KC_IP=$(kubectl -n $NS get pod "$KC_POD" -o jsonpath='{.status.podIP}')
+KC="curl -sk --resolve genieai-forge.local:4443:$KC_IP"
+KCURL="https://genieai-forge.local:4443"
+echo "  keycloak pod $KC_POD @ $KC_IP"
 export KC_ADMIN_USER=$(kubectl -n $NS get secret keycloak-admin-credentials -o jsonpath='{.data.username}' | base64 -d)
 export KC_ADMIN_PWD=$(kubectl -n $NS get secret keycloak-admin-credentials -o jsonpath='{.data.password}' | base64 -d)
 # the dataprep service account (the run granted it the 'admin' realm role)
 SAID=${SA_ID:-e33a4dd8-0856-4cce-be37-367267dece44}
-AT=$(curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -X POST "https://genieai-forge.local:4443/auth/realms/master/protocol/openid-connect/token" -d client_id=admin-cli -d "username=$KC_ADMIN_USER" -d "password=$KC_ADMIN_PWD" -d grant_type=password | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+AT=$($KC -X POST "$KCURL/auth/realms/master/protocol/openid-connect/token" -d client_id=admin-cli -d "username=$KC_ADMIN_USER" -d "password=$KC_ADMIN_PWD" -d grant_type=password | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 # 7a. the 'admin' realm role the run granted to the dataprep service account
-RID=$(curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/roles/admin" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
-curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -X DELETE -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/users/$SAID/role-mappings/realm/$RID" -o /dev/null -w "  role removed http=%{http_code}\n"
-curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/users/$SAID/role-mappings/realm" | python3 -c "import sys,json;d=json.load(sys.stdin);print('  service account roles now:',[r['name'] for r in d] if isinstance(d,list) else d)"
+RID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/roles/admin" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+$KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm/$RID" -o /dev/null -w "  role removed http=%{http_code}\n"
+$KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm" | python3 -c "import sys,json;d=json.load(sys.stdin);print('  service account roles now:',[r['name'] for r in d] if isinstance(d,list) else d)"
 # 7b. the eval user and the eval client the run created
-EUID=$(curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/users?username=e01-eval" | python3 -c "
+# (EVAL_USER_ID, never EUID — EUID is a bash readonly builtin; assigning it
+# fails silently and the DELETE would target the shell's numeric uid.)
+EVAL_USER_ID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users?username=e01-eval" | python3 -c "
 import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
-[ -n "$EUID" ] && curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -X DELETE -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/users/$EUID" -o /dev/null -w "  eval user deleted http=%{http_code}\n"
-CID=$(curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/clients?clientId=e01-eval" | python3 -c "
+if [ -n "$EVAL_USER_ID" ]; then
+  $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$EVAL_USER_ID" -o /dev/null -w "  eval user deleted http=%{http_code}\n"
+  # the deletion is VERIFIED, not assumed: the user must be gone
+  $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users?username=e01-eval" | python3 -c "
+import sys,json
+d=json.load(sys.stdin); print('  eval user still present!' if d else '  eval user gone (verified)')"
+else
+  echo "  eval user already absent"
+fi
+CID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval" | python3 -c "
 import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
-[ -n "$CID" ] && curl -sk --resolve genieai-forge.local:4443:10.42.0.240 -X DELETE -H "Authorization: Bearer $AT" "https://genieai-forge.local:4443/auth/admin/realms/genie/clients/$CID" -o /dev/null -w "  eval client deleted http=%{http_code}\n"
+if [ -n "$CID" ]; then
+  $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients/$CID" -o /dev/null -w "  eval client deleted http=%{http_code}\n"
+  $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval" | python3 -c "
+import sys,json
+d=json.load(sys.stdin); print('  eval client still present!' if d else '  eval client gone (verified)')"
+else
+  echo "  eval client already absent"
+fi
 
 say "8. the secrets the run restored"
 # the keycloak-proxy-client-secret Secret was missing at the baseline (its

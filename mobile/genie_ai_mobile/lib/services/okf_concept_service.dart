@@ -83,17 +83,19 @@ class OkfConceptService {
     );
     if (meta == null) return null;
     final body = (meta['body'] ?? '').toString();
+    final preview = previewOf(body);
     return OkfConcept(
       title: _title(meta, conceptId),
-      body: previewOf(body),
-      // Content was dropped only when the body did not fit the bound; the
-      // preview may also be shorter than the body for another reason (a
-      // dropped surrogate half), and that is not a truncation.
-      truncated: body.length > maxPreviewChars,
+      body: preview.preview,
+      // True EXACTLY when body characters were dropped: the breaks the
+      // preview inserts count against the bound, so the flag cannot be
+      // derived from the body's length alone.
+      truncated: preview.truncated,
     );
   }
 
-  /// The body the renderer shows: the concept's markdown, bounded.
+  /// The body the renderer shows: the concept's markdown, bounded, and
+  /// whether the bound dropped anything.
   ///
   /// The bound has two halves, and both matter:
   ///  - the LENGTH: the renderer builds a document eagerly, and a concept may
@@ -103,32 +105,32 @@ class OkfConceptService {
   ///    parser backtracks quadratically over one, and a naive cut CREATES
   ///    that shape (cutting a long line leaves a long run).
   ///
-  /// The cut never leaves an ill-formed string: a break is never inserted
-  /// between the halves of a surrogate pair, and a trailing lone high
-  /// surrogate is dropped.
-  static String previewOf(String body) {
-    if (body.length <= maxPreviewChars && !_hasLongRun(body)) return body;
+  /// The cut never leaves an ill-formed string: a surrogate is not a letter
+  /// or a digit, so the run resets at one and a break can never land inside
+  /// a surrogate pair; a trailing lone high surrogate is dropped.
+  static ({String preview, bool truncated}) previewOf(String body) {
+    if (body.length <= maxPreviewChars && !_hasLongRun(body)) {
+      return (preview: body, truncated: false);
+    }
     final buffer = StringBuffer();
     int run = 0;
+    // The body characters the preview keeps — the breaks the preview inserts
+    // count against the bound, so they cannot be the measure of what was
+    // dropped.
+    int kept = 0;
     for (var i = 0; i < body.length; i++) {
       if (buffer.length >= maxPreviewChars) break;
       final int unit = body.codeUnitAt(i);
       buffer.writeCharCode(unit);
+      kept++;
       if (!_isAlnum(unit)) {
         run = 0;
         continue;
       }
       run++;
       if (run >= previewRunWidth && buffer.length < maxPreviewChars) {
-        // Never break a surrogate pair: its low half would be left alone.
-        final bool nextIsLowSurrogate =
-            i + 1 < body.length &&
-            body.codeUnitAt(i + 1) >= 0xDC00 &&
-            body.codeUnitAt(i + 1) <= 0xDFFF;
-        if (!nextIsLowSurrogate) {
-          buffer.write(' ');
-          run = 0;
-        }
+        buffer.write(' ');
+        run = 0;
       }
     }
     String preview = buffer.toString();
@@ -136,9 +138,10 @@ class OkfConceptService {
       final int last = preview.codeUnitAt(preview.length - 1);
       if (last >= 0xD800 && last <= 0xDBFF) {
         preview = preview.substring(0, preview.length - 1);
+        kept--;
       }
     }
-    return preview;
+    return (preview: preview, truncated: kept < body.length);
   }
 
   /// The repository that serves a concept whose citation lost its repo

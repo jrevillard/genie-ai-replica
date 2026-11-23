@@ -211,6 +211,29 @@ void main() {
     expect(rendered.data.length, lessThan(longBody.length));
   });
 
+  testWidgets('a body that only just fits but loses characters says so', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // A body just under the bound: the breaks the preview inserts count
+    // against the same budget, so characters ARE dropped even though the
+    // body is shorter than the bound. The notice must say so.
+    final body = 'x' * 19970;
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptBody: body),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'hadith nawawi 36');
+
+    expect(
+      find.text(
+        'The preview is truncated — the document is longer than can be shown here.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a long unbroken run is broken so the renderer stays fast', (
     tester,
   ) async {

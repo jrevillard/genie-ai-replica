@@ -34,9 +34,10 @@ class OkfConceptRef {
 /// Whether a citation row is an OKF concept rather than a repository document.
 ///
 /// The mobile reads the RAW streamed/persisted citation (snake_case, as
-/// chatqna sends it and the backend persists it) — and, from the message
-/// metadata's `sources` key, a mapped row (camelCase). Both shapes are
-/// accepted, so a caller must not have to know which one it is holding.
+/// chatqna sends it and the backend persists it — the message metadata's
+/// `sources` key is a copy of those same rows, not a mapped shape).
+/// The camelCase spelling is accepted for parity with the web's shared
+/// predicate, which takes both shapes; no mobile producer emits it today.
 bool isOkfConceptCitation(Map<String, dynamic> doc) {
   if (doc['source'] == kOkfConceptSource) return true;
   return _firstNonEmpty(doc, const ['concept_id', 'conceptId']) != null;

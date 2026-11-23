@@ -853,13 +853,7 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
             children: [
               MarkdownBody(
                 data: item['answer'] ?? '',
-                styleSheet: MarkdownStyleSheet(
-                  p: TextStyle(
-                    fontSize: tokens.textSm,
-                    color: tokens.fg70,
-                    height: 1.4,
-                  ),
-                ),
+                styleSheet: _markdownStyle(tokens),
                 onTapLink: (text, href, title) {
                   if (href != null) {
                     launchUrl(

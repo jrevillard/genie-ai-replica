@@ -52,6 +52,16 @@ OkfConceptRef? okfConceptRef(Map<String, dynamic> doc) {
   return OkfConceptRef(repoId: repoId, conceptId: conceptId);
 }
 
+/// The key an open concept is tracked by: the concept id ALONE is not
+/// enough — the same concept id can live in two repositories (okf-server
+/// resolves a concept against every candidate repository), so the key
+/// carries the repository too.
+String okfConceptOpenKey(Map<String, dynamic> doc) {
+  final OkfConceptRef? ref = okfConceptRef(doc);
+  if (ref == null) return '';
+  return '${ref.repoId}/${ref.conceptId}';
+}
+
 String? _firstNonEmpty(Map<String, dynamic> doc, List<String> keys) {
   for (final key in keys) {
     final value = doc[key];

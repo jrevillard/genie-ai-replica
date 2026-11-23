@@ -399,10 +399,12 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       return;
     }
     // One fetch per concept at a time: a second tap while the first is in
-    // flight would open a second modal on top of the first.
-    if (_openingConcepts.contains(conceptRef.conceptId)) return;
+    // flight would open a second modal on top of the first. The key carries
+    // the repository — the same concept id can live in two of them.
+    final String openKey = okfConceptOpenKey(doc);
+    if (_openingConcepts.contains(openKey)) return;
 
-    setState(() => _openingConcepts.add(conceptRef.conceptId));
+    setState(() => _openingConcepts.add(openKey));
     final service = ref.read(okfConceptServiceProvider);
     try {
       String repoId = conceptRef.repoId;
@@ -429,9 +431,7 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       // ceiling (~250 000 characters) — rendering all of it on a phone
       // freezes the UI thread. The preview says so when it truncates.
       final bool truncated = concept.body.length > _maxRenderedConceptChars;
-      final String body = truncated
-          ? concept.body.substring(0, _maxRenderedConceptChars)
-          : concept.body;
+      final String body = _boundedPreview(concept.body, truncated);
       await DsModal.show<void>(
         context: context,
         title: concept.title,
@@ -470,9 +470,29 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       _showNotice(tr('sidebar.documentOpenError'));
     } finally {
       if (mounted) {
-        setState(() => _openingConcepts.remove(conceptRef.conceptId));
+        setState(() => _openingConcepts.remove(openKey));
       }
     }
+  }
+
+  /// The body the modal renders: the concept's markdown, cut to the render
+  /// bound when it is longer.
+  ///
+  /// The cut lands on a UTF-16 code unit, so it can split an astral
+  /// character (an emoji) in half: a lone surrogate makes the renderer throw
+  /// "string is not well-formed UTF-16" while it lays the text out. A
+  /// trailing high surrogate is dropped, which costs one character and keeps
+  /// the text well-formed.
+  static String _boundedPreview(String body, bool truncated) {
+    if (!truncated) return body;
+    String preview = body.substring(0, _maxRenderedConceptChars);
+    if (preview.isNotEmpty) {
+      final int last = preview.codeUnitAt(preview.length - 1);
+      if (last >= 0xD800 && last <= 0xDBFF) {
+        preview = preview.substring(0, preview.length - 1);
+      }
+    }
+    return preview;
   }
 
   /// A one-line notice in the interface language.
@@ -736,11 +756,9 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
         "";
     // A concept whose open is in flight shows the spinner in place of its
     // icon — the sidebar's own idiom for "loading" (the FAQ does the same).
-    final String conceptId = isOkfConceptCitation(doc)
-        ? (okfConceptRef(doc)?.conceptId ?? '')
-        : '';
+    final String openKey = okfConceptOpenKey(doc);
     final bool isOpening =
-        conceptId.isNotEmpty && _openingConcepts.contains(conceptId);
+        openKey.isNotEmpty && _openingConcepts.contains(openKey);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: DsSpacing.md),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
@@ -32,22 +33,30 @@ void main() {
     required List<Uri> requests,
     int conceptStatus = 200,
     String conceptBody = '# The concept body',
+    Duration delay = Duration.zero,
   }) {
     final client = MockClient((request) async {
       requests.add(request.url);
+      if (delay > Duration.zero) await Future<void>.delayed(delay);
       if (request.url.path.endsWith('/resolve-repo')) {
-        return http.Response(
-          jsonEncode({'repo_id': 'repo-1', 'bundle_version': 2}),
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({'repo_id': 'repo-1', 'bundle_version': 2})),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }
-      return http.Response(
-        jsonEncode({
-          'concept_id': 'hadith_nawawi_36',
-          'title': 'Hadith Nawawi 36',
-          'body': conceptBody,
-        }),
+      // UTF-8 bytes, the way okf-server answers: `http.Response(String)`
+      // encodes as latin1 and cannot carry an emoji at all.
+      return http.Response.bytes(
+        utf8.encode(
+          jsonEncode({
+            'concept_id': 'hadith_nawawi_36',
+            'title': 'Hadith Nawawi 36',
+            'body': conceptBody,
+          }),
+        ),
         conceptStatus,
+        headers: {'content-type': 'application/json; charset=utf-8'},
       );
     });
     return ProviderScope(
@@ -169,6 +178,83 @@ void main() {
         'The preview is truncated — the document is longer than can be shown here.',
       ),
       findsOneWidget,
+    );
+    // The CUT itself, not only the flag: a renderer that hands the whole
+    // body to MarkdownBody passes the notice assertion above and freezes the
+    // phone — the length of what is actually rendered is the invariant.
+    final MarkdownBody rendered = tester.widget<MarkdownBody>(
+      find.descendant(
+        of: find.byKey(const ValueKey('ds-modal')),
+        matching: find.byType(MarkdownBody),
+      ),
+    );
+    expect(rendered.data.length, lessThanOrEqualTo(20000));
+    expect(rendered.data.length, lessThan(longBody.length));
+  });
+
+  testWidgets('a cut that lands inside an emoji keeps the text well-formed', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // An emoji (a surrogate pair) straddling the render bound: cutting
+    // between the halves leaves a lone surrogate, and the renderer throws
+    // "string is not well-formed UTF-16" while it lays the text out.
+    final longBody = '${'x' * 19999}\u{1F600}${'y' * 5000}';
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptBody: longBody),
+    );
+    await settle(tester);
+
+    await tester.tap(find.text('hadith nawawi 36'));
+    await settle(tester);
+
+    expect(tester.takeException(), isNull);
+    final MarkdownBody rendered = tester.widget<MarkdownBody>(
+      find.descendant(
+        of: find.byKey(const ValueKey('ds-modal')),
+        matching: find.byType(MarkdownBody),
+      ),
+    );
+    expect(rendered.data.length, lessThanOrEqualTo(20000));
+  });
+
+  testWidgets('the same concept id in two repositories opens twice', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // The concept id alone is not an identity: okf-server resolves a concept
+    // against every candidate repository, so the same id can live in two of
+    // them. The in-flight guard must not swallow the second one.
+    Map<String, dynamic> row(String repoId) => {
+      'source': 'okf-concept',
+      'document_id': 'hadith_nawawi_36',
+      'document_name': 'hadith nawawi 36 ($repoId)',
+      'concept_id': 'hadith_nawawi_36',
+      'repo_id': repoId,
+      'url': '',
+    };
+    await tester.pumpWidget(
+      sidebar(
+        [row('repo-1'), row('repo-2')],
+        requests: requests,
+        delay: const Duration(milliseconds: 300),
+      ),
+    );
+    await settle(tester);
+
+    await tester.tap(find.text('hadith nawawi 36 (repo-1)'));
+    await tester.pump();
+    await tester.tap(find.text('hadith nawawi 36 (repo-2)'));
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(
+      requests.map((u) => u.path),
+      containsAll([
+        '/api/okf/repos/repo-1/concepts/hadith_nawawi_36',
+        '/api/okf/repos/repo-2/concepts/hadith_nawawi_36',
+      ]),
     );
   });
 

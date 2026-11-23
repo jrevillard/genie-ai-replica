@@ -181,6 +181,48 @@ function repoSetHash(repos) {
 }
 
 /**
+ * The HEAD-version hash: sha256 over the sorted (repo_id, head_version)
+ * pairs.
+ *
+ * The second comparison key, and it is not a duplicate of the repo-set hash.
+ * The repo-set hash answers "did the evaluation see the same SERVING set?" —
+ * the graph name carries the serving version. The head leg races the head
+ * VECTOR, so two evaluations over the same serving set are still different
+ * measurements when a head was re-built in between (the frontmatter changed,
+ * the head was recomputed, the serving graph did not move). One key cannot
+ * answer both questions, so the record carries both.
+ *
+ * A repository with NO head contributes `repo_id:` — the missing head is a
+ * fact about the measurement, not an absence from it.
+ */
+function headVersionHash(repos) {
+  const pairs = (repos || [])
+    .map((r) => `${r.repo_id}:${r.head_version === null || r.head_version === undefined ? '' : r.head_version}`)
+    .sort()
+    .join('\n');
+  return nodeCrypto.createHash('sha256').update(pairs).digest('hex').slice(0, 32);
+}
+
+/**
+ * The head versions of the given repositories, read from the repository
+ * documents (the head is stored on the repo doc — `head.version`).
+ */
+async function headVersionsFor(db, repoIds) {
+  const ids = (repoIds || []).filter(Boolean);
+  const out = new Map();
+  if (!ids.length) return out;
+  const cursor = await db.query(
+    'FOR r IN okf_repositories FILTER r._key IN @ids ' +
+      'RETURN { repo_id: r._key, head_version: r.head ? r.head.version : null }',
+    { ids }
+  );
+  for (const row of (await cursor.all()) || []) {
+    if (row && row.repo_id) out.set(row.repo_id, row.head_version === undefined ? null : row.head_version);
+  }
+  return out;
+}
+
+/**
  * RESOLVE a context's inputs into a snapshot. The authority's answer is used
  * verbatim — no recomposition.
  *
@@ -558,10 +600,21 @@ async function assertCarrierCurrent(carrier) {
  */
 async function carrierFor(contextId, caller = {}) {
   const carrier = await carrierOf(contextId);
+  return narrowCarrier(carrier, caller);
+}
+
+/**
+ * Narrow a FROZEN carrier to what this caller may measure — the staleness
+ * gate, then the authority, then the intersection (refused when empty).
+ *
+ * The one rule, shared: `carrierFor` and `bindingFor` must never disagree
+ * about what a caller may measure.
+ */
+async function narrowCarrier(carrier, caller = {}, authority = null) {
   await assertCarrierCurrent(carrier);
   const okfScopes = Array.isArray(caller.okfScopes) ? caller.okfScopes : [];
   const isSuperAdmin = !!caller.isSuperAdmin;
-  const view = await resolveGraphSet({ okfScopes, isSuperAdmin });
+  const view = authority || (await resolveGraphSet({ okfScopes, isSuperAdmin }));
   const allowed = new Set((view.repos || []).map((r) => r.repo_id));
   const rows = (carrier.repos || []).filter((r) => allowed.has(r.repo_id));
   if (!rows.length) {
@@ -587,15 +640,66 @@ async function carrierFor(contextId, caller = {}) {
   };
 }
 
+/**
+ * The BINDING: what a suite minted for this context measures, what it does
+ * NOT measure, and the two keys two runs must share to be comparable.
+ *
+ * Three parts, and the middle one is the load-bearing:
+ *
+ *   repos    — the MEASURED set (the carrier, narrowed to this caller) with
+ *              the head versions the head leg races;
+ *   out_set  — the EXCLUDED set: what this caller may read but the context
+ *              does NOT name. These are the abstention probes' source — a
+ *              query about a repository the evaluated group cannot traverse
+ *              must not be routed to the repository under test. It is empty
+ *              for a caller who may not read those repositories (a
+ *              repo-scoped admin), because a probe that leaks a repository
+ *              the caller cannot see is worse than no probe;
+ *   the keys — repo_set_hash (the serving set) and head_version_hash (the
+ *              head vectors), both over the measured set.
+ *
+ * @param {string} contextId
+ * @param {{okfScopes?: string[], isSuperAdmin?: boolean}} caller
+ * @returns {Promise<{context: object, carrier: object, repos: Array, out_set: Array, repo_set_hash: string, head_version_hash: string}>}
+ */
+async function bindingFor(contextId, caller = {}) {
+  const frozen = await carrierOf(contextId);
+  const okfScopes = Array.isArray(caller.okfScopes) ? caller.okfScopes : [];
+  const isSuperAdmin = !!caller.isSuperAdmin;
+  const authority = await resolveGraphSet({ okfScopes, isSuperAdmin });
+  const carrier = await narrowCarrier(frozen, caller, authority);
+
+  const frozenIds = new Set(frozen.repo_ids || []);
+  const outSet = (authority.repos || []).filter((r) => !frozenIds.has(r.repo_id));
+
+  const db = await dbService.getConnection();
+  const versions = await headVersionsFor(db, carrier.repo_ids);
+  const repos = (carrier.repos || []).map((r) => ({
+    ...r,
+    head_version: versions.has(r.repo_id) ? versions.get(r.repo_id) : null
+  }));
+
+  return {
+    context: carrier.context,
+    carrier,
+    repos,
+    out_set: outSet,
+    repo_set_hash: repoSetHash(repos),
+    head_version_hash: headVersionHash(repos)
+  };
+}
+
 module.exports = {
   COLLECTION,
   EvalContextError,
   resolveContext,
   effectiveScopes,
   repoSetHash,
+  headVersionHash,
   createContext,
   getContext,
   listContexts,
   refreshContext,
-  carrierFor
+  carrierFor,
+  bindingFor
 };

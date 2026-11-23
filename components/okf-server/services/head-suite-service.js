@@ -72,7 +72,7 @@ const HEAD_TEST_RUNS_COLLECTION = 'okf_head_test_runs';
 // Story 1-8f — per-class generation ceilings ("any number of tests for any
 // type"). The LLM call is batched at GEN_BATCH rows per class per call, so
 // these bound the DOC, not the model output.
-const CLASS_MAX = { positive: 1000, negative: 500, random: 500, meta: 500, nearMiss: 500 };
+const CLASS_MAX = { positive: 1000, negative: 500, random: 500, meta: 500, nearMiss: 500, abstention: 500 };
 const GEN_BATCH = 30;
 // Story 1-8d — the advisor predicts the production gate LOCALLY (embed +
 // cosine), so it can simulate tag-set changes before recommending them.
@@ -179,26 +179,70 @@ function parseJsonObject(text) {
 }
 
 /**
+ * #2061 phase 3 (E-7): the repository under test must be one the context
+ * NAMES — otherwise the suite would measure a corpus the context never
+ * agreed to. The refusal is a refusal, and it names the repositories the
+ * carrier DOES hold so the operator can see what was measured instead.
+ */
+function assertUnderTestInCarrier(repoId, repoName, binding) {
+  const measured = (binding && (binding.repos || (binding.carrier && binding.carrier.repos))) || [];
+  if (measured.map((r) => r.repo_id).includes(repoId)) return;
+  const named = measured.map((r) => r.name || r.repo_id);
+  const contextName = (binding && binding.context && binding.context.name) || 'the context';
+  const version = binding && binding.context && binding.context.version;
+  const err = new Error(
+    `the repository under test "${repoName || repoId}" is not in the evaluation context "${contextName}"` +
+      `${version ? ` (version ${version})` : ''}, which measures: ${named.length ? named.join(', ') : 'nothing'}. ` +
+      'Mint a suite for a repository the context names, or bind the suite to a context that names this one.'
+  );
+  err.code = 'UNDER_TEST_OUT_OF_CARRIER';
+  err.status = 409;
+  throw err;
+}
+
+/**
  * Sibling head CONTEXT for the generator prompt: name + head.text for
  * every other repo with a head (graph-less included — they compete on
  * the head leg). Cap at SIBLING_CONTEXT_LIMIT.
+ *
+ * #2061 phase 3 (E-7): `opts.repoIds` NARROWS the scan to a set of
+ * repositories — the carrier's, for a suite minted for a context. Without it
+ * the scan is the deployment's, which is what a suite minted without a
+ * context still means.
  */
-async function loadSiblingContext(db, underTestId) {
+async function loadSiblingContext(db, underTestId, opts = {}) {
+  const scoped = Array.isArray(opts.repoIds) ? opts.repoIds : null;
   const cursor = await db.query(
-    'FOR r IN okf_repositories FILTER r._key != @me FILTER r.head != null ' +
+    'FOR r IN okf_repositories ' +
+      (scoped ? 'FILTER r._key IN @ids ' : '') +
+      'FILTER r._key != @me FILTER r.head != null ' +
       'SORT r.name LIMIT @cap RETURN { repo_id: r._key, name: r.name, text: r.head.text || "" }',
-    { me: underTestId, cap: SIBLING_CONTEXT_LIMIT }
+    { me: underTestId, cap: SIBLING_CONTEXT_LIMIT, ids: scoped || [] }
   );
   return cursor.all();
 }
 
-function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics, nNearMiss, nMeta = 3) {
+function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics, nNearMiss, nMeta = 3, nAbstention = 0, outSiblings = []) {
   const siblingText = siblings.length
     ? siblings.map((s) => `- "${s.name}"\n  ${String(s.text || '').slice(0, 400)}`).join('\n')
     : '(no other repository currently has a vectorized head)';
   // Confusable negatives need competitors to be confusable WITH — a solo
   // universe yields none (the class exists only when siblings exist).
   const nConfusable = siblings.length ? nNegative : 0;
+  // #2061 phase 3 (E-7): the EXCLUDED set — what the evaluated scope does
+  // NOT include. These are the abstention probes' source: a query about
+  // their content must not be answered by the repository under test.
+  const outSiblingsText = outSiblings.length
+    ? `\nEXCLUDED REPOSITORIES (the evaluated scope does NOT include them — a\nquery about their content must NEVER be answered by the repository under\ntest; the system must abstain):\n` +
+      outSiblings.map((s) => `- "${s.name}"\n  ${String(s.text || '').slice(0, 400)}`).join('\n') +
+      '\n'
+    : '';
+  const abstentionInstruction = nAbstention
+    ? `\n- ${nAbstention} ABSTENTION queries that look like they belong to the EXCLUDED\n  repositories above, but that this repository must NOT answer: the evaluated\n  scope does not include that content, so the correct behaviour is to ABSTAIN,\n  not to route it here. Leave "expected_repo" empty. 5-15 words each.`
+    : '';
+  const abstentionOutputField = nAbstention
+    ? '\n    "abstention": [ {"query": "...", "reason": "<one sentence>"} ],'
+    : '';
   const forbiddenText = (fm.forbidden || []).join(', ') || '(none declared)';
   return `You are building a ROUTING TEST SUITE for one repository in a
 multi-repository retrieval system. Each query will be embedded and the
@@ -216,7 +260,7 @@ Summary: ${fm.summary || ''}
 COMPETING REPOSITORIES (queries similar to their content but not to the
 repository under test are the most valuable negative tests):
 ${siblingText}
-
+${outSiblingsText}
 Generate:
 - ${nPositive} POSITIVE queries a real user would type when they want
   THIS repository's content. Use its topic/entity vocabulary. Vary the
@@ -241,7 +285,7 @@ Generate:
 - ${nMeta} META/noise queries about the retrieval
   system itself (the testing lab, the head tester, the forbidden
   tags) — users probing the machinery rather than the content.
-  Example: "${META_TEMPLATES[0]}"
+  Example: "${META_TEMPLATES[0]}"${abstentionInstruction}
 - 5-8 KEYWORDS: single-domain terms strongly identifying THIS repository.
 
 UNIQUENESS (CRITICAL — duplicated queries are DISCARDED and the count comes
@@ -258,7 +302,7 @@ OUTPUT FORMAT (CRITICAL — the parser is strict, no synonyms):
     "negative": [ {"query": "...", "expected_repo": "...", "reason": "<one sentence>"} ],
     "near_miss": [ {"query": "...", "reason": "<one sentence>"} ],
     "off_domain": [ {"topic": "<one topic from the list above>", "query": "...", "reason": "<one sentence>"} ],
-    "meta": [ {"query": "...", "reason": "<one sentence>"} ],
+    "meta": [ {"query": "...", "reason": "<one sentence>"} ],${abstentionOutputField}
     "keywords": ["...", "..."] }
 Use the EXACT field names shown. Output ONLY the JSON object, no prose,
 no markdown fences.`;
@@ -495,11 +539,37 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const suiteName = typeof payload.name === 'string' ? payload.name.trim().slice(0, 80) : '';
     const randomTopics = sampleTopics(nRandom);
 
+    // #2061 phase 3 (E-7): the BINDING — the suite is minted FOR a context.
+    // Without one the behaviour is exactly what it was (the deployment's
+    // universe); with one the universe is the carrier's, and the rows carry
+    // the provenance stamp that says which pool they were minted from.
+    const binding = opts.binding || null;
+    let carrierIds = null;
+    let outSiblings = [];
+    if (binding) {
+      const measured = binding.repos || binding.carrier?.repos || [];
+      carrierIds = measured.map((r) => r.repo_id);
+      // The suite would measure a repository the context does not name —
+      // the run would score a corpus the context never agreed to.
+      assertUnderTestInCarrier(repoId, repo.name, binding);
+    }
+
     const db = await dbService.getConnection();
     await ensureCollection(db);
-    const siblings = await loadSiblingContext(db, repoId);
+    const siblings = await loadSiblingContext(db, repoId, { repoIds: carrierIds });
+    if (binding) {
+      // The EXCLUDED set: what the evaluated scope does NOT include. The
+      // abstention probes are minted from these — and only from these the
+      // caller may read (the binding already dropped the rest).
+      const outIds = (binding.out_set || []).map((r) => r.repo_id).filter((id) => id !== repoId);
+      outSiblings = outIds.length ? await loadSiblingContext(db, repoId, { repoIds: outIds }) : [];
+    }
+    // The abstention class exists only when there IS an excluded set to
+    // mint from — a probe with no excluded repository would be a plain
+    // negative wearing a new label.
+    const nAbstention = outSiblings.length ? zeroable(payload.n_abstention, 4, CLASS_MAX.abstention) : 0;
 
-    const llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], keywords: [] };
+    const llm = { positive: [], negative: [], off_domain: [], meta: [], near_miss: [], abstention: [], keywords: [] };
     // Provenance: the models the generation calls actually used (stamped
     // on each response by vllmChatCompletions) — kept for the suite doc.
     // A suite spans many calls: a TTL expiry (or a model change) mid-suite
@@ -517,7 +587,8 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         negative: new Set(),
         off_domain: new Set(),
         meta: new Set(),
-        near_miss: new Set()
+        near_miss: new Set(),
+        abstention: new Set()
       };
       const takeNew = (rows, klass) => {
         const out = [];
@@ -544,15 +615,17 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         const needNm = nNearMiss - llm.near_miss.length;
         const needM = nMeta - llm.meta.length;
         const needR = nRandom - llm.off_domain.length;
-        if (needP <= 0 && needN <= 0 && needNm <= 0 && needM <= 0 && needR <= 0) break;
+        const needA = nAbstention - llm.abstention.length;
+        if (needP <= 0 && needN <= 0 && needNm <= 0 && needM <= 0 && needR <= 0 && needA <= 0) break;
         const cP = Math.max(0, Math.min(needP, GEN_BATCH));
         const cN = Math.max(0, Math.min(needN, GEN_BATCH));
         const cNm = Math.max(0, Math.min(needNm, GEN_BATCH));
         const cM = Math.max(0, Math.min(needM, GEN_BATCH));
+        const cA = Math.max(0, Math.min(needA, GEN_BATCH));
         const callTopics = takeTopics(sampleTopics(Math.max(needR, 0)));
-        const rowsInCall = cP + cN + cNm + cM + callTopics.length;
+        const rowsInCall = cP + cN + cNm + cM + cA + callTopics.length;
         if (!rowsInCall) break;
-        const callPrompt = suitePrompt(repo, fm, siblings, cP, cN, callTopics, cNm, cM);
+        const callPrompt = suitePrompt(repo, fm, siblings, cP, cN, callTopics, cNm, cM, cA, outSiblings);
         const resp = await frontmatterService.vllmChatCompletions([{ role: 'user', content: callPrompt }], {
           // ~34 tokens per row + JSON overhead, scaled to the chunk — a
           // fixed budget truncated large asks mid-JSON.
@@ -563,17 +636,20 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
         const parsed = parseJsonObject(content && content.content);
         const before =
-          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length;
+          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length +
+          llm.abstention.length;
         if (parsed) {
           llm.positive.push(...takeNew(parsed.positive, 'positive'));
           llm.negative.push(...takeNew(parsed.negative, 'negative'));
           llm.near_miss.push(...takeNew(parsed.near_miss, 'near_miss'));
           llm.meta.push(...takeNew(parsed.meta, 'meta'));
           llm.off_domain.push(...takeNew(parsed.off_domain, 'off_domain'));
+          llm.abstention.push(...takeNew(parsed.abstention, 'abstention'));
           keywordsAdd(parsed.keywords);
         }
         const after =
-          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length;
+          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length +
+          llm.abstention.length;
         if (after === before) {
           // No progress this call (LLM repeated/exhausted) — stop; the
           // per-class deterministic fallbacks fill the remainder honestly.
@@ -585,9 +661,17 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
               n: llm.negative.length,
               nm: llm.near_miss.length,
               m: llm.meta.length,
-              r: llm.off_domain.length
+              r: llm.off_domain.length,
+              a: llm.abstention.length
             },
-            want: { p: nPositive, n: siblings.length ? nNegative : 0, nm: nNearMiss, m: nMeta, r: nRandom }
+            want: {
+              p: nPositive,
+              n: siblings.length ? nNegative : 0,
+              nm: nNearMiss,
+              m: nMeta,
+              r: nRandom,
+              a: nAbstention
+            }
           });
           break;
         }
@@ -598,31 +682,58 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       logger.warn('head-suite.generate.llm_failed', { repo_id: repoId, error: e.message });
     }
 
-    const positive = llm.positive
-      .filter((p) => p && typeof p.query === 'string' && p.query.trim())
-      .slice(0, nPositive)
-      .map((p) => ({
-        query: p.query.trim(),
-        kind: 'positive',
-        source: 'llm',
-        reason: p.reason || ''
-      }));
+    // #2061 phase 3 (E-7): the provenance stamp. A row minted from the
+    // carrier's pool is 'in'; a row minted from the EXCLUDED pool is 'out'.
+    // One rule, no per-class table — and a suite minted without a context
+    // carries NO stamp at all (there was no pool to be minted from).
+    const stampIn = (rows) => (binding ? rows.map((r) => ({ ...r, intended_carrier: 'in' })) : rows);
+
+    const positive = stampIn(
+      llm.positive
+        .filter((p) => p && typeof p.query === 'string' && p.query.trim())
+        .slice(0, nPositive)
+        .map((p) => ({
+          query: p.query.trim(),
+          kind: 'positive',
+          source: 'llm',
+          reason: p.reason || ''
+        }))
+    );
     const llmNegatives = siblings.length
-      ? llm.negative
+      ? stampIn(
+          llm.negative
+            .filter((p) => p && typeof p.query === 'string' && p.query.trim())
+            .slice(0, nNegative)
+            .map((p) => ({
+              query: p.query.trim(),
+              kind: 'negative',
+              cls: 'confusable',
+              source: 'llm',
+              expected_repo: typeof p.expected_repo === 'string' ? p.expected_repo.trim() : null,
+              reason: p.reason || ''
+            }))
+        )
+      : [];
+    // The ABSTENTION rows: minted from the excluded set, and their expected
+    // answer is NOBODY — the repository under test must not claim them.
+    const abstentions = binding
+      ? llm.abstention
           .filter((p) => p && typeof p.query === 'string' && p.query.trim())
-          .slice(0, nNegative)
+          .slice(0, nAbstention)
           .map((p) => ({
             query: p.query.trim(),
             kind: 'negative',
-            cls: 'confusable',
+            cls: 'abstention',
             source: 'llm',
-            expected_repo: typeof p.expected_repo === 'string' ? p.expected_repo.trim() : null,
+            expected_repo: null,
+            intended_carrier: 'out',
             reason: p.reason || ''
           }))
       : [];
-    const offDomain = offDomainQueries(llm.off_domain, randomTopics);
-    const meta = metaQueries(llm.meta, nMeta);
-    const nearMiss = nearMissQueries(llm.near_miss, fm, nNearMiss);
+    const offDomain = stampIn(offDomainQueries(llm.off_domain, randomTopics));
+    const meta = stampIn(metaQueries(llm.meta, nMeta));
+    const nearMiss = stampIn(nearMissQueries(llm.near_miss, fm, nNearMiss));
+    const forbiddenDerived = stampIn(forbiddenDerivedQueries(fm));
 
     // 1-8f2: the key can be PRE-MINTED (async generation — the HTTP
     // request returns 202 immediately and the UI polls for this key).
@@ -659,10 +770,13 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     const seenNeg = new Set();
     const dedupedNegatives = [
       ...llmNegatives,
-      ...forbiddenDerivedQueries(fm),
+      ...forbiddenDerived,
       ...nearMiss,
       ...offDomain,
-      ...meta
+      ...meta,
+      // The abstention rows come LAST: they are minted from the excluded
+      // pool, and a duplicate of an in-carrier row must not displace it.
+      ...abstentions
     ].filter((q) => {
       const k = normText(q.query);
       if (seenPos.has(k) || seenNeg.has(k)) return false;
@@ -698,7 +812,25 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         positive: dedupedPositives,
         negative: dedupedNegatives,
         keywords: llm.keywords.filter((k) => typeof k === 'string'),
-        notes: []
+        notes: [],
+        // #2061 phase 3 (E-7): the CONTEXT SNAPSHOT this suite was minted
+        // for — the snapshot, never a reference alone, so the suite stays
+        // readable without the context document (and without Keycloak).
+        // Absent on a suite minted without a context: that suite was minted
+        // against the deployment, and saying otherwise would be a lie.
+        ...(binding
+          ? {
+              context: {
+                id: binding.context.id,
+                name: binding.context.name,
+                version: binding.context.version,
+                hash: binding.context.hash || null,
+                repos: binding.repos,
+                repo_set_hash: binding.repo_set_hash,
+                head_version_hash: binding.head_version_hash
+              }
+            }
+          : {})
       }
     };
     await db.collection(HEAD_TEST_RUNS_COLLECTION).save(suiteDoc);
@@ -780,6 +912,14 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
     err.code = 'NO_FRONTMATTER';
     err.status = 409;
     throw err;
+  }
+  // #2061 phase 3 (E-7): the same gate, SYNCHRONOUSLY — a suite minted for a
+  // context that does not name this repository is refused NOW (a 409 the
+  // operator sees), not in the detached worker where it would surface as a
+  // failed poll.
+  if (opts.binding) {
+    const repoName = (await repositoryService.getById(repoId, { authz: opts.authz }))?.name || repoId;
+    assertUnderTestInCarrier(repoId, repoName, opts.binding);
   }
   const suiteKey = `s${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
   // F12 reservation (see the gate): re-checked synchronously after the

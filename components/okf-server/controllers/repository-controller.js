@@ -2263,6 +2263,26 @@ async function carrierFromRequest(req) {
   });
 }
 
+/**
+ * #2061 phase 3 (E-7): the BINDING a request asks to mint for.
+ *
+ * The binding is the carrier PLUS the excluded set (what the caller may
+ * read but the context does NOT name — the abstention probes' source) and
+ * the two comparison keys. It is narrowed to THIS caller exactly like the
+ * carrier is: a repo-scoped admin naming a context gets a binding measured
+ * over what they may traverse, and an excluded set they may read — never
+ * one they may not.
+ */
+async function bindingFromRequest(req) {
+  const body = req.body || {};
+  const contextId = body.context_id;
+  if (!contextId) return null;
+  return evaluationContextService.bindingFor(contextId, {
+    okfScopes: req.okfScopes,
+    isSuperAdmin: req.okfIsSuperAdmin
+  });
+}
+
 const routingTest = call(async (req) =>
   headTestService.routingTest(req.params.repo_id, req.body || {}, {
     ...adminOpts(req),
@@ -2360,7 +2380,10 @@ const generateTestSuite = call(
     const { suite_key, done } = await headSuiteService.beginSuiteGeneration(
       req.params.repo_id,
       req.body || {},
-      adminOpts(req)
+      // #2061 phase 3 (E-7): the binding is resolved SYNCHRONOUSLY, so a
+      // context that does not name this repository (or a stale one) is a
+      // 409 the operator sees now — not a failed poll later.
+      { ...adminOpts(req), binding: await bindingFromRequest(req) }
     );
     done.catch(() => {}); // the service logs; the poll surfaces the timeout
     return { suite_key, status: 'generating' };

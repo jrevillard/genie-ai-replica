@@ -518,3 +518,146 @@ describe('#2061 E-1/E-2: a STALE carrier is refused (the frozen graph name is go
     expect(carrier.repo_ids).toEqual(['r-a']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #2061 phase 3 (E-7) — the BINDING.
+//
+// A suite is minted for a CONTEXT. The binding is what makes that concrete:
+// the MEASURED set (the carrier, with the head versions the head leg races),
+// the EXCLUDED set (what the caller may read but the context does NOT name —
+// the abstention probes' source), and the TWO comparison keys.
+//
+// The keys are two because they answer two different questions: the serving
+// set can change while the head stays, and the head can change while the
+// serving set stays. The context VERSION answers neither (the serving set
+// refreshes on the 30s TTL).
+// ---------------------------------------------------------------------------
+
+/** Route the db queries by their text: the serving scan, then the head read. */
+function routeQueries(routes) {
+  mockDb.query.mockImplementation(async (q) => {
+    const text = typeof q === 'string' ? q : String((q && q.query) || '');
+    for (const [needle, rows] of routes) {
+      if (text.includes(needle)) return { all: async () => rows.map((r) => ({ ...r })) };
+    }
+    return { all: async () => [] };
+  });
+}
+
+describe('#2061 phase 3 (E-7): the BINDING — the measured set, the excluded set, the keys', () => {
+  beforeEach(() => {
+    mockDb._reset();
+    retrievalConfigService._resetServingCache();
+    keycloakAccess.groupRealmRoles.mockClear();
+    writeAudit.mockClear();
+    delete process.env.OKF_SCOPE_MODE;
+  });
+
+  test('the head-version hash is order-independent and moves when a head version moves', () => {
+    const rows = [
+      { repo_id: 'r-a', head_version: 3 },
+      { repo_id: 'r-b', head_version: 1 }
+    ];
+    const hash = evalCtx.headVersionHash(rows);
+    expect(hash).toHaveLength(32);
+    expect(evalCtx.headVersionHash([...rows].reverse())).toBe(hash);
+    // The head VECTOR is what the head leg races — a re-built head is a
+    // different measurement even when the serving graph is unchanged.
+    expect(evalCtx.headVersionHash([{ repo_id: 'r-a', head_version: 4 }, rows[1]])).not.toBe(hash);
+    // A repository with NO head is a fact, not an absence.
+    expect(evalCtx.headVersionHash([{ repo_id: 'r-a', head_version: null }])).not.toBe(hash);
+  });
+
+  test('the binding names the MEASURED set with its head versions and BOTH comparison keys', async () => {
+    routeQueries([
+      [
+        'lifecycle_state',
+        [
+          servingRow({ repo_id: 'r-public' }),
+          servingRow({ repo_id: 'r-a', acl: { restricted: true } })
+        ]
+      ],
+      [
+        'head_version',
+        [
+          { repo_id: 'r-public', head_version: 2 },
+          { repo_id: 'r-a', head_version: 5 }
+        ]
+      ]
+    ]);
+    const ctx = await evalCtx.createContext(
+      { name: 'group-a', scopes: ['okf:t:r-a:read'], principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    const binding = await evalCtx.bindingFor(ctx._key, { okfScopes: ['okf:t:r-a:read'], isSuperAdmin: false });
+
+    expect(binding.context).toEqual(expect.objectContaining({ id: ctx._key, name: 'group-a', version: 1 }));
+    // The measured set is the CARRIER — narrowed to this caller.
+    expect(binding.repos.map((r) => r.repo_id).sort()).toEqual(['r-a', 'r-public']);
+    // …with the head versions the head leg races.
+    expect(binding.repos.find((r) => r.repo_id === 'r-a').head_version).toBe(5);
+    // …and both keys, each naming what it is.
+    expect(binding.repo_set_hash).toBe(evalCtx.repoSetHash(binding.repos));
+    expect(binding.head_version_hash).toBe(evalCtx.headVersionHash(binding.repos));
+    expect(binding.repo_set_hash).not.toBe(binding.head_version_hash);
+  });
+
+  test('the EXCLUDED set is what the caller may read but the context does NOT name', async () => {
+    routeQueries([
+      [
+        'lifecycle_state',
+        [
+          servingRow({ repo_id: 'r-public' }),
+          servingRow({ repo_id: 'r-a', acl: { restricted: true } }),
+          servingRow({ repo_id: 'r-b', acl: { restricted: true } })
+        ]
+      ],
+      [
+        'head_version',
+        [
+          { repo_id: 'r-public', head_version: 2 },
+          { repo_id: 'r-a', head_version: 5 },
+          { repo_id: 'r-b', head_version: 1 }
+        ]
+      ]
+    ]);
+    const ctx = await evalCtx.createContext(
+      { name: 'group-a', scopes: ['okf:t:r-a:read'], principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    // The caller is a SUPERADMIN: it may read every serving repository, so
+    // the repository the context excludes is a legitimate probe source.
+    const binding = await evalCtx.bindingFor(ctx._key, { okfScopes: [], isSuperAdmin: true });
+    expect(binding.out_set.map((r) => r.repo_id)).toEqual(['r-b']);
+    // The excluded repository is NOT in the measured set — that is the point.
+    expect(binding.repos.map((r) => r.repo_id)).not.toContain('r-b');
+  });
+
+  test('a repo-scoped admin gets NO excluded set (they may not know what the context hides)', async () => {
+    routeQueries([
+      [
+        'lifecycle_state',
+        [
+          servingRow({ repo_id: 'r-public' }),
+          servingRow({ repo_id: 'r-a', acl: { restricted: true } }),
+          servingRow({ repo_id: 'r-b', acl: { restricted: true } })
+        ]
+      ],
+      [
+        'head_version',
+        [
+          { repo_id: 'r-public', head_version: 2 },
+          { repo_id: 'r-a', head_version: 5 }
+        ]
+      ]
+    ]);
+    const ctx = await evalCtx.createContext(
+      { name: 'group-a', scopes: ['okf:t:r-a:read'], principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    const binding = await evalCtx.bindingFor(ctx._key, { okfScopes: ['okf:t:r-a:read'], isSuperAdmin: false });
+    // The scoped admin may not traverse r-b, so the abstention probe that
+    // would have leaked it is never minted.
+    expect(binding.out_set).toEqual([]);
+  });
+});

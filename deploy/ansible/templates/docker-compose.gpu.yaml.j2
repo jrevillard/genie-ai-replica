@@ -37,19 +37,28 @@ services:
     # Tool-calling pin (REC-6, issue #2052): granite4 is the vLLM 0.29
     # documented parser for Granite 4.x models; the flags are inert for
     # requests that carry no tools. The pin follows the served model —
-    # Granite 3.x (this template's default) needs the `granite` parser
-    # plus a chat template and is deliberately not pinned here.
+    # Granite 3.x needs the `granite` parser plus a chat template and is
+    # deliberately not pinned by default. Override with
+    # vllm_tool_call_parser (the ansible spelling of the main compose's
+    # VLLM_TOOL_CALL_PARSER lever, #2052): set it to the model's documented
+    # parser to enable tool calling with that parser; set it to an empty
+    # string to force the flags OFF for a Granite 4.x model.
+    # The served model ids carry NO template default (issue #2119):
+    # vllm_llm_model_id and vllm_translation_model_id are mandatory — the
+    # render fails without them, and deploy-gpu.yml asserts both before any
+    # node change.
+{% set llm_tool_call_parser = vllm_tool_call_parser | default(('granite4' if 'granite-4' in vllm_llm_model_id else '')) %}
     command: >
-      --model {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
+      --model {{ vllm_llm_model_id }}
       --gpu_memory_utilization {{ vllm_gpu_utilization | default('0.55') }}
-      --served-model-name {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
+      --served-model-name {{ vllm_llm_model_id }}
       --max_model_len {{ vllm_max_model_len | default('65536') }}
       --max_num_seqs {{ vllm_max_num_seqs | default('16') }}
       --dtype={{ vllm_dtype | default('half') }}
       --enforce-eager
-{% if 'granite-4' in (vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct')) %}
+{% if llm_tool_call_parser %}
       --enable-auto-tool-choice
-      --tool-call-parser granite4
+      --tool-call-parser {{ llm_tool_call_parser }}
 {% endif %}
     environment:
       - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
@@ -79,9 +88,9 @@ services:
       - "{{ rocm_video_gid | default(44) }}"   # video group
 {% endif %}
     command: >
-      --model {{ vllm_translation_model_id | default('google/gemma-3-4b-it') }}
+      --model {{ vllm_translation_model_id }}
       --gpu_memory_utilization {{ vllm_translation_gpu_utilization | default('0.3') }}
-      --served-model-name {{ vllm_translation_model_id | default('google/gemma-3-4b-it') }}
+      --served-model-name {{ vllm_translation_model_id }}
       --max_model_len {{ vllm_translation_max_model_len | default('8192') }}
       --dtype={{ vllm_translation_dtype | default('auto') }}
       --port 8000

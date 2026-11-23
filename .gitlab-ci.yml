@@ -4166,11 +4166,13 @@ docs:validate:
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
     # The collapsed deploy-gpu.yml carries both vendors' plays. Render the
     # GPU-node compose template in BOTH shapes to prove the Jinja
-    # conditionals resolve: every row in the template carries an inline
-    # default, so two template-module runs (gpu_vendor set / unset) render
-    # the ROCm and NVIDIA node files without a host connection.
-    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm.yaml" -c local -e "gpu_vendor=rocm"
-    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local
+    # conditionals resolve: two template-module runs (gpu_vendor set /
+    # unset) render the ROCm and NVIDIA node files without a host
+    # connection. The served-model ids are MANDATORY with no template
+    # default (#2119), so every render passes them explicitly via -e —
+    # and the missing-variable case below asserts the render FAILS.
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm.yaml" -c local -e "gpu_vendor=rocm vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it"
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it"
     - grep -q "vllm-reranker" /tmp/gpu-rocm.yaml
     - '! grep -q "vllm-reranker" /tmp/gpu-nvidia.yaml'
     # The REC-6 tool-calling pin (#2052): the granite4 flags render ONLY when
@@ -4179,12 +4181,22 @@ docs:validate:
     # the vllm-llm command AND the environment entry still carrying
     # HUGGING_FACE_HUB_TOKEN, on the granite-4.1-8b renders (nvidia + rocm);
     # absent on both 3.3 default renders.
-    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-granite4.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-4.1-8b"
-    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm-granite4.yaml" -c local -e "gpu_vendor=rocm vllm_llm_model_id=ibm-granite/granite-4.1-8b"
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-granite4.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-4.1-8b vllm_translation_model_id=google/gemma-3-4b-it"
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm-granite4.yaml" -c local -e "gpu_vendor=rocm vllm_llm_model_id=ibm-granite/granite-4.1-8b vllm_translation_model_id=google/gemma-3-4b-it"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-granite4.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite4' in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm-granite4.yaml'))['services']['vllm-llm']; assert '--tool-call-parser granite4' in s['command'] and any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-nvidia.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']"
+    # The explicit parser lever (ansible spelling of VLLM_TOOL_CALL_PARSER,
+    # #2052 parity): an override on a Granite 3.x model renders the flags
+    # with THAT parser instead of the derived default (absent for 3.x).
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-parser-override.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it vllm_tool_call_parser=granite"
+    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-parser-override.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite' in s['command']"
+    # #2119: the served-model ids are MANDATORY — a render without them must
+    # FAIL, and the error must NAME the variable (never a silent default).
+    # The runner script carries set -e: capture the expected failure with
+    # `|| RC=$?` (a bare `cmd; RC=$?` aborts at cmd with its exit code).
+    - RC=0; ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-missing-model.yaml" -c local -e "gpu_vendor=rocm" > /tmp/gpu-missing-model.out 2>&1 || RC=$?; test "$RC" -ne 0 || { echo "render unexpectedly succeeded without vllm_llm_model_id"; exit 1; }; grep -q "vllm_llm_model_id" /tmp/gpu-missing-model.out || { echo "render failure does not name vllm_llm_model_id"; exit 1; }
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers

@@ -32,6 +32,48 @@
 #   prepare  - Directories, template rendering (nginx config, API keys,
 #              compose, sizing env)
 #   deploy   - Compose up, smoke tests
+#
+#   The served-model preflight plays (first in the file) run on EVERY
+#   invocation regardless of --tags: a missing vllm_llm_model_id /
+#   vllm_translation_model_id fails the run before any task touches the
+#   node (#2119).
+
+- name: GPU Node - Served-model preflight (fail before any node change, #2119)
+  hosts: itu_rtx_gpu_api
+  gather_facts: false
+  tags: [always]
+  tasks:
+    - name: Assert the served model ids are defined
+      ansible.builtin.assert:
+        that:
+          - vllm_llm_model_id is defined and vllm_llm_model_id | length > 0
+          - vllm_translation_model_id is defined and vllm_translation_model_id | length > 0
+        fail_msg: >-
+          vllm_llm_model_id and vllm_translation_model_id are MANDATORY on the GPU node.
+          The GPU overlay serves exactly these ids (--model / --served-model-name) and the
+          tool-calling pin keys on vllm_llm_model_id; there is NO template default, so a
+          missing value would otherwise silently substitute a smaller model (issue #2119).
+          Define both in group_vars/itu_rtx_gpu_api/vars.yml (or vault.yml) and re-run.
+
+- name: ROCm GPU Node - Served-model preflight (fail before any node change, #2119)
+  hosts: rocm_gpu_nodes
+  gather_facts: false
+  tags: [always]
+  vars_files:
+    - vars/rocm_gpu_nodes.yml
+    - vars/vault-rocm-gpu.yml
+  tasks:
+    - name: Assert the served model ids are defined
+      ansible.builtin.assert:
+        that:
+          - vllm_llm_model_id is defined and vllm_llm_model_id | length > 0
+          - vllm_translation_model_id is defined and vllm_translation_model_id | length > 0
+        fail_msg: >-
+          vllm_llm_model_id and vllm_translation_model_id are MANDATORY on the GPU node.
+          The GPU overlay serves exactly these ids (--model / --served-model-name) and the
+          tool-calling pin keys on vllm_llm_model_id; there is NO template default, so a
+          missing value would otherwise silently substitute a smaller model (issue #2119).
+          Define both in vars/rocm_gpu_nodes.yml (or vars/vault-rocm-gpu.yml) and re-run.
 
 - name: GPU Node - Detect environment
   hosts: itu_rtx_gpu_api

@@ -856,7 +856,10 @@ services:
       # answer stays) with the knob named in an ERROR log and in the execution
       # record — no numeric default exists anywhere. The leg bounds each vLLM
       # call at the run's remaining allowance and at the request's remaining
-      # end-to-end deadline; docs/agent-budget-deadline-pairs.md.
+      # end-to-end deadline; docs/agent-budget-deadline-pairs.md. The leg
+      # serves the post-stream whole-answer paths (streaming translation off,
+      # and the non-streaming JSON entry); streamed unit translation stays on
+      # the request-resolved translator in iteration 1.
       - AGENT_TRANSLATION_MAX_TOKENS=${AGENT_TRANSLATION_MAX_TOKENS:-}
       - AGENT_TRANSLATION_MAX_CALLS=${AGENT_TRANSLATION_MAX_CALLS:-}
       # OPEA runtime patches for remote GPU node (SSL bypass)

@@ -34,6 +34,15 @@ const TRANSLATION_RESERVE_MS = 30000; // the GPU translator's own hard timeout
 const FINALIZATION_MARGIN_MS = 5000; // metadata persistence + frame write + SSE teardown
 const DEADLINE_FLOOR_MS = 1000;
 
+// The below-reserves warning is emitted once per process: the
+// misconfiguration is static (the knob is read fresh at every call, but it
+// cannot change between calls in a running deployment), and the resolver
+// runs once per streaming request AND once per JSON turn — a per-request
+// warn would flood the log pipeline and bury the real per-request signals.
+// A configuration change takes effect silently mid-process (the new value
+// is applied either way); the restart re-warns with its own reading.
+let warnedBelowReserves = false;
+
 /**
  * The EFFECTIVE upstream timeout — the one value BOTH consumers of the pair
  * read (the deadline derivation and the axios `timeout` option). A configured
@@ -47,14 +56,17 @@ const DEADLINE_FLOOR_MS = 1000;
 function resolveUpstreamTimeoutMs() {
   const configured = parsePositiveInt(process.env.AGENT_UPSTREAM_TIMEOUT_MS, DEFAULT_UPSTREAM_TIMEOUT_MS, { min: 1 });
   if (configured <= TRANSLATION_RESERVE_MS + FINALIZATION_MARGIN_MS + DEADLINE_FLOOR_MS) {
-    // Entry-neutral name: the warning belongs to the SHARED module — either
-    // consumer (streaming or JSON) can trip it, so neither entry's prefix
-    // misattributes it. The frame-writer suite pins THIS name.
-    logger.warn('AgentRunContract.upstream_timeout_below_reserves', {
-      knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
-      configured,
-      applied: DEFAULT_UPSTREAM_TIMEOUT_MS
-    });
+    if (!warnedBelowReserves) {
+      warnedBelowReserves = true;
+      // Entry-neutral name: the warning belongs to the SHARED module — either
+      // consumer (streaming or JSON) can trip it, so neither entry's prefix
+      // misattributes it. The frame-writer suite pins THIS name.
+      logger.warn('AgentRunContract.upstream_timeout_below_reserves', {
+        knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
+        configured,
+        applied: DEFAULT_UPSTREAM_TIMEOUT_MS
+      });
+    }
     return DEFAULT_UPSTREAM_TIMEOUT_MS;
   }
   return configured;
@@ -387,7 +399,14 @@ function readUpstreamBody(data, status) {
     };
     data.on('end', finish);
     data.on('close', finish);
-    data.on('error', () => {
+    data.on('error', (error) => {
+      // The loss is loud: a body that died mid-read resolves the same empty
+      // shape as an empty one, and without this line the caller's generic
+      // fallback hides WHY the body vanished. Bounded: the message only.
+      logger.error('AgentRunContract.upstream_body_stream_error', {
+        status,
+        error: error?.message
+      });
       settled = true;
       resolve({ text: '', parsed: null });
     });

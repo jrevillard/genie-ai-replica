@@ -1191,9 +1191,10 @@ class QueryService {
    * @param {Object|null} headers - `{authorization}` for the OPEA call and
    *   (agentic branch) the posture resolution.
    * @param {Object} [options] - Story 2.4b: the agentic branch's translation
-   *   inputs `{targetLanguage, translator}` — the route resolves them (the
-   *   same resolution that refuses an unsupported language). The legacy
-   *   branch (chatqna translates server-side) passes none.
+   *   input `{targetLanguage}` — the route resolves it (the same resolution
+   *   that refuses an unsupported language); the whole-answer translation
+   *   itself runs through the agentic translation leg inside the turn. The
+   *   legacy branch (chatqna translates server-side) passes none.
    * @returns {Promise<Object>} The created query
    */
   async createQuery(queryData, headers = null, options = {}) {
@@ -1329,7 +1330,6 @@ class QueryService {
           queryId,
           headers,
           targetLanguage: options.targetLanguage,
-          translator: options.translator,
           // The turn starts AFTER the doc mint — the same anchor the legacy
           // branch's worker-leg responseTime reads, so the persisted
           // responseTime means the same thing on both sides of the flag.

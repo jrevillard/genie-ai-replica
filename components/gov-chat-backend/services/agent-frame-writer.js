@@ -25,6 +25,7 @@ const { writeSSEFrame } = require('./sse-frame');
 const { applyAbstentionOverlay } = require('./agent-json-result');
 const { wantsTranslation, streamingTranslationEnabled } = require('./translation/language-request');
 const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
+const { createWholeAnswerTranslator } = require('./translation/agentic-translation-leg');
 
 // Story 2.4 — the BFF frame writer. The BFF parses the agent-service SEAM
 // stream (POST /v1/runs, the `{run_id, call_id, seq, kind, payload}` envelope
@@ -94,9 +95,14 @@ async function proxyAgentRun({
   const bearer = authHeaders?.authorization || null;
 
   // The streaming-translation relay: the SAME machinery the legacy path uses
-  // (one home, translation behaves as today). No translation-backend
-  // selection keyed on routing here — the request-resolved translator is the
-  // one both paths use (story 2.10 revisits).
+  // (one home, translation behaves as today). The relay units run MID-STREAM
+  // — before any terminal usage record exists — so the agentic translation
+  // leg (whose residual plan reads that record) cannot serve them; the
+  // request-resolved translator stays the streaming path's backend in
+  // iteration 1, and the leg owns the POST-STREAM whole-answer translation
+  // (streaming off, and the non-streaming JSON entry) where the terminal
+  // record exists. Moving the usage record earlier in the seam is the
+  // iteration-2 decision that would let the leg bound the units too.
   const useStreamingTranslation = streamingTranslationEnabled() && wantsTranslation(targetLanguage);
   const streamRelay = useStreamingTranslation
     ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
@@ -425,11 +431,37 @@ async function proxyAgentRun({
       // (story 2.11) — the finalize COMPLETES the start write, never
       // clobbers it.
       const metadata = applyAbstentionOverlay(assembleMetadata('answered'), capturedVerdict);
+      // The post-stream whole-answer translation: the AGENTIC LEG owns it on
+      // the non-relay terminal (GPU-only keyed on the routing decision,
+      // bounded by the run's residual budget — the terminal usage record —
+      // and the remaining end-to-end deadline, fail-closed on the REQUIRED
+      // knobs). The relay path skips the post-stream translation entirely
+      // (its units were the delivery) and never builds one. The writability
+      // conditions are defense-in-depth — doAgentTerminal's entry guard
+      // covers them (and construction is where a missing knob logs its
+      // ERROR) — kept so the gate reads as one unit at the construction.
+      let translateFullAnswer = null;
+      if (
+        !streamRelay &&
+        wantsTranslation(targetLanguage) &&
+        fullResponseText &&
+        !res.writableEnded &&
+        !res.destroyed
+      ) {
+        translateFullAnswer = createWholeAnswerTranslator({
+          runUsage: usageRecord,
+          targetLanguage,
+          deadlineStartMs: streamStartTime,
+          timeoutMs: effectiveTimeoutMs,
+          signal: controller.signal
+        });
+      }
       await handleStreamDone(queryId, fullResponseText, streamStartTime, res, metadata, {
         targetLanguage,
         translator,
         skipPostStreamTranslation: Boolean(streamRelay),
         alreadyFailedTranslation,
+        translateFullAnswer,
         // The agentic answer cannot name routed graphs — the sticky set is
         // left untouched (branch-driven skip; story 2.4b).
         skipRoutedGraphs: true

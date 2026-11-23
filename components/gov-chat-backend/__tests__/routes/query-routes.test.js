@@ -1362,7 +1362,7 @@ describe('POST /', () => {
   // the {targetLanguage, translator} options. The mock factories re-run
   // inside the isolation, so the fresh instances are captured from there;
   // the file-level mocks stay untouched.
-  it('with the agentic branch on: the language resolution builds the translator and createQuery gets the options', async () => {
+  it('with the agentic branch on: the language check runs and createQuery gets the language option (no translator — the leg owns the translation)', async () => {
     process.env.AGENT_ENABLED = '1';
     let freshApp;
     let freshQueryService;
@@ -1382,17 +1382,17 @@ describe('POST /', () => {
         .send({ sessionId: 's1', text: 'hola', context: { language: 'fr' } });
 
       expect(response.status).toBe(201);
-      // The agentic language resolution prepared the translator for the
-      // post-run whole-answer translation.
-      expect(freshTranslation.createMarkdownTranslator).toHaveBeenCalledWith('en', 'fr');
+      // The language CHECK still runs (an unsupported language is refused) —
+      // but no markdown translator is prepared: the whole-answer translation
+      // runs through the agentic translation leg inside the turn, so nothing
+      // on this entry consumes a request-resolved one.
+      expect(freshTranslation.init).toHaveBeenCalledWith();
+      expect(freshTranslation.createMarkdownTranslator).not.toHaveBeenCalled();
       expect(freshQueryService.createQuery).toHaveBeenCalledTimes(1);
       const [calledData, calledHeaders, options] = freshQueryService.createQuery.mock.calls[0];
       expect(calledData).toMatchObject({ sessionId: 's1', text: 'hola' });
       expect(calledHeaders).toEqual({ authorization: `Bearer ${validToken}` });
-      expect(options).toEqual({
-        targetLanguage: 'fr',
-        translator: expect.objectContaining({ translate: expect.any(Function) })
-      });
+      expect(options).toEqual({ targetLanguage: 'fr' });
     } finally {
       delete process.env.AGENT_ENABLED;
     }
@@ -2361,7 +2361,11 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
     // The partial answer was saved with the empty-stream metadata (nothing
     // was captured yet) — the dead code's documented intent, now live — and
     // it carries the `answer_interrupted` honesty marker (ADR agentic-003): a
-    // partial save is never indistinguishable from a completion.
+    // partial save is never indistinguishable from a completion. The save
+    // also SKIPS the routed-graph persistence: no metadata frame arrived, so
+    // the save cannot name the session's routed graphs — persisting the
+    // derived empty set would RESET a stickiness the session already earned
+    // (the agentic disconnect save's same rule).
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
       'q1',
@@ -2372,7 +2376,8 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
         is_grounded: false,
         abstained: null,
         answer_interrupted: true
-      })
+      }),
+      { skipRoutedGraphs: true }
     );
   });
 

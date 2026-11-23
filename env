@@ -1536,7 +1536,11 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # with the knob named in an ERROR log and in the execution record — no
 # numeric default exists anywhere. The leg bounds each vLLM call at the
 # run's remaining allowance and at the request's remaining end-to-end
-# deadline; docs/agent-budget-deadline-pairs.md.
+# deadline; docs/agent-budget-deadline-pairs.md. The leg serves the
+# post-stream whole-answer paths (streaming translation off, and the
+# non-streaming JSON entry) — the run's residual plan reads the TERMINAL
+# usage record, which only exists after the run; streamed unit translation
+# stays on the request-resolved translator in iteration 1.
 # AGENT_TRANSLATION_MAX_TOKENS=
 # AGENT_TRANSLATION_MAX_CALLS=
 #

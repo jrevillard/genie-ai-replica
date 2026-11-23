@@ -1,0 +1,6 @@
+# The gate's refusal — the gated config-B leg, verbatim
+# command: run_protocol.py assess --config B --set assessment-set.json --out-dir . --corpus-collection GRAPH_SOURCE --compute-fingerprint
+# date: 2026-11-23 (forge k3s)
+
+REFUSED: gated run refused (config B): no reference manifest for corpus fingerprint 6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98 + assessment set digest 58850161afebad599234e5ef54b1122a17684e5de7b81e36b9b6c3867152a784. Run the A-only reference measurement first (`run_protocol.py reference`).
+exit=1

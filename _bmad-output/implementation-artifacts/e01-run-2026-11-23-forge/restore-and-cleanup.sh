@@ -100,16 +100,6 @@ import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 if [ -n "$EVAL_USER_ID" ]; then
   $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$EVAL_USER_ID" -o /dev/null -w "  eval user deleted http=%{http_code}\n"
-  # the deletion is VERIFIED, not assumed: the user must be gone, or the
-  # cleanup has failed and says so with a failing exit
-  if $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users?username=e01-eval" | python3 -c "
-import sys,json
-sys.exit(1 if json.load(sys.stdin) else 0)"; then
-    echo "  eval user gone (verified)"
-  else
-    echo "REFUSED: the eval user is STILL PRESENT after the delete — the cleanup failed; investigate before re-running"
-    exit 1
-  fi
 else
   echo "  eval user already absent"
 fi
@@ -118,17 +108,44 @@ import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 if [ -n "$CID" ]; then
   $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients/$CID" -o /dev/null -w "  eval client deleted http=%{http_code}\n"
-  if $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval" | python3 -c "
-import sys,json
-sys.exit(1 if json.load(sys.stdin) else 0)"; then
-    echo "  eval client gone (verified)"
-  else
-    echo "REFUSED: the eval client is STILL PRESENT after the delete — the cleanup failed; investigate before re-running"
-    exit 1
-  fi
 else
   echo "  eval client already absent"
 fi
+# 7c. the FINAL existence gate: the three realm changes must ALL be gone, or
+# the cleanup has failed. This re-query is independent of the delete steps
+# above, so a Keycloak death mid-step (an empty lookup read as "already
+# absent") cannot pass as success — the entities either still resolve
+# (REFUSED) or they do not (verified).
+LEFTOVER=0
+ROLEMAP=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm" 2>/dev/null | python3 -c "
+import sys,json
+try: d=json.load(sys.stdin)
+except Exception: sys.exit(2)
+sys.exit(2 if not isinstance(d,list) else (1 if any(r.get('name')=='admin' for r in d) else 0))") || LEFTOVER=1
+case "$ROLEMAP" in
+  0) echo "  dataprep SA: admin role gone (verified)";;
+  1) echo "REFUSED: the dataprep SA still holds the admin role — the cleanup failed; investigate before re-running"; exit 1;;
+  *) echo "REFUSED: could not re-query the dataprep SA's roles (Keycloak unreachable?) — the cleanup state is UNKNOWN; investigate before re-running"; exit 1;;
+esac
+# exit codes from the python probes: 0 = gone, 1 = still present, 2 = the
+# query itself failed (a dead Keycloak must read as UNKNOWN, never as a
+# false "already absent" success)
+check_gone() {
+  local what="$1" url="$2"
+  local rc=0
+  $KC -H "Authorization: Bearer $AT" "$url" 2>/dev/null | python3 -c "
+import sys,json
+try: d=json.load(sys.stdin)
+except Exception: sys.exit(2)
+sys.exit(1 if d else 0)" || rc=$?
+  case "$rc" in
+    0) echo "  eval $what gone (verified)";;
+    1) echo "REFUSED: the eval $what still resolve — the cleanup failed; investigate before re-running"; exit 1;;
+    *) echo "REFUSED: could not re-query the eval $what (Keycloak unreachable?) — the cleanup state is UNKNOWN; investigate before re-running"; exit 1;;
+  esac
+}
+check_gone users "$KCURL/auth/admin/realms/genie/users?username=e01-eval"
+check_gone clients "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval"
 
 say "8. the secrets the run restored"
 # the keycloak-proxy-client-secret Secret was missing at the baseline (its

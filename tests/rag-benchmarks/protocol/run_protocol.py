@@ -227,11 +227,11 @@ def cmd_reference(args: argparse.Namespace) -> int:
     fingerprint = _corpus_fingerprint(args)
     try:
         configuration = _resolved_configuration(args, "A")
-    except (RuntimeError, json.JSONDecodeError) as failed:
+    except (RuntimeError, OSError, json.JSONDecodeError) as failed:
         # capture_baseline's docker-only guard raises RuntimeError; a pinned
-        # --resolved-env file that is not valid JSON raises
-        # JSONDecodeError. Either way the CLI prints a refusal (the gate's
-        # shape), never a traceback.
+        # --resolved-env file that is missing, unreadable or not valid JSON
+        # raises OSError or JSONDecodeError. Any of them prints a refusal
+        # (the gate's shape), never a traceback.
         print(f"REFUSED: {failed}", file=sys.stderr)
         return 1
     configuration["model_ids"] = _model_ids(args)

@@ -20,6 +20,7 @@ registries, fake reference manifests, no live venue:
 import argparse
 import copy
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -175,6 +176,16 @@ def test_the_registry_loader_imports_yaml_lazily():
     """The package stays stdlib-only: the loader pulls PyYAML in when it
     reads a registry, never at import time."""
     assert not hasattr(thresholds_mod, "yaml")
+
+
+def test_the_loader_refuses_a_typed_reason_without_pyyaml(monkeypatch):
+    """The lazy-import contract's refusal half: a node without PyYAML gets the
+    typed ``registry_unavailable`` refusal, never an ImportError crash — every
+    other command keeps working on that node."""
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    with pytest.raises(thresholds_mod.ThresholdsRefusal) as failed:
+        thresholds_mod.load_registry(REGISTRY)
+    assert failed.value.reason == "registry_unavailable"
 
 
 # ---------------------------------------------------------------------------

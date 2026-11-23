@@ -85,7 +85,7 @@ def _yaml_module():
     """The YAML parser, imported lazily: the package stays stdlib-only."""
     try:
         import yaml  # local import: no eager third-party import in the package
-    except ImportError as missing:  # pragma: no cover — the CI job installs PyYAML
+    except ImportError as missing:
         raise ThresholdsRefusal(
             "registry_unavailable",
             f"PyYAML is not installed on this node ({missing}) — the threshold registry"

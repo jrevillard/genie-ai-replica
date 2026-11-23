@@ -226,7 +226,7 @@ the site comes up without any branding.
 
 #### Keycloak is no longer a GENIE.AI image
 
-The stack runs `quay.io/keycloak/keycloak:26.7.0` straight from upstream —
+The stack runs `quay.io/keycloak/keycloak:26.8.2` straight from upstream —
 15 GENIE.AI images instead of 16.
 
 **Migration (air-gapped)**: mirror the upstream Keycloak image in addition to

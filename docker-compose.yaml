@@ -3083,7 +3083,11 @@ services:
     # here so compose and chart state the same identity (#1227). Pinned by
     # name: the image's USER is the numeric source of truth.
     user: "keycloak:root"
-    image: quay.io/keycloak/keycloak:26.7.0
+    # 26.8.2 bundles Red Hat OpenJDK 21.0.13.1 — the fix for CVE-2026-114938
+    # ("Java4Shell", memory corruption in the accelerated Base64 decoder).
+    # The 26.8.2-1 and 26.8.2-2 builds carry the vulnerable 21.0.13; the
+    # 26.8.2 tag now points at the fixed 26.8.2-3 build.
+    image: quay.io/keycloak/keycloak:26.8.2
     # The upstream image ships an empty CMD (kc.sh prints its usage and exits
     # without a subcommand). The dropped custom image baked `start` via its
     # Dockerfile; restore that explicit startup for both compose and swarm.

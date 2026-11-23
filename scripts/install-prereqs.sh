@@ -16,7 +16,7 @@
 #        prerequisite for observability.grafana.enabled=true
 #
 # Operators installed:
-#   - keycloak-operator 26.8.0   (namespace keycloak-system; Kustomize install of the official modern Quarkus-based operator; 4 CRDs in k8s.keycloak.org group)
+#   - keycloak-operator 26.8.2   (namespace keycloak-system; Kustomize install of the official modern Quarkus-based operator; 4 CRDs in k8s.keycloak.org group)
 #   - cloudnative-pg 0.22.0      (namespace cnpg-system)
 #   - kube-arangodb 1.4.5        (namespace arango-system)
 #   - sealed-secrets 0.40.0      (namespace sealed-secrets; for the deploy repo's overlays — the chart renders no SealedSecret)
@@ -41,7 +41,14 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.0}"
+# The operator version pins BOTH the operator image and the Keycloak server
+# image it hands to a `Keycloak` CR that carries no `spec.image` (upstream
+# sets RELATED_IMAGE_KEYCLOAK to the same version). 26.8.2 is the first
+# release whose server image bundles Red Hat OpenJDK 21.0.13.1 — the fix for
+# CVE-2026-114938 ("Java4Shell", memory corruption in the accelerated Base64
+# decoder, pre-authentication RCE). The 26.8.2-1 / 26.8.2-2 builds carry the
+# vulnerable 21.0.13; the 26.8.2 tag now points at the fixed 26.8.2-3 build.
+KC_OPERATOR_VERSION="${KC_OPERATOR_VERSION:-26.8.2}"
 # The operator's CPU. Upstream ships requests 300m / limits 700m: on a
 # node close to its CPU quota the operator is throttled for most of its
 # periods and never finishes booting (it dies on a connection timeout to

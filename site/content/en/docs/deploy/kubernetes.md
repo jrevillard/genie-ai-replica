@@ -93,7 +93,7 @@ reconcilers and failed releases.
 |---|---|---|
 | `kube-arangodb` | 1.4.x | ArangoDB `ArangoDeployment` / `ArangoMember` |
 | CloudNativePG (`cnpg`) | a CRD serving `postgresql.cnpg.io/v1` | The Keycloak Postgres cluster (`keycloak-db`) |
-| `keycloak-operator` | 26.8.0 | `Keycloak` CR + realm import infrastructure |
+| `keycloak-operator` | 26.8.2 | `Keycloak` CR + realm import infrastructure |
 | `sealed-secrets` (or alternative) | ≥ 0.40 | Encrypts Secrets into the deploy repo |
 | **OpenTelemetry Operator** | ships the `opentelemetry.io/v1beta1` CRDs | The collector gateway **and** the filelog agent — **required by the default install**: `observability.logs.enabled` defaults to `true`, so a release without it fails with `no matches for kind "OpenTelemetryCollector"` |
 | **victoria-metrics-operator** (vm-operator) | ships `operator.victoriametrics.com/v1` | The `VLSingle` / `VMSingle` / `VTSingle` CRs — **required by the default install** for the same reason (`observability.logs.enabled: true`) |

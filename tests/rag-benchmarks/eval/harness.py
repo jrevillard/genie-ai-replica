@@ -65,8 +65,19 @@ K8S_NAMESPACE_ENV = "EVAL_K8S_NAMESPACE"
 DEFAULT_K8S_NAMESPACE = "genieai"
 
 
-def _k8s_namespace(namespace: str | None = None) -> str:
-    return namespace or os.getenv(K8S_NAMESPACE_ENV) or DEFAULT_K8S_NAMESPACE
+def exec_backend() -> str:
+    """The selected exec backend: ``"docker"`` (default) or ``"kubectl"``.
+
+    The ONE place the backend is read. Every consumer calls this instead of
+    re-parsing the env var, so a change to the default or to the
+    normalization is a one-site edit (a site that misses ``.strip()`` would
+    otherwise accept a value the dispatcher treats differently).
+    """
+    return os.getenv(EXEC_BACKEND_ENV, "docker").strip().lower()
+
+
+def _k8s_namespace() -> str:
+    return os.getenv(K8S_NAMESPACE_ENV) or DEFAULT_K8S_NAMESPACE
 
 
 def _pod_env_key(container: str) -> str:
@@ -75,18 +86,29 @@ def _pod_env_key(container: str) -> str:
     return f"EVAL_K8S_POD_{ident}"
 
 
-def _run_kubectl(args: list[str], timeout: float = 30) -> str:
+def _run_kubectl(
+    args: list[str],
+    timeout: float = 30,
+    input: str | None = None,
+    label: str | None = None,
+) -> str:
     """One kubectl call; stdout on success, a :class:`HarnessError` naming the
-    real cause otherwise (a failed lookup is never quietly read as "no pod")."""
+    real cause otherwise (a failed lookup is never quietly read as "no pod").
+
+    ``input`` is forwarded to the process's stdin — the only way to carry
+    values into a pod without putting them on argv. ``label`` names the
+    call in the failure message (default: the subcommand).
+    """
+    what = label or args[1]
     try:
         result = subprocess.run(
-            args, capture_output=True, text=True, timeout=timeout
+            args, capture_output=True, text=True, timeout=timeout, input=input
         )
     except (OSError, subprocess.TimeoutExpired) as failed:
-        raise HarnessError(f"kubectl {args[1]} failed: {failed}") from failed
+        raise HarnessError(f"kubectl {what} failed: {failed}") from failed
     if result.returncode != 0:
         raise HarnessError(
-            f"kubectl {args[1]} failed: {result.stderr.strip()[:300]}"
+            f"kubectl {what} failed: {result.stderr.strip()[:300]}"
         )
     return result.stdout
 
@@ -110,7 +132,7 @@ def _pod_exists(pod: str, namespace: str) -> bool:
     return True
 
 
-def resolve_k8s_pod(container: str, namespace: str | None = None) -> str:
+def resolve_k8s_pod(container: str) -> str:
     """Resolve a container identity to a live pod name on a Kubernetes venue.
 
     Resolution order — first hit wins:
@@ -135,7 +157,7 @@ def resolve_k8s_pod(container: str, namespace: str | None = None) -> str:
     No match is a :class:`HarnessError`, never a guess: a wrong pod would
     answer every query with someone else's service.
     """
-    ns = _k8s_namespace(namespace)
+    ns = _k8s_namespace()
     pinned = os.getenv(_pod_env_key(container))
     if pinned:
         if _pod_exists(pinned, ns):
@@ -179,7 +201,6 @@ def kubectl_exec(
     cmd: str,
     timeout: float = 120,
     pass_env: tuple = (),
-    namespace: str | None = None,
 ) -> str:
     """Run ``cmd`` inside a pod via ``kubectl exec``; return stdout.
 
@@ -190,7 +211,7 @@ def kubectl_exec(
     carrying a newline cannot survive the line-based transport, so it is
     refused loudly rather than silently truncated.
     """
-    ns = _k8s_namespace(namespace)
+    ns = _k8s_namespace()
     prelude = ""
     payload = ""
     if pass_env:
@@ -207,18 +228,9 @@ def kubectl_exec(
         "kubectl", "exec", "-i", "-n", ns, pod,
         "--", "sh", "-c", prelude + cmd,
     ]
-    result = subprocess.run(
-        args,
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+    return _run_kubectl(
+        args, timeout=timeout, input=payload, label=f"exec {pod}"
     )
-    if result.returncode != 0:
-        raise HarnessError(
-            f"kubectl exec {pod} failed: {result.stderr.strip()[:300]}"
-        )
-    return result.stdout
 
 
 def exec_in_container(
@@ -231,7 +243,7 @@ def exec_in_container(
     — the toolchain never guesses a transport, because a wrong one produces
     per-row failures that look like data.
     """
-    backend = os.getenv(EXEC_BACKEND_ENV, "docker").strip().lower()
+    backend = exec_backend()
     if backend == "docker":
         return docker_exec(container, cmd, timeout=timeout, pass_env=pass_env)
     if backend == "kubectl":

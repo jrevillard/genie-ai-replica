@@ -68,7 +68,7 @@ from pathlib import Path
 # Make the eval/ subpackage importable for the shared harness primitives
 # (the venue-dispatching exec + atomic JSON IO) — previously duplicated locally.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "eval"))
-from harness import exec_in_container as _exec, write_json  # noqa: E402
+from harness import exec_backend, exec_in_container as _exec, write_json  # noqa: E402
 
 # Metrics where a LOWER value is the parity-relevant regression signal.
 LOWER_IS_BETTER = ("recall", "precision", "complete_recall", "retrieval_recall")
@@ -228,12 +228,13 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
     is the component name a label selector resolves, and half a migration
     would read one venue's env and exec into another's pods.
     """
-    if os.getenv("EVAL_EXEC_BACKEND", "docker").strip().lower() == "kubectl":
+    if exec_backend() == "kubectl":
         raise RuntimeError(
             "resolve_containers is docker-only (docker ps): capture_baseline"
             " has no Kubernetes path yet — produce the baseline through the"
             " protocol driver instead (protocol/run_protocol.py reference"
-            " --resolved-env <snapshot.json>)"
+            " --resolved-env <snapshot.json>): the pinned snapshot file wins"
+            " over --stack-prefix, so no docker lookup is attempted"
         )
     out = _run(
         ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}"],
@@ -270,13 +271,11 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
 def _image_digest(container: str) -> str:
     """Resolve the image ID (sha256) backing a container — the practical digest.
 
-    DOCKER-ONLY (docker inspect); same refusal as resolve_containers."""
-    if os.getenv("EVAL_EXEC_BACKEND", "docker").strip().lower() == "kubectl":
-        raise RuntimeError(
-            "_image_digest is docker-only (docker inspect): capture_baseline"
-            " has no Kubernetes path yet — produce the baseline through the"
-            " protocol driver instead"
-        )
+    DOCKER-ONLY (docker inspect). No venue guard here: the only caller
+    (``snapshot_stack``) runs after ``resolve_containers``, which refuses
+    loudly on a Kubernetes venue — a second refusal here would be unreachable
+    and, wrapped in a bare ``RuntimeError``, silently degradable to
+    ``image_id: None``."""
     return _run(
         ["docker", "inspect", "--format", "{{.Image}}", container], timeout=30
     ).strip()

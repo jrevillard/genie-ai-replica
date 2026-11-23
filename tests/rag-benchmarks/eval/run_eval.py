@@ -60,7 +60,7 @@ import urllib.error
 import metrics
 from arango import cursor, source_chunks
 from chunk_identity import content_hash
-from harness import EXEC_BACKEND_ENV, HarnessError, exec_in_container, write_json
+from harness import HarnessError, exec_backend, exec_in_container, write_json
 from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
@@ -74,10 +74,29 @@ from keycloak import KeycloakError, fetch_realm_token
 #     genieai.io/component=<name>): CHATQNA_CONTAINER=chatqna
 # VICTORIATRACES_SVC = <stack>_victoriatraces (hyphenated swarm service name).
 # See tests/rag-benchmarks/CLAUDE.md for the full run recipe.
-CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER") or (
-    "chatqna" if os.getenv(EXEC_BACKEND_ENV, "docker").strip().lower() == "kubectl"
-    else "chatqna-xeon-backend-server"
-)
+#
+# CHATQNA_CONTAINER holds the LIVE identity, refreshed by the docker
+# re-resolution below. The operator's pin and the venue-shaped default are
+# both read at CALL time (see ``_chatqna_identity``), so an ambient export
+# cannot be frozen into the module at import and a backend flipped after
+# import no longer leaves a stale identity behind.
+CHATQNA_CONTAINER = ""
+
+
+def _default_chatqna_identity() -> str:
+    """The venue-shaped chatqna identity: the k8s COMPONENT name on the
+    kubectl backend, the docker container name otherwise."""
+    return "chatqna" if exec_backend() == "kubectl" else "chatqna-xeon-backend-server"
+
+
+def _chatqna_identity() -> str:
+    """The identity to exec against: the live (re-resolved) identity, else the
+    operator's pin, else the venue-shaped default."""
+    return (
+        CHATQNA_CONTAINER
+        or os.getenv("CHATQNA_CONTAINER")
+        or _default_chatqna_identity()
+    )
 VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")
 CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
 CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "genieai-chatqna")
@@ -170,10 +189,10 @@ def _chatqna_exec(
     global CHATQNA_CONTAINER
     try:
         return exec_in_container(
-            CHATQNA_CONTAINER, cmd, timeout=timeout, pass_env=pass_env
+            _chatqna_identity(), cmd, timeout=timeout, pass_env=pass_env
         )
     except HarnessError:
-        if os.getenv(EXEC_BACKEND_ENV, "docker").strip().lower() == "docker":
+        if exec_backend() == "docker":
             new = _resolve_chatqna_container(force=True)
             if new and new != CHATQNA_CONTAINER:
                 CHATQNA_CONTAINER = new

@@ -30,8 +30,11 @@ def _entry(content_hash="abc123", chunk_key="key1"):
 def _docker_backend(monkeypatch):
     """The docker-path tests must not depend on the ambient EVAL_EXEC_BACKEND:
     an operator's exported kubectl backend would flip them onto the kubectl
-    branch and fail on the docker argv."""
+    branch and fail on the docker argv. The same goes for an ambient
+    CHATQNA_CONTAINER pin (live-proven on this host): it would replace the
+    identity the tests assert on."""
     monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+    monkeypatch.delenv("CHATQNA_CONTAINER", raising=False)
 
 
 def test_score_anchor_projects_keys_to_content_hashes():
@@ -1305,11 +1308,16 @@ def test_f1_chatqna_resolver_prefers_env_override(monkeypatch):
         return run_eval.os.getenv("CHATQNA_CONTAINER")
     monkeypatch.setattr(run_eval, "_resolve_chatqna_container", fake_resolve)
     # Suppress the per-entry retry path so the test only observes the
-    # first attempt's wrapper call.
+    # first attempt's wrapper call. The HarnessError reaction writes the
+    # live identity into the module — restore it, or the next test inherits
+    # this test's pin.
+    original_identity = run_eval.CHATQNA_CONTAINER
     try:
         run_eval.drive_query({"query": "x"})
     except HarnessError:
         pass
+    finally:
+        run_eval.CHATQNA_CONTAINER = original_identity
     # force=True passed on the HarnessError reaction
     assert invoked == [True]
 
@@ -1401,38 +1409,32 @@ def test_kubectl_backend_skips_the_docker_reresolution(monkeypatch):
     # The failure re-raised WITHOUT consulting docker at all.
     assert resolve_calls == []
     assert run_eval.CHATQNA_CONTAINER != "chatqna-rotated-docker-name"
-    assert calls == [run_eval.CHATQNA_CONTAINER]
+    # The exec used the venue-shaped identity (the k8s component name), not
+    # the docker container name.
+    assert calls == ["chatqna"]
 
 
 def test_chatqna_identity_default_is_backend_aware(monkeypatch):
     """The default identity is the k8s COMPONENT name on the kubectl backend
     and the docker container name otherwise; an explicit CHATQNA_CONTAINER
-    wins on both. The constant is computed at import, so each branch is read
-    in a fresh subprocess."""
-    import subprocess
-    import sys
-    from pathlib import Path
+    pin wins on both. The default is read at CALL time, so the backend is
+    honoured without a module re-import."""
+    monkeypatch.setattr(run_eval, "CHATQNA_CONTAINER", "")
 
-    eval_dir = str(Path(__file__).resolve().parent)
-    cases = [
-        ({}, "chatqna-xeon-backend-server"),          # docker default
-        ({"EVAL_EXEC_BACKEND": "kubectl"}, "chatqna"),
-        ({"EVAL_EXEC_BACKEND": " KUBECTL "}, "chatqna"),   # normalized (strip+lower)
-        ({"EVAL_EXEC_BACKEND": "kubectl", "CHATQNA_CONTAINER": "chatqna-prod"}, "chatqna-prod"),
-        ({"CHATQNA_CONTAINER": "chatqna-prod"}, "chatqna-prod"),
-    ]
-    for env, expected in cases:
-        code = (
-            "import sys; sys.path.insert(0, {evaldir!r});"
-            "import run_eval; print(run_eval.CHATQNA_CONTAINER)"
-        ).format(evaldir=eval_dir)
-        # The ambient CHATQNA_CONTAINER (an operator's exported pin, live-proven
-        # on this host) must not leak into the docker-default branch — the case
-        # env is the whole truth for this knob.
-        base_env = {k: v for k, v in os.environ.items() if k != "CHATQNA_CONTAINER"}
-        out = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True, text=True, env={**base_env, **env}, timeout=60,
-        )
-        assert out.returncode == 0, out.stderr
-        assert out.stdout.strip() == expected, (env, out.stdout)
+    monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+    assert run_eval._default_chatqna_identity() == "chatqna-xeon-backend-server"
+    assert run_eval._chatqna_identity() == "chatqna-xeon-backend-server"
+
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", "kubectl")
+    assert run_eval._default_chatqna_identity() == "chatqna"
+    assert run_eval._chatqna_identity() == "chatqna"
+
+    # The backend value is normalized (strip + lower) before the comparison.
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", " KUBECTL ")
+    assert run_eval._default_chatqna_identity() == "chatqna"
+
+    # The operator's pin wins on both backends.
+    monkeypatch.setattr(run_eval, "CHATQNA_CONTAINER", "chatqna-prod")
+    assert run_eval._chatqna_identity() == "chatqna-prod"
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", "docker")
+    assert run_eval._chatqna_identity() == "chatqna-prod"

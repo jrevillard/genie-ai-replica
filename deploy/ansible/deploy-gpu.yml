@@ -32,6 +32,11 @@
 #   prepare  - Directories, template rendering (nginx config, API keys,
 #              compose, sizing env)
 #   deploy   - Compose up, smoke tests
+#
+#   The served-model preflight plays (first in the file) run on EVERY
+#   invocation regardless of --tags: a missing vllm_llm_model_id /
+#   vllm_translation_model_id fails the run before any task touches the
+#   node (#2119).
 
 - name: GPU Node - Served-model preflight (fail before any node change, #2119)
   hosts: itu_rtx_gpu_api

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Capture the deployed stack baseline (V03) and reconcile it with the source baseline.
 
-Story 1.2 of the agentic-foundations PRD (issue #1948). The record this script
-renders is the reference E01 (Epic 4) measures against: it must describe the
+The record this script
+renders is the reference E01 measures against: it must describe the
 system that actually serves traffic, not the one the repository assumes.
 
 Read-only. The script creates, patches and deletes nothing on the cluster, and
@@ -142,7 +142,7 @@ INJECTED_PATTERNS = (
     re.compile(r"_TCP_PROTO$"),
 )
 
-# Dispositions for the differences this story knows about. A difference with
+# Dispositions for the differences this baseline knows about. A difference with
 # no entry here is rendered as UNRESOLVED: an unexplained drift must not
 # pass silently.
 # --------------------------------------------------------------------------
@@ -1851,7 +1851,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
     if model_only:
         # The application tier is compared for the model ids it pins and
         # for the endpoints the chart derives; its remaining environment is
-        # not the retrieval configuration this story baselines. It is
+        # not the retrieval configuration this baseline records. It is
         # listed, never dropped silently.
         template_map = {
             name: entry
@@ -1915,7 +1915,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             ):
                 # The application tier is compared for its model ids only:
                 # its remaining environment is not the retrieval
-                # configuration this story baselines. It is listed, never
+                # configuration this baseline records. It is listed, never
                 # dropped silently.
                 undeclared.append(env_name)
                 continue

@@ -1,6 +1,6 @@
 'use strict';
 
-// The BFF's answer-translation leg for the agentic path (story 2.10, AD-14).
+// The BFF's answer-translation leg for the agentic path.
 //
 // The legacy path (translation-service.js + query-routes.js) keeps its
 // deployed behavior untouched — this module is additive shared code that only
@@ -13,13 +13,13 @@
 //    that is unconfigured or fails at request time is a skip with the
 //    recorded reason: the English answer stays.
 // 2. Residual discipline. `planTranslation`
-//    (services/agent-residual-budget.js, story 2.3) decides
+//    (services/agent-residual-budget.js) decides
 //    translate-vs-skip from the run's usage record, the deployment's
 //    allowances and the caller's remaining deadline. No call starts beyond
 //    the remaining deadline (per-call `timeoutMs` = the time left at call
 //    start); each call's `max_tokens` is the remaining allowance; the
 //    disconnect `AbortSignal` is the caller's. The leg owns no clock: the
-//    remaining-deadline value arrives per call, produced by the story-2.4
+//    remaining-deadline value arrives per call, produced by the
 //    caller.
 // 3. Skip is not failure. V05 ties `done.translationFailed` to
 //    attempted-and-failed. A budget/config skip returns outcome `skipped`
@@ -29,7 +29,7 @@
 //    caller abort, with no retry.
 //
 // The leg owns no frames, no agent-leg HTTP client and no disconnect
-// detection: the caller (story 2.4) produces the AbortSignal and the
+// detection: the caller produces the AbortSignal and the
 // remaining-deadline value and writes every client frame from the returned
 // outcome. The accounting block the leg returns is the shape the caller
 // persists into the `queries` metadata execution record:
@@ -43,7 +43,7 @@
 // produced); `queryTranslationStatus` is the V05 vocabulary verbatim, never
 // extended.
 // The leg does not use the Redis translation cache: every call is
-// budget-accounted, so iteration 1 answers by not caching.
+// budget-accounted, so every answer is served by not caching.
 
 const { logger, parsePositiveInt } = require('../../shared-lib');
 const { planTranslation, SKIP_STATUSES } = require('../agent-residual-budget');
@@ -109,7 +109,7 @@ function readKnob(name) {
 }
 
 /**
- * The accounting block — the shape the story-2.4 caller persists into the
+ * The accounting block — the shape the frame-writer caller persists into the
  * `queries` metadata execution record. Unit-pinned by the leg's test suite.
  *
  * @param {Object} parts

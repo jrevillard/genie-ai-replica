@@ -1507,9 +1507,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     // restore reads (isTranslationFailed): the mobile save
                     // uploads THIS map (messages-post metadata), so the
                     // record it stores must carry what the live turn knew
-                    // — the agent lane's server-side doc does not (issue
-                    // #2080), and a restored failed translation would
-                    // otherwise read as a delivered one.
+                    // — the agent lane's server-side doc does not, and a
+                    // restored failed translation would otherwise read as
+                    // a delivered one.
                     'translation_status': answerTranslationFailed
                         ? 'failed'
                         : 'ok',
@@ -1643,8 +1643,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
       // What happened to the language of the answer: the metadata's
       // translation_status (the lanes that persist it) or the body's root
-      // latch (story 2.4b — the agent lane's metadata does not carry the
-      // field, #2080). An answer that was not translated is flagged, so
+      // latch (the agent lane's metadata does not carry the field). An
+      // answer that was not translated is flagged, so
       // the English original is never read as a translation of it.
       final bool translationFailed =
           isTranslationFailed(metadata) ||

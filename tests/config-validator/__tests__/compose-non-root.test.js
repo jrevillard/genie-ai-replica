@@ -42,7 +42,7 @@ describe('compose non-root contract (#1227)', () => {
     expect([...real.alwaysOn].sort()).toEqual(
       [
         // agent-service is NOT here: it sits behind the `agent` compose
-        // profile (#2053, the okf-server/certbot shape), so it left the
+        // profile (the okf-server/certbot shape), so it left the
         // always-on scope. Its non-root pin stays enforced — in its own
         // dedicated gate (agent-service.test.js, user: "10001:10001").
         'arango-vector-db',

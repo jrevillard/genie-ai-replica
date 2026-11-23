@@ -1,6 +1,6 @@
 'use strict';
 
-// Story 2.11 — the two attribution writes on the `queries` doc: the
+// The two attribution writes on the `queries` doc: the
 // run-start block (metadata.agent_run = {run_id, execution_versions,
 // started_at}) and the honest-outcome patch (outcome + finished_at). The
 // contract under test: the merge runs SERVER-SIDE (one AQL UPDATE over the

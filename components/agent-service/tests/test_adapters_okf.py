@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The okf-server concept adapter (story 1.7): the exact-join concept read.
+"""The okf-server concept adapter: the exact-join concept read.
 
 The adapter calls okf-server's serving read
 ``GET /api/okf/repos/:repo_id/concepts/:concept_id`` — the route whose

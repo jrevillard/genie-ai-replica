@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """GENIE.AI agent service - internal-only HTTP surface.
 
-Story 1.3 (Epic 1): the service exists, is deployable, is switchable and is
-observable. Story 2.3 adds the run surface: ``POST /v1/runs`` serves the
+The run surface: ``POST /v1/runs`` serves the
 SEAM stream (the envelope ``{run_id, call_id, seq, kind, payload}`` over
 SSE, plus its own terminal usage record) — never a client frame name; the
 BFF parses this stream and writes every client frame.
@@ -156,8 +155,8 @@ def _runtime() -> RequestOrchestrator:
 @asynccontextmanager
 async def lifespan(app: fastapi.FastAPI):
     # The flag is logged, not enforced here: the deployment gate is the
-    # Compose `deploy.replicas` value (one flag for the whole stack, as the
-    # epic defines it). The run surface carries its own fail-closed reads.
+    # Compose `deploy.replicas` value (one flag for the whole stack).
+    # The run surface carries its own fail-closed reads.
     logger.info(
         "agent service started (AGENT_ENABLED=%s)",
         os.getenv("AGENT_ENABLED", "0"),

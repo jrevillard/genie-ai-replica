@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The run manifest builder (story 4.1 — every run versions what it ran on).
+"""The run manifest builder (every run versions what it ran on).
 
 One manifest rides every run report (reference or gated) and records:
 

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The authorization executor (story 1.7): the negative authorization matrix.
+"""The authorization executor: the negative authorization matrix.
 
 The executor is the port's enforcement point: authorization precedes every
 resolution, every resolved identity is re-validated, and nothing outside the
@@ -88,7 +88,7 @@ class FakeChunks:
 
 
 class FakeSearchPort:
-    """The inner port the executor wraps for search (story 1.6 implements it)."""
+    """The inner port the executor wraps for search."""
 
     def __init__(self, result=None):
         self.result = result
@@ -147,7 +147,7 @@ def test_legacy_read_authorized_succeeds_with_provenance_and_content():
 
 def test_legacy_read_unauthorized_refuses_before_any_resolution():
     """The executor carries the narrow context itself, so the context gate
-    passes and the AD-4 legacy-graph membership check is what refuses —
+    passes and the legacy-graph membership check is what refuses —
     a deleted membership check must turn this test red."""
     docrepo, chunks = FakeDocRepo(), FakeChunks()
     narrow = ctx(graphs=("OKF_a_v1",), repos=(AuthorizedRepo(repo_id="r-1", graph_name="OKF_a_v1"),))
@@ -257,7 +257,7 @@ def test_cross_user_and_cross_session_attempts_refuse():
 
 
 def test_permission_change_between_turns_invalidates_retained_evidence():
-    """FR-28: the same target authorized at turn N is refused at turn N+1.
+    """The same target authorized at turn N is refused at turn N+1.
     Turn N+1's executor carries turn N+1's own (narrower) context, so the
     membership check — not the context gate — is what refuses the re-read."""
     docrepo = FakeDocRepo()

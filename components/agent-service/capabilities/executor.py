@@ -1,9 +1,9 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The authorization executor — the port's enforcement point (story 1.7).
+"""The authorization executor — the port's enforcement point.
 
 A contract declares; an executor enforces. The V04 map (§6) records which
-obligations were declared by story 1.5 and enforced by nobody; this module
+obligations were declared but enforced by nobody; this module
 is where each of them becomes enforced:
 
 * **Authorization precedes resolution.** A target outside the request's
@@ -14,7 +14,7 @@ is where each of them becomes enforced:
 * **Every resolved identity is re-validated.** What the adapters resolved
   must be what was authorized: a provenance that drifts from the request,
   or a resolved graph outside the set, fails closed — never a wider corpus.
-* **The legacy corpus maps per AD-4.** A legacy ``file_id`` is in scope iff
+* **The legacy corpus maps.** A legacy ``file_id`` is in scope iff
   the request's authorized set includes the legacy graph. No per-user ACL
   exists on that corpus, and none is invented here.
 * **The negative matrix covers search too.** The executor wraps the inner
@@ -24,7 +24,7 @@ is where each of them becomes enforced:
 * **Per-request identity.** The executor is constructed with one request's
   trusted context; a call that arrives with any other context is refused.
   That is what invalidates retained-evidence reuse across a permission
-  change between turns (FR-28) — the next turn's executor carries the next
+  change between turns — the next turn's executor carries the next
   turn's set.
 
 Failures keep the contract's carriers: authorization failure and transient
@@ -72,7 +72,7 @@ class AuthorizedExecutor:
 
     Constructed per request with the context the BFF assembled, the caller's
     bearer (forwarded only to the services that validate their own callers)
-    and the read adapters. The inner search port is injected: story 1.6's
+    and the read adapters. The inner search port is injected: the
     adapter in production, a fake in tests.
     """
 
@@ -163,7 +163,7 @@ class AuthorizedExecutor:
     async def _read_legacy_file(self, file_id: str, budget: OperationBudget) -> ReadSourceResult:
         validate_file_id(file_id, operation=_AUTHORIZE)
         if self._legacy_graph_name not in self._authorized_graphs:
-            # AD-4: the legacy corpus has no per-user ACL — in scope only when
+            # The legacy corpus has no per-user ACL — in scope only when
             # the set includes the legacy graph. Refused before doc-repo.
             raise AuthorizationError("the legacy corpus is not in the authorized set", operation=_AUTHORIZE)
         # Resolution (doc-repo metadata) and content (the graph's chunks) share

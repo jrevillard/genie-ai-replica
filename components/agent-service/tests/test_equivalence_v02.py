@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The behavioral-equivalence suite: the V02 fixtures vs the implementation.
 
-DATA-DRIVEN (story 1.9): every assertion reads its expectation from
+DATA-DRIVEN: every assertion reads its expectation from
 ``docs/baselines/v02-opea-query-path-contract.fixtures.json`` — the recorded
 knobs drive the config loads, the recorded ``expected_output`` statements are
 asserted through the established fake seams (``httpx.MockTransport`` for TEI,
@@ -69,10 +69,10 @@ RECORDED_BEHAVIORS = (
     "reranker_down",
 )
 
-# The behaviors story 1.6's port deliberately does NOT implement, pinned as
+# The behaviors the port deliberately does NOT implement, pinned as
 # recorded deviations. THE TABLE IS THE CONTRACT: each entry names the
 # recorded behavior, the recorded scope line that stands, and what the port
-# does instead — so a review reads the deviation without opening the story.
+# does instead — so a review reads the deviation from the table alone.
 DEVIATIONS = {
     "graph_traversal": (
         "The deployed traversal stage rewrites each surviving chunk's text "
@@ -648,7 +648,7 @@ def test_deviation_fanout_no_carrier_no_cross_graph_fusion():
     for symbol in ("fanout", "_fanout", "carrier", "cross_graph", "fanout_candidates"):
         assert not hasattr(adapter_module, symbol), symbol
     # The recorded env carries the fan-out knobs (deployed); no config load
-    # exposes one — the port's multi-graph story is the CAPABILITY's context
+    # exposes one — the port's multi-graph scope is the CAPABILITY's context
     # legs, not the fan-out: each graph is one leg, the union is reranked once.
     loaded = ArangoConfig.load(recorded_env())
     assert not any("fanout" in field for field in type(loaded).__dataclass_fields__)

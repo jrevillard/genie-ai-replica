@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for protocol/counter_metrics.py (+ the counters CLI wiring).
 
-Every counter-metric row of the story's matrix through fixture rows (no live
+Every counter-metric row of the module's matrix through fixture rows (no live
 venue, no deployment case content):
 
 * CM-1 records the PER-REQUEST cost/latency delta against the reference, the

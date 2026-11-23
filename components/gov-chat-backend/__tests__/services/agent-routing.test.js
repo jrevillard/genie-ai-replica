@@ -2,7 +2,7 @@
 
 require('../setup-env');
 
-// Story 2.4 (AD-9) — the shared routing helper. The helper is the ONLY place
+// The shared routing helper. The helper is the ONLY place
 // in the component that reads AGENT_ENABLED (the single-read invariant is
 // pinned by the source scan below), and its read happens ONCE at module load
 // (the OKF_ENABLED pattern): a test that wants a different flag value

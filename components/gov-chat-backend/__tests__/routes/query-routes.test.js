@@ -1276,8 +1276,8 @@ describe('POST /', () => {
   it('maps a typed error through its own statusCode and code', async () => {
     // The same mapping the streaming path applies: an intentional, named,
     // configuration-driven state is never rendered as the 500
-    // unexpected-fault class. (Story 3.1's AGENTIC_PATH_NOT_SERVED refusal
-    // was removed when story 2.4b served the path it guarded — the general
+    // unexpected-fault class. (The AGENTIC_PATH_NOT_SERVED refusal
+    // was removed when the dedicated path served the one it guarded — the general
     // statusCode+code passthrough stays, any named state rides it.)
     const typed = new Error('the named condition');
     typed.code = 'NAMED_CONDITION';
@@ -1306,7 +1306,7 @@ describe('POST /', () => {
     expect(response.body.message).toBe('token expired');
   });
 
-  // Story 2.4b — the verbatim-answer gate is the AgentJsonTurnError CLASS,
+  // The verbatim-answer gate is the AgentJsonTurnError CLASS,
   // not the statusCode+body shape: a typed error from any other source (the
   // VlUnavailableError pattern) keeps the legacy 500 shape, never an
   // accidental verbatim passthrough.
@@ -1320,7 +1320,7 @@ describe('POST /', () => {
     expect(response.body).toEqual({ message: 'vl down' });
   });
 
-  // Story 2.4b — the flag-off wiring pin: the legacy entry only CHECKS the
+  // The flag-off wiring pin: the legacy entry only CHECKS the
   // language (chatqna translates the answer server-side — no translator is
   // built) and calls createQuery with EXACTLY the legacy two arguments (no
   // options object, no third parameter). Together with the flag-on test
@@ -1353,7 +1353,7 @@ describe('POST /', () => {
     expect(thirdArg).toBeUndefined();
   });
 
-  // Story 2.4b — the flag-on wiring pin. This file loads with AGENT_ENABLED
+  // The flag-on wiring pin. This file loads with AGENT_ENABLED
   // unset (the routing helper reads it once at module load: flag OFF for the
   // whole file above), so the flag-on wiring runs through a FRESH module
   // registry — the isolated require reads the flag ON and the route factory
@@ -2040,7 +2040,7 @@ describe('query id correlation on the server span', () => {
       writableEnded: false,
       headersSent: false,
       // The handler registers its disconnect listener on the response
-      // (story 2.4 hoists it before the chatqna await) — a real res is an
+      // (hoisted before the chatqna await) — a real res is an
       // EventEmitter; the fake carries the same seam.
       on: jest.fn(),
       writeHead: jest.fn(() => {
@@ -2274,7 +2274,7 @@ describe('POST /:queryId/link/:messageId', () => {
 });
 
 // ============================================================
-// Story 2.4 — the guarded agentic branch: with AGENT_ENABLED off (the flag
+// The guarded agentic branch: with AGENT_ENABLED off (the flag
 // this suite's module graph loaded with), the legacy chatqna relay serves
 // the streaming entry byte-identically and the agent leg is never called.
 // The ON side of the wiring lives in agent-frame-writer.test.js.
@@ -2327,7 +2327,7 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
     expect(url).toBe('http://chatqna:8888/v1/chatqna');
   });
 
-  // The dead `req.on('close')` listener is now live on `res` (story 2.4): a
+  // The dead `req.on('close')` listener is now live on `res`: a
   // REAL client disconnect mid-stream must abort the upstream and partial-save
   // the answer (the dead code's documented intent). A real socket close — the
   // client aborts its request — is the signal that fires server-side `close`.
@@ -2360,7 +2360,7 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
 
     // The partial answer was saved with the empty-stream metadata (nothing
     // was captured yet) — the dead code's documented intent, now live — and
-    // it carries the `answer_interrupted` honesty marker (ADR agentic-003): a
+    // it carries the `answer_interrupted` honesty marker: a
     // partial save is never indistinguishable from a completion. The save
     // also SKIPS the routed-graph persistence: no metadata frame arrived, so
     // the save cannot name the session's routed graphs — persisting the
@@ -2409,7 +2409,7 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
 
     // The captured metadata rides the partial save verbatim, with the marker
     // added on top — the same finalize, the same honesty contract as the
-    // agentic path (ADR agentic-003).
+    // agentic path.
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
       'q1',
@@ -2453,8 +2453,8 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
   });
 
   it('a normal completion in relay mode is never marked interrupted, even when the stream ends during the flush', async () => {
-    // The end handler marks only when the done frame was never handled
-    // (ADR agentic-003). In relay mode the done frame sets `handled`
+    // The end handler marks only when the done frame was never handled.
+    // In relay mode the done frame sets `handled`
     // synchronously and the terminal awaits the relay flush — the `end`
     // event fires inside that window. The guard must keep the marker out
     // of a normally completed answer whose finalize happens after the
@@ -2574,7 +2574,7 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
 });
 
 // ============================================================
-// Story 2.4 — the mid-stream error contract under the now-live
+// The mid-stream error contract under the now-live
 // res.on('close') listener: the error frame IS the terminal, and the
 // `doneState.handled` mark in the stream-error branch keeps the close
 // listener from turning an errored stream into a partial save.

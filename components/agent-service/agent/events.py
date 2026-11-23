@@ -83,8 +83,8 @@ _vocabulary_never_carries_a_bff_frame_name()
 
 
 def run_started_payload(question: str, execution_versions: dict | None) -> dict:
-    """The ``run_started`` payload — ONE home for the handshake shape
-    (story 2.11, AD-11): the question plus the execution-version record
+    """The ``run_started`` payload — ONE home for the handshake shape:
+    the question plus the execution-version record
     when one was built. A ``None`` record keeps the probe-shaped
     ``{"question"}`` payload (the record key is additive)."""
     payload: dict = {"question": question}

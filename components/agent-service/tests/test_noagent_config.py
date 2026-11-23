@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The no-agent config: the frozen env-knob surface (story 1.9).
+"""The no-agent config: the frozen env-knob surface.
 
 Deployed names keep deployed defaults; new knobs follow the component's
 conventions and answer their documented defaults when unset.

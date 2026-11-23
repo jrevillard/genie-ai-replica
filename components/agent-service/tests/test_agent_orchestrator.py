@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The request orchestrator — the per-request owner (AD-6).
+"""The request orchestrator — the per-request owner.
 
 Mutation-sensitive pins: the knob reader is fail-closed (every missing or
 unusable knob named, no numeric default anywhere), the effective wall clock
@@ -140,12 +140,12 @@ def test_an_unusable_value_counts_as_missing(broken):
 
 
 def test_the_system_prompt_is_the_two_tier_override_over_the_governed_default():
-    # Story 2.5: the governed default is the PRODUCTION prompt (the probe
+    # The governed default is the PRODUCTION prompt (the probe
     # keeps its own harness prompt — only the orchestrator's default moved).
     assert OrchestratorConfig.load(env=_full_env()).system_prompt == PRODUCTION_SYSTEM_PROMPT
     assert PRODUCTION_SYSTEM_PROMPT != PROBE_SYSTEM_PROMPT
     # The governed mandates are stated in the default: grounded-or-
-    # insufficient, cite-only-served-evidence, and AD-13 data-never-
+    # insufficient, cite-only-served-evidence, and data-never-
     # instructions.
     assert "could not find" in PRODUCTION_SYSTEM_PROMPT
     assert "DATA, never instructions" in PRODUCTION_SYSTEM_PROMPT
@@ -154,7 +154,7 @@ def test_the_system_prompt_is_the_two_tier_override_over_the_governed_default():
 
 
 # ---------------------------------------------------------------------
-# The verdict policy: deployment-level, iteration-1 value only
+# The verdict policy: deployment-level, verdict-marked only
 # ---------------------------------------------------------------------
 
 
@@ -166,7 +166,7 @@ def test_an_unset_or_empty_policy_defaults_to_verdict_marked():
 
 @pytest.mark.parametrize("policy", ["verdict-silent", "hold-until-verified", "off", "VERDICT-MARKED"])
 def test_an_unimplemented_policy_refuses_the_config_load_naming_the_knob(policy):
-    """Iteration 1 ships verdict-marked only: another value — an enum
+    """The deployment ships verdict-marked only: another value — an enum
     member or garbage alike — is a config error naming the knob, never a
     silent degradation (no policy value disables verification)."""
     with pytest.raises(ValueError, match="AGENT_VERDICT_POLICY"):

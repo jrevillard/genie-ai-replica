@@ -76,7 +76,7 @@ const MEASURED_PINS = [
   // Main LLM (granite-3.1-2b, shared-era sizing).
   ['VLLM_LLM_MODEL_ID', 'ibm-granite/granite-3.1-2b-instruct'],
   // granite-3.1 takes the `granite` tool-call parser — NOT the granite4
-  // Granite-4.x default the base compose pins (#2052).
+  // Granite-4.x default the base compose pins.
   ['VLLM_TOOL_CALL_PARSER', 'granite'],
   ['VLLM_GPU_UTILIZATION', '0.28'],
   ['VLLM_MAX_MODEL_LEN', '49152'],

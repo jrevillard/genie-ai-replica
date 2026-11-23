@@ -1,6 +1,6 @@
 'use strict';
 
-// Story 2.4b — the fail-soft whole-answer translation core, ONE home for the
+// The fail-soft whole-answer translation core, ONE home for the
 // two consumers (the streaming terminal's non-relay branch in
 // routes/query-routes.js and the non-streaming JSON consumer in
 // services/agent-json-result.js): one translator call, the empty-result rule

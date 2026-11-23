@@ -1,13 +1,13 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The three configuration drivers (story 4.1 — A, B, C over one runway).
+"""The three configuration drivers (A, B, C over one runway).
 
 * **Config A** — the legacy fixed RAG. The driver REUSES the anchor eval
   machinery (``eval/run_eval.py anchor``) via subprocess, exactly the
   ``capture_baseline._run_anchor_eval`` pattern — never a fork. The anchor's
   own behaviors carry over: resume through its ``.done`` sidecar on a stable
   report path, atomic report writes, fail-fast on missed traces.
-* **Config B** — the story-1.9 no-agent pipeline, INVOKED never
+* **Config B** — the no-agent pipeline, INVOKED never
   re-implemented: the harness ships ``config_b_driver.py`` into the
   agent-service container over the docker-exec transport and runs it there
   (where ``noagent.pipeline`` and the serving network position live); the
@@ -22,18 +22,18 @@
 
 Every driver: per-case rows, atomic writes (``harness.write_json``), and
 resume — an interrupted run keeps its completed rows on disk and re-runs
-ONLY the unfinished case ids. Multi-turn cases (story 4.2) execute their
+ONLY the unfinished case ids. Multi-turn cases execute their
 turns strictly in order, each turn a full run with its own caller context;
 a turn's row carries the turn-indexed id ``<case_id>#t<n>`` and the turn
 index.
 
-Beside the three drivers, ``run_config_a_capture`` (story 4.3) captures
+Beside the three drivers, ``run_config_a_capture`` captures
 config A's per-case ANSWERS — the answer/abstention/latency judgment inputs
 the E01 comparison needs and the anchor path (trace-only, whole-set) does
 not carry. It imports ``run_eval.drive_query``/``_extract_answer`` VERBATIM
 and never edits them: ``harness_sha`` is the reuse identity. The reference
-command (:func:`run_config_a`) stays exactly the artifact story 4.4
-consumes — the capture is a separate command, not a change to it.
+command (:func:`run_config_a`) stays exactly the artifact the threshold
+registry consumes — the capture is a separate command, not a change to it.
 
 STDLIB-ONLY: no new runtime dependency (the eval toolchain's constraint).
 """
@@ -94,7 +94,7 @@ def _load_entries(set_path: str | Path) -> list[dict]:
     return entries
 
 
-# The reason a config-A row records for a security case (story 4.2): config A
+# The reason a config-A row records for a security case: config A
 # is the legacy fixed RAG — no authorization executor, no steerable agent.
 A_SECURITY_SKIP_REASON = (
     "config A is the legacy fixed RAG: no agent surface to authorize or steer —"
@@ -127,7 +127,7 @@ def security_skip_rows(entries: list[dict]) -> dict:
 
 
 def _pending_in_order(cases: list[dict], done: set[str]) -> list[dict]:
-    """The per-turn entries to run, in strict turn order (story 4.2): a
+    """The per-turn entries to run, in strict turn order: a
     multi-turn case re-runs from its FIRST missing turn through the end — a
     later turn never executes before an earlier one, so a partial prior run
     re-runs the tail rather than resuming mid-sequence."""
@@ -220,7 +220,7 @@ def run_config_a(
             f"config A run missed {n_missed} trace(s), {n_unmapped} unmapped chunk key(s) "
             "(observability off? stale traces?) — refusing to record a partial reference"
         )
-    # The security cases (story 4.2): A has no agent surface — the skipped rows
+    # The security cases: A has no agent surface — the skipped rows
     # record the reason so the pair's report shows an intentional difference,
     # never a silent absence.
     skip_rows = security_skip_rows(entries if entries is not None else _load_entries(set_path))
@@ -230,7 +230,7 @@ def run_config_a(
 
 
 # ---------------------------------------------------------------------------
-# Config A answer capture (story 4.3) — the E01 judgment inputs
+# Config A answer capture — the E01 judgment inputs
 # ---------------------------------------------------------------------------
 
 # The response keys the capture records when the response carries them (the
@@ -321,7 +321,7 @@ def _retrieval_scope(entry: dict) -> dict:
     requested. The two legs' scopes are NOT the same construct — chatqna
     filters on the entry's category/service labels, the B lane on the case
     context's ``requested_labels`` — so the capture records both sides of the
-    difference instead of implying they match (FR-27)."""
+    difference instead of implying they match."""
     context = entry.get("context")
     context = context if isinstance(context, dict) else {}
     requested = context.get("requested_labels")
@@ -382,7 +382,7 @@ def run_config_a_capture(
     corpus_fingerprint: str | None = None,
     corpus_fingerprint_source: str = "pinned",
 ) -> dict:
-    """Capture config A's per-case answers over the assessment set (story 4.3).
+    """Capture config A's per-case answers over the assessment set.
 
     The E01 comparison's A-side judgment inputs: per-case ``answer``,
     ``http_status``, ``wall_ms`` (monotonic-timed here — the anchor subprocess
@@ -421,12 +421,12 @@ def run_config_a_capture(
     The anchor's three-attempt retry for
     TRANSIENT failures is not mirrored: the capture records a per-case
     failure row instead, and the report counts it. The bearer machinery lives
-    under ``eval/``, which this story must not edit — its ``harness_sha`` is
+    under ``eval/``, which the capture must not edit — its ``harness_sha`` is
     the capture-artifact reuse identity.
 
     The set's SECURITY cases are not queried: config A is the legacy fixed
     RAG — no authorization executor, no steerable agent — so they are
-    recorded as skipped rows with story 4.2's reason, exactly like the A
+    recorded as skipped rows with ``A_SECURITY_SKIP_REASON``, exactly like the A
     reference run's rows. Firing an injected instruction at a surface that
     cannot resist it would produce evidence the protocol declares
     inapplicable.
@@ -847,9 +847,9 @@ def run_one_case_c(
                 elif "usage_record" in event:
                     usage_record = event["usage_record"]
                 elif kind == "verdict":
-                    # The citation-verdict projection (AD-7): its
+                    # The citation-verdict projection: its
                     # source_documents carry the delivered provenance the
-                    # security verdict layer's subset check reads (story 4.2).
+                    # security verdict layer's subset check reads.
                     verdict_payload = event.get("payload") or {}
                     if isinstance(verdict_payload.get("source_documents"), list):
                         source_documents = verdict_payload["source_documents"]
@@ -891,7 +891,7 @@ def run_one_case_c(
         row["source_documents"] = source_documents
     if error_text is not None:
         row["error_text"] = error_text
-    # A turn's row records its turn index (story 4.2) — the id carries the
+    # A turn's row records its turn index — the id carries the
     # same fact, the field keeps it machine-readable without parsing.
     row.update(_turn_field(case))
     if is_cancellation:
@@ -910,7 +910,7 @@ def run_config_c(
 ) -> dict:
     """Run the assessment set through config C's governed seam; per-case rows,
     atomic writes, resume (only unfinished case ids are re-run). Multi-turn
-    cases run their turns strictly in order (story 4.2), each turn its own
+    cases run their turns strictly in order, each turn its own
     run under its own context."""
     transport = transport or UrllibCTransport()
     out_dir = Path(out_dir)

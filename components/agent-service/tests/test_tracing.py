@@ -1,8 +1,8 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """The OpenTelemetry wiring: the observability gate, the exported span and the
-PII redaction that keeps sensitive attributes out of the trace store. Story
-2.11 adds the run-path span tree and the outbound W3C traceparent
+PII redaction that keeps sensitive attributes out of the trace store, plus
+the run-path span tree and the outbound W3C traceparent
 propagation."""
 
 import importlib
@@ -121,7 +121,7 @@ def test_a_span_keeps_its_pii_attributes_redacted(traced_app):
     assert spans[0].attributes["db.system"] == "arangodb"
 
 
-# ── story 2.11 — the run-path span tree and the outbound propagation ────────
+# ── the run-path span tree and the outbound propagation ─────────────────────
 
 
 def _run_scripted_run():

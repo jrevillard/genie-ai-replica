@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The E01 comparison report (story 4.3) — A vs B behavior preservation.
+"""The E01 comparison report — A vs B behavior preservation.
 
 A PURE, digest-pinned join of the A reference leg's artifacts (the anchor
 report + ``capture-a``'s captured answer rows) and the gated B leg's
@@ -23,11 +23,11 @@ The report's contract:
 * **Uncontrolled differences are identified from recorded evidence**: the
   prompt digests and model ids from the two manifests, the execution-condition
   facts (a sequential anchor pass vs batched B lanes), and cache state
-  recorded as unrecorded-by-the-harness (FR-27).
+  recorded as unrecorded-by-the-harness.
 * **The defect ledger is lineage-verified before application** (corpus
   fingerprint + set digest + reference-manifest digest); its case ids carry
   ``reference_defect`` in the per-case records; a ledger ABSENT is recorded
-  as absent — A failures then stand as plain comparison results (FR-26: a
+  as absent — A failures then stand as plain comparison results (a
   defect is recorded knowledge, never silently a requirement B must
   reproduce).
 * **Refusals are typed** (:class:`E01Refusal`) and precede any report
@@ -69,7 +69,7 @@ E01_PAIR = "E01"
 
 REFERENCE_DEFECTS_ARTIFACT = "reference-defects"
 
-# M-1..M-5 — the epic's enumeration, in order (retrieval quality, answer
+# M-1..M-5 — the counter-metric enumeration, in order (retrieval quality, answer
 # grounding, abstention correctness, latency, resource consumption).
 M_DIMENSIONS = {
     "M-1": "retrieval_quality",
@@ -257,7 +257,7 @@ class E01Refusal(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# The reference-defects ledger (FR-26) — the thresholds pattern, not the gate
+# The reference-defects ledger — the thresholds pattern, not the gate
 # ---------------------------------------------------------------------------
 
 
@@ -629,8 +629,8 @@ def _latency_stats(values: list[float]) -> dict:
 
     No tolerance band is published: the capture machinery's ``compute_triples``
     clamps its band to [0, 1] (it was written for normalized metrics), which
-    would invert a millisecond band — and the tolerance itself is story 4.4's
-    to sign, not the harness's to invent.
+    would invert a millisecond band — and the tolerance itself is the
+    threshold registry's to sign, not the harness's to invent.
     """
     import capture_baseline  # local import: the capture module's median/MAD
 
@@ -691,7 +691,7 @@ def _build_m5(b_rows: dict) -> tuple[dict, dict]:
 
 
 # ---------------------------------------------------------------------------
-# The uncontrolled-differences section (FR-27) — recorded evidence only
+# The uncontrolled-differences section — recorded evidence only
 # ---------------------------------------------------------------------------
 
 
@@ -763,8 +763,7 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     response metadata (after its service-over-category collapse), the noagent
     lane in the row metadata. The comparison is therefore a fact, not a
     proxy; the request-side intent stays recorded beside it, because a
-    REQUESTED label that never became an effective filter is itself a finding
-    (FR-27).
+    REQUESTED label that never became an effective filter is itself a finding.
 
     Two A-side findings, kept apart because they compare DIFFERENT things: the
     requested labels the MEASURED effective filter never carried, and the

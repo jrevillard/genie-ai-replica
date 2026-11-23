@@ -3,9 +3,9 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 //
-// STATIC repository check — the OPEA-free gate (Story 1.4, FR-20, AD-1).
+// STATIC repository check — the OPEA-free gate.
 //
-// AD-1 makes the agentic path OPEA-free structurally, not by discipline: a
+// The agentic path is OPEA-free structurally, not by discipline: a
 // contributor who imports the OPEA overlay package into an agent-path package,
 // or vendors an OPEA tree at build time, breaks the constraint with a green
 // pipeline. This gate is what makes the constraint structural.
@@ -27,7 +27,7 @@
 // ---------------------------------
 // - The BFF's runtime call graph. Grep cannot tell which URL the agentic
 //   branch targets at runtime; a BFF that routes to the OPEA chatqna service
-//   passes this gate untouched. That leg is covered by the Epic 3 story 3.1
+//   passes this gate untouched. That leg is covered by the
 //   routing-helper test, which asserts the agentic branch never targets the
 //   chatqna/OPEA URL.
 // - Reachability through an alias or a re-export: the gate matches the

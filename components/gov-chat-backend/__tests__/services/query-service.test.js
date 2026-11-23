@@ -536,7 +536,7 @@ describe('QueryService', () => {
     });
 
     it('should pass through query_translation_status on the metadata event', () => {
-      // What the history translator fed the embedder (issue #1026): dropping
+      // What the history translator fed the embedder: dropping
       // it here would hide a degraded translation from the streamed path.
       const meta = {
         type: 'metadata',
@@ -773,7 +773,7 @@ describe('QueryService', () => {
       expect(result).toBeDefined();
       expect(result.queryId).toBe('q1');
       expect(result.response).toBeDefined();
-      // Story 2.4b — the ONE persist/analytics tail serves the legacy
+      // The ONE persist/analytics tail serves the legacy
       // branches too: the minted doc is COMPLETED (isAnswered, the branch's
       // metadata) and analytics records the completed document.
       expect(mockQueriesCollection.update).toHaveBeenCalledWith(
@@ -1177,11 +1177,11 @@ describe('QueryService', () => {
     });
 
     it('an agentic answer leaves the session sticky set untouched (no okfRoutedGraphs on the update)', async () => {
-      // Story 2.4b — the agent citation envelope carries no graph_name by
+      // The agent citation envelope carries no graph_name by
       // contract, so an agentic finalize cannot name routed graphs. The
       // branch-driven skip (`{skipRoutedGraphs: true}`) is what leaves the
-      // sticky set untouched — the DEFAULT finalize now persists (story
-      // 3.2's rollback self-healing, pinned above), so the option is the
+      // sticky set untouched — the DEFAULT finalize now persists the
+      // rollback self-healing pinned above, so the option is the
       // pin's substance.
       await queryService.finalizeStreamQuery(
         'q1',
@@ -2065,7 +2065,7 @@ describe('query routing — one flag, both entries', () => {
   // Rollback continuity: a new turn in an agentic-era
   // conversation (earlier turns finalized under the flag) must answer through
   // the legacy pipeline into the SAME-SHAPED queries doc, reading and writing
-  // no agent-specific state (AD-12).
+  // no agent-specific state.
   it('rollback continuity: the legacy entry mints the same-shaped doc, no agent field read or written', async () => {
     routingFlag.isAgentPathEnabled.mockReturnValue(false);
     mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'route-3' });
@@ -2084,7 +2084,7 @@ describe('query routing — one flag, both entries', () => {
 
   it('rollback continuity: the legacy finalize over an agentic-shaped turn persists the empty routed set (self-healing)', async () => {
     // The agentic citation rows carry no graph_name, so the routed-set
-    // derivation reads [] — the known limitation ADR agentic-003 records.
+    // derivation reads [] — a known limitation.
     // The legacy finalize itself needs no agent-specific state: it persists
     // over the doc and the analytics record reads it whole.
     routingFlag.isAgentPathEnabled.mockReturnValue(false);
@@ -2142,7 +2142,7 @@ describe('query routing — one flag, both entries', () => {
   });
 
   it('flag on: the non-stream entry serves the agentic branch — the run leg, never the legacy worker', async () => {
-    // Story 2.4b IS the agentic serving path the 3.1 refusal once guarded the
+    // The JSON entry IS the agentic serving path the old refusal once guarded the
     // absence of: an activated flag now routes the JSON entry through the
     // agentic branch (mint → runAgentJsonTurn → the ONE tail) — queryId
     // continuity holds, the legacy worker never runs, and the run request
@@ -2182,8 +2182,8 @@ describe('query routing — one flag, both entries', () => {
   });
 
   it('flag on: test-mode serves the mock — the mock bypass outranks the flag on the JSON entry', async () => {
-    // Story 2.4b's precedence: the mock branch is the honest one under
-    // test-mode (the story's own gate), so a mocked answer never presents
+    // Precedence: the mock branch is the honest one under
+    // test-mode (its own gate), so a mocked answer never presents
     // itself as an agent answer — it IS the mock branch, deterministically.
     routingFlag.isAgentPathEnabled.mockReturnValue(true);
     mockDb.query.mockResolvedValue(createMockCursor([]));
@@ -2196,7 +2196,7 @@ describe('query routing — one flag, both entries', () => {
   });
 });
 // ============================================================
-// Story 2.4 — the agent CallerContext builder: the REAL method (the graph-set
+// The agent CallerContext builder: the REAL method (the graph-set
 // rule is one home shared with the fan-out carrier; the repos mapping
 // enforces the contract's own invariant — a repo may never name a graph
 // outside the authorized set, and may appear once).

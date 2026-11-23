@@ -26,8 +26,8 @@ def _env_int(source, name: str, default: int) -> int:
     """Parse an int env var tolerantly: unset OR set-to-empty (compose's
     default injection for the semantic knobs) or non-numeric values all
     fall back to the default instead of crash-looping the service at
-    wiring time (deployed ``_env_int`` — issue #1091 fixed this crash
-    class in the deployed module; the port inherits the tolerance)."""
+    wiring time (deployed ``_env_int``; the port inherits the
+    tolerance)."""
     raw = source.get(name)
     if raw is None or str(raw).strip() == "":
         return default

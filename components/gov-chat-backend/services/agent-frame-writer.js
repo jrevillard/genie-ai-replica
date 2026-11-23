@@ -27,14 +27,14 @@ const { wantsTranslation, streamingTranslationEnabled } = require('./translation
 const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
 const { createWholeAnswerTranslator } = require('./translation/agentic-translation-leg');
 
-// Story 2.4 — the BFF frame writer. The BFF parses the agent-service SEAM
+// The BFF frame writer. The BFF parses the agent-service SEAM
 // stream (POST /v1/runs, the `{run_id, call_id, seq, kind, payload}` envelope
 // over SSE plus the terminal usage record) and writes EVERY client frame
 // itself — chunk relay, agent_activity, agent_verdict, metadata (+ the
 // agent_run persistence), translation injection, done/error. The agent
 // service never writes a client frame.
 //
-// Frame contract (pinned positions, epic 2):
+// Frame contract (pinned positions):
 //   - the five existing client types are byte-compatible with the legacy
 //     dialect (chunk/metadata/translation/done/error, done always last);
 //   - `agent_activity` (version 1) interleaves with the chunks — one frame
@@ -46,8 +46,8 @@ const { createWholeAnswerTranslator } = require('./translation/agentic-translati
 // Clients that ignore the two additive types behave exactly as today.
 //
 // The deadline pair, the citation mapping, the metadata assembly and the
-// upstream body reader are the SHARED contract module's (agent-run-contract.js,
-// story 2.4b) — this file is the streaming consumer; the non-streaming JSON
+// upstream body reader are the SHARED contract module's (agent-run-contract.js)
+// — this file is the streaming consumer; the non-streaming JSON
 // consumer (agent-json-result.js) reads the same homes.
 
 /**
@@ -98,11 +98,11 @@ async function proxyAgentRun({
   // (one home, translation behaves as today). The relay units run MID-STREAM
   // — before any terminal usage record exists — so the agentic translation
   // leg (whose residual plan reads that record) cannot serve them; the
-  // request-resolved translator stays the streaming path's backend in
-  // iteration 1, and the leg owns the POST-STREAM whole-answer translation
+  // request-resolved translator stays the streaming path's backend, and the
+  // leg owns the POST-STREAM whole-answer translation
   // (streaming off, and the non-streaming JSON entry) where the terminal
   // record exists. Moving the usage record earlier in the seam is the
-  // iteration-2 decision that would let the leg bound the units too.
+  // future decision that would let the leg bound the units too.
   const useStreamingTranslation = streamingTranslationEnabled() && wantsTranslation(targetLanguage);
   const streamRelay = useStreamingTranslation
     ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
@@ -115,7 +115,7 @@ async function proxyAgentRun({
   let runId = null;
   let capturedVerdict = null;
   let usageRecord = null;
-  // Story 2.11 — the attribution state. `runStart` is what the
+  // The attribution state. `runStart` is what the
   // `run_started` payload carried (persisted AT START, so a run whose final
   // frame never arrives keeps its versions); the writer pair below owns the
   // fire-and-forget discipline and the one-honest-outcome latch (the first
@@ -161,7 +161,7 @@ async function proxyAgentRun({
     streamDeadline = setTimeout(() => {
       streamDeadline = null;
       logger.warn('AgentFrameWriter.stream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
-      // The BFF-attributed deadline is an honest terminal fact (story 2.11):
+      // The BFF-attributed deadline is an honest terminal fact:
       // the run's doc keeps its versions and reads `timed_out`. Latched —
       // the abort's stream teardown below must not overwrite it.
       persistRunOutcome('timed_out');
@@ -191,14 +191,14 @@ async function proxyAgentRun({
     // A partial answer already streamed is partial-saved like the legacy
     // close path does — the agent-service cancels its in-flight work (its
     // contract; a cancelled run emits no terminal event). The save carries
-    // the `answer_interrupted` honesty marker (ADR agentic-003): a truncated
+    // the `answer_interrupted` honesty marker: a truncated
     // answer must never persist indistinguishable from a complete one, and
     // `abstained` reads NULL — an interrupted turn's decision is not final
-    // (the verdict was never terminaled; 3.2's `false` rationale covers
+    // (the verdict was never terminaled; the `false` rationale covers
     // COMPLETED turns only, and `answer_interrupted` already distinguishes
     // interrupted-ness). A disconnect before any text chunk leaves the
     // at-start doc unanswered — nothing is fabricated. The `cancelled`
-    // outcome rides exactly ONE write (story 2.11): with partial text, the
+    // outcome rides exactly ONE write: with partial text, the
     // partial save's assembled metadata carries it (merging the run-start
     // block instead of clobbering it) and the standalone patch stays
     // latched OFF — a fire-and-forget patch racing the save would be a
@@ -213,7 +213,7 @@ async function proxyAgentRun({
       queryService
         .finalizeStreamQuery(queryId, fullResponseText, Date.now() - streamStartTime, metadata, {
           // The agentic answer cannot name routed graphs — the sticky set is
-          // left untouched (branch-driven skip; story 2.4b).
+          // left untouched (branch-driven skip).
           skipRoutedGraphs: true
         })
         .catch((err) => {
@@ -232,7 +232,7 @@ async function proxyAgentRun({
   // than the legacy carrier: any resolver problem except a 401 (the request
   // itself is invalid — it propagates) builds an empty CallerContext, whose
   // search_knowledge raises AuthorizationError — the run ends in the
-  // insufficiency answer, the epic's own fail-closed direction for degraded
+  // insufficiency answer, the fail-closed direction for degraded
   // retrieval. (The legacy carrier's degrade instead keeps the
   // byte-identical legacy-corpus payload — same trigger, intended
   // different outcome.)
@@ -374,7 +374,7 @@ async function proxyAgentRun({
     if (!controller.signal.aborted) {
       controller.abort();
     }
-    // The honest outcome rides the same terminal (story 2.11): the seam's
+    // The honest outcome rides the same terminal: the seam's
     // own outcome code for a run_error, `interrupted` for an upstream
     // stream that died before the final metadata. Latched — a deadline
     // fire's `timed_out` (written at the abort) is never overwritten by the
@@ -434,7 +434,7 @@ async function proxyAgentRun({
       // and a stream with NO verdict restores null ("decision never
       // reported"; the base's null rides untouched). The assembled
       // metadata merges the run-start block + the `answered` outcome
-      // (story 2.11) — the finalize COMPLETES the start write, never
+      // — the finalize COMPLETES the start write, never
       // clobbers it.
       const metadata = applyAbstentionOverlay(assembleMetadata('answered'), capturedVerdict);
       // The post-stream whole-answer translation: the AGENTIC LEG owns it on
@@ -469,7 +469,7 @@ async function proxyAgentRun({
         alreadyFailedTranslation,
         translateFullAnswer,
         // The agentic answer cannot name routed graphs — the sticky set is
-        // left untouched (branch-driven skip; story 2.4b).
+        // left untouched (branch-driven skip).
         skipRoutedGraphs: true
       });
     } catch (error) {
@@ -490,8 +490,8 @@ async function proxyAgentRun({
     runId = event.run_id;
     switch (event.kind) {
       case 'run_started': {
-        // No client frame; the payload IS the run-start handshake (story
-        // 2.11, AD-11): the execution-version record is persisted AT START,
+        // No client frame; the payload IS the run-start handshake:
+        // the execution-version record is persisted AT START,
         // so a run whose final frame never arrives keeps its versions.
         // Fire-and-forget: an attribution write failure must never break
         // the answer path. (captureRunStart is the ONE shape home — the
@@ -553,8 +553,8 @@ async function proxyAgentRun({
         break;
       case 'run_error': {
         // The legacy error contract: error frame then end — no metadata, no
-        // done, nothing fabricated. The outcome is the agent's own verdict
-        // (story 2.11): the event's code — which the loop keeps identical
+        // done, nothing fabricated. The outcome is the agent's own verdict:
+        // the event's code — which the loop keeps identical
         // to the usage record's outcome that follows on the stream — so the
         // doc reads `error` / `budget_exhausted` verbatim. The usage record
         // itself is not persisted here (the run failed; the doc stays

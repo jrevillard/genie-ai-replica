@@ -1,9 +1,9 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for the security scenario suite (story 4.2) — the verdict
+"""Unit tests for the security scenario suite — the verdict
 layer, the findings report and the run-protocol wiring.
 
-The story's I/O & edge-case matrix, row by row, through the fake seams (the
+The I/O & edge-case matrix, row by row, through the fake seams (the
 verdict layer is a pure function of rows + set, so most rows are covered by
 crafted records; the driver/CLI rows ride the existing fake transports).
 All rows are exercised; no live venue, no network.

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The legacy chunk adapter (story 1.7): the corpus text of one legacy file.
+"""The legacy chunk adapter: the corpus text of one legacy file.
 
 The chunks of the legacy graph live in ``{graph_name}_SOURCE``; the text
 rides the ``text`` field (V02 §4). The adapter reads them with one

@@ -5,8 +5,8 @@ const { extractCommittableUnit } = require('./stream-boundary');
 const { languageForLog } = require('./language-log');
 const { writeSSEFrame } = require('../sse-frame');
 
-// The streaming-translation unit relay (issue #829), extracted from the
-// query-routes streaming handler (story 2.4). ONE home, consumed by both
+// The streaming-translation unit relay, extracted from the
+// query-routes streaming handler. ONE home, consumed by both
 // paths — the legacy chatqna relay and the agentic frame writer — so the
 // translation behaves as today on both: complete units (sentence/paragraph
 // boundaries) are committed to the translator while the stream runs, and a
@@ -56,7 +56,7 @@ function createStreamUnitRelay({ res, translator, targetLanguage, queryId }) {
   // model. `separator` is the exact trailing whitespace that followed the
   // unit in the source; we pass it through verbatim, so structure BETWEEN
   // units (the "\n\n" paragraph breaks, line breaks) survives too. This is
-  // what keeps formatting intact during streaming translation (issue #829).
+  // what keeps formatting intact during streaming translation.
   const scheduleUnitTranslation = (content, separator) => {
     translationChain = translationChain.then(async () => {
       if (res.writableEnded) return;

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""Config B — the single-pass no-agent pipeline (story 1.9).
+"""Config B — the single-pass no-agent pipeline.
 
 One run of :meth:`NoAgentPipeline.run` is ONE pass through the recorded
 stage list — preparation → retrieval/reranking/selection (the
@@ -76,7 +76,7 @@ logger = logging.getLogger(__name__)
 
 # The pipeline's own honest degradation reason (NOT a recorded deployed
 # reason — the deployed path embedded the source text instead; this pipeline
-# refuses the mechanism and answers the degradation, per the story's Design
+# refuses the mechanism and answers the degradation, per the Design
 # Notes).
 PREPARATION_DEGRADED = "preparation_degraded"
 

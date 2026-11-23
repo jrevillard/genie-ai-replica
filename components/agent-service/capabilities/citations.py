@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The ``source_documents`` projection — the FR-13 citation envelope.
+"""The ``source_documents`` projection — the citation envelope.
 
 One module owns the shape the frontend citation components consume: the
 deployed envelope the no-agent lane assembles today, extracted here so the
@@ -32,8 +32,8 @@ the deployed OKF fallback (gated on an ``OKF_``-prefixed provenance graph).
 Neither the no-agent pipeline nor the governed path makes a per-answer
 metadata round-trip (the capability's contract result carries identity, not
 file metadata), so EVERY legacy hit is surfaced in the id-derived shape.
-Widening the delta — resolving doc-repo metadata here — is an iteration-2
-decision, not silently taken. The OKF entries carry the deployed
+Widening the delta — resolving doc-repo metadata here — is a deliberate
+future extension, not silently taken. The OKF entries carry the deployed
 OKF-fallback shape MINUS ``graph_name`` (the contract's provenance type does
 not carry it; the deployed fallback always does, and the frontend mapping
 reads it tolerantly).

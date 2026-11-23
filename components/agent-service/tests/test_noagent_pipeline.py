@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""Config B end to end over fakes — every matrix row (story 1.9).
+"""Config B end to end over fakes — every matrix row.
 
 The capability, the preparer, the generation client and the counter are
 fakes; the lane is REAL (a per-test lock path), the prompt assembly is the

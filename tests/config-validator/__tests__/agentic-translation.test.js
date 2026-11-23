@@ -1,8 +1,8 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// Story 2.10 (Epic 2): the agentic answer-translation leg is wired, its
+// The agentic answer-translation leg is wired, its
 // REQUIRED knobs are present, and the OPEA translation image stays out of
-// the agentic path (AD-14). These gates are STATIC repository checks - they
+// the agentic path. These gates are STATIC repository checks - they
 // inspect the sources, they never start the stack.
 
 'use strict';
@@ -20,7 +20,7 @@ const ROOT = path.join(__dirname, '..', '..', '..');
 const COMPOSE_PATH = path.join(ROOT, 'docker-compose.yaml');
 const ENV_PATH = path.join(ROOT, 'env');
 
-// The two REQUIRED knobs (story 2.10): the BFF reads them fail-closed, so a
+// The two REQUIRED knobs: the BFF reads them fail-closed, so a
 // deployment without them skips answer translation — the wiring must at
 // least reach the container and be documented.
 const KNOBS = ['AGENT_TRANSLATION_MAX_TOKENS', 'AGENT_TRANSLATION_MAX_CALLS'];
@@ -71,7 +71,7 @@ describe('the agentic translation leg is wired and GPU-only (story 2.10)', () =>
   });
 
   test('the backend block never references the OPEA translation service', () => {
-    // The agentic selection is GPU-only (AD-14): the BFF names the vLLM
+    // The agentic selection is GPU-only: the BFF names the vLLM
     // translation worker, never the OPEA image or its service endpoint.
     expect(backendBlock).not.toMatch(/opea\/translation/);
     // The OPEA service's own endpoint wiring (chatqna's env carries it; the

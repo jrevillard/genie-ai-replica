@@ -1,4 +1,4 @@
-"""Tests for the V03 deployed-baseline capture (story 1.2, issue #1948).
+"""Tests for the V03 deployed-baseline capture.
 
 The capture reconciles a running deployment against the repository's chart
 source. Its failure modes are quiet ones - an unexplained difference, a
@@ -1192,7 +1192,7 @@ def test_the_record_carries_the_capture_date(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# the chart identity (story 1.10, issue #1998)
+# the chart identity
 # --------------------------------------------------------------------------
 
 

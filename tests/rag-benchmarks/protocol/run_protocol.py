@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The evaluation-protocol CLI (story 4.1) — the harness's operator surface.
+"""The evaluation-protocol CLI — the harness's operator surface.
 
 Subcommands (the eval toolchain's argparse conventions; all live-venue
 commands print their refusal reasons and exit nonzero — the gate and the
@@ -28,13 +28,13 @@ reuse check REFUSE, they never warn)::
         mismatch. There is no override.
 
     verdicts --rows <rows.json> --set <set_path> --out <report.json> [--config A|B|C]
-        Re-judge stored rows into the findings report (story 4.2) without
+        Re-judge stored rows into the findings report without
         re-running: the security verdict layer over the rows a previous run
         wrote.
 
     capture-a --set <set_path> --out-dir <dir> --corpus-collection NAME
         [--corpus-fingerprint HEX | --compute-fingerprint]
-        The per-case config-A answer capture (story 4.3): the E01 judgment
+        The per-case config-A answer capture: the E01 judgment
         inputs (answers, http_status, wall_ms, source/citation/abstention
         fields) the anchor path cannot carry. Reuses run_eval's query driver
         verbatim (with the anchor's own bearer refresh). The rows file is
@@ -45,14 +45,14 @@ reuse check REFUSE, they never warn)::
     e01 --reference-manifest PATH --gated-manifest PATH --anchor-report PATH
         --captured-rows PATH --b-rows PATH --out PATH [--defects PATH]
         [--created-utc STAMP] [--seed N]
-        The E01 comparison report (story 4.3): the digest-pinned A-vs-B join
+        The E01 comparison report: the digest-pinned A-vs-B join
         into per-dimension M-1..M-5 records. Refuses before building on a
         lineage mismatch, a config-C manifest on the B leg, a missing leg
         artifact or a lineage-mismatched defects ledger.
 
     thresholds --registry PATH [--reference-manifest PATH] [--out PATH]
         [--report PATH] [--created-utc STAMP]
-        The threshold registry's promotion decision (story 4.4): every
+        The threshold registry's promotion decision: every
         measured dimension with its agreed value or its EXPLICIT absence, and
         the sign-off owner. An absent dimension and an unsigned sign-off block
         promotion exactly like a missing predecessor — a blocked registry
@@ -62,7 +62,7 @@ reuse check REFUSE, they never warn)::
     counters --reference-rows PATH --candidate-rows PATH --out PATH
         [--reference-manifest PATH] [--correctness-ledger PATH]
         [--created-utc STAMP]
-        The counter-metrics report (story 4.4): CM-1 (the per-request
+        The counter-metrics report: CM-1 (the per-request
         cost/latency delta against the reference), CM-2 (the excessive-
         abstention rate on the questions the reference answers correctly) and
         CM-3 (the limit/cancellation rate) as first-class, top-level results.
@@ -198,7 +198,7 @@ def _validated_entries(args: argparse.Namespace) -> list | None:
 def _write_findings_report(
     out_dir: Path, config: str, entries: list, rows: dict, absent_rows: str = "error"
 ) -> tuple[Path, dict]:
-    """The findings report (story 4.2): rows → verdicts → report, written into
+    """The findings report: rows → verdicts → report, written into
     the run out-dir beside the rows and the manifest. No silent pass. The
     reference path passes ``absent_rows="skipped"`` — config A evaluates
     through the anchor report, so a case without a row is the expected shape
@@ -422,7 +422,7 @@ def _load_rows_refusing(path: str, what: str):
 
 
 def cmd_capture_a(args: argparse.Namespace) -> int:
-    """The per-case config-A answer capture (story 4.3): the E01 judgment
+    """The per-case config-A answer capture: the E01 judgment
     inputs the anchor path cannot carry. The reference command is untouched."""
     entries = _validated_entries(args)
     if entries is None:
@@ -462,7 +462,7 @@ def _load_capture_refusing(path: str):
 
 
 def cmd_e01(args: argparse.Namespace) -> int:
-    """The E01 comparison report (story 4.3): the typed refusals run first
+    """The E01 comparison report: the typed refusals run first
     (a refusal means nothing was built), then the pure build, then the
     report written to --out with its digest printed."""
     reference_manifest = _load_json_refusing(args.reference_manifest, "the A-leg reference manifest")
@@ -507,7 +507,7 @@ def cmd_e01(args: argparse.Namespace) -> int:
 
 
 def cmd_thresholds(args: argparse.Namespace) -> int:
-    """The threshold registry's promotion decision (story 4.4).
+    """The threshold registry's promotion decision.
 
     The registry is the single home of the threshold decision; this command
     reports it and — only when every measured dimension carries an agreed
@@ -577,7 +577,7 @@ def cmd_thresholds(args: argparse.Namespace) -> int:
 
 
 def cmd_counters(args: argparse.Namespace) -> int:
-    """The counter-metrics report (story 4.4): CM-1, CM-2 and CM-3 as
+    """The counter-metrics report: CM-1, CM-2 and CM-3 as
     first-class, top-level results. An absent input is recorded as absent with
     its reason — the rate is never reported as zero where nothing was measured.
     """

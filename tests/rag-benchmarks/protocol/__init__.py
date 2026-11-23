@@ -1,15 +1,15 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The evaluation protocol package (story 4.1 — one runway).
+"""The evaluation protocol package.
 
-The versioned harness machinery Epic 4's experiments run on: the evaluation-set
+The versioned harness machinery the protocol's experiments run on: the evaluation-set
 schema and composition validator (:mod:`evalset`), the run-manifest builder
 (:mod:`manifest`), the E01/E02 pair-conditions manifest (:mod:`pairs`), the
 A-only-first partial-order gate (:mod:`gate`), the capture-artifact suitability
 checks (:mod:`reuse`), the three configuration drivers (:mod:`drivers`), the
-E01 comparison report (:mod:`e01`, story 4.3), the threshold registry and its
-promotion decision (:mod:`thresholds`, story 4.4), the counter-metrics report
-(:mod:`counter_metrics`, story 4.4), and the CLI (:mod:`run_protocol`).
+E01 comparison report (:mod:`e01`), the threshold registry and its
+promotion decision (:mod:`thresholds`), the counter-metrics report
+(:mod:`counter_metrics`), and the CLI (:mod:`run_protocol`).
 
 STDLIB-ONLY on the driver process: every module here imports the standard
 library plus the sibling ``eval``/``tests/rag-benchmarks`` modules it reuses

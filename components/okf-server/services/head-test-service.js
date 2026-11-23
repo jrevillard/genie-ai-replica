@@ -13,16 +13,16 @@
 //       the repo under test + every sibling with a head — INCLUDING
 //       graph-less repos (a published-not-ingested repo has a head but
 //       no graph; its winning the head leg IS the selectivity signal —
-//       per David 2026-10-08: "it is just signalling; the query would
+//       per the design reading: "it is just signalling; the query would
 //       not be executed").
 //     LEG B (chunk-probe replay, ground truth, needs graphs): replicates
-//       the Story 1.3 production router exactly — same probe AQL, same
+//       the production router exactly — same probe AQL, same
 //       global top-40 merge, graph qualifies iff it contributes
 //       >= ROUTE_MIN_CHUNKS chunks, floor = single best graph, any
 //       probe failure after retry → degraded (mirrors retriever
 //       genieai_retriever_arangodb.py:1694-1788).
 //
-// Formula experimentation (David: "get the best formula before
+// Formula experimentation ("get the best formula before
 // ingestion"): the stored head.per_field vectors let the lab recompute
 // the head score under alternate weights WITHOUT rebuilding the head.
 //   formula = 'default'                    → use the STORED head.vector
@@ -85,18 +85,18 @@ const ROUTE_TOP_K = parseInt(process.env.RETRIEVER_ROUTE_TOP_K || '40', 10);
 const ROUTE_MIN_CHUNKS = parseInt(process.env.RETRIEVER_ROUTE_MIN_CHUNKS || '3', 10);
 const ROUTE_PROBE_TIMEOUT_MS = parseInt(process.env.RETRIEVER_ROUTE_PROBE_TIMEOUT_MS || '2000', 10);
 const ROUTE_RETRY = parseInt(process.env.RETRIEVER_ROUTE_RETRY || '1', 10);
-// Story 1-8a (David 2026-10-08: "under no circumstances should 'fun in
-// Indonesia' be routed to the NCD Information repo"): a head only CLAIMS a
+// Decision on record: "under no circumstances should 'fun in
+// Indonesia' be routed to the NCD Information repo": a head only CLAIMS a
 // query when its score clears the forbidden centroid by this margin —
 // forbidden-dominant and noise-floor queries are structurally suppressed
 // regardless of universe size. Calibrated on NCD (2026-10-08): suppressed
 // set spans avg−forbidden ∈ [−0.062, −0.008] (mental-health, nutrition,
 // exercise, "fun in Indonesia"); selected set ≥ +0.024 ("genetic risk
-// factors for cancer" — David: "probably in, given the tags"; on-topic
+// factors for cancer" — operator judgment: "probably in, given the tags"; on-topic
 // positives +0.106..+0.122). Default 0.01 sits centered in the gap.
 const ROUTE_HEAD_MARGIN = parseFloat(process.env.RETRIEVER_ROUTE_HEAD_MARGIN || '0.01');
-// Story 1-8b (David 2026-10-09: "forbidden is forbidden — that is a hard
-// contract, it should immediately score zero") — the gate hardens from one
+// Decision on record: "forbidden is forbidden — that is a hard
+// contract, it should immediately score zero" — the gate hardens from one
 // margin rule to a three-condition claim. Calibrated on NCD 2026-10-09
 // (19-query probe, gate-probe-inner.js):
 //   FLOOR: unrelated queries score 0.32-0.48 on ANY head ("capital of
@@ -142,7 +142,7 @@ function scoreHead(head, queryVec, formula) {
     const v = head.per_field && head.per_field[f];
     perFieldCos[f] = Array.isArray(v) ? cosine(queryVec, v) : null;
   }
-  // Story 1-8b — per-tag forbidden cosines for the hard veto gate. Each
+  // Per-tag forbidden cosines for the hard veto gate. Each
   // forbidden tag was embedded individually at head build time
   // (per_field.forbidden_vectors = [{tag, vector}]).
   const tagCosines = [];
@@ -444,7 +444,7 @@ async function routingTest(repoId, payload = {}, opts = {}) {
     ranked.forEach((r, i) => {
       r.head_rank = i + 1;
     });
-    // Story 1-8a/1-8b — the forbidden contract, three conditions. A repo
+    // The forbidden contract, three conditions. A repo
     // CLAIMS the head leg only when ALL of:
     //   floor  — score ≥ ROUTE_HEAD_FLOOR (off-domain noise can never win;
     //            the margin rule alone is blind to fully-unrelated queries).
@@ -779,7 +779,7 @@ async function guardSuggestions(repoId, candidates, opts = {}) {
       if (c !== null && (!worst || c > worst.cosine)) worst = { cosine: c };
     }
     if (worst && worst.cosine >= GUARD_SELF_SUBJECT) {
-      // Name the offending OWN TAG (2026-10-09: David read "must not match
+      // Name the offending OWN TAG (2026-10-09: the design reading has "must not match
       // the repository's own subject" as being about the forbidden list —
       // the guard actually fires against the repo's OWN topic/entity/
       // keyword tags, e.g. 'lung-cancer-treatment' vs own entity

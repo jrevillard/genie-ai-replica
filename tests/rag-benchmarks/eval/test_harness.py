@@ -193,6 +193,19 @@ class TestResolveK8sPod:
         with mock.patch("harness._run_kubectl", return_value="pod-a pod-b\n"):
             assert resolve_k8s_pod("chatqna") == "pod-a"
 
+    def test_empty_first_selector_falls_through_to_the_second(self, monkeypatch):
+        """The empty-match case the `[*]` jsonpath exists for: the first
+        selector matches nothing (rc=0, empty stdout) and the SECOND selector
+        must be consulted — not an abort, not a refusal."""
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        with mock.patch(
+            "harness._run_kubectl", side_effect=["", "pod-from-standard-label\n"]
+        ) as run:
+            assert resolve_k8s_pod("chatqna") == "pod-from-standard-label"
+        assert run.call_count == 2
+        second_label = run.call_args.args[0][run.call_args.args[0].index("-l") + 1]
+        assert second_label == "app.kubernetes.io/component=chatqna"
+
     def test_namespace_is_normalized_and_defaults_to_genieai(self, monkeypatch):
         """An ambient namespace with a stray space (a quoted multi-line
         export) is stripped, not sent at a namespace nothing lives in; unset

@@ -63,7 +63,9 @@ say "7. the run's realm changes are reverted"
 # hardcoded pod IP goes stale on any reschedule and every later curl would
 # return empty (the json.loads then dies on the realm revert, silently).
 KC_POD=$(kubectl -n $NS get pod -l app=keycloak --field-selector status.phase=Running -o jsonpath='{.items[*].metadata.name}' | awk '{print $1}')
-KC_IP=$(kubectl -n $NS get pod "$KC_POD" -o jsonpath='{.status.podIP}')
+# A hand-set KC_IP survives (the operator's documented escape hatch when the
+# pod is down); the live pod IP is only the default.
+KC_IP=${KC_IP:-$(kubectl -n $NS get pod "$KC_POD" -o jsonpath='{.status.podIP}')}
 if [ -z "$KC_IP" ]; then
   echo "REFUSED: no running keycloak pod in $NS — the realm revert (step 7) cannot run; fix the venue or set KC_IP by hand before re-running"
   exit 1
@@ -75,10 +77,20 @@ export KC_ADMIN_USER=$(kubectl -n $NS get secret keycloak-admin-credentials -o j
 export KC_ADMIN_PWD=$(kubectl -n $NS get secret keycloak-admin-credentials -o jsonpath='{.data.password}' | base64 -d)
 # the dataprep service account (the run granted it the 'admin' realm role)
 SAID=${SA_ID:-e33a4dd8-0856-4cce-be37-367267dece44}
-AT=$($KC -X POST "$KCURL/auth/realms/master/protocol/openid-connect/token" -d client_id=admin-cli -d "username=$KC_ADMIN_USER" -d "password=$KC_ADMIN_PWD" -d grant_type=password | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+AT=$($KC -X POST "$KCURL/auth/realms/master/protocol/openid-connect/token" -d client_id=admin-cli -d "username=$KC_ADMIN_USER" -d "password=$KC_ADMIN_PWD" -d grant_type=password | python3 -c "import sys,json;print(json.load(sys.stdin).get('access_token',''))")
+# An empty token means every realm step below would fail-cascade into
+# "already absent" claims — refused here, not silently "successful".
+if [ -z "$AT" ]; then
+  echo "REFUSED: could not mint the master admin token (rotated password? missing secret?) — the realm revert (step 7) cannot run; fix the credentials before re-running"
+  exit 1
+fi
 # 7a. the 'admin' realm role the run granted to the dataprep service account
-RID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/roles/admin" | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
-$KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm/$RID" -o /dev/null -w "  role removed http=%{http_code}\n"
+RID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/roles/admin" | python3 -c "import sys,json;print(json.load(sys.stdin).get('id',''))")
+if [ -n "$RID" ]; then
+  $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm/$RID" -o /dev/null -w "  role removed http=%{http_code}\n"
+else
+  echo "  admin role already absent (a prior revert ran)"
+fi
 $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm" | python3 -c "import sys,json;d=json.load(sys.stdin);print('  service account roles now:',[r['name'] for r in d] if isinstance(d,list) else d)"
 # 7b. the eval user and the eval client the run created
 # (EVAL_USER_ID, never EUID — EUID is a bash readonly builtin; assigning it
@@ -88,10 +100,16 @@ import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 if [ -n "$EVAL_USER_ID" ]; then
   $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$EVAL_USER_ID" -o /dev/null -w "  eval user deleted http=%{http_code}\n"
-  # the deletion is VERIFIED, not assumed: the user must be gone
-  $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users?username=e01-eval" | python3 -c "
+  # the deletion is VERIFIED, not assumed: the user must be gone, or the
+  # cleanup has failed and says so with a failing exit
+  if $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users?username=e01-eval" | python3 -c "
 import sys,json
-d=json.load(sys.stdin); print('  eval user still present!' if d else '  eval user gone (verified)')"
+sys.exit(1 if json.load(sys.stdin) else 0)"; then
+    echo "  eval user gone (verified)"
+  else
+    echo "REFUSED: the eval user is STILL PRESENT after the delete — the cleanup failed; investigate before re-running"
+    exit 1
+  fi
 else
   echo "  eval user already absent"
 fi
@@ -100,9 +118,14 @@ import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 if [ -n "$CID" ]; then
   $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients/$CID" -o /dev/null -w "  eval client deleted http=%{http_code}\n"
-  $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval" | python3 -c "
+  if $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval" | python3 -c "
 import sys,json
-d=json.load(sys.stdin); print('  eval client still present!' if d else '  eval client gone (verified)')"
+sys.exit(1 if json.load(sys.stdin) else 0)"; then
+    echo "  eval client gone (verified)"
+  else
+    echo "REFUSED: the eval client is STILL PRESENT after the delete — the cleanup failed; investigate before re-running"
+    exit 1
+  fi
 else
   echo "  eval client already absent"
 fi

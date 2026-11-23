@@ -14,8 +14,8 @@ It comes in two lengths, built from the same sources:
 The short deck leaves out the OKF tooling, the web and mobile screens, the
 retrieval, reranking and generation detail, the observability and
 troubleshooting slides, the testing-lab slide, the GPU API and sizing
-slides, and the deployment matrix. Each slide names the variants that show
-it.
+slides, the deployment matrix, the access simulation and the configuration
+overview. Each slide names the variants that show it.
 
 It speaks six United Nations languages — English, French, Spanish, Russian,
 Arabic and Chinese — from one file. The reader picks a language in the
@@ -176,10 +176,10 @@ show it on its own line:
 @cover|Whose knowledge shapes an AI answer?|+light
 ```
 
-A slide whose title is not followed by `|+<variant>` is in the full deck
-only; the `+` keeps a pipe in a title prose. The
-field is machine data, so every language carries the same one — the build
-refuses a file that drifted.
+A slide whose line does not end with `|+<variant>` is in the full deck
+only. Everything between the layout and that field is the title, so a
+title may carry a pipe. The field is machine data, so every language
+carries the same one — the build refuses a file that drifted.
 
 A slide keeps the number it holds in the slide file, whatever the length,
 so the short deck does not renumber what it keeps: the brand marks, the

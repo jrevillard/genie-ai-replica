@@ -272,6 +272,14 @@ async function check() {
 
     await page.goto(url + "?check=entry");
     const ids = await page.locator(".slides > section.deck-slide").evaluateAll(slides => slides.map(node => node.id));
+    // Each length carries its own chapter timings. The last slide belongs to
+    // the last chapter, so its timing tells which timings the build applied.
+    const published = JSON.parse(readFileSync(resolve(__dirname, "../src/variants.json"), "utf8"));
+    const reference = readFileSync(resolve(__dirname, "../src/slides/en.txt"), "utf8").split("\n")
+      .filter((line) => line.startsWith("# ")).pop().split("|")[1];
+    assert.equal(await page.locator(".slides > section.deck-slide").last().getAttribute("data-timing"),
+      ((published[variant] || {}).timings || {})["7"] || reference,
+      "the chapter timings are those of the " + variant + " deck");
     assert.equal(ids.filter(id => id.startsWith("chapter-")).length, 6);
     for (const id of ids) {
       await page.evaluate((hash) => { location.hash = hash; }, "/" + id);

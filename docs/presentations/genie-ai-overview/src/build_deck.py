@@ -124,7 +124,6 @@ MARKS = {
     'opea': ('OPEA', None), 'hf': ('Hugging Face TEI', '#956613'), 'vllm': ('vLLM', None),
     'otel': ('OpenTelemetry', None), 'victoria': ('VictoriaMetrics', '#632CA5'), 'grafana': ('Grafana', '#b74600'),
     'docker': ('Docker', '#176cb4'), 'kube': ('Kubernetes', '#326CE5'), 'helm': ('Helm', '#253575'),
-    'nginx': ('NGINX', '#007A37'), 'kong': ('Kong', '#093f2f'), 'envoy': ('Envoy Gateway', None),
     'nvidia': ('NVIDIA', '#507400'), 'amd': ('AMD', '#9b261f'),
 }
 SLIDE_MARKS = {
@@ -207,9 +206,13 @@ def parse(code):
         elif line.startswith('@'):
             fields = line[1:].split('|')
             layout, title, variants = fields[0], '|'.join(fields[1:]), {'full'}
+            if any(field.strip().startswith('+') or field.strip() in VARIANTS for field in fields[1:-1]):
+                raise SystemExit(f'{code}.txt: slide "{title}": the variants field comes last')
             if len(fields) > 2:
                 last = fields[-1].strip()
                 if last.startswith('+'):
+                    if not last[1:].strip():
+                        raise SystemExit(f'{code}.txt: slide "{title}": the variants field names no variant')
                     title = '|'.join(fields[1:-1])
                     variants.update(name.strip() for name in last[1:].split(',') if name.strip())
                 elif last in VARIANTS:
@@ -242,7 +245,7 @@ def structure(slides):
     """The shape of a slide file — what every language must reproduce."""
     return [
         (
-            slide.layout, slide.chapter_number, len(slide.items),
+            slide.layout, slide.chapter_number, slide.timing, len(slide.items),
             [len(item) for item in slide.items],
             bool(slide.eyebrow), bool(slide.takeaway), bool(slide.notes),
             tuple(slide.sources), tuple(sorted(slide.variants)),
@@ -265,10 +268,13 @@ def first_drift(mine, theirs):
 
 
 # French shows the infinitive. The imperative is the voice of the speaker
-# notes and of what the deck quotes, and a `-ez` ending marks its second
-# person plural.
-IMPERATIVE = r'[a-zà-öø-ÿ]+ez\b'
+# notes and of what the deck quotes; `-ez` marks its second person plural,
+# and `faites` and `dites` are its two irregular forms.
+IMPERATIVE = r'\b(?:[a-zà-öø-ÿ]+ez|faites|dites)\b'
 QUOTED = r'«[^»]*»'
+# The glossary sets a narrow no-break space before each of these.
+SPACED = ':;?!'
+NARROW = '\u202f'
 # The text a chapter divider shows.
 DIVIDER_TEXT = r'chapter\.\d+\.(title|summary|steps(\.\d+)?)$'
 # What the deck quotes keeps its own voice: a chat slide shows what the
@@ -277,7 +283,7 @@ QUOTING = ('chat', 'ingestion')
 
 
 def register_problems(code, slides):
-    """The imperative forms in the French text a slide shows."""
+    """The French text a slide shows that breaks a rule of the glossary."""
     if code != 'fr':
         return []
     shown = []
@@ -287,19 +293,25 @@ def register_problems(code, slides):
             texts += [(f'row {index}', '|'.join(row)) for index, row in enumerate(slide.items, 1)]
         shown += [(f'slide {number} {field}', text) for field, text in texts]
     shown += [(key, CHROME[code][key]) for key in CHROME[code] if match(DIVIDER_TEXT, key)]
-    found = [
-        (where, word)
-        for where, text in shown
-        for word in findall(IMPERATIVE, sub(QUOTED, '', text), IGNORECASE)
-    ]
+    found = []
+    for where, text in shown:
+        found += [
+            (where, f'the imperative "{word}"')
+            for word in findall(IMPERATIVE, sub(QUOTED, '', text), IGNORECASE)
+        ]
+        found += [
+            (where, f'"{mark}" without a narrow no-break space before it')
+            for index, mark in enumerate(text)
+            if mark in SPACED and (index == 0 or text[index - 1] != NARROW)
+        ]
     if not found:
         return []
     return [
         (
-            'fr: the text a slide shows is written in the infinitive; the imperative is for the '
-            'speaker notes and for what the deck quotes:'
+            'fr: the text a slide shows breaks the glossary rules, the infinitive and the '
+            'spacing before : ; ? !:'
         )
-    ] + [f'  {where}: {word}' for where, word in found]
+    ] + [f'  {where}: {problem}' for where, problem in found]
 
 
 def e(value):
@@ -1022,8 +1034,15 @@ if __name__ == '__main__':
     variants = sorted(VARIANTS) if args.variant == 'all' else [args.variant]
     if args.output and len(variants) > 1:
         parser.error('--output writes one variant: name it with --variant')
-    for variant in variants:
+    if args.output is None:
+        unpublished = [variant for variant in variants if variant not in DEFAULT_OUTPUT]
+        if unpublished:
+            parser.error(f'no published path for: {", ".join(unpublished)}')
+    # Every variant is rendered before the first one is written, so a
+    # failure leaves no pair half-updated.
+    pages = {variant: build(variant) for variant in variants}
+    for variant, content in pages.items():
         target = args.output or DEFAULT_OUTPUT[variant]
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(build(variant), encoding='utf-8')
+        target.write_text(content, encoding='utf-8')
         print(target)

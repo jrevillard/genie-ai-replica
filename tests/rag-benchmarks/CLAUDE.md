@@ -168,6 +168,9 @@ EOF
 
 | Var | What it is | How to resolve |
 |-----|------------|----------------|
+| `EVAL_EXEC_BACKEND` | The exec backend: `docker` (compose/swarm, the default) or `kubectl` (a Kubernetes venue). Selected, never detected — a wrong backend fails loudly instead of half-running. | Set per venue. |
+| `EVAL_K8S_NAMESPACE` | The namespace a kubectl venue's pods live in (default `genieai`). | Set per venue. |
+| `EVAL_K8S_POD_<IDENT>` | Pins a pod name for one container identity (e.g. `EVAL_K8S_POD_CHATQNA` for `CHATQNA_CONTAINER=chatqna`). A pin naming a retired pod falls back to the label selectors with a once-only warning. | Optional; the label selectors are the normal path. |
 | `CHATQNA_CONTAINER` | Docker container name to exec curl inside | `docker ps --format '{{.Names}}' \| grep chatqna-xeon-backend-server \| head -1` — Swarm replica suffix is dynamic (`.1.<random>`), never hardcode |
 | `CHATQNA_SERVICE_NAME` | OTel service name chatqna reports | `genieai-chatqna` — constant across stacks (the OTel SDK ignores the swarm stack prefix) |
 | `VICTORIATRACES_SVC` | VictoriaTraces service DNS name inside the overlay | `<stack>_victoriatraces` (hyphenated, matching the swarm service name) |

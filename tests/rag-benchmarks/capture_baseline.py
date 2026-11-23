@@ -230,9 +230,10 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
     """
     if os.getenv("EVAL_EXEC_BACKEND", "docker").strip().lower() == "kubectl":
         raise RuntimeError(
-            "resolve_containers is docker-only (docker ps): on a Kubernetes"
-            " venue pass --resolved-env with a snapshot taken from the pods"
-            " instead"
+            "resolve_containers is docker-only (docker ps): capture_baseline"
+            " has no Kubernetes path yet — produce the baseline through the"
+            " protocol driver instead (protocol/run_protocol.py reference"
+            " --resolved-env <snapshot.json>)"
         )
     out = _run(
         ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}"],
@@ -272,8 +273,9 @@ def _image_digest(container: str) -> str:
     DOCKER-ONLY (docker inspect); same refusal as resolve_containers."""
     if os.getenv("EVAL_EXEC_BACKEND", "docker").strip().lower() == "kubectl":
         raise RuntimeError(
-            "_image_digest is docker-only (docker inspect): on a Kubernetes"
-            " venue read the digest from the pod's containerStatuses imageID"
+            "_image_digest is docker-only (docker inspect): capture_baseline"
+            " has no Kubernetes path yet — produce the baseline through the"
+            " protocol driver instead"
         )
     return _run(
         ["docker", "inspect", "--format", "{{.Image}}", container], timeout=30
@@ -316,8 +318,8 @@ def env_grep_cmd(keys) -> str:
 def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
     """Read the RESOLVED values out of the live containers (the venue's exec
     primitive — ``docker exec`` on a compose/swarm venue; on a Kubernetes
-    venue resolve_containers refuses first, so a --resolved-env snapshot is
-    the path).
+    venue resolve_containers refuses first, so the baseline goes through the
+    protocol driver's ``--resolved-env`` snapshot instead).
 
     This is the "exact env under test, resolved values, not placeholders"
     requirement (AC:5). A var is recorded only when the container actually holds

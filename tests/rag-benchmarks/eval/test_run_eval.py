@@ -1371,3 +1371,64 @@ def test_extract_answer_returns_the_abstention_prose():
         {"response": "I do not have enough information to answer.", "metadata": {"abstained": True}}
     )
     assert run_eval._extract_answer(body) == "I do not have enough information to answer."
+
+
+def test_kubectl_backend_skips_the_docker_reresolution(monkeypatch):
+    """The docker re-resolution (docker ps) runs ONLY on the docker backend:
+    on a Kubernetes venue it would at best print noise and at worst
+    overwrite CHATQNA_CONTAINER with a docker container name that no k8s
+    label matches (the mixed-host poison)."""
+    from harness import HarnessError
+
+    calls = []
+
+    def fake_exec(container, cmd, timeout=120, pass_env=()):
+        calls.append(container)
+        raise HarnessError("kubectl exec pod-1 failed: container not found")
+
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_exec)
+    resolver = types.SimpleNamespace(assert_not_called=lambda: None)
+    resolve_calls = []
+    def fake_resolve(force=False):
+        resolve_calls.append(force)
+        return "chatqna-rotated-docker-name"
+    monkeypatch.setattr(run_eval, "_resolve_chatqna_container", fake_resolve)
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", "kubectl")
+    try:
+        with pytest.raises(HarnessError):
+            run_eval._chatqna_exec("echo hi")
+    finally:
+        monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+    # The failure re-raised WITHOUT consulting docker at all.
+    assert resolve_calls == []
+    assert run_eval.CHATQNA_CONTAINER != "chatqna-rotated-docker-name"
+    assert calls == [run_eval.CHATQNA_CONTAINER]
+
+
+def test_chatqna_identity_default_is_backend_aware(monkeypatch):
+    """The default identity is the k8s COMPONENT name on the kubectl backend
+    and the docker container name otherwise; an explicit CHATQNA_CONTAINER
+    wins on both. The constant is computed at import, so each branch is read
+    in a fresh subprocess."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    eval_dir = str(Path(__file__).resolve().parent)
+    cases = [
+        ({}, "chatqna-xeon-backend-server"),          # docker default
+        ({"EVAL_EXEC_BACKEND": "kubectl"}, "chatqna"),
+        ({"EVAL_EXEC_BACKEND": "kubectl", "CHATQNA_CONTAINER": "chatqna-prod"}, "chatqna-prod"),
+        ({"CHATQNA_CONTAINER": "chatqna-prod"}, "chatqna-prod"),
+    ]
+    for env, expected in cases:
+        code = (
+            "import sys; sys.path.insert(0, {evaldir!r});"
+            "import run_eval; print(run_eval.CHATQNA_CONTAINER)"
+        ).format(evaldir=eval_dir)
+        out = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, env={**os.environ, **env}, timeout=60,
+        )
+        assert out.returncode == 0, out.stderr
+        assert out.stdout.strip() == expected, (env, out.stdout)

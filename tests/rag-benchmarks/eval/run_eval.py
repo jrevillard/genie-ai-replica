@@ -75,7 +75,7 @@ from keycloak import KeycloakError, fetch_realm_token
 # VICTORIATRACES_SVC = <stack>_victoriatraces (hyphenated swarm service name).
 # See tests/rag-benchmarks/CLAUDE.md for the full run recipe.
 CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER") or (
-    "chatqna" if os.getenv(EXEC_BACKEND_ENV, "docker") == "kubectl"
+    "chatqna" if os.getenv(EXEC_BACKEND_ENV, "docker").strip().lower() == "kubectl"
     else "chatqna-xeon-backend-server"
 )
 VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")

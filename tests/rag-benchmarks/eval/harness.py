@@ -91,14 +91,22 @@ def _run_kubectl(args: list[str], timeout: float = 30) -> str:
     return result.stdout
 
 
+_warned_stale_pins: set[str] = set()
+
+
 def _pod_exists(pod: str, namespace: str) -> bool:
+    """True when the pod object exists. Only a NOT-FOUND answer counts as
+    "gone": an RBAC denial or an API outage raises, so the stale-pin
+    warning never masks the real cause."""
     try:
         _run_kubectl(
             ["kubectl", "get", "pod", pod, "-n", namespace,
              "-o", "jsonpath={.metadata.name}"]
         )
-    except HarnessError:
-        return False
+    except HarnessError as failed:
+        if "not found" in str(failed).lower():
+            return False
+        raise
     return True
 
 
@@ -108,9 +116,11 @@ def resolve_k8s_pod(container: str, namespace: str | None = None) -> str:
     Resolution order — first hit wins:
 
     1. ``EVAL_K8S_POD_<IDENT>`` — the operator's exact pin. The pin is
-       checked for liveness: a pod that no longer exists (a rollout rotated
-       it away) falls through to the labels with a warning, so a stale pin
-       cannot pin the run to a corpse;
+       existence-checked: a pod a rollout retired falls through to the
+       labels with a once-only warning, so a stale pin cannot pin the run
+       to a pod name nothing answers on. (Existence, not phase: a pin can
+       still name a Terminating pod — the label path is the phase-guarded
+       one; pin a live pod.)
     2. a label selector over RUNNING pods —
        ``genieai.io/component=<container>`` then
        ``app.kubernetes.io/component=<container>``. The running-only filter
@@ -130,11 +140,17 @@ def resolve_k8s_pod(container: str, namespace: str | None = None) -> str:
     if pinned:
         if _pod_exists(pinned, ns):
             return pinned
-        print(
-            f"[harness] pinned {_pod_env_key(container)}={pinned!r} is gone;"
-            " falling back to the label selectors",
-            file=sys.stderr,
-        )
+        # The pin is a snapshot; a rollout retires it. Warn ONCE per pin —
+        # the fallback runs per exec, and dozens of identical lines would
+        # bury the run's own output.
+        if pinned not in _warned_stale_pins:
+            _warned_stale_pins.add(pinned)
+            print(
+                f"[harness] pinned {_pod_env_key(container)}={pinned!r} is"
+                " gone; falling back to the label selectors for the rest of"
+                " the run",
+                file=sys.stderr,
+            )
     for label in (
         f"genieai.io/component={container}",
         f"app.kubernetes.io/component={container}",

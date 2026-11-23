@@ -39,6 +39,25 @@ in one HTML file: English, French, Spanish, Russian, Arabic and Chinese.
   checks that nothing overflows the slide. A change to the CSS or the
   runtime can break one language without touching the others.
 
+## The two lengths of the walkthrough
+
+The walkthrough is built in two lengths from one set of sources: the full
+60 minute deck and a 30 minute one. A slide names the variants that show it
+— `@layout|Title|+light` is in both — so a slide keeps its place in the file
+whichever length is built.
+
+- **Do not delete slides from the slide files to change the short deck.**
+  Remove the `|+light` mark instead. The field is machine data, so every
+  language must carry the same one; the build refuses a file that drifted.
+- **A slide keeps its number in both decks.** The short deck does not
+  renumber what it keeps, so the brand marks, the Mermaid diagrams, the
+  translation slots and the source links keep their keys.
+- **A slide the short deck drops may still be named by one it keeps.** The
+  short deck names the format once, as the second way knowledge enters the
+  assistant, and never presents the tooling. Keep it that way in every
+  language.
+- **`npm run build` writes both decks** and `npm run check` checks both.
+
 ## Existing Marp decks
 
 Use the following tooling notes when editing an existing Marp deck.

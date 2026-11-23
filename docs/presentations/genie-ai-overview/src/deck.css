@@ -356,7 +356,10 @@ body.receiver #deck-ui { display: none; }
   box-shadow: 0 15px 32px #233f6317;
 }
 .mermaid-split .diagram-paper { height: var(--diagram-split-height, 310px); padding: 13px 9px; }
-.diagram-paper svg { display: block; width: 100%; height: 100%; }
+/* The diagrams are English on every page, right-to-left ones included.
+   A label that starts with a slash would otherwise read from the end:
+   the page direction moves that slash after the words. */
+.diagram-paper svg { display: block; width: 100%; height: 100%; direction: ltr; }
 /* The diagram keeps its shape but gives the notes room when a
    translation needs it. */
 .deck-slide.tight { --diagram-height: 190px; --diagram-split-height: 285px; }

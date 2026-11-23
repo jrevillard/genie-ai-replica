@@ -16,6 +16,10 @@ before translating, so the six versions say the same thing the same way.
 Product names keep their Latin spelling in every language, including the
 right-to-left ones. They are never given an Arabic or Chinese translation.
 
+`RAG` is one of them. When a slide has to spell the acronym out, every
+language writes `RETRIEVAL-AUGMENTED GENERATION (RAG)`: the expansion is the
+term's own name, and it is not translated either.
+
 ## Terms to translate
 
 | English | What it means |

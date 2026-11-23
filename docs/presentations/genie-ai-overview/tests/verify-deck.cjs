@@ -5,9 +5,43 @@ const { resolve } = require("node:path");
 const { createServer } = require("node:http");
 const { once } = require("node:events");
 
-const html = readFileSync(process.argv[2] || resolve(__dirname, "../../../../site/static/presentations/genie-ai/index.html"));
+// The deck has two variants: the full briefing and the 30 minute one.
+// They share the sources, so the checks that only make sense for the
+// slides one of them leaves out run against the full deck alone.
+const VARIANTS = {
+  full: {
+    path: "../../../../site/static/presentations/genie-ai/index.html",
+    slides: 43,
+    diagrams: 12,
+    brands: 33,
+    positions: {10: 12, 15: 17},
+  },
+  light: {
+    path: "../../../../site/static/presentations/genie-ai-30/index.html",
+    slides: 27,
+    diagrams: 5,
+    brands: 20,
+    positions: {10: 11, 15: 13},
+  },
+};
+const args = process.argv.slice(2);
+const variant = (args.find(arg => arg.startsWith("--variant=")) || "--variant=full").split("=")[1];
+const spec = VARIANTS[variant];
+if (!spec) throw new Error("Unknown variant: " + variant);
+const html = readFileSync(args.find(arg => !arg.startsWith("--")) || resolve(__dirname, spec.path), "utf8");
+
+const bundle = JSON.parse(html.match(/<script id="deck-i18n" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+const staticTitle = (html.match(/<title data-i18n="chrome\.deck\.title">([^<]*)<\/title>/) || [])[1] || "";
+const unescapeHtml = (text) => text.replaceAll("&lt;", "<").replaceAll("&gt;", ">")
+  .replaceAll("&quot;", "\"").replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
 
 async function check() {
+  // The page chrome is written in the first language. The runtime rewrites
+  // the title when it runs, so the served file itself has to carry it: a
+  // reader whose script does not run, and every crawler, must still meet
+  // the deck's own title rather than the last language the build ended on.
+  assert.equal(unescapeHtml(staticTitle), bundle.slots.en["chrome.deck.title"],
+    "the served " + variant + " deck carries its title in its own language");
   const server = createServer((request, response) => {
     response.setHeader("Content-Type", "text/html; charset=utf-8");
     response.end(html);
@@ -33,7 +67,26 @@ async function check() {
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector(".reveal.ready") && document.fonts.status === "loaded");
     assert.equal(await page.locator("html").getAttribute("lang"), "en");
-    assert.equal(await page.locator(".slides > section.deck-slide").count(), 43);
+    assert.equal(await page.locator(".slides > section.deck-slide").count(), spec.slides);
+    // The short deck names the format once, as the second way knowledge
+    // enters the assistant, and never presents the tooling. The check
+    // reads the whole slide - body, notes and source links - and every
+    // language says the same.
+    async function assertFormatMentions(code) {
+      const sections = await page.locator(".slides > section.deck-slide").evaluateAll(slides =>
+        slides.map(node => [node.id, node.textContent]));
+      const mentions = sections.filter(([, text]) => text.includes("OKF")).map(([id]) => id).sort();
+      assert.deepEqual(mentions, ["slide-06"],
+        "the short deck names the format outside the ingestion slide in " + code);
+      for (const [id, text] of sections) {
+        assert.ok(!text.includes("OKF Studio"), "the short deck presents the tooling on " + id + " in " + code);
+      }
+    }
+    if (variant === "light") {
+      assert.equal(await page.locator("#slide-16").count(), 0);
+      assert.equal(await page.locator("#slide-21").count(), 1);
+      await assertFormatMentions("en");
+    }
     assert.equal(await page.title(), "GENIE.AI walkthrough");
     assert.equal(await page.locator(".slides > section.present").getAttribute("id"), "slide-01");
 
@@ -66,7 +119,7 @@ async function check() {
     await page.keyboard.press("ArrowRight");
     assert.equal(await page.locator(".slides > section.present").getAttribute("id"), "slide-09");
     await page.getByRole("heading",{name:"A source document has to become searchable."}).waitFor();
-    assert.equal(await page.locator("figure.diagram-paper svg").count(), 12);
+    assert.equal(await page.locator("figure.diagram-paper svg").count(), spec.diagrams);
     const ingestion = page.locator("#slide-09.present");
     const settings = ingestion.locator(".ingestion-settings");
     assert.deepEqual(await ingestion.locator(".format-list li").allTextContents(),
@@ -118,7 +171,7 @@ async function check() {
     assert.equal(await ingestion.locator(".diagram-trace.is-target").first().evaluate(edge => getComputedStyle(edge).animationName), "none");
     await page.keyboard.press("m");
     current = await slide(10);
-    assert.equal(await current.getAttribute("data-position"), "12");
+    assert.equal(await current.getAttribute("data-position"), String(spec.positions[10]));
     await page.keyboard.press("ArrowRight");
     await current.locator(".diagram-notes .is-target").filter({hasText:"Ask"}).waitFor();
     await current.locator("g.node.is-target").filter({hasText:"ChatQnA"}).waitFor();
@@ -127,31 +180,27 @@ async function check() {
     await current.locator("g.node.is-target").filter({hasText:"ArangoDB"}).waitFor();
     assert.ok(await current.locator("path.diagram-trace.is-target").count());
 
-    current = await slide(11);
-    assert.equal(await current.getAttribute("data-position"), "13");
-    await current.getByRole("heading",{name:"What runs inside GENIE.AI?",exact:true}).waitFor();
-    await page.keyboard.press("ArrowLeft");
-    const previous = page.locator("#slide-10.present");
-    await previous.waitFor();
-    assert.equal(await previous.evaluate(section => section.classList.contains("is-entering")), false);
+    // The retrieval, reranking, profile and deployment slides only the
+    // full deck shows.
+    if (variant === "full") {
+      current = await slide(11);
+      const retrievalNodes = await current.locator("svg g.node").evaluateAll(nodes =>
+        Object.fromEntries(nodes.map(node => [node.textContent, node.getBoundingClientRect().top])));
+      assert.ok(retrievalNodes.BM25 < retrievalNodes["Vector search"]);
+      assert.ok(retrievalNodes["Rank fusion"] < retrievalNodes["Graph expansion"]);
+      assert.deepEqual(await current.locator(".diagram-notes h2").allTextContents(),
+        ["BM25 search", "Vector search", "Graph expansion"]);
 
-    current = await slide(12);
-    const retrievalNodes = await current.locator("svg g.node").evaluateAll(nodes =>
-      Object.fromEntries(nodes.map(node => [node.textContent, node.getBoundingClientRect().top])));
-    assert.ok(retrievalNodes.BM25 < retrievalNodes["Vector search"]);
-    assert.ok(retrievalNodes["Rank fusion"] < retrievalNodes["Graph expansion"]);
-    assert.deepEqual(await current.locator(".diagram-notes h2").allTextContents(),
-      ["BM25 search", "Vector search", "Graph expansion"]);
+      current = await slide(12);
+      const best = current.locator('.rank-row[data-light="0"]');
+      assert.equal(await best.evaluate((element) => getComputedStyle(element).top), "170px");
+      await page.keyboard.press("ArrowRight");
+      await page.waitForFunction(() => getComputedStyle(document.querySelector(".present .rank-row.is-target")).top === "0px");
+      await page.keyboard.press("ArrowLeft");
+      await page.waitForFunction(() => getComputedStyle(document.querySelector(".present .rank-row")).top === "170px");
+    }
 
-    current = await slide(13);
-    const best = current.locator('.rank-row[data-light="0"]');
-    assert.equal(await best.evaluate((element) => getComputedStyle(element).top), "170px");
-    await page.keyboard.press("ArrowRight");
-    await page.waitForFunction(() => getComputedStyle(document.querySelector(".present .rank-row.is-target")).top === "0px");
-    await page.keyboard.press("ArrowLeft");
-    await page.waitForFunction(() => getComputedStyle(document.querySelector(".present .rank-row")).top === "170px");
-
-    current = await slide(15);
+    current = await slide(14);
     assert.equal(await current.locator(".language-flag").count(), 3);
     assert.equal(await current.locator("article p[lang=sw]").count(), 2);
     assert.equal(await current.locator("article p[lang=en]").count(), 1);
@@ -163,43 +212,59 @@ async function check() {
       assert.ok(await current.locator("path.diagram-trace.is-target").count());
     }
 
-    current = await slide(20);
-    assert.equal(await current.locator(".profile:visible").count(), 2);
-    await page.keyboard.press("ArrowRight");
-    await current.locator(".profile.is-target h2").filter({hasText:"Frontline officer"}).waitFor();
-    await page.keyboard.press("ArrowRight");
-    await current.locator(".profile.is-target h2").filter({hasText:"Authorised caseworker"}).waitFor();
+    // Returning from the next slide brings back the settled view.
+    current = await slide(15);
+    assert.equal(await current.getAttribute("data-position"), String(spec.positions[15]));
+    await current.getByRole("heading",{name:"What runs inside GENIE.AI?",exact:true}).waitFor();
+    await page.keyboard.press("ArrowLeft");
+    const previous = page.locator("#slide-14.present");
+    await previous.waitFor();
+    assert.equal(await previous.evaluate(section => section.classList.contains("is-entering")), false);
+
+    if (variant === "full") {
+      current = await slide(20);
+      assert.equal(await current.locator(".profile:visible").count(), 2);
+      await page.keyboard.press("ArrowRight");
+      await current.locator(".profile.is-target h2").filter({hasText:"Frontline officer"}).waitFor();
+      await page.keyboard.press("ArrowRight");
+      await current.locator(".profile.is-target h2").filter({hasText:"Authorised caseworker"}).waitFor();
+    }
 
     current = await slide(24);
     const institutionLines = await current.locator('svg g.node[id^="flowchart-L-"] text > tspan').allTextContents();
     assert.deepEqual(institutionLines.map(line => line.replaceAll("\u200b", "")), ["Institution-managed", "model endpoint"]);
 
-    current = await slide(29);
-    const matrix = current.locator(".deployment-matrix");
-    assert.equal(await matrix.locator("tbody tr").count(), 3);
-    for (const title of ["Docker Compose","Docker Swarm","Kubernetes & Helm"]) {
-      assert.equal(await matrix.locator("tbody th").filter({hasText:title}).count(),1);
+    if (variant === "full") {
+      current = await slide(29);
+      const matrix = current.locator(".deployment-matrix");
+      assert.equal(await matrix.locator("tbody tr").count(), 3);
+      for (const title of ["Docker Compose","Docker Swarm","Kubernetes & Helm"]) {
+        assert.equal(await matrix.locator("tbody th").filter({hasText:title}).count(),1);
+      }
+      current = await slide(30);
+      await page.keyboard.press("ArrowRight");
+      assert.equal(await current.locator("g.node.is-target").count(), 3);
+      await current.locator("g.node.is-target").filter({hasText:"Docker Swarm"}).waitFor();
+      await page.keyboard.press("ArrowRight");
+      await current.locator("g.node.is-target").filter({hasText:/Dedicated.*GPU API/}).waitFor();
+      assert.equal(await current.locator("path.diagram-trace.is-target").count(), 3);
+      await page.keyboard.press("ArrowRight");
+      await current.locator("g.node.is-target").filter({hasText:"vLLM"}).waitFor();
+      await page.keyboard.press("ArrowLeft");
+      await current.locator("g.node.is-target").filter({hasText:/Dedicated.*GPU API/}).waitFor();
+      current = await slide(31);
+      assert.match(await current.locator(".slide-content").textContent(), /NVIDIA GPUs with CUDA and AMD GPUs with ROCm/);
+      assert.doesNotMatch(await current.textContent(), /exercised|still in review|open merge request/i);
+      current = await slide(32);
+      await current.getByRole("heading",{name:"What can you configure in GENIE.AI?",exact:true}).waitFor();
+      assert.match(await current.locator(".slide-takeaway").textContent(), /re-ingest/);
     }
-    current = await slide(30);
-    await page.keyboard.press("ArrowRight");
-    assert.equal(await current.locator("g.node.is-target").count(), 3);
-    await current.locator("g.node.is-target").filter({hasText:"Docker Swarm"}).waitFor();
-    await page.keyboard.press("ArrowRight");
-    await current.locator("g.node.is-target").filter({hasText:/Dedicated.*GPU API/}).waitFor();
-    assert.equal(await current.locator("path.diagram-trace.is-target").count(), 3);
-    await page.keyboard.press("ArrowRight");
-    await current.locator("g.node.is-target").filter({hasText:"vLLM"}).waitFor();
-    await page.keyboard.press("ArrowLeft");
-    await current.locator("g.node.is-target").filter({hasText:/Dedicated.*GPU API/}).waitFor();
-    current = await slide(31);
-    assert.match(await current.locator(".slide-content").textContent(), /NVIDIA GPUs with CUDA and AMD GPUs with ROCm/);
-    assert.doesNotMatch(await current.textContent(), /exercised|still in review|open merge request/i);
-    current = await slide(32);
-    await current.getByRole("heading",{name:"What can you configure in GENIE.AI?",exact:true}).waitFor();
-    assert.match(await current.locator(".slide-takeaway").textContent(), /re-ingest/);
+    // The integration slide names its four integration points, one per card.
+    assert.deepEqual(await page.locator("#slide-07 .diagram-notes h2").allTextContents(),
+      ["Your applications", "Your sign-in", "Your documents", "Your models"]);
     current = await slide(37);
     assert.equal(await current.locator(".eyebrow").textContent(), "QUESTIONS");
-    assert.ok(await page.locator(".brand-strip img").count() > 20);
+    assert.equal(await page.locator(".brand-strip img").count(), spec.brands);
     assert.deepEqual(await page.locator(".brand-strip img").evaluateAll(imgs =>
       imgs.filter(img => !img.complete || img.naturalWidth < 1).map(img => img.alt)), []);
     assert.deepEqual(errors, []);
@@ -262,12 +327,15 @@ async function check() {
     await page.getByRole("button", {name:"Resume motion",exact:true}).waitFor();
     assert.equal(await ingestion.locator(".diagram-idle").first().evaluate(edge => getComputedStyle(edge).animationName), "none");
 
-    // Every language the deck carries must switch, set its own direction
-    // and keep its content inside the slide. A translation that runs long
-    // is a defect the English pass cannot see.
+    // Every language the deck carries must switch, set its own direction,
+    // keep its content inside the slide and actually say something in its
+    // own words. A deck that carries English prose under a translated
+    // interface passes every other check, so the text itself is compared.
     const languages = await page.locator("#deck-language option").evaluateAll(options =>
       options.map(option => option.value));
     assert.ok(languages.length > 1, "the deck offers more than one language");
+    const englishProse = await page.locator("#slide-06 .slide-content").textContent();
+    assert.ok(englishProse.length > 40, "the English prose is there to compare against");
     for (const code of languages) {
       const languageUrl = url + "?lang=" + code + "#/slide-01";
       await page.goto(languageUrl);
@@ -301,9 +369,51 @@ async function check() {
         });
         assert.deepEqual(issues, [], "Content out of bounds on slide " + id + " in " + code);
       }
+      // The prose must be the language's own. The runtime swaps every slot
+      // in the page, so a slide that kept its English text would pass
+      // every check above.
+      if (code !== "en") {
+        const prose = await page.locator("#slide-06 .slide-content").textContent();
+        assert.notEqual(prose, englishProse, "slide 6 still reads English in " + code);
+      }
+      if (variant === "light") await assertFormatMentions(code);
+      if (code === "ar") {
+        // A Latin name of several words is one island on the right-to-left
+        // line. Split at the space and the line would read the second word
+        // first: "OKF Studio" would read "Studio OKF". An Arabic word
+        // between two Latin ones keeps them apart.
+        const islands = (selector) => page.locator(selector + " [dir=ltr]").allTextContents();
+        assert.deepEqual(await islands("#slide-10 .eyebrow"), ["RETRIEVAL-AUGMENTED GENERATION (RAG)"]);
+        assert.deepEqual(await islands('#slide-04 [data-i18n="src.itu"]'), ["GENIE.AI · ITU"]);
+        assert.deepEqual(await islands('#slide-10 [data-i18n="s10.items.0.f1"]'), ["Node.js", "OPEA ChatQnA"]);
+        assert.deepEqual(await islands('#slide-37 [data-i18n="src.k8s"]'), ["Kubernetes", "Helm"]);
+        // The diagrams stay English on the right-to-left page. A label that
+        // starts with a slash would read from the end if the page direction
+        // reached it, so the first character is checked to be the leftmost.
+        // A hidden slide has no boxes to measure, so the slide is shown first.
+        await page.evaluate((hash) => { location.hash = hash; }, "/slide-07");
+        await page.locator("section#slide-07.present").waitFor({state: "visible"});
+        // A label is cut into one text run per line; the runs that start
+        // with a slash are the ones the page direction would reorder.
+        const labels = await page.locator('#slide-07 figure svg text').evaluateAll(texts => texts.flatMap((text) => {
+          const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+          const found = [];
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent.startsWith("/api/")) continue;
+            const range = document.createRange();
+            const last = node.textContent.length - 1;
+            range.setStart(node, 0); range.setEnd(node, 1);
+            const first = range.getBoundingClientRect().left;
+            range.setStart(node, last); range.setEnd(node, last + 1);
+            found.push([node.textContent, first < range.getBoundingClientRect().left]);
+          }
+          return found;
+        }));
+        assert.deepEqual(labels, [["/api/*", true], ["/api/queries", true], ["/api/files", true]]);
+      }
     }
     assert.deepEqual(errors, []);
-    console.log("Checked all 43 slides, entry and idle motion, pause, notes, offline assets, reduced-motion navigation and "
+    console.log("Checked all " + spec.slides + " slides of the " + variant + " deck, entry and idle motion, pause, notes, offline assets, reduced-motion navigation and "
       + languages.length + " languages");
   } finally {
     await browser.close();

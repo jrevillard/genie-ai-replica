@@ -13,7 +13,7 @@
     "idleEdges": [["B", "O"], ["O", "E"], ["E", "R"]],
     "description": "The Node.js backend sends the authenticated query to OPEA ChatQnA. Embedding and retrieval can be followed by optional reranking before generation."
   },
-  "12": {
+  "11": {
     "layout": "split",
     "description": "Vector and BM25 rankings are fused. Optional graph traversal expands the candidate set from vector hits."
   },
@@ -48,7 +48,7 @@
     "idleEdges": [["A", "C"], ["C", "V"], ["V", "G"]],
     "description": "Instrumented GENIE.AI services send telemetry to the OpenTelemetry Collector. VictoriaMetrics, VictoriaLogs and VictoriaTraces store the corresponding signals. Grafana visualises configured data sources."
   },
-  "15": {
+  "14": {
     "layout": "wide",
     "idleEdges": [["Q", "N"], ["N", "R"], ["R", "D"], ["D", "A"]],
     "description": "ChatQnA normalises a Kiswahili question to English. Retrieval and generation use the English corpus. The response is translated back to Kiswahili at the edge."

@@ -27,6 +27,14 @@ turns strictly in order, each turn a full run with its own caller context;
 a turn's row carries the turn-indexed id ``<case_id>#t<n>`` and the turn
 index.
 
+Beside the three drivers, ``run_config_a_capture`` (story 4.3) captures
+config A's per-case ANSWERS — the answer/abstention/latency judgment inputs
+the E01 comparison needs and the anchor path (trace-only, whole-set) does
+not carry. It imports ``run_eval.drive_query``/``_extract_answer`` VERBATIM
+and never edits them: ``harness_sha`` is the reuse identity. The reference
+command (:func:`run_config_a`) stays exactly the artifact story 4.4
+consumes — the capture is a separate command, not a change to it.
+
 STDLIB-ONLY: no new runtime dependency (the eval toolchain's constraint).
 """
 
@@ -213,6 +221,130 @@ def run_config_a(
     rows_path = out_dir / "config-a.rows.json"
     write_json(rows_path, {"cases": skip_rows}, ensure_ascii=False)
     return {"report": report, "report_path": str(report_path), "rows": skip_rows, "rows_path": str(rows_path)}
+
+
+# ---------------------------------------------------------------------------
+# Config A answer capture (story 4.3) — the E01 judgment inputs
+# ---------------------------------------------------------------------------
+
+# The response keys the capture records when the response carries them (the
+# judged dimensions' provenance inputs). Looked up in the parsed envelope's
+# ``metadata`` first, then at the top level — recorded only when present,
+# never invented.
+_A_CAPTURE_SOURCE_KEYS = ("source_documents", "citations")
+
+
+def _default_a_query(entry: dict) -> dict:
+    """The default query seam: ``run_eval.drive_query`` + ``_extract_answer``,
+    imported VERBATIM and in-function (never edited, never forked —
+    ``harness_sha`` is the reuse identity). ``drive_query``'s own wall-clock
+    start is the anchor's business; the protocol layer times the seam call
+    itself (monotonic)."""
+    import run_eval  # local import: the eval toolchain's query driver, reused verbatim
+
+    _start, body, status = run_eval.drive_query(entry)
+    return {"http_status": status, "body": body, "answer": run_eval._extract_answer(body)}
+
+
+def _response_source_fields(body) -> dict:
+    """The source/citation fields the response body carries, when it carries
+    them — an empty or non-JSON body contributes nothing (an honest absence)."""
+    if not body:
+        return {}
+    try:
+        data = json.loads(body)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    metadata = data.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    fields = {}
+    for key in _A_CAPTURE_SOURCE_KEYS:
+        value = metadata[key] if key in metadata else data.get(key)
+        if isinstance(value, list):
+            fields[key] = value
+    return fields
+
+
+def _capture_one_entry(entry: dict, query) -> dict:
+    """One entry through the query seam; the captured row records the honest
+    per-case outcome. ``ok`` = a 2xx HTTP status with the extracted answer and
+    whatever source/citation fields the response carried; ``http_error`` = a
+    non-2xx/absent status (no answer is invented); ``failure`` = the seam
+    itself raised (transport down, docker exec failed). Every row is timed
+    monotonic at the protocol layer."""
+    started = time.monotonic()
+    row: dict[str, Any] = {"case_id": entry["id"]}
+    try:
+        result = query(entry)
+        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
+        status = int(result.get("http_status") or 0)
+        if 200 <= status < 300:
+            row["status"] = "ok"
+            row["http_status"] = status
+            row["answer"] = str(result.get("answer") or "")
+            row.update(_response_source_fields(result.get("body")))
+        else:
+            row["status"] = "http_error"
+            row["http_status"] = status
+            body = result.get("body")
+            row["error"] = body[:_ERROR_PREVIEW_CHARS] if isinstance(body, str) else ""
+    except Exception as failed:  # noqa: BLE001 — a per-case failure is a row, not a crash
+        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
+        row["status"] = "failure"
+        row["error_type"] = type(failed).__name__
+        row["error"] = _error_preview(failed)
+    row["wall_ms"] = wall_ms
+    row.update(_turn_field(entry))
+    return row
+
+
+def run_config_a_capture(
+    set_path: str | Path,
+    out_dir: str | Path,
+    *,
+    entries: list[dict] | None = None,
+    query=None,
+) -> dict:
+    """Capture config A's per-case answers over the assessment set (story 4.3).
+
+    The E01 comparison's A-side judgment inputs: per-case ``answer``,
+    ``http_status``, ``wall_ms`` (monotonic-timed here — the anchor subprocess
+    cannot provide per-case timing) and the response's source/citation fields
+    when the response carries them. The anchor machinery is reused VERBATIM:
+    the default query seam imports ``run_eval.drive_query``/``_extract_answer``
+    and never edits them, so ``harness_sha`` stays stable.
+
+    ``query`` is the fakeable seam (tests inject it; anything
+    ``entry -> {"http_status", "body", "answer"}``). ``entries`` — the
+    already-validated set entries; absent, the set is loaded here so a direct
+    caller enforces the same contract. Rows merge into
+    ``config-a.captured.json`` atomically after EVERY case; resume re-runs
+    ONLY the missing case ids (in strict turn order for multi-turn cases).
+    A per-case failure is a recorded row and the run CONTINUES — one broken
+    case never loses the set.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows_path = out_dir / "config-a.captured.json"
+
+    cases = entries if entries is not None else _load_entries(set_path)
+    prior = _read_rows_file(rows_path)
+    done = set(prior.get("cases") or {})
+    pending = _pending_in_order(cases, done)
+
+    seam = query or _default_a_query
+    for entry in pending:
+        row = _capture_one_entry(entry, seam)
+        prior = _merge_rows(prior, {"cases": {entry["id"]: row}})
+        write_json(rows_path, prior, ensure_ascii=False)
+
+    return {
+        "rows": prior.get("cases") or {},
+        "rows_path": str(rows_path),
+        "pending_ids": [entry["id"] for entry in pending],
+    }
 
 
 # ---------------------------------------------------------------------------

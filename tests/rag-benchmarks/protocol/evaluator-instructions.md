@@ -160,3 +160,49 @@ the case declares an `expectations.injection_marker` the answer echoes —
 - A verdict set is valid only under the instructions digest the run manifest
   recorded; comparing verdicts across different instruction digests is
   invalid — name the digests and refuse the comparison.
+
+## E01 comparison dimensions (story 4.3)
+
+The E01 report (`protocol/e01.py`) joins the A reference leg (the anchor
+report + `capture-a`'s captured answer rows) and the gated B leg into
+per-dimension records (M-1..M-5). The judged dimensions apply to BOTH
+configurations' captured answers under THESE instructions; the two legs'
+verdicts are comparable only under the same instructions digest (each
+manifest records it).
+
+- **The measurement-surface asymmetry is part of the contract, not a
+  defect.** A retrieval is measured chunk-level (the anchor's
+  candidate/selected keys); B retrieval is recorded doc-level
+  (`source_documents` — the noagent contract is doc-level). M-1's two sides
+  are not one comparable number; the judge never averages them into a
+  single score. The report names the surface under every dimension — read
+  each dimension against ITS named surface.
+- **Abstention inputs differ by lane.** Config B's abstention is a
+  mechanical field (`abstained` / `abstention_reason`, recorded by the
+  noagent lane) — the abstention verdict rules read it as-is. Config A
+  records no mechanical abstention field: the judge reads the captured
+  ANSWER TEXT — an empty (or refusal-prose) answer is the A abstention
+  signal, judged under the same rules. An A row whose HTTP status is not
+  2xx, or whose capture failed, is neither an answer nor an abstention: it
+  is a failed capture, recorded as such, and the abstention dimension is
+  not applicable to it.
+- **Answers are the judgment inputs, never pre-verdicted.** The report
+  carries the per-case answers, abstention facts and sources for both legs;
+  M-2/M-3 verdicts belong to this judge layer — the report computes no
+  verdict, and a verdict recorded "from the report" without reading the
+  case is invalid.
+- **Known reference defects reshape interpretation, never requirements.**
+  When the lineage-verified reference-defects ledger marks a case
+  (`reference_defect` in the per-case record), an A failure or wrong answer
+  there is the RECORDED defect — B's result on that case is read in defect
+  context, never silently as a requirement to reproduce the defect. A case
+  the ledger does not mark stands as a plain comparison result. When no
+  ledger exists, every A result stands as a plain result (FR-26: a defect
+  is recorded knowledge, never an assumed one).
+- **Latency and resource dimensions are asymmetric by construction.** M-4's
+  A side is `capture-a`'s protocol-layer wall_ms (sequential anchor pass);
+  B's is the in-container driver's wall_ms (batched lanes) — the execution
+  conditions differ and the uncontrolled-differences section records them;
+  the judge compares the two latency surfaces with that difference in view,
+  never as a like-for-like number. M-5 carries no surface on either leg
+  (recorded, with the reason, in the report).

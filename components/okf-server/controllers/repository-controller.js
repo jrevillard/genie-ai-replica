@@ -46,6 +46,9 @@ const { maxConceptDocChars, conceptTooLargeError } = require('../services/concep
 // in-handler requires). The services never require this controller, so
 // there is no import cycle to defer.
 const headTestService = require('../services/head-test-service');
+// #2061 phase 2 (E-2): the Evaluation Context catalogue — the carrier a
+// scoped run is measured against.
+const evaluationContextService = require('../services/evaluation-context-service');
 const headSuiteService = require('../services/head-suite-service');
 const studioDraftService = require('../services/studio-draft-service');
 const ragasSuiteService = require('../services/ragas-suite-service');
@@ -2238,7 +2241,34 @@ const rebuildRepoHead = call(async (req) => {
  * replays the Story 1.3 chunk-probe routing for repos with graphs.
  * Admin-scoped (LLM/TEI-burning surface).
  */
-const routingTest = call((req) => headTestService.routingTest(req.params.repo_id, req.body || {}, adminOpts(req)));
+/**
+ * #2061 phase 2 (E-2): the CARRIER a request asks to be evaluated against.
+ * `context_id` names an Evaluation Context; the carrier is that context's
+ * STORED snapshot (never a fresh resolution — the snapshot is the contract,
+ * and CI resolves from snapshots with no Keycloak at all). An unknown
+ * context is REFUSED, never silently an empty carrier.
+ */
+async function carrierFromRequest(req) {
+  const body = req.body || {};
+  const contextId = body.context_id || (req.query && req.query.context_id);
+  if (!contextId) return null;
+  // The carrier is narrowed to what THIS CALLER may traverse: the catalogue
+  // is superadmin-gated, but the run routes are repo-scoped-admin and the
+  // run records are read-scoped. Without this, naming a context id was a
+  // way to have a foreign (possibly restricted) repository set measured and
+  // persisted into a record this caller can read.
+  return evaluationContextService.carrierFor(contextId, {
+    okfScopes: req.okfScopes,
+    isSuperAdmin: req.okfIsSuperAdmin
+  });
+}
+
+const routingTest = call(async (req) =>
+  headTestService.routingTest(req.params.repo_id, req.body || {}, {
+    ...adminOpts(req),
+    carrier: await carrierFromRequest(req)
+  })
+);
 /**
  * Story 1-8d — POST /api/okf/repos/:repo_id/routing-advisor.
  * The comprehensive advisor: aggregates the queries of the last N runs
@@ -2379,7 +2409,12 @@ const runTestSuite = call(
     // column); scripts can opt out with {"probe": false}.
     const { run_key, done } = await headSuiteService.beginRunSuite(req.params.repo_id, req.params.suite_key, {
       ...adminOpts(req),
-      probe: !(req.body && req.body.probe === false)
+      probe: !(req.body && req.body.probe === false),
+      // #2061 phase 2 (E-2): the run is measured against the named
+      // Evaluation Context's carrier. The carrier is resolved ONCE, here, and
+      // travels with the run — so every row of the run is scored against the
+      // SAME set, and the record says which set.
+      carrier: await carrierFromRequest(req)
     });
     done.catch(() => {}); // the service logs + records the failure doc
     return { run_key, status: 'running' };
@@ -2503,7 +2538,9 @@ const runRagasSuite = call(
       req.params.repo_id,
       req.params.suite_key,
       req.body || {},
-      adminOpts(req)
+      // #2061 phase 2 (E-4): the served run is measured over the named
+      // Evaluation Context's carrier — the group the benchmark asks about.
+      { ...adminOpts(req), carrier: await carrierFromRequest(req) }
     );
     done.catch(() => {});
     return { run_key, status: 'running' };

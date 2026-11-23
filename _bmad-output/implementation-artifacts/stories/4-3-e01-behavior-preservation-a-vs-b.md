@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 76 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 79 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,7 +132,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 255 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 258 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
 the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
 ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
@@ -398,6 +398,26 @@ exhausted, so the MR stays a draft pending the orchestrator's ruling.
 | F65' | The bearer test recorded only the `force` flag — the non-forced TTL refresh (the defect F52' is about) and the ORDER of the bootstrap stayed invisible | important | **Fixed**: the fake mirrors the anchor's TTL rule and the test pins the order (the refresh precedes the first drive) and the untouched pre-minted bearer |
 | F66' | The wall-clock assertion covered only the first timed case | nit | **Fixed**: every timed case is asserted (the holding-clock mutation was verified to fail locally) |
 | F67' | The coercion kept a falsy non-string scalar (`0`, `False`) — a label the server drops, so the report compared a scope the filter can never carry | nit | **Fixed**: every falsy label is dropped, exactly like the server; a whitespace-only label is kept (the wire is verbatim) |
+
+**QUALITY PHASE over the round-3 increment (6 lanes: reuse, simplification,
+efficiency, altitude, test-audit ×2) — 10 findings, ALL fixed.** Two were
+defects the round-4 FIX review had missed (one of them a credential leak in
+the round-3 fix itself); the rest were drift guards, duplication and
+altitude. The lane finding "the word split returns more than its consumer
+needs" is superseded by F68' below — the per-word rule needs the whole list.
+
+| # | Finding | Lane | Verdict | Disposition |
+|---|---|---|---|---|
+| F68' | The author-word exception vetoed the WHOLE key on its first word — `author_auth_header` kept its Bearer value, a credential reaching the report | altitude | important | **Fixed**: the marker is applied PER WORD — an author-bearing word is evidence, any other auth-bearing word is a credential |
+| F69' | The scope was compared as a LIST while a scope is a SET (the retriever filters on the union) — a repeated label published a phantom scope difference | altitude | important | **Fixed**: the two legs' effective filters are compared as sets; the recorded facts stay as measured |
+| F70' | The two A-side scope lists overlap with no reading rule — a case whose label was never SENT reads like a collapse case | altitude | important | **Fixed**: the report's note names the two causes, and the judge contract (`evaluator-instructions.md`) names both lists and the rule |
+| F71' | The coercion's mirror of the server's rule was a transcription — the server's rule had already drifted | reuse, test-audit | important | **Fixed**: a parity pin loads the server's own `label_contract` and asserts the two agree (the documented dedup divergence asserted) |
+| F72' | Two fakes of the config-B wire format — the new one and the suite's | reuse, simplification, test-audit | important | **Fixed**: the suite's `FakeBTransport` is reused |
+| F73' | The bearer fake restated the anchor's TTL window (240−30 instead of the anchor's 240−60) | reuse, simplification, test-audit | nit | **Fixed**: the fake imports the anchor's own constants |
+| F74' | The container-side read of the shipped labels had no owner | test-audit | important | **Fixed**: a test asserts the in-container driver reads the shipped list as N labels |
+| F75' | The word split ran for every key, though only the marker branch consumes it | efficiency | nit | **Fixed**: it is computed only under the marker branch (a 200-case report build: 133 ms → 62 ms) |
+| F76' | Four small duplications: the coercion's redundant string branch, the stale scope docstring, the thrice-written set-file shape, three parallel lists in the bearer fake | simplification | nit | **Fixed**: all four |
+| F77' | The scope record's docstring still described the pre-F62' rule, and the judge contract did not name the not-sent list | simplification, test-audit | nit | **Fixed**: the docstring, the note and the judge contract now state the two causes |
 
 ## Design Notes
 

@@ -174,20 +174,18 @@ def as_label_list(value) -> list[str]:
     one label (the legacy shape) and an empty label is not a scope. A string
     split into characters would be a silent lie about the scope.
 
-    Mirrors the server EXACTLY: ``_as_label_list`` takes a LIST as-is and
-    treats every other truthy value as ONE scalar, then ``build_filter_labels``
-    drops the FALSY labels (``""``, ``None``, ``0``, ``False``) and stringifies
-    the rest. A whitespace-only label is KEPT (the wire is verbatim).
+    Mirrors the server's label rules: ``_as_label_list`` takes a LIST as-is
+    and treats every other truthy value as ONE scalar, then
+    ``build_filter_labels`` drops the FALSY labels (``""``, ``None``, ``0``,
+    ``False``) and stringifies the rest. A whitespace-only label is KEPT (the
+    wire is verbatim). The server's filter builder additionally DEDUPS the
+    labels it builds; this coercion keeps the request's own list, and the
+    report compares the two legs' scopes as sets — so the dedup carries no
+    scope meaning.
     """
     if not value:
         return []
-    if isinstance(value, list):
-        items = value
-    elif isinstance(value, str):
-        return [value]
-    else:
-        # Any other scalar is one label, stringified (the server's rule).
-        items = [value]
+    items = value if isinstance(value, list) else [value]
     labels = []
     for item in items:
         # A falsy element is not a label (the server drops it too).

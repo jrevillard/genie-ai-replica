@@ -216,14 +216,23 @@ manifest records it).
   never assume it.** Each lane records the filter it actually applied:
   config A's response metadata (`filter_labels`, after chatqna's
   service-over-category collapse) and config B's row metadata
-  (`filter_labels`, the noagent lane's requested labels). The report states
+  (`filter_labels`, the noagent lane's requested labels). A scope is a SET of
+  labels — the retriever filters on their union — so a repeated label is not
+  a scope difference (chatqna dedups the filter it builds; the noagent lane
+  applies the request verbatim). The report states
   whether the two match (`scope_matched`), names the cases whose effective
   scopes differ, records the labels the A capture SENT beside them, names the
-  cases whose REQUESTED labels never became an effective filter (chatqna
-  collapses a category into its service, so a requested category can be
-  filtered out while the request carried it), and names the cases that issued
+  cases whose REQUESTED labels never became an effective filter, names the
+  cases whose REQUESTED labels were never SENT, and names the cases that issued
   no request at all (a skipped capture). `scope_matched` is `null` when the
   comparison was partial (a case scoped on one leg only) or absent, and
   `false` when a mismatch was observed — the report never claims a scope match
   it did not measure. For a case whose scopes differ, a retrieval
   or grounding difference reflects the SCOPE, not the pipeline.
+- **The two A-side scope lists name DIFFERENT causes — read the one that
+  applies.** `cases_whose_requested_labels_were_not_sent`: the label was
+  never on the wire, so the SCOPE was the request's (the lane never asked for
+  it). `cases_whose_requested_labels_never_became_an_effective_filter`: the
+  label is not in the filter the lane applied — when the case is NOT in the
+  not-sent list, chatqna's collapse dropped it (the request carried it). The
+  two lists can name the same case; the not-sent list is then the cause.

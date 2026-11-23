@@ -19,9 +19,8 @@ are fixture rows (no deployment case content). Proven here:
 """
 
 import argparse
-import base64
 import json
-import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -108,6 +107,17 @@ def _set_file(tmp_path, extra_answerable=("c1", "c2", "c3", "c4")):
     path = tmp_path / "set.json"
     path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
     return path
+
+
+def _patch_case(set_path, case_id, **fields):
+    """Patch one case of a set file in place (the set file's shape is written
+    in one place only)."""
+    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
+    for entry in entries:
+        if entry["id"] == case_id:
+            entry.update(fields)
+    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    return set_path
 
 
 def _manifests():
@@ -296,11 +306,7 @@ def _expected_ids(set_path):
 def test_capture_a_records_per_case_rows_with_timing_and_turn_ids(tmp_path):
     set_path = _set_file(tmp_path, extra_answerable=("c1", "mt"))
     # The multi-turn case: two turns — the seam answers per turn id.
-    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
-    for entry in entries:
-        if entry["id"] == "mt":
-            entry["turns"] = [{"query": "turn one"}, {"query": "turn two"}]
-    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    _patch_case(set_path, "mt", turns=[{"query": "turn one"}, {"query": "turn two"}])
 
     seam, calls = _seam({"c1": "answer c1", "mt#t1": "answer t1", "mt#t2": "answer t2"})
     result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
@@ -442,57 +448,63 @@ def test_the_b_driver_ships_the_coerced_label_scope(tmp_path):
     the in-container driver splits a bare string into characters, the B leg
     filters on characters, and the report publishes a scope difference that
     does not exist."""
+    from test_protocol_drivers import FakeBTransport
+
     set_path = _set_file(tmp_path, extra_answerable=("c1",))
-    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
-    for entry in entries:
-        if entry["id"] == "c1":
-            entry["context"] = {"requested_labels": "Forestry", "user_id": "u"}
-    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    _patch_case(set_path, "c1", context={"requested_labels": "Forestry", "user_id": "u"})
 
-    class _Transport:
-        """Decodes what the driver ships and answers with one ok row per
-        case — the seam the container side stands in for."""
-
-        def __init__(self):
-            self.shipped: list[dict] = []
-
-        def exec_cmd(self, container, cmd, timeout=600, pass_env=()):
-            quoted = re.findall(r"printf %s '([^']+)'", cmd)
-            if cmd.startswith("base64 -w0"):
-                rows = {
-                    case["id"]: {
-                        "case_id": case["id"],
-                        "status": "ok",
-                        "answer": "an answer",
-                        "abstained": False,
-                        "source_documents": [],
-                        "metadata": {},
-                        "wall_ms": 12.0,
-                    }
-                    for case in self.shipped
-                }
-                payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b"}})
-                return base64.b64encode(payload.encode("utf-8")).decode("ascii")
-            if "python3" in cmd and quoted:
-                self.shipped.extend(json.loads(base64.b64decode(quoted[0]).decode("utf-8"))["cases"])
-            return ""
-
-    transport = _Transport()
+    transport = FakeBTransport()
     drivers.run_config_b(set_path, tmp_path / "out-b", transport=transport)
-    shipped = [case for case in transport.shipped if case["id"] == "c1"]
+    shipped = [case for case in transport.shipped_cases if case["id"] == "c1"]
     assert shipped, "the case never shipped to the container"
     assert shipped[0]["context"]["requested_labels"] == ["Forestry"]
 
 
+def test_the_container_reads_the_shipped_labels_as_labels():
+    """The other end of the same wire: the in-container driver reads the
+    shipped label list as N labels. A bare string there would split into
+    characters — the hazard the write boundary exists to prevent."""
+    import types
+
+    # The container's own contract module is not importable here (it is the
+    # agent-service's, with its own dependencies) — the driver only needs the
+    # model to construct, so the seam stands in for it.
+    capabilities = types.ModuleType("capabilities")
+    contract = types.ModuleType("capabilities.contract")
+
+    class _CallerContext:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    contract.CallerContext = _CallerContext
+    capabilities.contract = contract
+    monkey = pytest.MonkeyPatch()
+    monkey.setitem(sys.modules, "capabilities", capabilities)
+    monkey.setitem(sys.modules, "capabilities.contract", contract)
+    try:
+        from protocol import config_b_driver
+
+        context = config_b_driver.build_context(
+            {"context": {"requested_labels": ["Forestry", "Timber"], "user_id": "u"}}
+        )
+    finally:
+        monkey.undo()
+    assert tuple(context.requested_labels) == ("Forestry", "Timber")
+
+
 def test_e01_keeps_an_author_key_and_drops_the_credential_names():
     """The credential rule matches credential NAMES in every spelling: an
-    `author` key is evidence, not a secret, and must survive — while the
-    joined and camelCase auth spellings are credentials and must not."""
+    author-bearing key is evidence, not a secret, and must survive — while
+    the joined and camelCase auth spellings are credentials and must not.
+    The rule is applied PER WORD, so a key that carries BOTH ("author_auth")
+    is a credential — the author word does not veto the whole key."""
     from protocol.e01 import _is_credential_key
 
     assert _is_credential_key("author") is False
     assert _is_credential_key("authors") is False
     assert _is_credential_key("authorName") is False
+    assert _is_credential_key("doc_authors") is False
+    assert _is_credential_key("coauthor") is False
     assert _is_credential_key("auth") is True
     assert _is_credential_key("auth_token") is True
     assert _is_credential_key("authorization") is True
@@ -501,16 +513,29 @@ def test_e01_keeps_an_author_key_and_drops_the_credential_names():
     assert _is_credential_key("authHeader") is True
     assert _is_credential_key("authheader") is True
     assert _is_credential_key("authValue") is True
+    # A key that carries an author word AND an auth word is a credential.
+    assert _is_credential_key("author_auth") is True
+    assert _is_credential_key("author_auth_header") is True
+    assert _is_credential_key("authorAuthHeader") is True
 
     rows = _b_rows()
-    rows["c1"]["metadata"] = {"author": "Jane Doe", "auth": "LEAK", "authHeader": "Bearer SUPERSECRET"}
+    rows["c1"]["metadata"] = {
+        "author": "Jane Doe",
+        "doc_authors": ["Jane Doe"],
+        "auth": "LEAK",
+        "authHeader": "Bearer SUPERSECRET",
+        "author_auth_header": "Bearer COMPOUNDLEAK",
+    }
     report = _build(b_rows=rows)
     recorded = report["per_case"]["c1"]["b"]["metadata"]
     assert recorded["author"] == "Jane Doe"
+    assert recorded["doc_authors"] == ["Jane Doe"]
     assert "auth" not in recorded
     assert "authHeader" not in recorded
+    assert "author_auth_header" not in recorded
     assert "LEAK" not in json.dumps(report)
     assert "SUPERSECRET" not in json.dumps(report)
+    assert "COMPOUNDLEAK" not in json.dumps(report)
 
 
 def test_the_shared_label_coercion_mirrors_the_server_rule():
@@ -541,6 +566,47 @@ def test_the_shared_label_coercion_mirrors_the_server_rule():
     # The server takes a LIST as-is and treats every other shape as one
     # scalar — a tuple is not a list there either.
     assert as_label_list(("Timber", "Forestry")) == ["('Timber', 'Forestry')"]
+
+
+def test_the_label_coercion_matches_the_server_rule_it_mirrors():
+    """The coercion MIRRORS the server's label rule — so the two legs cannot
+    disagree about the scope they applied. The expectations are read from
+    the server's own code (loaded by path, the way the fanout parity test
+    loads its counterpart), not transcribed: a server-side change that this
+    copy did not follow turns this red instead of drifting silently.
+
+    The one documented divergence: the server's filter builder DEDUPS the
+    labels it builds, the coercion keeps the request's own list. The report
+    compares the two legs' scopes as sets, so the dedup carries no scope
+    meaning."""
+    import importlib.util
+
+    from protocol.evalset import as_label_list
+
+    server_path = Path(__file__).resolve().parents[2] / "genie-ai-overlay" / "core" / "label_contract.py"
+    spec = importlib.util.spec_from_file_location("server_label_contract", server_path)
+    server = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(server)
+
+    values = [
+        "Forestry",
+        ["Timber", "Forestry"],
+        ["Timber", "", None],
+        ["Timber", 0],
+        ["Timber", False],
+        ["Timber", " "],
+        "",
+        [],
+        None,
+        0,
+        5,
+        ("Timber", "Forestry"),
+    ]
+    for value in values:
+        assert as_label_list(value) == server.build_filter_labels({"categoryLabels": value}), value
+    # The documented divergence, asserted rather than left implicit.
+    assert as_label_list(["Timber", "Timber"]) == ["Timber", "Timber"]
+    assert server.build_filter_labels({"categoryLabels": ["Timber", "Timber"]}) == ["Timber"]
 
 
 def test_e01_redacts_the_auth_and_session_keys():
@@ -598,31 +664,31 @@ def test_capture_a_seeds_the_bearer_clock_before_the_first_drive(tmp_path, monke
     first TTL check refreshes at once and replaces a pre-minted
     service-account bearer — the A leg would then answer under a different
     identity than the reference it is compared against."""
-    import sys
     import time
     import types
 
+    # The anchor's OWN constants — the fake must not restate them (the TTL
+    # window is the anchor's, not a copy of it).
+    from run_eval import _TOKEN_REFRESH_MARGIN, _TOKEN_TTL
+
     fake_run_eval = types.ModuleType("run_eval")
     fake_run_eval._token_ts = 0.0
-    forced = []
-    sequence = []
-    clock_at_drive = []
+    # ONE event log: ("refresh", force) and ("drive", clock-at-drive).
+    events: list[tuple] = []
 
     def _maybe_refresh_token(force=False):
         """The anchor's own TTL rule: a non-forced refresh happens only when
         the clock has aged past the TTL — which is exactly what an unseeded
         clock looks like."""
-        if not force and time.time() - fake_run_eval._token_ts <= 240.0 - 30.0:
+        if not force and time.time() - fake_run_eval._token_ts <= _TOKEN_TTL - _TOKEN_REFRESH_MARGIN:
             return False
-        forced.append(force)
-        sequence.append("refresh")
+        events.append(("refresh", force))
         fake_run_eval._token_ts = time.time()
         return True
 
     def _drive_query(entry):
         # The clock the capture seeded, as the FIRST drive sees it.
-        clock_at_drive.append(fake_run_eval._token_ts)
-        sequence.append("drive")
+        events.append(("drive", fake_run_eval._token_ts))
         # The anchor's per-entry TTL check (run_eval's loop does this).
         _maybe_refresh_token()
         return (0.0, '{"response": "parsed"}', 200)
@@ -637,23 +703,26 @@ def test_capture_a_seeds_the_bearer_clock_before_the_first_drive(tmp_path, monke
     set_path = _set_file(tmp_path, extra_answerable=("c1",))
     # The DEFAULT seam (no injected query) — the path that drives chatqna.
     drivers.run_config_a_capture(set_path, tmp_path / "out", corpus_fingerprint=CORPUS)
-    assert clock_at_drive, "no case was driven"
+    drives = [clock for kind, clock in events if kind == "drive"]
+    assert drives, "no case was driven"
     # The clock was seeded BEFORE the first drive — not after the loop.
-    assert clock_at_drive[0] > 0.0, "the refresh clock was seeded after the first drive"
+    assert drives[0] > 0.0, "the refresh clock was seeded after the first drive"
     # No refresh at all: the pre-minted bearer survives (the TTL check sees
     # a fresh clock and skips).
-    assert forced == [], "a pre-minted bearer must not be replaced"
+    assert [kind for kind, _ in events if kind == "refresh"] == [], (
+        "a pre-minted bearer must not be replaced"
+    )
 
     # With no static bearer, the anchor forces ONE refresh up front.
     fake_run_eval._token_ts = 0.0
-    forced.clear()
-    sequence.clear()
-    clock_at_drive.clear()
+    events.clear()
     monkeypatch.delenv("E2E_BEARER_TOKEN")
     drivers.run_config_a_capture(set_path, tmp_path / "out2", corpus_fingerprint=CORPUS)
-    assert [f for f in forced if f] == [True], "no static bearer means one forced refresh"
+    assert [force for kind, force in events if kind == "refresh"] == [True], (
+        "no static bearer means one forced refresh"
+    )
     # The forced refresh happened BEFORE the first drive (the seed block).
-    assert sequence and sequence[0] == "refresh", "the forced refresh did not run before the drives"
+    assert events and events[0][0] == "refresh", "the forced refresh did not run before the drives"
 
 def test_e01_reports_all_five_dimensions_for_both_configs_with_named_surfaces():
     report = _build()
@@ -1710,6 +1779,22 @@ def test_e01_compares_the_effective_scope_of_both_legs():
     assert scope["cases_with_a_different_effective_scope"] == ["c1"]
 
 
+def test_e01_compares_the_effective_scopes_as_sets():
+    """A scope is a SET of labels — the retriever filters on their union, so
+    a repeated label carries no scope meaning. chatqna dedups the filter it
+    builds; the noagent lane applies the request verbatim — comparing the
+    lists would publish a scope difference that does not exist."""
+    captured, rows = _scoped_rows("c1", ["Forestry"])
+    rows["c1"]["metadata"] = {"filter_labels": ["Forestry", "Forestry"]}
+    report = _build(captured_rows=captured, b_rows=rows)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["scope_matched"] is True
+    assert scope["cases_with_a_different_effective_scope"] == []
+    # The recorded facts stay as they were measured.
+    assert scope["A"]["effective_filter_labels_per_case"]["c1"] == ["Forestry"]
+    assert scope["B"]["effective_filter_labels_per_case"]["c1"] == ["Forestry", "Forestry"]
+
+
 def test_e01_drops_a_credential_named_like_a_token_count():
     """A `_tokens` name is a count only when it carries no credential
     marker — "password_tokens" is not a count."""
@@ -1844,11 +1929,7 @@ def test_capture_a_records_a_string_valued_label_as_one_label(tmp_path):
     """The legacy string shape is ONE label — splitting it into characters
     would be a silent lie about the scope."""
     set_path = _set_file(tmp_path, extra_answerable=("c1",))
-    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
-    for entry in entries:
-        if entry["id"] == "c1":
-            entry["categoryLabels"] = "Tomato"
-    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    _patch_case(set_path, "c1", categoryLabels="Tomato")
     seam, _ = _seam({"c1": "a1"})
     result = drivers.run_config_a_capture(
         set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS

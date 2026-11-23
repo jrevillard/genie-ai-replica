@@ -27,7 +27,12 @@ const COLLECTIONS = [
   // Async repo-wide PII concept rescans (202 + poll, pii-service
   // beginRepoConceptScan). One placeholder doc per run; the doc's status
   // ('running' | 'complete' | 'failed') IS the poll's answer.
-  'okf_pii_scan_runs'
+  'okf_pii_scan_runs',
+  // #2061 phase 2 (E-1): the Evaluation Contexts — named, versioned,
+  // snapshot-resolved authorization principals. One doc per context; the
+  // resolved graph set is a SNAPSHOT (the authority's answer, frozen), never
+  // a hand-listed set.
+  'okf_evaluation_contexts'
 ];
 
 const INDEXES = {
@@ -72,7 +77,10 @@ const INDEXES = {
   okf_pii_scan_runs: [
     { type: 'persistent', fields: ['repo_id'] },
     { type: 'persistent', fields: ['created_at'] }
-  ]
+  ],
+  // E-1's catalogue: the name is the operator-facing key (not unique — two
+  // contexts may share a name across tenants), so the index is non-unique.
+  okf_evaluation_contexts: [{ type: 'persistent', fields: ['name'] }]
 };
 
 // EXTERNAL collections (David, 2026-09-09: "create the required indexes and

@@ -162,7 +162,7 @@ def test_snapshot_resolved_env_distinguishes_missing_vs_unresolved(monkeypatch):
             return "RERANKER_TOP_N=3\nRERANKING_STRATEGY=slice\n"
         raise RuntimeError("exec failed")
 
-    monkeypatch.setattr(cb, "_docker_exec", fake_exec)
+    monkeypatch.setattr(cb, "_exec", fake_exec)
     r = cb.snapshot_resolved_env(containers)
     assert r["values"] == {"RERANKER_TOP_N": "3", "RERANKING_STRATEGY": "slice"}
     assert "RERANKER_MODEL_ID" in r["missing"]  # reranker exec failed
@@ -181,7 +181,7 @@ def test_snapshot_resolved_env_records_multi_service_conflicts(monkeypatch):
             return "RERANKER_TOP_N=3\nRERANKING_STRATEGY=slice\n"
         return "RERANKER_TOP_N=5\nRERANKER_MODEL_ID=bge-reranker-v2-m3\n"
 
-    monkeypatch.setattr(cb, "_docker_exec", fake_exec)
+    monkeypatch.setattr(cb, "_exec", fake_exec)
     r = cb.snapshot_resolved_env(containers)
     assert r["values"]["RERANKER_TOP_N"] == "5"  # last service wins, but...
     assert "RERANKER_TOP_N" in r["conflicts"]  # ...the conflict is recorded, not hidden

@@ -517,14 +517,16 @@ def run_config_a_capture(
 
 
 class DockerExecBTransport:
-    """The docker-exec transport (the eval toolchain's established pattern):
+    """The container-exec transport (the eval toolchain's established pattern):
     every B operation is a ``sh -c`` command run inside the agent-service
-    container through ``harness.docker_exec``."""
+    container through ``harness.exec_in_container`` — docker on a
+    compose/swarm venue, ``kubectl exec`` on a Kubernetes venue (the venue
+    is selected by ``EVAL_EXEC_BACKEND``, never detected)."""
 
     def exec_cmd(self, container: str, cmd: str, timeout: float = 600, pass_env: tuple = ()) -> str:
-        from harness import docker_exec
+        from harness import exec_in_container
 
-        return docker_exec(container, cmd, timeout=timeout, pass_env=pass_env)
+        return exec_in_container(container, cmd, timeout=timeout, pass_env=pass_env)
 
 
 def _b64(payload: bytes) -> str:

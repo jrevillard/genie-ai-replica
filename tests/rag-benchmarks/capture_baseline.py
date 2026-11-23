@@ -68,7 +68,7 @@ from pathlib import Path
 # Make the eval/ subpackage importable for the shared harness primitives
 # (``docker_exec`` + atomic JSON IO) — previously duplicated locally.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "eval"))
-from harness import docker_exec as _docker_exec, write_json  # noqa: E402
+from harness import exec_in_container as _exec, write_json  # noqa: E402
 
 # Metrics where a LOWER value is the parity-relevant regression signal.
 LOWER_IS_BETTER = ("recall", "precision", "complete_recall", "retrieval_recall")
@@ -316,7 +316,7 @@ def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
             missing.extend(keys)
             continue
         try:
-            body = _docker_exec(
+            body = _exec(
                 info["container"],
                 env_grep_cmd(keys),
                 timeout=30,

@@ -58,7 +58,7 @@ import urllib.error
 import metrics
 from arango import cursor, source_chunks
 from chunk_identity import content_hash
-from harness import HarnessError, docker_exec as _docker_exec, write_json
+from harness import HarnessError, exec_in_container, write_json
 from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
@@ -136,11 +136,11 @@ def _resolve_chatqna_container(force: bool = False) -> str | None:
     return pinned or _chatqna_container_cache
 
 
-def _chatqna_docker_exec(
+def _chatqna_exec(
     cmd: str, timeout: float = 150, pass_env: tuple = ()
 ) -> str:
-    """Wrap ``_docker_exec`` against the chatqna container with mid-run
-    re-resolution on ``HarnessError``.
+    """Wrap the venue's exec primitive against the chatqna container with
+    mid-run re-resolution on ``HarnessError``.
 
     On the first call uses ``CHATQNA_CONTAINER`` as resolved; on
     ``HarnessError`` (container rotated), call
@@ -148,10 +148,16 @@ def _chatqna_docker_exec(
     replica and update the module-level cache, then re-raise so the
     per-entry retry loop (3 attempts) consumes the recovered attempt
     on its next call.
+
+    The re-resolution is DOCKER-specific (``docker ps | grep``): on a
+    Kubernetes venue the pod is resolved per exec by
+    ``harness.resolve_k8s_pod`` (label selector), so a rotated pod is
+    picked up without this cache — and a failed docker re-resolve on a
+    Kubernetes venue only prints a warning.
     """
     global CHATQNA_CONTAINER
     try:
-        return _docker_exec(
+        return exec_in_container(
             CHATQNA_CONTAINER, cmd, timeout=timeout, pass_env=pass_env
         )
     except HarnessError:
@@ -253,13 +259,13 @@ def drive_query(entry: dict) -> tuple[float, str, int]:
             f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
             f" -H \"Authorization: Bearer $E2E_BEARER_TOKEN\" -d '{payload_json}' -w '\\n%{{http_code}}'"
         )
-        raw = _chatqna_docker_exec(cmd, timeout=150, pass_env=("E2E_BEARER_TOKEN",))
+        raw = _chatqna_exec(cmd, timeout=150, pass_env=("E2E_BEARER_TOKEN",))
     else:
         cmd = (
             f"curl -s -m 120 -X POST {CHATQNA_URL} -H 'Content-Type: application/json'"
             f" -d '{payload_json}' -w '\\n%{{http_code}}'"
         )
-        raw = _chatqna_docker_exec(cmd, timeout=150)
+        raw = _chatqna_exec(cmd, timeout=150)
     body, _, code = raw.rpartition("\n")
     status = int(code) if code.strip().isdigit() else 0
     return start, body, status
@@ -376,7 +382,7 @@ def fetch_selection(start_s: float) -> tuple[list[str], list[str], list[dict]]:
             f"?service={CHATQNA_SERVICE_NAME}"
             f"&start={start_us}&end={end_us}&limit=50"
         )
-        raw = _chatqna_docker_exec(f"curl -s '{url}'", timeout=60)
+        raw = _chatqna_exec(f"curl -s '{url}'", timeout=60)
         candidates, selected, breakdown = _extract_selection(raw, start_s)
         if candidates or selected:
             return candidates, selected, breakdown

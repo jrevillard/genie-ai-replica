@@ -82,13 +82,13 @@ def test_score_anchor_empty_map_produces_no_scoring_signal():
 
 
 def test_drive_query_returns_http_status(monkeypatch):
-    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120, pass_env=(): '{"text":"ok"}\n200')
+    monkeypatch.setattr(run_eval, "exec_in_container", lambda c, cmd, timeout=120, pass_env=(): '{"text":"ok"}\n200')
     start, body, status = run_eval.drive_query({"query": "q"})
     assert status == 200 and body == '{"text":"ok"}'
 
 
 def test_drive_query_401_detected(monkeypatch):
-    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120, pass_env=(): '{"error":"invalid_token"}\n401')
+    monkeypatch.setattr(run_eval, "exec_in_container", lambda c, cmd, timeout=120, pass_env=(): '{"error":"invalid_token"}\n401')
     _, _, status = run_eval.drive_query({"query": "q"})
     assert status == 401
 
@@ -103,7 +103,7 @@ def test_docker_exec_pass_env_forwards_flag(monkeypatch):
         captured["argv"] = argv
         return type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
     monkeypatch.setattr(run_eval.subprocess, "run", fake_run)
-    run_eval._docker_exec("c", "echo hi", pass_env=("FOO",))
+    run_eval.exec_in_container("c", "echo hi", pass_env=("FOO",))
     assert captured["argv"] == ["docker", "exec", "-e", "FOO", "c", "sh", "-c", "echo hi"]
 
 
@@ -117,7 +117,7 @@ def test_drive_query_token_not_in_argv(monkeypatch):
     def fake_docker_exec(c, cmd, timeout=120, pass_env=()):
         captured.append({"container": c, "cmd": cmd, "pass_env": tuple(pass_env)})
         return '{"text":"x"}\n200'
-    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_docker_exec)
     monkeypatch.setenv("E2E_BEARER_TOKEN", "SECRETTOKEN")
     start, body, status = run_eval.drive_query({"query": "q"})
     assert status == 200
@@ -268,7 +268,7 @@ def test_fetch_selection_respects_deadline_overshoot(monkeypatch):
     # Tiny budget so the second iteration crosses the deadline
     monkeypatch.setattr(_re, "TRACE_FETCH_TIMEOUT", 0.05)
     monkeypatch.setattr(_re, "TRACE_FLUSH_WAIT", 999.0)
-    monkeypatch.setattr(_re, "_docker_exec",
+    monkeypatch.setattr(_re, "exec_in_container",
                         lambda c, cmd, timeout=60, pass_env=(): json.dumps({"data": []}))
     # Module-local time namespace so both sleep() and time() are patchable
     t0 = [1000.0]
@@ -316,7 +316,7 @@ def test_fetch_selection_immediate_first_poll(monkeypatch):
         sleep=lambda s: sleeps.append(s),
         time=time.time,
     ))
-    monkeypatch.setattr(run_eval, "_docker_exec", my_docker)
+    monkeypatch.setattr(run_eval, "exec_in_container", my_docker)
     monkeypatch.setattr(run_eval, "TRACE_FETCH_TIMEOUT", 30)
     cands, sels, _ = run_eval.fetch_selection(time.time())
     assert cands == ["key_a"]
@@ -1237,7 +1237,7 @@ def test_f1_chatqna_container_reresolved_on_docker_exec_failure(tmp_path, monkey
                 f"docker exec {container} failed: No such container: {container}"
             )
         return '{"text":"ok"}\n200'
-    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_docker_exec)
 
     # Resolver: re-resolve returns a NEW container name (the rotated one)
     resolve_calls = []
@@ -1283,7 +1283,7 @@ def test_f1_chatqna_resolver_prefers_env_override(monkeypatch):
     def fake_docker_exec(container, cmd, timeout=120, pass_env=()):
         seen_containers.append(container)
         raise HarnessError("not running")
-    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_docker_exec)
     # Even on HarnessError, the resolver checks env first; with force=True
     # it still honors the env value (logs a warning if a new name is found)
     # but here we mock the resolver to record its invocation pattern.

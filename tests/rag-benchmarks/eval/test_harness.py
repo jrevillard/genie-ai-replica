@@ -5,11 +5,15 @@ Covers:
   - read_json UTF-8 round-trip with accents
   - docker_exec error path (mock subprocess.run rc=1 → HarnessError)
   - docker_exec pass_env flag order (-e inserted BEFORE container name)
+  - exec_in_container venue dispatch (docker | kubectl | unknown)
+  - kubectl_exec: the forwarded env values travel on STDIN, never on argv
+  - resolve_k8s_pod: the operator's pin wins, then the label selectors
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,7 +22,15 @@ from unittest import mock
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import HarnessError, docker_exec, read_json, write_json  # noqa: E402
+from harness import (  # noqa: E402
+    HarnessError,
+    docker_exec,
+    exec_in_container,
+    kubectl_exec,
+    read_json,
+    resolve_k8s_pod,
+    write_json,
+)
 
 
 class TestWriteJson:
@@ -96,3 +108,76 @@ class TestDockerExec:
         with mock.patch("harness.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="docker", timeout=1)):
             with pytest.raises(subprocess.TimeoutExpired):
                 docker_exec("ctr", "sleep 99", timeout=1)
+
+
+class TestKubectlExec:
+    def test_forwarded_env_travels_on_stdin_never_on_argv(self):
+        """The bearer token must not be visible in ``ps`` — it goes through stdin."""
+        fake = mock.Mock()
+        fake.returncode = 0
+        fake.stdout = "ok"
+        fake.stderr = ""
+        with mock.patch.dict(os.environ, {"E2E_BEARER_TOKEN": "s3cret"}):
+            with mock.patch("harness.subprocess.run", return_value=fake) as run:
+                assert kubectl_exec("pod-1", "echo $E2E_BEARER_TOKEN", pass_env=("E2E_BEARER_TOKEN",)) == "ok"
+        args = run.call_args.args[0]
+        assert args[0] == "kubectl" and args[1] == "exec"
+        assert "pod-1" in args
+        assert not any("s3cret" in str(a) for a in args)
+        # The value reaches the pod through the exec's stdin.
+        assert run.call_args.kwargs["input"] == "E2E_BEARER_TOKEN=s3cret\n"
+
+    def test_error_path_raises_harness_error(self):
+        fake = mock.Mock()
+        fake.returncode = 1
+        fake.stdout = ""
+        fake.stderr = "pod not found"
+        with mock.patch("harness.subprocess.run", return_value=fake):
+            with pytest.raises(HarnessError, match="kubectl exec .* failed.*pod not found"):
+                kubectl_exec("pod-1", "echo hi")
+
+
+class TestResolveK8sPod:
+    def test_operator_pin_wins(self, monkeypatch):
+        monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-abc")
+        assert resolve_k8s_pod("chatqna") == "chatqna-abc"
+
+    def test_label_selector_resolves_the_live_pod(self, monkeypatch):
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        fake = mock.Mock()
+        fake.returncode = 0
+        fake.stdout = "chatqna-xyz\n"
+        fake.stderr = ""
+        with mock.patch("harness.subprocess.run", return_value=fake) as run:
+            assert resolve_k8s_pod("chatqna") == "chatqna-xyz"
+        assert "genieai.io/component=chatqna" in run.call_args.args[0]
+
+    def test_no_match_is_a_refusal_not_a_guess(self, monkeypatch):
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        fake = mock.Mock()
+        fake.returncode = 0
+        fake.stdout = ""
+        fake.stderr = ""
+        with mock.patch("harness.subprocess.run", return_value=fake):
+            with pytest.raises(HarnessError, match="no pod found"):
+                resolve_k8s_pod("chatqna")
+
+
+class TestExecInContainer:
+    def test_docker_is_the_default_backend(self, monkeypatch):
+        monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+        with mock.patch("harness.docker_exec", return_value="from-docker") as docker:
+            assert exec_in_container("ctr", "echo hi") == "from-docker"
+        docker.assert_called_once()
+
+    def test_kubectl_backend_dispatches_to_the_pod(self, monkeypatch):
+        monkeypatch.setenv("EVAL_EXEC_BACKEND", "kubectl")
+        with mock.patch("harness.resolve_k8s_pod", return_value="pod-1"):
+            with mock.patch("harness.kubectl_exec", return_value="from-kubectl") as kubectl:
+                assert exec_in_container("chatqna", "echo hi") == "from-kubectl"
+        kubectl.assert_called_once()
+
+    def test_unknown_backend_refuses_loudly(self, monkeypatch):
+        monkeypatch.setenv("EVAL_EXEC_BACKEND", "podman")
+        with pytest.raises(HarnessError, match="unknown exec backend"):
+            exec_in_container("ctr", "echo hi")

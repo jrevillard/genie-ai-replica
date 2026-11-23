@@ -17,6 +17,52 @@ const http = require('http');
 const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
 
+// The one http.request double for this file. Each block used to hand-roll the
+// same scaffolding (an EventEmitter req with write/setTimeout/destroy stubs,
+// `end -> cb(res)`), and the copies drifted: the non-2xx health refusal
+// drains the response (`res.resume()`), a piece only some copies modelled.
+// One builder models the request/response interface the service touches;
+// each block parameterizes only the behavior it pins (status, body chunks,
+// whether the request times out).
+const serveRequest = ({ client = http, statusCode = 200, body = null, timeout = false } = {}) => {
+  const capturedOpts = [];
+  const writtenBodies = [];
+  const responses = [];
+  client.request.mockImplementation((opts, cb) => {
+    capturedOpts.push(opts);
+    const req = new EventEmitter();
+    req.write = jest.fn((chunk) => writtenBodies.push(JSON.parse(chunk)));
+    req.setTimeout = () => {};
+    // A real ClientRequest emits 'error' when destroyed with one — the abort
+    // wiring relies on it.
+    req.destroy = jest.fn((err) => {
+      if (err) req.emit('error', err);
+    });
+    if (timeout) {
+      // Node fires 'timeout' on the request when the `timeout` option expires.
+      req.end = () => process.nextTick(() => req.emit('timeout'));
+      return req;
+    }
+    const res = new EventEmitter();
+    res.statusCode = statusCode;
+    res.setEncoding = () => {};
+    // The refusal paths drain the response (`resume`); a real IncomingMessage
+    // carries it, so the double models it as a jest.fn the tests can pin.
+    res.resume = jest.fn();
+    responses.push(res);
+    req.end = () => {};
+    process.nextTick(() => {
+      cb(res);
+      // `healthCheck` reads only `statusCode`; the body readers ('data' +
+      // 'end') get the body here, then the response finishes itself.
+      if (body !== null) res.emit('data', typeof body === 'string' ? body : JSON.stringify(body));
+      res.emit('end');
+    });
+    return req;
+  });
+  return { capturedOpts, writtenBodies, responses };
+};
+
 describe('GpuTranslateBackend translation', () => {
   let backend;
   beforeAll(() => {
@@ -104,29 +150,10 @@ describe('GpuTranslateBackend translation', () => {
     });
     afterEach(() => jest.clearAllMocks());
 
-    const serveBody = (body) => {
-      const res = new EventEmitter();
-      res.statusCode = 200;
-      res.setEncoding = () => {};
-      http.request.mockImplementation((opts, cb) => {
-        const req = new EventEmitter();
-        req.write = () => {};
-        req.end = () => {};
-        process.nextTick(() => {
-          cb(res);
-          res.emit('data', JSON.stringify(body));
-          res.emit('end');
-        });
-        return req;
-      });
-    };
-
     it('rejects a non-streaming translation that stopped at max_tokens', async () => {
       // A budget is a ceiling: without this the caller cannot tell a short text
       // from a cut-off one, and the shortened answer reaches the cache.
-      serveBody({
-        choices: [{ finish_reason: 'length', message: { content: 'Une traduc' } }]
-      });
+      serveRequest({ body: { choices: [{ finish_reason: 'length', message: { content: 'Une traduc' } }] } });
       await expect(
         backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
       ).rejects.toThrow(/truncated/);
@@ -135,16 +162,14 @@ describe('GpuTranslateBackend translation', () => {
     it('rejects a choice carrying no content', async () => {
       // Resolving this as an empty string would blank the paragraph: the
       // markdown path substitutes whatever came back for the node's core.
-      serveBody({ choices: [{ finish_reason: 'content_filter', message: { content: null } }] });
+      serveRequest({ body: { choices: [{ finish_reason: 'content_filter', message: { content: null } }] } });
       await expect(
         backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
       ).rejects.toThrow(/no message content/);
     });
 
     it('resolves a completed non-streaming translation', async () => {
-      serveBody({
-        choices: [{ finish_reason: 'stop', message: { content: ' Hola ' } }]
-      });
+      serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: ' Hola ' } }] } });
       await expect(backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })).resolves.toBe(
         'Hola'
       );
@@ -186,20 +211,7 @@ describe('GpuTranslateBackend translation', () => {
 
     it('callVllmService sends a request and returns the translated text (non-streaming)', async () => {
       // Mock the HTTP response — this tests the request/response handling, not a mock return.
-      const res = new EventEmitter();
-      res.setEncoding = () => {};
-      http.request.mockImplementation((opts, cb) => {
-        const req = new EventEmitter();
-        req.write = () => {};
-        req.end = () => {};
-        process.nextTick(() => {
-          res.statusCode = 200;
-          cb(res);
-          res.emit('data', JSON.stringify({ choices: [{ message: { content: 'Hola mundo' } }] }));
-          res.emit('end');
-        });
-        return req;
-      });
+      serveRequest({ body: { choices: [{ message: { content: 'Hola mundo' } }] } });
 
       const result = await backend.callVllmService({
         model: 'google/gemma-3-4b-it',
@@ -269,18 +281,6 @@ describe('GpuTranslateBackend startup probe', () => {
   // outcome and the budget are asserted here.
   let savedEnv;
 
-  const requestThatTimesOut = (captured) => {
-    http.request.mockImplementation((opts) => {
-      captured.opts = opts;
-      const req = new EventEmitter();
-      req.write = () => {};
-      req.setTimeout = () => {};
-      req.destroy = jest.fn();
-      req.end = () => process.nextTick(() => req.emit('timeout'));
-      return req;
-    });
-  };
-
   beforeEach(() => {
     savedEnv = {
       endpoint: process.env.VLLM_TRANSLATION_ENDPOINT,
@@ -314,22 +314,20 @@ describe('GpuTranslateBackend startup probe', () => {
   };
 
   it('rejects when the health check times out', async () => {
-    requestThatTimesOut({});
+    serveRequest({ timeout: true });
     await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow(/health check timeout/);
   });
 
   it('spends the configured probe budget on the health check', async () => {
-    const captured = {};
-    requestThatTimesOut(captured);
+    const probe = serveRequest({ timeout: true });
 
     await expect(backendWithEnv({ TRANSLATION_PROBE_TIMEOUT_SECONDS: '7' }).healthCheck()).rejects.toThrow();
 
-    expect(captured.opts.timeout).toBe(7000);
+    expect(probe.capturedOpts[0].timeout).toBe(7000);
   });
 
   it.each(['-1', '0', 'abc', ''])('refuses a budget of "%s" and keeps the default', async (value) => {
-    const captured = {};
-    requestThatTimesOut(captured);
+    const probe = serveRequest({ timeout: true });
     const backend = backendWithEnv({ TRANSLATION_PROBE_TIMEOUT_SECONDS: value });
 
     await expect(backend.healthCheck()).rejects.toThrow();
@@ -338,47 +336,34 @@ describe('GpuTranslateBackend startup probe', () => {
     // truthy and therefore survives an `|| DEFAULT` fallback. Node's HTTP layer
     // does not honour a negative timeout, so the gate would stop expiring and
     // fall back to OS defaults instead.
-    expect(captured.opts.timeout).toBe(30000);
+    expect(probe.capturedOpts[0].timeout).toBe(30000);
   });
 
   it('keeps a default budget generous enough for a cold TLS handshake', async () => {
-    const captured = {};
-    requestThatTimesOut(captured);
+    const probe = serveRequest({ timeout: true });
 
     await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow();
 
     // The endpoint answered /health in 32 ms in production, so any budget that
     // can expire on a healthy remote node is a false-negative gate.
-    expect(captured.opts.timeout).toBeGreaterThanOrEqual(30000);
+    expect(probe.capturedOpts[0].timeout).toBeGreaterThanOrEqual(30000);
   });
 
   it('does not let the model-info read fail the service', async () => {
-    requestThatTimesOut({});
+    serveRequest({ timeout: true });
 
     await expect(new GpuTranslateBackend().fetchModelInfo()).resolves.toBeUndefined();
   });
 
-  // A /health answer that is not 2xx: `healthCheck` reads only `statusCode`.
-  const servingStatus = (statusCode) => {
-    const res = new EventEmitter();
-    res.statusCode = statusCode;
-    // The refusal path drains the response (`resume`), which a real
-    // IncomingMessage carries; the double models that interface piece, as a
-    // jest.fn so the tests can pin the drain.
-    res.resume = jest.fn();
-    http.request.mockImplementation((opts, cb) => {
-      const req = new EventEmitter();
-      req.end = () => process.nextTick(() => cb(res));
-      return req;
-    });
-    return res;
-  };
+  // A /health answer that is not 2xx: `healthCheck` reads only `statusCode`
+  // and drains the response before rejecting.
+  const servingStatus = (statusCode) => serveRequest({ statusCode, body: null });
 
   it.each([500, 503, 404])('rejects on health status %d — an unready service fails the gate', async (status) => {
-    const res = servingStatus(status);
+    const probe = servingStatus(status);
 
     await expect(new GpuTranslateBackend().healthCheck()).rejects.toThrow(new RegExp(`status ${status}`));
-    expect(res.resume).toHaveBeenCalled();
+    expect(probe.responses[0].resume).toHaveBeenCalled();
   });
 
   it('keeps init from marking a 503-serving vLLM as initialized', async () => {
@@ -406,36 +391,6 @@ describe('GpuTranslateBackend endpoint addressing', () => {
   // Where the request goes and what it carries: the bearer token, and the
   // endpoint path prefix that a remote GPU API is addressed through.
   let savedEnv;
-
-  // A response that ends on its own: `healthCheck` reads only `statusCode`,
-  // the other two read data and wait for 'end'.
-  const responding = (statusCode, chunks = []) => {
-    const res = new EventEmitter();
-    res.statusCode = statusCode;
-    res.setEncoding = () => {};
-    res.end = () =>
-      process.nextTick(() => {
-        chunks.forEach((c) => res.emit('data', c));
-        res.emit('end');
-      });
-    return res;
-  };
-
-  const captures = (sink) => (opts, cb) => {
-    sink.opts = opts;
-    const req = new EventEmitter();
-    req.write = () => {};
-    req.setTimeout = () => {};
-    req.destroy = jest.fn();
-    req.end = () => {
-      const res = sink.res();
-      cb(res);
-      // `healthCheck` reads only `statusCode` and returns; the other two read
-      // 'data' and wait for 'end', so the response has to finish itself.
-      if (typeof res.end === 'function') res.end();
-    };
-    return req;
-  };
 
   // `VLLM_API_KEY` is read once at module load, so a backend with a key needs
   // a fresh module rather than a mutated instance.
@@ -496,67 +451,63 @@ describe('GpuTranslateBackend endpoint addressing', () => {
     const REMOTE = 'https://gpu-node.example.com/translation';
 
     it.each([
-      ['health check', (b) => b.healthCheck(), '/health', []],
-      ['model info', (b) => b.fetchModelInfo(), '/v1/models', []],
+      ['health check', (b) => b.healthCheck(), '/health', null],
+      ['model info', (b) => b.fetchModelInfo(), '/v1/models', null],
       [
         'chat completion',
         (b) => b.callVllmService({ messages: [] }),
         '/v1/chat/completions',
-        [JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })]
+        JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })
       ]
     ])('prefixes the %s path with the endpoint path', async (_label, invoke, suffix, body) => {
       process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
-      const sink = { res: () => responding(200, body) };
-      https.request.mockImplementation(captures(sink));
+      const probe = serveRequest({ client: https, body });
 
       const backend = new GpuTranslateBackend();
       backend.initialized = true;
       await invoke(backend);
 
-      expect(sink.opts.path).toBe(`/translation${suffix}`);
+      expect(probe.capturedOpts[0].path).toBe(`/translation${suffix}`);
     });
 
     it('drops a trailing slash so the prefix does not double up', async () => {
       process.env.VLLM_TRANSLATION_ENDPOINT = `${REMOTE}/`;
-      const sink = { res: () => responding(200, []) };
-      https.request.mockImplementation(captures(sink));
+      const probe = serveRequest({ client: https });
 
       await new GpuTranslateBackend().healthCheck();
 
-      expect(sink.opts.path).toBe('/translation/health');
+      expect(probe.capturedOpts[0].path).toBe('/translation/health');
     });
 
     it('sends a remote https endpoint to the default port', async () => {
       process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
-      const sink = { res: () => responding(200, []) };
-      https.request.mockImplementation(captures(sink));
+      const probe = serveRequest({ client: https });
 
       await new GpuTranslateBackend().healthCheck();
 
-      expect(sink.opts.hostname).toBe('gpu-node.example.com');
-      expect(sink.opts.port).toBe(443);
+      expect(probe.capturedOpts[0].hostname).toBe('gpu-node.example.com');
+      expect(probe.capturedOpts[0].port).toBe(443);
     });
 
     it('authenticates the startup probe itself, not only the helper', async () => {
       // The probe is the boot gate for a remote HTTPS GPU node, which rejects
       // an unauthenticated request. A token applied everywhere except here
       // would let boot succeed against a node every later call is refused by.
-      const sink = { res: () => responding(200, []) };
-      https.request.mockImplementation(captures(sink));
+      const probe = serveRequest({ client: https });
       const backend = backendWithKey();
       backend.endpoint = REMOTE;
 
       await backend.healthCheck();
 
-      expect(sink.opts.headers.Authorization).toBe('Bearer test-key-123');
-      expect(sink.opts.method).toBe('GET');
+      expect(probe.capturedOpts[0].headers.Authorization).toBe('Bearer test-key-123');
+      expect(probe.capturedOpts[0].method).toBe('GET');
     });
 
     it('carries the bearer token on a real request, not just on the helper', async () => {
-      const sink = {
-        res: () => responding(200, [JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })])
-      };
-      https.request.mockImplementation(captures(sink));
+      const probe = serveRequest({
+        client: https,
+        body: JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })
+      });
       process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
 
       const backend = backendWithKey();
@@ -564,8 +515,8 @@ describe('GpuTranslateBackend endpoint addressing', () => {
       backend.endpoint = REMOTE;
 
       expect(await backend.callVllmService({ messages: [{ role: 'user', content: 'hello' }] })).toBe('traduit');
-      expect(sink.opts.headers.Authorization).toBe('Bearer test-key-123');
-      expect(sink.opts.method).toBe('POST');
+      expect(probe.capturedOpts[0].headers.Authorization).toBe('Bearer test-key-123');
+      expect(probe.capturedOpts[0].method).toBe('POST');
     });
   });
 });
@@ -575,49 +526,19 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   // timeout overridable, the request abortable. The legacy `translate` and
   // the option-less `callVllmService` keep their deployed behavior.
   let backend;
-  let writtenBodies;
-  let capturedOpts;
-
-  const serveChat = (json, { emitError = null } = {}) => {
-    const res = new EventEmitter();
-    res.statusCode = 200;
-    res.setEncoding = () => {};
-    http.request.mockImplementation((opts, cb) => {
-      capturedOpts.push(opts);
-      const req = new EventEmitter();
-      req.write = jest.fn((d) => writtenBodies.push(JSON.parse(d)));
-      req.end = () => {};
-      req.setTimeout = () => {};
-      req.destroy = jest.fn((err) => {
-        if (err) req.emit('error', err);
-      });
-      process.nextTick(() => {
-        if (emitError) {
-          req.emit('error', new Error(emitError));
-          return;
-        }
-        cb(res);
-        res.emit('data', JSON.stringify(json));
-        res.emit('end');
-      });
-      return req;
-    });
-  };
 
   beforeAll(() => {
     backend = new GpuTranslateBackend();
     backend.initialized = true;
   });
-  beforeEach(() => {
-    writtenBodies = [];
-    capturedOpts = [];
-  });
   afterEach(() => jest.clearAllMocks());
 
   it('returns the endpoint-served usage verbatim', async () => {
-    serveChat({
-      choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }],
-      usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 }
+    serveRequest({
+      body: {
+        choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }],
+        usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 }
+      }
     });
     const r = await backend.translateWithUsage(['Hello'], 'en', 'es');
     expect(r.translations).toEqual(['Hola']);
@@ -626,39 +547,39 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   });
 
   it('estimates chars/4, flagged estimated, when the response carries no usage', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     const r = await backend.translateWithUsage(['Hello'], 'en', 'es');
     expect(r.estimated).toBe(true);
     expect(r.usage).toEqual({
-      prompt_tokens: Math.ceil(JSON.stringify(writtenBodies[0].messages).length / 4),
+      prompt_tokens: Math.ceil(JSON.stringify(probe.writtenBodies[0].messages).length / 4),
       completion_tokens: Math.ceil('Hola'.length / 4)
     });
   });
 
   it('caps the output budget at options.maxTokens on top of the window math', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     await backend.translateWithUsage(['Hello world'], 'en', 'es', { maxTokens: 40 });
     // A request the window math would have budgeted far above 40 comes out
     // capped at the caller's bound.
-    expect(writtenBodies[0].max_tokens).toBe(40);
+    expect(probe.writtenBodies[0].max_tokens).toBe(40);
   });
 
   it('overrides the request timeout with options.timeoutMs', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: 4321 });
-    expect(capturedOpts[0].timeout).toBe(4321);
+    expect(probe.capturedOpts[0].timeout).toBe(4321);
   });
 
   it('shrinks the timeout across texts so a later one cannot start past the deadline', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     // A 50ms budget with two texts: after the first call the elapsed time is
     // subtracted before the second request is built. Both requests carry a
     // positive, non-increasing timeout bounded by the caller's value.
     await backend.translateWithUsage(['Hello', 'world'], 'en', 'es', { timeoutMs: 50 });
-    expect(capturedOpts).toHaveLength(2);
-    expect(capturedOpts[0].timeout).toBeLessThanOrEqual(50);
-    expect(capturedOpts[1].timeout).toBeLessThanOrEqual(capturedOpts[0].timeout);
-    expect(capturedOpts[1].timeout).toBeGreaterThan(0);
+    expect(probe.capturedOpts).toHaveLength(2);
+    expect(probe.capturedOpts[0].timeout).toBeLessThanOrEqual(50);
+    expect(probe.capturedOpts[1].timeout).toBeLessThanOrEqual(probe.capturedOpts[0].timeout);
+    expect(probe.capturedOpts[1].timeout).toBeGreaterThan(0);
   });
 
   it('refuses to start a call past the deadline the caller set', async () => {
@@ -667,7 +588,7 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
     // Third read (the per-text deadline check) jumps far ahead: the second
     // text never starts.
     dateSpy.mockReturnValue(realNow() + 60000);
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     await expect(backend.translateWithUsage(['Hello', 'world'], 'en', 'es', { timeoutMs: 50 })).rejects.toThrow(
       /request timeout/
     );
@@ -704,66 +625,68 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   it('rejects immediately, without a request, on an already-aborted signal', async () => {
     const controller = new AbortController();
     controller.abort();
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     await expect(backend.translateWithUsage(['Hello'], 'en', 'es', { signal: controller.signal })).rejects.toThrow(
       /aborted/
     );
-    expect(capturedOpts).toHaveLength(0);
+    expect(probe.capturedOpts).toHaveLength(0);
   });
 
   it('skips empty texts without a call, like translate', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     const r = await backend.translateWithUsage(['', 'Hello', '   '], 'en', 'es');
     expect(r.translations).toEqual(['', 'Hola', '']);
-    expect(writtenBodies).toHaveLength(1);
+    expect(probe.writtenBodies).toHaveLength(1);
   });
 
   it('answers an empty array with no usage and no estimate', async () => {
     const r = await backend.translateWithUsage([], 'en', 'es');
     expect(r).toEqual({ translations: [], usage: null, estimated: false });
-    expect(capturedOpts).toHaveLength(0);
   });
 
   it('answers an input of only empty texts with usage null — no-call is not zero-usage', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     const r = await backend.translateWithUsage(['', '   '], 'en', 'es');
     expect(r.translations).toEqual(['', '']);
     expect(r.usage).toBeNull();
     expect(r.estimated).toBe(false);
-    expect(capturedOpts).toHaveLength(0);
+    expect(probe.capturedOpts).toHaveLength(0);
   });
 
   it('treats a non-finite timeoutMs as not provided (the 30s default)', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probeNaN = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: NaN });
-    expect(capturedOpts[0].timeout).toBe(30000);
+    expect(probeNaN.capturedOpts[0].timeout).toBe(30000);
 
+    const probeInf = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: Infinity });
-    expect(capturedOpts[1].timeout).toBe(30000);
+    expect(probeInf.capturedOpts[0].timeout).toBe(30000);
   });
 
   it('accepts options: null on both entry points (no TypeError)', async () => {
-    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     await expect(
       backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }], max_tokens: 10 }, null)
     ).resolves.toBe('Hola');
     await expect(backend.translateWithUsage(['Hello'], 'en', 'es', null)).resolves.toMatchObject({
       translations: ['Hola']
     });
-    expect(capturedOpts[0].timeout).toBe(30000);
+    expect(probe.capturedOpts[0].timeout).toBe(30000);
   });
 
   describe('legacy behavior pins', () => {
     it('callVllmService keeps the deployed 30s timeout when called without options', async () => {
-      serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+      const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
       await backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
-      expect(capturedOpts[0].timeout).toBe(30000);
+      expect(probe.capturedOpts[0].timeout).toBe(30000);
     });
 
     it('translate still resolves plain strings and ignores any usage in the response', async () => {
-      serveChat({
-        choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }],
-        usage: { prompt_tokens: 7, completion_tokens: 3 }
+      serveRequest({
+        body: {
+          choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }],
+          usage: { prompt_tokens: 7, completion_tokens: 3 }
+        }
       });
       const out = await backend.translate(['Hello'], 'en', 'es');
       expect(out).toEqual(['Hola']);

@@ -305,6 +305,9 @@ const Map<String, dynamic> manLocale = {
     "faq": "Nyininkarolu (FAQ)",
     "faqTranslationUnavailable":
         "Translation unavailable — showing the original English.",
+    "okfConceptTruncated": "Previziyoo te fanga — dokamad ye fanga la.",
+    "okfSourceUnavailable": "Cha nel y bun shoh ry-akin dy fakin.",
+    "documentOpenError": "Cha dooarsh yn docamad",
     "tab": {
       "all": "Kumoolu biling",
       "folders": "Folodaalu",

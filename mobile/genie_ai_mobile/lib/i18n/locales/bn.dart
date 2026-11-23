@@ -300,6 +300,9 @@ const Map<String, dynamic> bnLocale = {
     "noDocuments": "কোনো সম্পর্কিত নথি নেই",
     "faq": "সচরাচর জিজ্ঞাসিত প্রশ্নাবলী (FAQ)",
     "faqTranslationUnavailable": "অনুবাদ অনুপলব্ধ — মূল ইংরেজি দেখানো হচ্ছে।",
+    "okfConceptTruncated": "প্রিভিউ সীমিত — নথি এখানে দেখানোর চেয়ে দীর্ঘ।",
+    "okfSourceUnavailable": "এই উৎসটি দেখার জন্য উপলব্ধ নয়।",
+    "documentOpenError": "ডকুমেন্ট খোলা যায়নি",
     "tab": {
       "all": "সব চ্যাট",
       "folders": "ফোল্ডারগুলো",

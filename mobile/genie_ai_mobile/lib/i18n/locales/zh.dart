@@ -296,6 +296,9 @@ const Map<String, dynamic> zhLocale = {
     "noDocuments": "没有相关文档",
     "faq": "常见问题",
     "faqTranslationUnavailable": "翻译不可用 — 显示英文原文。",
+    "okfConceptTruncated": "预览已截断 — 文档比此处可显示的更长。",
+    "okfSourceUnavailable": "该来源暂不可查看。",
+    "documentOpenError": "无法打开文档",
     "tab": {
       "all": "所有聊天",
       "folders": "文件夹",

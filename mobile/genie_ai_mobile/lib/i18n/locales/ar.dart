@@ -298,6 +298,9 @@ const Map<String, dynamic> arLocale = {
     "faq": "الأسئلة الشائعة",
     "faqTranslationUnavailable":
         "الترجمة غير متاحة — يتم عرض النص الأصلي بالإنجليزية.",
+    "okfConceptTruncated": "المعاينة مقطوعة — المستند أطول مما يمكن عرضه هنا.",
+    "okfSourceUnavailable": "هذا المصدر غير متاح للعرض.",
+    "documentOpenError": "تعذر فتح المستند",
     "tab": {
       "all": "كل المحادثات",
       "folders": "المجلدات",

@@ -306,6 +306,10 @@ const Map<String, dynamic> enLocale = {
     "faq": "Frequently Asked Questions",
     "faqTranslationUnavailable":
         "Translation unavailable — showing the original English.",
+    "okfConceptTruncated":
+        "The preview is truncated — the document is longer than can be shown here.",
+    "okfSourceUnavailable": "This source is not available to view.",
+    "documentOpenError": "Could not open the document",
     "tab": {
       "all": "All Chats",
       "folders": "Folders",

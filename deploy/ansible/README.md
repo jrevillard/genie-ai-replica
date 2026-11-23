@@ -255,6 +255,7 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `vllm_translation_model_id` | `google/gemma-3-4b-it` | Translation model. MANDATORY on the GPU node (no template default — `deploy-gpu.yml` asserts it, #2119); defined in `group_vars/all.yml` (NVIDIA) / `vars/rocm_gpu_nodes.yml` (ROCm). |
+| `vllm_tool_call_parser` | _(unset — derived: `granite4` for a Granite 4.x `vllm_llm_model_id`, no pin otherwise)_ | The ansible spelling of the main compose's `VLLM_TOOL_CALL_PARSER` lever (#2052). Unset renders `--enable-auto-tool-choice --tool-call-parser granite4` ONLY for Granite 4.x ids; set it to the model's documented parser (e.g. `granite`) to enable tool calling on another model; set it to an empty string to force the flags OFF. |
 | `vllm_translation_max_model_len` | `8192` | Maximum context length |
 | `vllm_translation_dtype` | `auto` | Data type |
 | `vllm_translation_gpu_utilization` | `0.9` | GPU memory fraction |

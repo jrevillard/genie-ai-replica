@@ -18,6 +18,7 @@ registries, fake reference manifests, no live venue:
 """
 
 import argparse
+import inspect
 import json
 from pathlib import Path
 
@@ -279,6 +280,129 @@ def test_an_agreed_dimension_without_its_value_is_refused():
     assert failed.value.reason == "registry_invalid_entry"
 
 
+def test_a_quoted_signed_value_is_refused():
+    """A quoted YAML ``signed: "false"`` is a string, not a boolean — it must
+    never read as signed."""
+    registry = _registry()
+    registry["sign_off"]["signed"] = "false"
+    with pytest.raises(thresholds_mod.ThresholdsRefusal) as failed:
+        thresholds_mod.validate_registry(registry, source="the fixture registry")
+    assert failed.value.reason == "sign_off_invalid"
+
+
+def test_an_unsupported_registry_version_is_refused():
+    registry = _registry()
+    registry["registry_version"] = "9.9.9"
+    with pytest.raises(thresholds_mod.ThresholdsRefusal) as failed:
+        thresholds_mod.validate_registry(registry, source="the fixture registry")
+    assert failed.value.reason == "registry_version_unsupported"
+    assert thresholds_mod.THRESHOLD_REGISTRY_VERSION in str(failed.value)
+
+
+def test_a_relabelled_dimension_is_refused():
+    """An entry never relabels its dimension — the signed artifact would
+    disagree with the report that reads it."""
+    registry = _registry()
+    registry["dimensions"]["M-1"]["dimension"] = "LATENCY"
+    with pytest.raises(thresholds_mod.ThresholdsRefusal) as failed:
+        thresholds_mod.validate_registry(registry, source="the fixture registry")
+    assert failed.value.reason == "registry_invalid_entry"
+    assert "retrieval_quality" in str(failed.value)
+
+
+def test_an_unquoted_date_scalar_is_normalized_to_its_iso_string(tmp_path):
+    """PyYAML resolves an unquoted ``2026-12-01`` to a datetime.date — the
+    known date fields read as the ISO string the contract asks for."""
+    text = "\n".join(
+        [
+            "registry_version: \"1.0.0\"",
+            "artifact: \"evaluation-threshold-registry\"",
+            "sign_off:",
+            "  owner: \"jrevillard (ITU)\"",
+            "  signed: true",
+            "  agreed_on: 2026-12-01",
+            "  signed_on: 2026-12-02",
+            "dimensions:",
+        ]
+        + [
+            f"""  {code}:
+    dimension: "{name}"
+    surface: "the fixture surface"
+    status: agreed
+    value: 0.5
+    absent_reason: null
+    rationale: "the fixture rationale"
+    agreement_date: 2026-12-01"""
+            for code, name in thresholds_mod.M_DIMENSIONS.items()
+        ]
+    )
+    path = tmp_path / "dates.yaml"
+    path.write_text(text, encoding="utf-8")
+    registry = thresholds_mod.load_registry(path)
+    assert registry["sign_off"]["agreed_on"] == "2026-12-01"
+    assert registry["dimensions"]["M-1"]["agreement_date"] == "2026-12-01"
+    # the report digests the registry — a date object would crash the digest
+    report = thresholds_mod.build_thresholds_report(registry, created_utc=CREATED)
+    assert report["digest"]
+
+
+def test_an_unserializable_value_outside_the_date_fields_is_refused(tmp_path):
+    """A date in a field the normalization does not cover is refused, naming
+    the remedy (quote the scalar) — it never crashes a downstream digest."""
+    text = "\n".join(
+        [
+            "registry_version: \"1.0.0\"",
+            "artifact: \"evaluation-threshold-registry\"",
+            "notes: 2026-12-01",
+            "sign_off:",
+            "  owner: \"jrevillard (ITU)\"",
+            "  signed: true",
+            "dimensions:",
+        ]
+        + [
+            f"""  {code}:
+    dimension: "{name}"
+    surface: "the fixture surface"
+    status: absent
+    value: null
+    absent_reason: "the fixture reason"
+    rationale: "the fixture rationale"
+    agreement_date: null"""
+            for code, name in thresholds_mod.M_DIMENSIONS.items()
+        ]
+    )
+    path = tmp_path / "dates.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(thresholds_mod.ThresholdsRefusal) as failed:
+        thresholds_mod.load_registry(path)
+    assert failed.value.reason == "registry_malformed"
+    assert "quote" in str(failed.value)
+
+
+def test_promotion_decision_validates_the_registry_first():
+    """A registry the loader would refuse never reaches a decision — a library
+    caller cannot read ``allowed`` off one."""
+    registry = _registry()
+    del registry["dimensions"]["M-3"]
+    with pytest.raises(thresholds_mod.ThresholdsRefusal) as failed:
+        thresholds_mod.promotion_decision(registry)
+    assert failed.value.reason == "registry_incomplete"
+
+
+def test_the_report_carries_no_path_in_its_digested_body():
+    """The digest covers the registry's CONTENT, never the caller's path
+    spelling — the report is reproducible across path spellings."""
+    registry = thresholds_mod.load_registry(REGISTRY)
+    report = thresholds_mod.build_thresholds_report(registry, created_utc=CREATED)
+    assert "path" not in report["registry"]
+    assert "registry_path" not in inspect.signature(thresholds_mod.build_thresholds_report).parameters
+
+
+def test_the_dead_helpers_are_gone():
+    assert not hasattr(thresholds_mod, "registry_sha256")
+    assert not hasattr(thresholds_mod, "reference_manifest_digest")
+
+
 # ---------------------------------------------------------------------------
 # Signing — a blocked registry produces NO signed artifact
 # ---------------------------------------------------------------------------
@@ -419,3 +543,12 @@ def test_the_cli_exits_0_on_a_complete_registry(tmp_path, capsys):
     )
     assert out.exists()
     assert "ALLOWED" in capsys.readouterr().out
+
+
+def test_the_cli_exits_2_on_a_missing_reference_manifest(tmp_path, capsys):
+    """A missing required argument is a usage error (2), not a refusal (1)."""
+    path = _write_registry(tmp_path, _registry())
+    out = tmp_path / "thresholds.json"
+    assert main(["thresholds", "--registry", str(path), "--out", str(out)]) == 2
+    assert "usage" in capsys.readouterr().err
+    assert not out.exists()

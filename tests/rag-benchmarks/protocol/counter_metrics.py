@@ -39,9 +39,8 @@ COUNTER_METRICS_REPORT_VERSION = "1.0.0"
 COUNTER_METRICS_REPORT_ARTIFACT = "counter-metrics-report"
 REFERENCE_CORRECTNESS_ARTIFACT = "reference-correctness"
 
-# The three counter-metrics — first-class, top-level entries of the report.
-CM_METRICS = ("CM-1", "CM-2", "CM-3")
-
+# The three counter-metrics — first-class, top-level entries of the report —
+# are named by the keys of the report's ``counter_metrics`` mapping.
 CM1_NAME = "cost_and_latency_per_agentic_request"
 CM2_NAME = "excessive_abstention_rate"
 CM3_NAME = "limit_and_cancellation_rate"
@@ -163,6 +162,23 @@ def verify_correctness_lineage(
             "the reference-correctness ledger does not cover this comparison:"
             f" {' and '.join(mismatched)} differ — refusing before the report is built",
         )
+    ids = ledger.get("correct_case_ids")
+    if not isinstance(ids, list):
+        raise CounterMetricsRefusal(
+            "correctness_invalid_ids",
+            "the reference-correctness ledger's correct_case_ids is a"
+            f" {type(ids).__name__}, not a list — refusing before the report is built",
+        )
+    offenders = [
+        value for value in ids if isinstance(value, bool) or not isinstance(value, (str, int))
+    ]
+    if offenders:
+        raise CounterMetricsRefusal(
+            "correctness_invalid_ids",
+            "the reference-correctness ledger's correct_case_ids carry a"
+            f" {type(offenders[0]).__name__} — the ids are case-id scalars (strings or"
+            " integers, never booleans or nested values); refusing before the report is built",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -229,8 +245,9 @@ def _abstention_fact(row) -> bool | None:
             value = holder.get("abstained")
             if isinstance(value, bool):
                 return value
-            if value is not None:
-                return bool(value)
+            # A non-boolean value is never coerced — the string "false" is not
+            # an abstention. It falls through to the reason check below and
+            # otherwise counts as unrecorded.
         reason = holder.get("abstention_reason")
         if isinstance(reason, str) and reason.strip():
             return True
@@ -241,7 +258,9 @@ def _abstention_fact(row) -> bool | None:
 # still did not answer — the failure family. A governed refusal (the
 # admission lane refusing a request) is neither: it is recorded as its own
 # terminal state, never as a failure.
-FAILURE_STATES = frozenset({"error", "stream_error", "http_error", "failure"})
+FAILURE_STATES = frozenset(
+    {"error", "stream_error", "http_error", "failure", "configuration_error", "invalid_request"}
+)
 
 
 def _terminal_state(row) -> tuple[str, str | None, bool, str | None, bool]:
@@ -278,6 +297,10 @@ def _terminal_state(row) -> tuple[str, str | None, bool, str | None, bool]:
             return (LIMIT_MARKER_C, f"abstention_reason={LIMIT_MARKER_B}", True, "limit", False)
         if status == "skipped":
             return ("skipped", None, False, None, False)
+        # A recorded abstention is a terminal state of its own — never an
+        # answered execution, so CM-3 and CM-2 read the same case the same way.
+        if _abstention_fact(row) is True:
+            return ("abstained", "abstained", True, None, False)
         if status == "ok":
             return (ANSWERED_STATE, None, True, None, True)
         return ("failure", None, True, "failure", False)
@@ -333,7 +356,9 @@ def _build_cm1(reference_rows: dict, candidate_rows: dict) -> dict:
         values = [row[key] for row in agentic_rows if key in row]
         if values:
             totals[key] = {"sum": sum(values), "n_rows": len(values)}
-    # The cost DELTA — available only when BOTH sides carry a cost surface.
+    # The cost DELTA — available only when BOTH sides carry a cost surface
+    # AND at least one counter is shared: two sides recording disjoint
+    # counters is "not computable", never "the delta is zero".
     cost_deltas = []
     for case_id in paired:
         reference_counters = _cost_counters(_resource_record(reference_rows.get(case_id)))
@@ -344,7 +369,11 @@ def _build_cm1(reference_rows: dict, candidate_rows: dict) -> dict:
         cost_deltas.append(
             {
                 "case_id": case_id,
-                **{f"delta_{key}": candidate_counters[key] - reference_counters[key] for key in shared},
+                "candidate_only": sorted(set(candidate_counters) - set(reference_counters)),
+                **{
+                    f"delta_{key}": candidate_counters[key] - reference_counters[key]
+                    for key in shared
+                },
             }
         )
     if latency_rows:
@@ -382,6 +411,15 @@ def _build_cm1(reference_rows: dict, candidate_rows: dict) -> dict:
                 "the candidate rows carry no resource record — the candidate cost surface is"
                 " unavailable, so the cost delta is not computable (the latency delta is"
                 " reported beside it)"
+            ),
+        }
+    elif not cost_deltas:
+        cost_delta = {
+            "available": False,
+            "not_available_reason": (
+                "both sides carry resource records but no counter is shared between them —"
+                " the cost delta is not computable, and an empty delta is never reported as"
+                " a zero delta"
             ),
         }
     else:
@@ -452,7 +490,17 @@ def _build_cm2(candidate_rows: dict, correctness_ledger: dict | None) -> dict:
                 " artifact carries, so the rate is NOT computable and is NOT reported as zero"
             ),
         }
-    correct_ids = [str(case_id) for case_id in (correctness_ledger.get("correct_case_ids") or [])]
+    # The denominator is the ledger's DISTINCT case ids, first occurrence
+    # kept — a duplicate entry would inflate the denominator and deflate the
+    # rate without anything being measured twice.
+    seen: set[str] = set()
+    correct_ids = []
+    for raw in correctness_ledger.get("correct_case_ids") or []:
+        case_id = str(raw)
+        if case_id in seen:
+            continue
+        seen.add(case_id)
+        correct_ids.append(case_id)
     if not correct_ids:
         return {
             "metric": "CM-2",
@@ -555,6 +603,9 @@ def _build_cm3(candidate_rows: dict) -> dict:
             "a generic failure is recorded as a failure, never as a limit hit — its count and"
             " rate travel beside the limit/cancellation rate so a zero limit rate never hides a"
             " failing execution",
+            "the terminal states are the recorded ones: an ok row that records an abstention is"
+            " the 'abstained' state, not an answered execution — CM-3 and CM-2 then read the same"
+            " case the same way",
         ],
     }
 

@@ -356,6 +356,157 @@ def test_cm3_records_a_failure_beside_the_rate():
     assert cm3["values"]["failure_rate"] == pytest.approx(0.5)
 
 
+def test_cm3_counts_the_governed_refusal_terminals_as_failures():
+    """A configuration error and an invalid request are terminal states that
+    did not answer — never a zero failure rate."""
+    candidate = {
+        "c1": {"case_id": "c1", "outcome": "configuration_error", "wall_ms": 10.0},
+        "c2": {"case_id": "c2", "outcome": "invalid_request", "wall_ms": 10.0},
+    }
+    report = build_counter_metrics_report(
+        reference_rows={}, candidate_rows=candidate, created_utc=CREATED
+    )
+    cm3 = report["counter_metrics"]["CM-3"]
+    assert cm3["values"]["n_hits"] == 0
+    assert cm3["values"]["n_failure_rows"] == 2
+    assert cm3["values"]["failure_rate"] == 1.0
+
+
+def test_cm3_reads_a_recorded_abstention_as_its_own_terminal_state():
+    """An ok row that records an abstention is the 'abstained' state — never
+    an answered execution, so CM-3 and CM-2 read the same case the same way."""
+    candidate = {
+        "c1": {"case_id": "c1", "status": "ok", "abstained": True},
+        "c2": {"case_id": "c2", "status": "ok"},
+    }
+    report = build_counter_metrics_report(
+        reference_rows={}, candidate_rows=candidate, created_utc=CREATED
+    )
+    cm3 = report["counter_metrics"]["CM-3"]
+    states = {row["case_id"]: row for row in cm3["values"]["per_case_terminal_states"]}
+    assert states["c1"]["terminal_state"] == "abstained"
+    assert states["c1"]["answered"] is False
+    assert cm3["values"]["n_answered"] == 1
+
+
+def test_a_non_boolean_abstained_value_is_never_coerced():
+    """The string "false" is not an abstention: the fact counts as unrecorded,
+    so CM-2 is not computable — never computed from a coerced value."""
+    candidate = {"c1": {"case_id": "c1", "status": "ok", "abstained": "false"}}
+    reference_manifest = _reference_manifest()
+    ledger = reference_correctness_file(
+        corpus_fingerprint=CORPUS,
+        assessment_set_sha256=SET_SHA,
+        reference_manifest=reference_manifest,
+        correct_case_ids=["c1"],
+    )
+    report = build_counter_metrics_report(
+        reference_rows={},
+        candidate_rows=candidate,
+        reference_manifest=reference_manifest,
+        correctness_ledger=ledger,
+        created_utc=CREATED,
+    )
+    cm2 = report["counter_metrics"]["CM-2"]
+    assert cm2["available"] is False
+    assert "values" not in cm2
+
+
+def test_a_correctness_ledger_whose_ids_are_not_a_list_is_refused():
+    ledger = reference_correctness_file(
+        corpus_fingerprint=CORPUS,
+        assessment_set_sha256=SET_SHA,
+        reference_manifest=_reference_manifest(),
+        correct_case_ids=["c1"],
+    )
+    ledger["correct_case_ids"] = "c1c2"
+    with pytest.raises(CounterMetricsRefusal) as failed:
+        build_counter_metrics_report(
+            reference_rows={},
+            candidate_rows={"c1": {"case_id": "c1", "status": "ok"}},
+            reference_manifest=_reference_manifest(),
+            correctness_ledger=ledger,
+            created_utc=CREATED,
+        )
+    assert failed.value.reason == "correctness_invalid_ids"
+
+
+def test_a_correctness_ledger_with_a_non_scalar_id_is_refused():
+    ledger = reference_correctness_file(
+        corpus_fingerprint=CORPUS,
+        assessment_set_sha256=SET_SHA,
+        reference_manifest=_reference_manifest(),
+        correct_case_ids=["c1"],
+    )
+    # the assembled record normalizes its ids to strings — the raw shape the
+    # verifier must refuse is patched in here
+    ledger["correct_case_ids"] = ["c1", {"id": "c2"}]
+    with pytest.raises(CounterMetricsRefusal) as failed:
+        build_counter_metrics_report(
+            reference_rows={},
+            candidate_rows={"c1": {"case_id": "c1", "status": "ok"}},
+            reference_manifest=_reference_manifest(),
+            correctness_ledger=ledger,
+            created_utc=CREATED,
+        )
+    assert failed.value.reason == "correctness_invalid_ids"
+
+
+def test_cm2_deduplicates_the_ledgers_case_ids():
+    """A duplicate entry must not inflate the denominator."""
+    candidate = {"c1": {"case_id": "c1", "status": "ok", "abstained": True}}
+    reference_manifest = _reference_manifest()
+    ledger = reference_correctness_file(
+        corpus_fingerprint=CORPUS,
+        assessment_set_sha256=SET_SHA,
+        reference_manifest=reference_manifest,
+        correct_case_ids=["c1", "c1"],
+    )
+    report = build_counter_metrics_report(
+        reference_rows={},
+        candidate_rows=candidate,
+        reference_manifest=reference_manifest,
+        correctness_ledger=ledger,
+        created_utc=CREATED,
+    )
+    cm2 = report["counter_metrics"]["CM-2"]
+    assert cm2["values"]["n_reference_correct_cases"] == 1
+    assert cm2["values"]["rate"] == 1.0
+
+
+def test_cm1_reports_disjoint_cost_counters_as_not_computable():
+    """Two sides recording disjoint counters is 'not computable', never 'the
+    delta is zero' — and the candidate-only counters are named."""
+    reference = {"c1": _reference_row("c1", 100.0, usage_record={"outcome": "answered", "prompt_tokens": 80})}
+    candidate = {
+        "c1": _candidate_row("c1", 150.0, usage_record={"outcome": "answered", "tool_calls": 4})
+    }
+    report = build_counter_metrics_report(
+        reference_rows=reference, candidate_rows=candidate, created_utc=CREATED
+    )
+    cm1 = report["counter_metrics"]["CM-1"]
+    cost_delta = cm1["values"]["cost_delta"]
+    assert cost_delta["available"] is False
+    assert "no counter is shared" in cost_delta["not_available_reason"]
+
+
+def test_cm1_names_the_candidate_only_counters_in_each_delta_row():
+    reference = {
+        "c1": _reference_row("c1", 100.0, usage_record={"outcome": "answered", "model_calls": 1})
+    }
+    candidate = {
+        "c1": _candidate_row(
+            "c1", 150.0, usage_record={"outcome": "answered", "model_calls": 3, "tool_calls": 4}
+        )
+    }
+    report = build_counter_metrics_report(
+        reference_rows=reference, candidate_rows=candidate, created_utc=CREATED
+    )
+    row = report["counter_metrics"]["CM-1"]["values"]["cost_delta"]["per_request"][0]
+    assert row["delta_model_calls"] == 2
+    assert row["candidate_only"] == ["tool_calls"]
+
+
 def test_cm3_is_not_computable_without_an_execution():
     report = build_counter_metrics_report(
         reference_rows={}, candidate_rows={}, created_utc=CREATED

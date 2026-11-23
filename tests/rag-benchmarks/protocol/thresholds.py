@@ -31,13 +31,13 @@ command keeps working there.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from . import PROTOCOL_VERSION
 from .e01 import M_DIMENSIONS
 from .gate import thresholds_file
-from .manifest import manifest_digest, sha256_json
+from .manifest import sha256_json
 
 THRESHOLD_REGISTRY_VERSION = "1.0.0"
 THRESHOLD_REGISTRY_ARTIFACT = "evaluation-threshold-registry"
@@ -125,12 +125,28 @@ def load_registry(path: str | Path) -> dict:
     return registry
 
 
+def _iso_date(value):
+    """A ``datetime.date``/``datetime`` reads as its ISO string.
+
+    PyYAML resolves an UNQUOTED scalar like ``agreement_date: 2026-12-01`` to a
+    ``datetime.date``, which is neither a string nor JSON-serializable — the
+    known date fields are rewritten in place so a date a person wrote plainly
+    validates and digests like the string they meant.
+    """
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+
+
 def validate_registry(registry, *, source: str = "the registry") -> dict:
     """Validate the registry's strict shape; return it, or refuse.
 
-    The shape: the registry artifact, a version, a sign-off header carrying an
-    owner, and exactly one entry per measured dimension — each entry naming the
-    surface it applies to, the rationale, and EITHER an agreed value (with its
+    The shape: the registry artifact, the supported version, a sign-off header
+    carrying an owner and a BOOLEAN ``signed``, and exactly one entry per
+    measured dimension — each entry naming its canonical dimension, the surface
+    it applies to, the rationale, and EITHER an agreed value (with its
     agreement date) OR an explicit absence (with its reason and no value).
     """
     if not isinstance(registry, dict):
@@ -145,10 +161,17 @@ def validate_registry(registry, *, source: str = "the registry") -> dict:
             f"{source} declares artifact {registry.get('artifact')!r}, not"
             f" {THRESHOLD_REGISTRY_ARTIFACT!r} — refusing before the thresholds are read",
         )
-    if not _is_text(registry.get("registry_version")):
+    version = registry.get("registry_version")
+    if not _is_text(version):
         raise ThresholdsRefusal(
             "registry_malformed",
             f"{source} carries no registry_version — the registry is versioned, never anonymous",
+        )
+    if version != THRESHOLD_REGISTRY_VERSION:
+        raise ThresholdsRefusal(
+            "registry_version_unsupported",
+            f"{source} declares registry_version {version!r}; this machinery reads"
+            f" {THRESHOLD_REGISTRY_VERSION!r} — refusing before the thresholds are read",
         )
     sign_off = registry.get("sign_off")
     if not isinstance(sign_off, dict):
@@ -162,6 +185,13 @@ def validate_registry(registry, *, source: str = "the registry") -> dict:
             "sign_off_missing",
             f"{source} carries a sign-off header without an owner — the gate sign-off owner is"
             " recorded in the registry header; a missing owner blocks promotion",
+        )
+    if not isinstance(sign_off.get("signed"), bool):
+        raise ThresholdsRefusal(
+            "sign_off_invalid",
+            f"{source} carries a sign-off whose `signed` is {sign_off.get('signed')!r}, not a"
+            " boolean — a quoted \"false\" would read as signed; the sign-off is signed or it"
+            " is not",
         )
     dimensions = registry.get("dimensions")
     if not isinstance(dimensions, dict):
@@ -185,8 +215,27 @@ def validate_registry(registry, *, source: str = "the registry") -> dict:
             f" dimensions ({', '.join(MEASURED_DIMENSIONS)}) — refusing before the thresholds"
             " are read",
         )
+    # The known date fields are normalized BEFORE the per-entry validation, so
+    # a plainly written date is read as the string the entry contract asks for.
+    sign_off["agreed_on"] = _iso_date(sign_off.get("agreed_on"))
+    sign_off["signed_on"] = _iso_date(sign_off.get("signed_on"))
+    for entry in dimensions.values():
+        if isinstance(entry, dict):
+            entry["agreement_date"] = _iso_date(entry.get("agreement_date"))
     for code in MEASURED_DIMENSIONS:
         _validate_entry(dimensions[code], code=code, source=source)
+    # Nothing downstream may crash on a non-serializable value (an unquoted
+    # date in a field the normalization above does not cover): the registry
+    # digests, or it is refused here.
+    try:
+        sha256_json(registry)
+    except TypeError as failed:
+        raise ThresholdsRefusal(
+            "registry_malformed",
+            f"{source} carries a value that is not JSON-serializable ({failed}) — the registry"
+            " is a YAML file a person signs: quote your date and value scalars (e.g."
+            ' agreement_date: "2026-12-01")',
+        ) from failed
     return registry
 
 
@@ -198,6 +247,13 @@ def _validate_entry(entry, *, code: str, source: str) -> None:
         raise ThresholdsRefusal(
             "registry_invalid_entry",
             f"{source} carries a {code} entry that is a {type(entry).__name__}, not a mapping",
+        )
+    if entry.get("dimension") != M_DIMENSIONS.get(code):
+        raise ThresholdsRefusal(
+            "registry_invalid_entry",
+            f"{source} carries a {code} entry labelled {entry.get('dimension')!r} — the"
+            f" canonical name is {M_DIMENSIONS.get(code)!r}: an entry never relabels its"
+            " dimension, or the signed artifact would disagree with the report that reads it",
         )
     status = entry.get("status")
     if status not in (STATUS_AGREED, STATUS_ABSENT):
@@ -270,9 +326,15 @@ def _sign_off_record(registry: dict) -> dict:
 
 def _dimension_record(code: str, entry: dict) -> dict:
     """One dimension's report record — its status, its value or its absence
-    (with the reason), the surface, the rationale and the agreement date."""
+    (with the reason), the surface, the rationale and the agreement date.
+
+    The dimension NAME is always the canonical one (``M_DIMENSIONS``): the
+    entry's own label is validated to agree with it, so a registry can never
+    relabel a dimension and the report cannot carry a name that disagrees with
+    the E01 report's enumeration.
+    """
     return {
-        "dimension": entry.get("dimension") or M_DIMENSIONS.get(code),
+        "dimension": M_DIMENSIONS.get(code),
         "status": entry.get("status"),
         "value": entry.get("value"),
         "absent_reason": entry.get("absent_reason"),
@@ -285,11 +347,16 @@ def _dimension_record(code: str, entry: dict) -> dict:
 def promotion_decision(registry: dict) -> dict:
     """The promotion decision over one registry.
 
+    The registry is validated FIRST — a registry the loader would refuse never
+    reaches a decision, so a library caller cannot read ``allowed`` (or a
+    signed artifact) off one.
+
     Promotion is ALLOWED only when every measured dimension carries an agreed
     value AND the sign-off is signed by a named owner. Every other state is a
     blocking reason, named one by one — an absent dimension is never reported
     as satisfied and no value is ever substituted for it.
     """
+    validate_registry(registry)
     dimensions = registry.get("dimensions") or {}
     sign_off = _sign_off_record(registry)
     blocking: list[dict] = []
@@ -413,7 +480,7 @@ def derive_thresholds_artifact(
         entry = entry if isinstance(entry, dict) else {}
         thresholds[code] = {
             "value": entry.get("value"),
-            "dimension": entry.get("dimension") or M_DIMENSIONS.get(code),
+            "dimension": M_DIMENSIONS.get(code),
             "surface": entry.get("surface"),
             "rationale": entry.get("rationale"),
             "agreement_date": entry.get("agreement_date"),
@@ -450,13 +517,14 @@ def build_thresholds_report(
     *,
     created_utc: str | None = None,
     derived: dict | None = None,
-    registry_path: str | None = None,
 ) -> dict:
     """Build the threshold report — the promotion decision, the sign-off owner
     and every dimension's agreed value or explicit absence.
 
     A pure function of the registry plus the pinned ``created_utc``: the same
-    registry and pin digest identically.
+    registry and pin digest identically. The report carries the registry's
+    CONTENT digest — never the file's path spelling, which would make the
+    digest depend on where the caller happens to sit.
     """
     decision = promotion_decision(registry)
     body = {
@@ -468,7 +536,6 @@ def build_thresholds_report(
         "registry": {
             "artifact": registry.get("artifact"),
             "version": registry.get("registry_version"),
-            "path": registry_path,
             "sha256": sha256_json(registry),
         },
         "sign_off": decision["sign_off"],
@@ -480,13 +547,3 @@ def build_thresholds_report(
     }
     body["digest"] = thresholds_report_digest(body)
     return body
-
-
-def registry_sha256(registry: dict) -> str:
-    """The registry's content digest — the identity a decision is bound to."""
-    return sha256_json(registry)
-
-
-def reference_manifest_digest(reference_manifest: dict) -> str:
-    """The digest a derived thresholds artifact references."""
-    return manifest_digest(reference_manifest)

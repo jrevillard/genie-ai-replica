@@ -151,7 +151,7 @@ over three first-class top-level records:
 `tests/rag-benchmarks/protocol/run_protocol.py` — the `thresholds` and
 `counters` subcommands; `ThresholdsRefusal` and `CounterMetricsRefusal` map
 to the typed-refusal exit 1. `tests/rag-benchmarks/test_protocol_thresholds.py`
-(24 tests) and `tests/rag-benchmarks/test_protocol_counter_metrics.py` (20
+(33 tests) and `tests/rag-benchmarks/test_protocol_counter_metrics.py` (28
 tests) — every matrix row through temp registries, fake reference manifests
 and fixture rows. CI: the protocol pytest line gains the two new files.
 
@@ -185,9 +185,9 @@ and fixture rows. CI: the protocol pytest line gains the two new files.
 
 **Verification (this session):**
 `cd tests/rag-benchmarks && pytest test_protocol_thresholds.py test_protocol_counter_metrics.py -q`
-→ 44 passed.
+→ 61 passed.
 `pytest test_capture_baseline.py test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py test_protocol_e01.py test_protocol_thresholds.py test_protocol_counter_metrics.py -q`
-→ 304 passed (the two new files included; the gate's refusals and the E01
+→ 321 passed (the two new files included; the gate's refusals and the E01
 report unchanged).
 `python3 -m py_compile protocol/*.py` → clean.
 `ruff check --config ../../components/agent-service/pyproject.toml protocol/ test_protocol_thresholds.py test_protocol_counter_metrics.py`
@@ -227,6 +227,40 @@ Config C rows carry no abstention field today, so CM-2 over a config-C
 candidate records the abstention fact as unrecorded (NOT computable) rather
 than guessing one — the field is what CM-2 needs, and the driver that records
 it belongs to story 4.5's candidate runs.
+
+**Review corrections (C1) — 13 confirmed findings + 2 dead-code cuts, all
+fixed, each pinned by a test.** The registry loader/type side: a quoted
+`signed: "false"` is now refused (`sign_off_invalid`) — the sign-off is a
+boolean or it is not; the known date fields
+(`dimensions[*].agreement_date`, `sign_off.agreed_on`/`signed_on`) are
+normalized to their ISO strings in place, so an unquoted `2026-12-01` reads as
+the string the contract asks for instead of refusing misleadingly or crashing
+the digest, and a value that is not JSON-serializable anywhere else is refused
+`registry_malformed` naming the remedy (quote your scalars) instead of crashing
+`sha256_json`; `promotion_decision` now validates the registry FIRST, so a
+library caller can never read `allowed` (or a signed artifact) off a registry
+the loader would refuse; an entry may not relabel its dimension — the
+canonical `M_DIMENSIONS` name is required in the entry and is what the report
+and the derived artifact carry, so the signed artifact can never disagree with
+the E01 report's enumeration; `registry_version` must equal the supported
+`THRESHOLD_REGISTRY_VERSION` (`registry_version_unsupported`); the report no
+longer embeds the caller's registry path in its digested body (the digest is
+content-only and reproducible across path spellings); the dead
+`registry_sha256`/`reference_manifest_digest` helpers are deleted. The
+counter-metrics side: `configuration_error` and `invalid_request` join
+`FAILURE_STATES`, so an all-died run can no longer report `failure_rate: 0`;
+a recorded abstention is its own terminal state (`abstained`, answered False) —
+CM-3 and CM-2 now read the same case the same way; a non-boolean `abstained`
+value (`"false"`) is never coerced — it counts as unrecorded; the
+correctness ledger's `correct_case_ids` must be a list of scalars
+(`correctness_invalid_ids`) and is deduplicated (first occurrence kept), so an
+int cannot crash and duplicates cannot inflate the denominator; CM-1's cost
+delta is `available` only when at least one counter is shared (disjoint
+counters record `not_available_reason`, never an empty delta reading as zero)
+and each delta row names the candidate-side counters the reference does not
+carry (`candidate_only`); the dead `CM_METRICS` constant is deleted. The CLI:
+a missing `--reference-manifest` is a usage error (exit 2, the same wording as
+the missing `--out` case), not a refusal.
 
 ## Spec Change Log
 

@@ -525,11 +525,11 @@ def cmd_thresholds(args: argparse.Namespace) -> int:
     if decision["promotion"] == "allowed":
         if not args.reference_manifest:
             print(
-                "REFUSED: --reference-manifest is required — the thresholds are bound to the"
-                " measured reference they were agreed against",
+                "usage: thresholds --reference-manifest PATH is required to bind the"
+                " thresholds to the measured reference they were agreed against",
                 file=sys.stderr,
             )
-            return 1
+            return 2
         reference_manifest = _load_json_refusing(args.reference_manifest, "the reference manifest")
         if reference_manifest is None:
             return 1
@@ -545,12 +545,7 @@ def cmd_thresholds(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-    report = thresholds_mod.build_thresholds_report(
-        registry,
-        created_utc=args.created_utc,
-        derived=derived,
-        registry_path=str(args.registry),
-    )
+    report = thresholds_mod.build_thresholds_report(registry, created_utc=args.created_utc, derived=derived)
     if args.report:
         report_path = _write_manifest(Path(args.report).parent, Path(args.report).name, report)
         print(f"thresholds report: {report_path}")

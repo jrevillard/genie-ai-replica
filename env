@@ -174,7 +174,7 @@ HUGGING_FACE_HUB_TOKEN=
 #
 # When no API is named, this variable chooses between the two backends that
 # exist: `auto` (the default when unset) probes the in-cluster worker with
-# backoff inside a 60s readiness window — a GPU that is still loading at boot
+# backoff inside a 30s readiness window — a GPU that is still loading at boot
 # is picked up once it answers — and keeps the GPU if it answers within the
 # window, the CPU model if it does not; `cpu` takes the CPU model directly;
 # `gpu` skips the probe and requires the GPU.

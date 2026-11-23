@@ -144,7 +144,7 @@ nothing in the response to say so. The check now runs once at startup only;
 after that, a failure is reported as a failure.
 
 When no GPU API is configured, `TRANSLATION_BACKEND` decides, and `auto`
-probes with backoff inside a 60-second readiness window and commits:
+probes with backoff inside a 30-second readiness window and commits:
 
 | `GPU_NODE_HOST` / endpoint | `TRANSLATION_BACKEND` | Result |
 |---|---|---|
@@ -156,7 +156,10 @@ probes with backoff inside a 60-second readiness window and commits:
 `TRANSLATION_PROBE_TIMEOUT_SECONDS` (default `30`) bounds each probe attempt
 inside that window. It must cover a cold TLS handshake to a remote node: the
 endpoint's `/health` answers in tens of milliseconds once connected, so a
-budget that can expire on a healthy API would stop a working deployment.
+budget that can expire on a healthy API would stop a working deployment. The
+readiness window is wall-clock: a probe that hangs for its full timeout
+consumes the window in one attempt and lands on CPU after a single probe —
+the one-shot behavior, never worse.
 
 The flag is **read on every request** at
 [`query-routes.js:208`](https://opensource.unicc.org/un/itu/genie-ai/-/blob/main/components/gov-chat-backend/routes/query-routes.js#L208)

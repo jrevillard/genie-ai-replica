@@ -29,7 +29,17 @@ const translationBackend = process.env.TRANSLATION_BACKEND || 'auto';
 // genuinely absent still ends the boot on CPU at a bounded time cost. Code
 // constants, not env knobs: the trade-off is boot latency against GPU pickup,
 // and it has no per-deployment answer an operator could size better than this.
-const AUTO_GPU_READINESS_WINDOW_MS = 60000;
+//
+// The window is bounded by the container healthcheck budget, not only by this
+// constant: backend init runs before the HTTP server listens, so every second
+// spent probing is a second of boot. 30s picks up an in-cluster worker that
+// becomes ready within low tens of seconds while keeping the worst boot
+// (window + CPU model load) inside the envelope the compose/chart healthcheck
+// `start_period` was sized for. A probe that hangs for its full
+// TRANSLATION_PROBE_TIMEOUT_SECONDS budget consumes the window in one
+// attempt and lands on CPU after a single probe — the one-shot behavior this
+// window replaces, never worse.
+const AUTO_GPU_READINESS_WINDOW_MS = 30000;
 const AUTO_GPU_RETRY_BACKOFF_START_MS = 2000;
 const AUTO_GPU_RETRY_BACKOFF_MAX_MS = 10000;
 

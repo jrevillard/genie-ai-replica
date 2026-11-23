@@ -315,8 +315,8 @@ describe('TranslationService', () => {
       jest.useFakeTimers();
 
       const selection = svc.selectBackend();
-      // Less than the 60s window: the GPU probe is still being retried.
-      await jest.advanceTimersByTimeAsync(30000);
+      // Inside the 30s window: the GPU probe is still being retried.
+      await jest.advanceTimersByTimeAsync(20000);
       expect(gpu.init.mock.calls.length).toBeGreaterThan(1);
       expect(CpuTranslateBackend).not.toHaveBeenCalled();
 
@@ -325,6 +325,26 @@ describe('TranslationService', () => {
 
       expect(svc.backendType).toBe('cpu');
       expect(svc.backend.translate).toBe(mockCpuTranslate);
+    });
+
+    it('settles on CPU by 30s so the boot stays inside the container healthcheck budget', async () => {
+      // Backend init runs before the server listens: every probing second is
+      // boot time against the compose/chart healthcheck start_period (90s).
+      // A window that grew past that envelope would restart-loop the task on
+      // slow hosts — the bound is part of the contract.
+      const svc = serviceInAuto();
+      const gpu = gpuApi({
+        endpointExplicit: false,
+        init: jest.fn().mockRejectedValue(new Error('vLLM service unreachable: ECONNREFUSED'))
+      });
+      GpuTranslateBackend.mockImplementationOnce(() => gpu);
+      jest.useFakeTimers();
+
+      const selection = svc.selectBackend();
+      await jest.advanceTimersByTimeAsync(30000);
+      await selection;
+
+      expect(svc.backendType).toBe('cpu');
     });
 
     it('does not retry on the configured-GPU path — the refusal stays immediate', async () => {

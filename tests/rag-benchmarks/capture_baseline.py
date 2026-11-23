@@ -66,9 +66,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Make the eval/ subpackage importable for the shared harness primitives
-# (``docker_exec`` + atomic JSON IO) — previously duplicated locally.
+# (the venue-dispatching exec + atomic JSON IO) — previously duplicated locally.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "eval"))
-from harness import docker_exec as _docker_exec, write_json  # noqa: E402
+from harness import exec_backend, exec_in_container as _exec, write_json  # noqa: E402
 
 # Metrics where a LOWER value is the parity-relevant regression signal.
 LOWER_IS_BETTER = ("recall", "precision", "complete_recall", "retrieval_recall")
@@ -221,7 +221,24 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
     (e.g. ``genieai-el-salvador_``) disambiguates when a node hosts several
     stacks — docker ps row order is not deterministic, so without it the wrong
     stack's env could be read (AC:5 "the stack under test").
+
+    DOCKER-ONLY identity: the resolved names are docker container names and
+    the lookup is ``docker ps``. On a Kubernetes venue (``EVAL_EXEC_BACKEND``
+    = kubectl) this is a loud refusal, not a wrong answer — the k8s identity
+    is the component name a label selector resolves, and half a migration
+    would read one venue's env and exec into another's pods.
     """
+    if exec_backend() == "kubectl":
+        raise RuntimeError(
+            "resolve_containers is docker-only (docker ps): capture_baseline"
+            " has no Kubernetes path, and no command can produce this"
+            " baseline artifact (N runs + median/MAD tolerance) on k8s yet."
+            " The closest protocol-side substitute is protocol/run_protocol.py"
+            " reference --resolved-env <snapshot.json> — a ONE-run reference"
+            " manifest without the tolerance layer this driver builds — with"
+            " the snapshot file pinned by hand (the pinned file wins over"
+            " --stack-prefix, so no docker lookup is attempted)"
+        )
     out = _run(
         ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}"],
         timeout=30,
@@ -255,7 +272,13 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
 
 
 def _image_digest(container: str) -> str:
-    """Resolve the image ID (sha256) backing a container — the practical digest."""
+    """Resolve the image ID (sha256) backing a container — the practical digest.
+
+    DOCKER-ONLY (docker inspect). No venue guard here: the only caller
+    (``snapshot_stack``) runs after ``resolve_containers``, which refuses
+    loudly on a Kubernetes venue — a second refusal here would be unreachable
+    and, wrapped in a bare ``RuntimeError``, silently degradable to
+    ``image_id: None``."""
     return _run(
         ["docker", "inspect", "--format", "{{.Image}}", container], timeout=30
     ).strip()
@@ -295,7 +318,10 @@ def env_grep_cmd(keys) -> str:
 
 
 def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
-    """Read the RESOLVED values out of the live containers (docker exec).
+    """Read the RESOLVED values out of the live containers (the venue's exec
+    primitive — ``docker exec`` on a compose/swarm venue; on a Kubernetes
+    venue resolve_containers refuses first, so the baseline goes through the
+    protocol driver's ``--resolved-env`` snapshot instead).
 
     This is the "exact env under test, resolved values, not placeholders"
     requirement (AC:5). A var is recorded only when the container actually holds
@@ -316,7 +342,7 @@ def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
             missing.extend(keys)
             continue
         try:
-            body = _docker_exec(
+            body = _exec(
                 info["container"],
                 env_grep_cmd(keys),
                 timeout=30,

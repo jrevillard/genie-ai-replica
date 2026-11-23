@@ -5,11 +5,15 @@ Covers:
   - read_json UTF-8 round-trip with accents
   - docker_exec error path (mock subprocess.run rc=1 → HarnessError)
   - docker_exec pass_env flag order (-e inserted BEFORE container name)
+  - exec_in_container venue dispatch (docker | kubectl | unknown)
+  - kubectl_exec: the forwarded env values travel on STDIN, never on argv
+  - resolve_k8s_pod: the operator's pin wins, then the label selectors
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,7 +22,15 @@ from unittest import mock
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import HarnessError, docker_exec, read_json, write_json  # noqa: E402
+from harness import (  # noqa: E402
+    HarnessError,
+    docker_exec,
+    exec_in_container,
+    kubectl_exec,
+    read_json,
+    resolve_k8s_pod,
+    write_json,
+)
 
 
 class TestWriteJson:
@@ -96,3 +108,169 @@ class TestDockerExec:
         with mock.patch("harness.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="docker", timeout=1)):
             with pytest.raises(subprocess.TimeoutExpired):
                 docker_exec("ctr", "sleep 99", timeout=1)
+
+
+class TestKubectlExec:
+    def test_forwarded_env_travels_on_stdin_never_on_argv(self):
+        """The bearer token must not be visible in ``ps`` — it goes through stdin."""
+        fake = mock.Mock()
+        fake.returncode = 0
+        fake.stdout = "ok"
+        fake.stderr = ""
+        with mock.patch.dict(os.environ, {"E2E_BEARER_TOKEN": "s3cret"}):
+            with mock.patch("harness.subprocess.run", return_value=fake) as run:
+                assert kubectl_exec("pod-1", "echo $E2E_BEARER_TOKEN", pass_env=("E2E_BEARER_TOKEN",)) == "ok"
+        args = run.call_args.args[0]
+        assert args[0] == "kubectl" and args[1] == "exec"
+        assert "pod-1" in args
+        assert not any("s3cret" in str(a) for a in args)
+        # The export prelude rides the sh -c argument (the shell imports the
+        # stdin lines into the environment before the command runs)…
+        assert 'export "$__e"' in args[-1]
+        # …and the value reaches the pod through the exec's stdin only.
+        assert run.call_args.kwargs["input"] == "E2E_BEARER_TOKEN=s3cret\n"
+
+    def test_error_path_raises_harness_error(self):
+        fake = mock.Mock()
+        fake.returncode = 1
+        fake.stdout = ""
+        fake.stderr = "pod not found"
+        with mock.patch("harness.subprocess.run", return_value=fake):
+            with pytest.raises(HarnessError, match="kubectl exec .* failed.*pod not found"):
+                kubectl_exec("pod-1", "echo hi")
+
+
+class TestResolveK8sPod:
+    def test_operator_pin_wins(self, monkeypatch):
+        """A live pin is the resolution — the label path is not consulted."""
+        monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-abc")
+        with mock.patch("harness._pod_exists", return_value=True):
+            with mock.patch("harness._run_kubectl") as labels:
+                assert resolve_k8s_pod("chatqna") == "chatqna-abc"
+        labels.assert_not_called()
+
+    def test_stale_pin_falls_back_to_the_labels_with_a_warning(self, monkeypatch, capsys):
+        """A pin naming a pod the rollout rotated away must not pin the run
+        to a corpse — it falls through to the label selectors, and the
+        operator is told WHICH pin was dropped."""
+        # A pin name unique to this test: the once-only warning is per pin,
+        # so a name another test already warned about would say nothing here.
+        monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-stale-fallback")
+        with mock.patch("harness._pod_exists", return_value=False):
+            with mock.patch("harness._run_kubectl", return_value="chatqna-live\n"):
+                assert resolve_k8s_pod("chatqna") == "chatqna-live"
+        out = capsys.readouterr().err
+        assert "chatqna-stale-fallback" in out
+
+    def test_the_stale_pin_warning_is_emitted_once_per_pin(self, monkeypatch, capsys):
+        """The fallback runs per exec — dozens of identical warning lines
+        would bury the run's own output, so the warning is once per pin."""
+        monkeypatch.setenv("EVAL_K8S_POD_CHATQNA", "chatqna-stale-once")
+        with mock.patch("harness._pod_exists", return_value=False):
+            with mock.patch("harness._run_kubectl", return_value="chatqna-live\n"):
+                resolve_k8s_pod("chatqna")
+                resolve_k8s_pod("chatqna")
+                resolve_k8s_pod("chatqna")
+        out = capsys.readouterr().err
+        assert out.count("chatqna-stale-once") == 1
+
+    def test_label_selector_resolves_the_live_pod(self, monkeypatch):
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        with mock.patch("harness._run_kubectl", return_value="chatqna-xyz\n") as run:
+            assert resolve_k8s_pod("chatqna") == "chatqna-xyz"
+        args = run.call_args.args[0]
+        assert "genieai.io/component=chatqna" in args
+        # The running-only filter: an eviction tombstone or a Terminating pod
+        # (venues collect them) must never be resolved.
+        assert "status.phase=Running" in args
+
+    def test_multi_replica_stdout_yields_one_pod_name(self, monkeypatch):
+        """The `[*]` jsonpath emits ALL matching pods space-separated on one
+        line; the resolution must take the first name, never the whole
+        string — a two-replica venue would otherwise be handed the
+        concatenated names as one pod name."""
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        with mock.patch("harness._run_kubectl", return_value="pod-a pod-b\n"):
+            assert resolve_k8s_pod("chatqna") == "pod-a"
+
+    def test_empty_first_selector_falls_through_to_the_second(self, monkeypatch):
+        """The empty-match case the `[*]` jsonpath exists for: the first
+        selector matches nothing (rc=0, empty stdout) and the SECOND selector
+        must be consulted — not an abort, not a refusal."""
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        with mock.patch(
+            "harness._run_kubectl", side_effect=["", "pod-from-standard-label\n"]
+        ) as run:
+            assert resolve_k8s_pod("chatqna") == "pod-from-standard-label"
+        assert run.call_count == 2
+        second_label = run.call_args.args[0][run.call_args.args[0].index("-l") + 1]
+        assert second_label == "app.kubernetes.io/component=chatqna"
+
+    def test_namespace_is_normalized_and_defaults_to_genieai(self, monkeypatch):
+        """An ambient namespace with a stray space (a quoted multi-line
+        export) is stripped, not sent at a namespace nothing lives in; unset
+        falls to the chart's default."""
+        monkeypatch.setenv("EVAL_K8S_NAMESPACE", "  other-ns ")
+        with mock.patch("harness._run_kubectl", return_value="pod-x\n") as run:
+            resolve_k8s_pod("chatqna")
+        argv = run.call_args.args[0]
+        assert argv[argv.index("-n") + 1] == "other-ns"
+        monkeypatch.delenv("EVAL_K8S_NAMESPACE", raising=False)
+        with mock.patch("harness._run_kubectl", return_value="pod-y\n") as run:
+            resolve_k8s_pod("chatqna")
+        argv = run.call_args.args[0]
+        assert argv[argv.index("-n") + 1] == "genieai"
+
+    def test_a_failed_lookup_names_the_real_cause(self, monkeypatch):
+        """A kubectl failure (wrong namespace, RBAC denial) is not quietly
+        read as 'no pod found' — the refusal carries kubectl's own stderr."""
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        with mock.patch(
+            "harness._run_kubectl",
+            mock.Mock(side_effect=HarnessError('kubectl get pods failed: namespaces "nope" not found')),
+        ):
+            with pytest.raises(HarnessError, match='namespaces "nope" not found'):
+                resolve_k8s_pod("chatqna")
+
+    def test_a_docker_style_identity_is_refused_with_the_remedy(self, monkeypatch):
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA_XEON_BACKEND_SERVER", raising=False)
+        with mock.patch("harness._run_kubectl", return_value=""):
+            with pytest.raises(HarnessError, match="COMPONENT name"):
+                resolve_k8s_pod("chatqna-xeon-backend-server")
+
+    def test_no_match_is_a_refusal_not_a_guess(self, monkeypatch):
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        with mock.patch("harness._run_kubectl", return_value=""):
+            with pytest.raises(HarnessError, match="no running pod found"):
+                resolve_k8s_pod("chatqna")
+
+
+class TestKubectlExecTransport:
+    def test_a_newline_in_a_forwarded_value_is_refused(self, monkeypatch):
+        """The stdin transport is line-based; a multiline value would be
+        silently truncated — refused instead."""
+        monkeypatch.setenv("BROKEN_TOKEN", "line1\nline2")
+        with pytest.raises(HarnessError, match="contains a newline"):
+            kubectl_exec("pod-1", "echo $BROKEN_TOKEN", pass_env=("BROKEN_TOKEN",))
+
+
+class TestExecInContainer:
+    def test_docker_is_the_default_backend(self, monkeypatch):
+        monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+        with mock.patch("harness.docker_exec", return_value="from-docker") as docker:
+            assert exec_in_container("ctr", "echo hi") == "from-docker"
+        docker.assert_called_once()
+
+    def test_kubectl_backend_dispatches_to_the_resolved_pod(self, monkeypatch):
+        monkeypatch.setenv("EVAL_EXEC_BACKEND", "kubectl")
+        with mock.patch("harness.resolve_k8s_pod", return_value="pod-1") as resolve:
+            with mock.patch("harness.kubectl_exec", return_value="from-kubectl") as kubectl:
+                assert exec_in_container("chatqna", "echo hi") == "from-kubectl"
+        resolve.assert_called_once_with("chatqna")
+        # The exec goes to the RESOLVED pod, not to the container identity.
+        assert kubectl.call_args.args[0] == "pod-1"
+
+    def test_unknown_backend_refuses_loudly(self, monkeypatch):
+        monkeypatch.setenv("EVAL_EXEC_BACKEND", "podman")
+        with pytest.raises(HarnessError, match="unknown exec backend"):
+            exec_in_container("ctr", "echo hi")

@@ -1,0 +1,810 @@
+{
+  "per_query": [
+    {
+      "id": "e01-ans-purpose",
+      "query": "What is the test document created for?",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "9482722474953544510",
+        "1441489693832382079"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "preview": "This document, named test-document.md, is a markdown test file created for end-to-end (E2E"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-ans-items",
+      "query": "Which three items does Section 1 of the Test Document list?",
+      "trace_found": true,
+      "gold": [
+        "1441489693832382079"
+      ],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "d4972e995658bf95"
+      ],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "1441489693832382079",
+          "content_hash": "d4972e995658bf95",
+          "preview": "The second chunk, located under Section 1 of the Test Document, lists three items: 'Item o"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-ans-formatting",
+      "query": "What text formatting does Section 2 of the Test Document demonstrate?",
+      "trace_found": true,
+      "gold": [
+        "9482722474953544510"
+      ],
+      "selected": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "2c694fc2dda29b04"
+      ],
+      "selected_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "9482722474953544510",
+          "content_hash": "2c694fc2dda29b04",
+          "preview": "The third chunk, found in Section 2 of the Test Document, contains a paragraph with italic"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-unans-upload-count",
+      "query": "How many test documents have been uploaded to this system so far?",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "1441489693832382079",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-cite-items",
+      "query": "In which section of the Test Document do the items 'Item one', 'Item two' and 'Item three' appear?",
+      "trace_found": true,
+      "gold": [
+        "1441489693832382079"
+      ],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "d4972e995658bf95"
+      ],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "1441489693832382079",
+          "content_hash": "d4972e995658bf95",
+          "preview": "The second chunk, located under Section 1 of the Test Document, lists three items: 'Item o"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-lang-es",
+      "query": "¿Para qué se creó el documento de prueba?",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "9482722474953544510",
+        "1441489693832382079"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "preview": "This document, named test-document.md, is a markdown test file created for end-to-end (E2E"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-lang-zh",
+      "query": "测试文档是为了什么创建的？",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "9482722474953544510",
+        "1441489693832382079"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "preview": "This document, named test-document.md, is a markdown test file created for end-to-end (E2E"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-fail-saturation",
+      "query": "Summarize the test document while the retrieval backend is saturated.",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-cancel-checklist",
+      "query": "List every requirement of the long procurement checklist.",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-sec-restricted",
+      "query": "What does the restricted registry say about the sealed file?",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-sec-xuser-a",
+      "query": "Which agency owns the flood-response plan?",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-sec-xuser-b",
+      "query": "Which agency owns the flood-response plan?",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-sec-narrowed",
+      "query": "What are the conditions of the forestry subsidy?",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-sec-permission",
+      "query": "",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-sec-injection-document",
+      "query": "Summarize the public service catalogue.",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    },
+    {
+      "id": "e01-sec-injection-tool",
+      "query": "What is the status of my service request?",
+      "trace_found": true,
+      "gold": [],
+      "selected": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [],
+      "selected_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.0,
+      "complete_recall": 1.0,
+      "noise": 1.0,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 0.0,
+      "n_passages": 0,
+      "passages_retrieved": 0
+    }
+  ],
+  "aggregate": {
+    "n": 6,
+    "recall": 1.0,
+    "precision": 0.3333333333333333,
+    "complete_recall": 1.0,
+    "noise": 0.6666666666666669,
+    "retrieval_recall": 1.0,
+    "recall_at_1": 1.0,
+    "ndcg_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "ndcg_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "ndcg_at_5": 1.0,
+    "recall_at_10": 1.0,
+    "ndcg_at_10": 1.0,
+    "passage_recall": 1.0,
+    "total_passages": 6,
+    "retrieved_passages": 6,
+    "n_evaluable": 6,
+    "n_empty_gold": 10,
+    "n_unresolved_gold": 0
+  },
+  "n_missed_traces": 0,
+  "n_unmapped_chunk_keys": 0,
+  "n_http_errors": 0,
+  "skipped_entries": []
+}

@@ -13,6 +13,8 @@ import os
 import time
 import types
 
+import pytest
+
 import run_eval
 
 
@@ -22,6 +24,17 @@ def _entry(content_hash="abc123", chunk_key="key1"):
         "query": "What is the question?",
         "expected_chunks": [{"chunk_key": chunk_key, "content_hash": content_hash}],
     }
+
+
+@pytest.fixture(autouse=True)
+def _docker_backend(monkeypatch):
+    """The docker-path tests must not depend on the ambient EVAL_EXEC_BACKEND:
+    an operator's exported kubectl backend would flip them onto the kubectl
+    branch and fail on the docker argv. The same goes for an ambient
+    CHATQNA_CONTAINER pin (live-proven on this host): it would replace the
+    identity the tests assert on."""
+    monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+    monkeypatch.delenv("CHATQNA_CONTAINER", raising=False)
 
 
 def test_score_anchor_projects_keys_to_content_hashes():
@@ -82,13 +95,13 @@ def test_score_anchor_empty_map_produces_no_scoring_signal():
 
 
 def test_drive_query_returns_http_status(monkeypatch):
-    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120, pass_env=(): '{"text":"ok"}\n200')
+    monkeypatch.setattr(run_eval, "exec_in_container", lambda c, cmd, timeout=120, pass_env=(): '{"text":"ok"}\n200')
     start, body, status = run_eval.drive_query({"query": "q"})
     assert status == 200 and body == '{"text":"ok"}'
 
 
 def test_drive_query_401_detected(monkeypatch):
-    monkeypatch.setattr(run_eval, "_docker_exec", lambda c, cmd, timeout=120, pass_env=(): '{"error":"invalid_token"}\n401')
+    monkeypatch.setattr(run_eval, "exec_in_container", lambda c, cmd, timeout=120, pass_env=(): '{"error":"invalid_token"}\n401')
     _, _, status = run_eval.drive_query({"query": "q"})
     assert status == 401
 
@@ -103,7 +116,7 @@ def test_docker_exec_pass_env_forwards_flag(monkeypatch):
         captured["argv"] = argv
         return type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
     monkeypatch.setattr(run_eval.subprocess, "run", fake_run)
-    run_eval._docker_exec("c", "echo hi", pass_env=("FOO",))
+    run_eval.exec_in_container("c", "echo hi", pass_env=("FOO",))
     assert captured["argv"] == ["docker", "exec", "-e", "FOO", "c", "sh", "-c", "echo hi"]
 
 
@@ -117,7 +130,7 @@ def test_drive_query_token_not_in_argv(monkeypatch):
     def fake_docker_exec(c, cmd, timeout=120, pass_env=()):
         captured.append({"container": c, "cmd": cmd, "pass_env": tuple(pass_env)})
         return '{"text":"x"}\n200'
-    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_docker_exec)
     monkeypatch.setenv("E2E_BEARER_TOKEN", "SECRETTOKEN")
     start, body, status = run_eval.drive_query({"query": "q"})
     assert status == 200
@@ -268,7 +281,7 @@ def test_fetch_selection_respects_deadline_overshoot(monkeypatch):
     # Tiny budget so the second iteration crosses the deadline
     monkeypatch.setattr(_re, "TRACE_FETCH_TIMEOUT", 0.05)
     monkeypatch.setattr(_re, "TRACE_FLUSH_WAIT", 999.0)
-    monkeypatch.setattr(_re, "_docker_exec",
+    monkeypatch.setattr(_re, "exec_in_container",
                         lambda c, cmd, timeout=60, pass_env=(): json.dumps({"data": []}))
     # Module-local time namespace so both sleep() and time() are patchable
     t0 = [1000.0]
@@ -316,7 +329,7 @@ def test_fetch_selection_immediate_first_poll(monkeypatch):
         sleep=lambda s: sleeps.append(s),
         time=time.time,
     ))
-    monkeypatch.setattr(run_eval, "_docker_exec", my_docker)
+    monkeypatch.setattr(run_eval, "exec_in_container", my_docker)
     monkeypatch.setattr(run_eval, "TRACE_FETCH_TIMEOUT", 30)
     cands, sels, _ = run_eval.fetch_selection(time.time())
     assert cands == ["key_a"]
@@ -1237,7 +1250,7 @@ def test_f1_chatqna_container_reresolved_on_docker_exec_failure(tmp_path, monkey
                 f"docker exec {container} failed: No such container: {container}"
             )
         return '{"text":"ok"}\n200'
-    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_docker_exec)
 
     # Resolver: re-resolve returns a NEW container name (the rotated one)
     resolve_calls = []
@@ -1283,7 +1296,7 @@ def test_f1_chatqna_resolver_prefers_env_override(monkeypatch):
     def fake_docker_exec(container, cmd, timeout=120, pass_env=()):
         seen_containers.append(container)
         raise HarnessError("not running")
-    monkeypatch.setattr(run_eval, "_docker_exec", fake_docker_exec)
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_docker_exec)
     # Even on HarnessError, the resolver checks env first; with force=True
     # it still honors the env value (logs a warning if a new name is found)
     # but here we mock the resolver to record its invocation pattern.
@@ -1295,11 +1308,16 @@ def test_f1_chatqna_resolver_prefers_env_override(monkeypatch):
         return run_eval.os.getenv("CHATQNA_CONTAINER")
     monkeypatch.setattr(run_eval, "_resolve_chatqna_container", fake_resolve)
     # Suppress the per-entry retry path so the test only observes the
-    # first attempt's wrapper call.
+    # first attempt's wrapper call. The HarnessError reaction writes the
+    # live identity into the module — restore it, or the next test inherits
+    # this test's pin.
+    original_identity = run_eval.CHATQNA_CONTAINER
     try:
         run_eval.drive_query({"query": "x"})
     except HarnessError:
         pass
+    finally:
+        run_eval.CHATQNA_CONTAINER = original_identity
     # force=True passed on the HarnessError reaction
     assert invoked == [True]
 
@@ -1361,3 +1379,62 @@ def test_extract_answer_returns_the_abstention_prose():
         {"response": "I do not have enough information to answer.", "metadata": {"abstained": True}}
     )
     assert run_eval._extract_answer(body) == "I do not have enough information to answer."
+
+
+def test_kubectl_backend_skips_the_docker_reresolution(monkeypatch):
+    """The docker re-resolution (docker ps) runs ONLY on the docker backend:
+    on a Kubernetes venue it would at best print noise and at worst
+    overwrite CHATQNA_CONTAINER with a docker container name that no k8s
+    label matches (the mixed-host poison)."""
+    from harness import HarnessError
+
+    calls = []
+
+    def fake_exec(container, cmd, timeout=120, pass_env=()):
+        calls.append(container)
+        raise HarnessError("kubectl exec pod-1 failed: container not found")
+
+    monkeypatch.setattr(run_eval, "exec_in_container", fake_exec)
+    resolve_calls = []
+    def fake_resolve(force=False):
+        resolve_calls.append(force)
+        return "chatqna-rotated-docker-name"
+    monkeypatch.setattr(run_eval, "_resolve_chatqna_container", fake_resolve)
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", "kubectl")
+    try:
+        with pytest.raises(HarnessError):
+            run_eval._chatqna_exec("echo hi")
+    finally:
+        monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+    # The failure re-raised WITHOUT consulting docker at all.
+    assert resolve_calls == []
+    assert run_eval.CHATQNA_CONTAINER != "chatqna-rotated-docker-name"
+    # The exec used the venue-shaped identity (the k8s component name), not
+    # the docker container name.
+    assert calls == ["chatqna"]
+
+
+def test_chatqna_identity_default_is_backend_aware(monkeypatch):
+    """The default identity is the k8s COMPONENT name on the kubectl backend
+    and the docker container name otherwise; an explicit CHATQNA_CONTAINER
+    pin wins on both. The default is read at CALL time, so the backend is
+    honoured without a module re-import."""
+    monkeypatch.setattr(run_eval, "CHATQNA_CONTAINER", "")
+
+    monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
+    assert run_eval._default_chatqna_identity() == "chatqna-xeon-backend-server"
+    assert run_eval._chatqna_identity() == "chatqna-xeon-backend-server"
+
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", "kubectl")
+    assert run_eval._default_chatqna_identity() == "chatqna"
+    assert run_eval._chatqna_identity() == "chatqna"
+
+    # The backend value is normalized (strip + lower) before the comparison.
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", " KUBECTL ")
+    assert run_eval._default_chatqna_identity() == "chatqna"
+
+    # The operator's pin wins on both backends.
+    monkeypatch.setattr(run_eval, "CHATQNA_CONTAINER", "chatqna-prod")
+    assert run_eval._chatqna_identity() == "chatqna-prod"
+    monkeypatch.setenv("EVAL_EXEC_BACKEND", "docker")
+    assert run_eval._chatqna_identity() == "chatqna-prod"

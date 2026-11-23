@@ -297,9 +297,11 @@ def _terminal_state(row) -> tuple[str, str | None, bool, str | None, bool]:
             return (LIMIT_MARKER_C, f"abstention_reason={LIMIT_MARKER_B}", True, "limit", False)
         if status == "skipped":
             return ("skipped", None, False, None, False)
-        # A recorded abstention is a terminal state of its own — never an
-        # answered execution, so CM-3 and CM-2 read the same case the same way.
-        if _abstention_fact(row) is True:
+        # A recorded abstention on an ANSWERED-SHAPED row is a terminal state
+        # of its own — never an answered execution, so CM-3 and CM-2 read the
+        # same case the same way. A failing row keeps the failure family: an
+        # abstention fact beside an error is not what the run died of.
+        if status == "ok" and _abstention_fact(row) is True:
             return ("abstained", "abstained", True, None, False)
         if status == "ok":
             return (ANSWERED_STATE, None, True, None, True)

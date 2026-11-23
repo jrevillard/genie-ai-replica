@@ -356,6 +356,26 @@ def test_cm3_records_a_failure_beside_the_rate():
     assert cm3["values"]["failure_rate"] == pytest.approx(0.5)
 
 
+def test_cm3_keeps_a_failing_row_in_the_failure_family_even_when_it_records_an_abstention():
+    """Only an ANSWERED-SHAPED (status ok) row that records an abstention
+    becomes the 'abstained' state — a failing row stays a failure, whatever
+    abstention fact rides beside it."""
+    candidate = {
+        "c1": {"case_id": "c1", "status": "error", "abstained": True},
+        "c2": {"case_id": "c2", "status": "ok", "abstained": True},
+    }
+    report = build_counter_metrics_report(
+        reference_rows={}, candidate_rows=candidate, created_utc=CREATED
+    )
+    cm3 = report["counter_metrics"]["CM-3"]
+    states = {row["case_id"]: row for row in cm3["values"]["per_case_terminal_states"]}
+    assert states["c1"]["terminal_state"] == "failure"
+    assert states["c1"]["hit_kind"] == "failure"
+    assert states["c2"]["terminal_state"] == "abstained"
+    assert cm3["values"]["n_failure_rows"] == 1
+    assert cm3["values"]["n_answered"] == 0
+
+
 def test_cm3_counts_the_governed_refusal_terminals_as_failures():
     """A configuration error and an invalid request are terminal states that
     did not answer — never a zero failure rate."""

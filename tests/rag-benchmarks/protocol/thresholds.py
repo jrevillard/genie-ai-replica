@@ -216,12 +216,15 @@ def validate_registry(registry, *, source: str = "the registry") -> dict:
             " are read",
         )
     # The known date fields are normalized BEFORE the per-entry validation, so
-    # a plainly written date is read as the string the entry contract asks for.
-    sign_off["agreed_on"] = _iso_date(sign_off.get("agreed_on"))
-    sign_off["signed_on"] = _iso_date(sign_off.get("signed_on"))
+    # a plainly written date is read as the string the entry contract asks
+    # for. Only PRESENT keys are rewritten: injecting the optional keys would
+    # mutate the caller's dict and break the report's content digest.
+    for key in ("agreed_on", "signed_on"):
+        if key in sign_off:
+            sign_off[key] = _iso_date(sign_off[key])
     for entry in dimensions.values():
-        if isinstance(entry, dict):
-            entry["agreement_date"] = _iso_date(entry.get("agreement_date"))
+        if isinstance(entry, dict) and "agreement_date" in entry:
+            entry["agreement_date"] = _iso_date(entry["agreement_date"])
     for code in MEASURED_DIMENSIONS:
         _validate_entry(dimensions[code], code=code, source=source)
     # Nothing downstream may crash on a non-serializable value (an unquoted

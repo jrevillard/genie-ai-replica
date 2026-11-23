@@ -151,7 +151,7 @@ over three first-class top-level records:
 `tests/rag-benchmarks/protocol/run_protocol.py` — the `thresholds` and
 `counters` subcommands; `ThresholdsRefusal` and `CounterMetricsRefusal` map
 to the typed-refusal exit 1. `tests/rag-benchmarks/test_protocol_thresholds.py`
-(33 tests) and `tests/rag-benchmarks/test_protocol_counter_metrics.py` (28
+(34 tests) and `tests/rag-benchmarks/test_protocol_counter_metrics.py` (29
 tests) — every matrix row through temp registries, fake reference manifests
 and fixture rows. CI: the protocol pytest line gains the two new files.
 
@@ -185,9 +185,9 @@ and fixture rows. CI: the protocol pytest line gains the two new files.
 
 **Verification (this session):**
 `cd tests/rag-benchmarks && pytest test_protocol_thresholds.py test_protocol_counter_metrics.py -q`
-→ 61 passed.
+→ 63 passed.
 `pytest test_capture_baseline.py test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py test_protocol_e01.py test_protocol_thresholds.py test_protocol_counter_metrics.py -q`
-→ 321 passed (the two new files included; the gate's refusals and the E01
+→ 323 passed (the two new files included; the gate's refusals and the E01
 report unchanged).
 `python3 -m py_compile protocol/*.py` → clean.
 `ruff check --config ../../components/agent-service/pyproject.toml protocol/ test_protocol_thresholds.py test_protocol_counter_metrics.py`
@@ -262,9 +262,50 @@ carry (`candidate_only`); the dead `CM_METRICS` constant is deleted. The CLI:
 a missing `--reference-manifest` is a usage error (exit 2, the same wording as
 the missing `--out` case), not a refusal.
 
+**FIX review round 1 — 2 nit-level defects introduced by the correction diff,
+both fixed, each pinned.** (1) The date normalization wrote the optional
+`agreed_on`/`signed_on`/`agreement_date` keys into a registry that omitted
+them — it mutated the caller's dict and made the report's content digest
+disagree with the parsed content; the rewrite now touches only keys that are
+present. (2) The new `abstained` terminal state fired for ANY status, so a
+`{status: error, abstained: true}` row was reclassified out of the failure
+family; it is now gated on `status == "ok"` (the `result_budget_exhausted`
+limit check keeps its place before it) — a failing row keeps the failure
+family whatever abstention fact rides beside it.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+**Global code-review (C1) on `1f5eb7147` — 12 findings, every claim verified
+by an executed probe before it was filed; all 12 routed to patch (smallest
+fix, no scope change) and fixed on `f3d8bd8f2`.**
+
+| # | Finding | Severity | Verdict | Disposition |
+|---|---------|----------|---------|-------------|
+| F1 | A quoted `signed: "false"` reads as signed — promotion ALLOWED with no operator sign-off, a signed artifact written, the gate opened | important | confirmed (end-to-end probe: gate accepts the artifact) | **Fixed**: `validate_registry` requires a real bool (`sign_off_invalid`) |
+| F2 | Unquoted YAML dates: `agreement_date: 2026-12-01` refuses misleadingly ("no agreement_date"); an unquoted `signed_on` crashes `build_thresholds_report` with an uncaught TypeError | important | confirmed (both probes) | **Fixed**: known date fields normalized to ISO strings in place; a non-serializable registry refuses `registry_malformed` with the remedy |
+| F3 | `configuration_error`/`invalid_request` absent from `FAILURE_STATES` — a run where every execution died reports `failure_rate: 0` | important | confirmed (probe) | **Fixed**: both added |
+| F4 | An abstained config-B row (status ok, abstained true) is reported as answered by CM-3 while CM-2 counts it as an abstention — the same report contradicts itself | important | confirmed (probe) | **Fixed**: a recorded abstention is its own terminal state (answered False), the budget-exhausted marker still wins |
+| F5 | CM-1 cost delta `available: true` with an empty `per_request` when the sides share no counter — reads as "the delta is zero"; candidate-only counters vanish from the delta | important | confirmed (probe) | **Fixed**: available gated on non-empty deltas; `candidate_only` named per delta row |
+| F6 | Library callers skip validation: `promotion_decision`/`derive_thresholds_artifact` sign an invalid registry (null surfaces) | important | confirmed (probe) | **Fixed**: `promotion_decision` validates first |
+| F7 | An entry can relabel its dimension; the report and the signed artifact carry a name that disagrees with the E01 enumeration | important | confirmed (probe) | **Fixed**: the canonical `M_DIMENSIONS` name is required and always emitted |
+| F8 | The report digest embeds the caller's registry path — not reproducible across path spellings, contradicting its own docstring | important | confirmed (probe: two digests for one registry) | **Fixed**: path removed from the digested body |
+| F9 | `correct_case_ids` shape unchecked: an int crashes uncaught, a string becomes per-character ids, duplicates inflate the denominator | important | confirmed (probe) | **Fixed**: list-of-scalars validation (`correctness_invalid_ids`) + dedupe |
+| F10 | `registry_version` never compared; dead helpers (`registry_sha256`, `reference_manifest_digest`, `CM_METRICS`) | nit | confirmed (grep) | **Fixed**: version equality enforced (`registry_version_unsupported`); dead code deleted |
+| F11 | `_abstention_fact` coerces a string `"false"` to True — counted as an abstention | nit | confirmed (probe) | **Fixed**: only real bools accepted; otherwise unrecorded |
+| F12 | Missing `--reference-manifest` exits 1 (refusal) while the missing `--out` exits 2 (usage) — inconsistent exit codes | nit | confirmed (probe) | **Fixed**: both are usage errors (exit 2) |
+
+**FIX-REVIEW (chain round 1, f=0) on the C1 correction diff
+(`1f5eb7147..f3d8bd8f2`) — 12/12 CONFIRMED-RESOLVED, mutation-sensitive (the
+new pins run red against the base modules: 17 failed / 44 passed), and two new
+nit-level defects found in the correction itself, both fixed in the same
+chain:**
+
+| # | Finding | Severity | Verdict | Disposition |
+|---|---------|----------|---------|-------------|
+| R1 | `validate_registry` INSERTS the optional date keys when absent — a registry whose sign-off omits `agreed_on`/`signed_on` gets `None` injected, so the report's `registry.sha256` stops matching the parsed content and the caller's dict is mutated (the pure-function docstring lied) | nit | confirmed (probe: two different digests for one file) | **Fixed**: rewrite a date field only when the key exists |
+| R2 | The new abstained terminal state fired for ANY status — a `{status: error, abstained: true}` row was reclassified out of the failure family | nit | confirmed (probe) | **Fixed**: the abstained state is gated on `status == "ok"` (the budget-exhausted marker keeps its place before it) |
 
 ## Design Notes
 

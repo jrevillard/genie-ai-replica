@@ -18,6 +18,7 @@ registries, fake reference manifests, no live venue:
 """
 
 import argparse
+import copy
 import inspect
 import json
 from pathlib import Path
@@ -27,7 +28,7 @@ import yaml
 
 from protocol import gate
 from protocol import thresholds as thresholds_mod
-from protocol.manifest import build_manifest, manifest_digest
+from protocol.manifest import build_manifest, manifest_digest, sha256_json
 from protocol.run_protocol import cmd_thresholds, main
 
 REGISTRY = Path(__file__).resolve().parent / "protocol" / "thresholds.yaml"
@@ -278,6 +279,22 @@ def test_an_agreed_dimension_without_its_value_is_refused():
     with pytest.raises(thresholds_mod.ThresholdsRefusal) as failed:
         thresholds_mod.validate_registry(registry, source="the fixture registry")
     assert failed.value.reason == "registry_invalid_entry"
+
+
+def test_a_registry_without_the_date_fields_validates_without_injecting_keys():
+    """The optional date keys are rewritten ONLY when present: validating a
+    registry that omits them injects no key, mutates nothing, and the report's
+    content digest equals sha256_json of the untouched dict."""
+    registry = _registry(absent=tuple(thresholds_mod.MEASURED_DIMENSIONS))
+    del registry["sign_off"]["agreed_on"]
+    del registry["sign_off"]["signed_on"]
+    for entry in registry["dimensions"].values():
+        del entry["agreement_date"]
+    before = copy.deepcopy(registry)
+    assert thresholds_mod.validate_registry(registry) is registry
+    assert registry == before
+    report = thresholds_mod.build_thresholds_report(registry, created_utc=CREATED)
+    assert report["registry"]["sha256"] == sha256_json(registry)
 
 
 def test_a_quoted_signed_value_is_refused():

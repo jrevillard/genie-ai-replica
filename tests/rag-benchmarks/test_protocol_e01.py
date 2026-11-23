@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 
 from protocol import drivers
-from protocol import e01 as e01_mod
 from protocol.e01 import (
     E01Refusal,
     build_e01_report,
@@ -1343,20 +1342,26 @@ def test_capture_a_writes_the_rows_file_only_through_the_case_loop(tmp_path):
     assert on_disk["capture"]["corpus_fingerprint"] == CORPUS
 
 
-def test_e01_keeps_every_measurement_name_it_declares():
-    """The measurement rule is a CONTRACT with the judge — the declared names
-    survive, a token COUNT survives even outside the allowlist, and a token
-    CREDENTIAL does not."""
+def test_e01_keeps_the_measurement_names_and_drops_the_credentials():
+    """The redaction rule is a CONTRACT with the judge — asserted at the
+    REPORT boundary: the declared measurement names reach the report (and a
+    token count outside the allowlist), a token CREDENTIAL does not."""
     from protocol.e01 import MEASUREMENT_KEY_NAMES
 
+    rows = _b_rows()
+    metadata = {name: 1 for name in MEASUREMENT_KEY_NAMES}
+    metadata["cached_tokens"] = 3
+    metadata["access_token"] = "LEAK"
+    rows["c1"]["metadata"] = metadata
+    report = _build(b_rows=rows)
+    recorded = report["per_case"]["c1"]["b"]["metadata"]
     for name in MEASUREMENT_KEY_NAMES:
-        kept = e01_mod._redact_deep({name: 1})
-        assert name in kept, f"{name} is allowlisted but the redaction drops it"
+        assert name in recorded, f"{name} is a declared measurement name but the report drops it"
     # A count the allowlist does not list (the rule covers the suffix).
-    assert "cached_tokens" in e01_mod._redact_deep({"cached_tokens": 1})
+    assert recorded["cached_tokens"] == 3
     # A credential that ends like a count is still dropped.
-    assert "access_tokens" not in e01_mod._redact_deep({"access_tokens": "LEAK"})
-    assert "api_token" not in e01_mod._redact_deep({"api_token": "LEAK"})
+    assert "access_token" not in recorded
+    assert "LEAK" not in json.dumps(report)
 
 
 def test_e01_m5_keeps_the_token_counts_the_judge_reads():

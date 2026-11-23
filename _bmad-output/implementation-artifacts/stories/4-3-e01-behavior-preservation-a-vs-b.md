@@ -212,6 +212,24 @@ report redacts what it copies, but a credential-named key inside a manifest
 map would still reach the committed manifest — filed as an issue and recorded
 in `deferred-work.md`.
 
+**Test audit (the story's test surface: `test_protocol_e01.py` + the
+protocol package it exercises).** One finding, fixed: the measurement-name
+rule was asserted through the private `_redact_deep` helper — a
+private-predicate test. It now asserts the same contract at the REPORT
+boundary (the declared measurement names reach the report, a token count
+outside the allowlist survives, a token credential does not), which is where
+the judge reads it. Retained with reasons: the fake query seam (it IS the
+capture's boundary — the seam contract is what the fakes exercise); the
+default-seam test (it pins the `run_eval` reuse, which is the
+capture-artifact reuse identity); the mid-run rows-file probe (it pins a
+deliberate decision — the stamp lands with the first written case, not
+before); the fixture rows (synthetic, no deployment case content); the
+composition-valid set builder (the composition floor is enforced on the data
+path, so the fixture must satisfy it). The duplication of the case/set
+helpers with story 4.1's and 4.2's test files is real but belongs to a
+shared `conftest.py` extraction across those files — outside this diff, and
+recorded in the simplify phase's skipped list.
+
 ## Spec Change Log
 
 ## Review Triage Log

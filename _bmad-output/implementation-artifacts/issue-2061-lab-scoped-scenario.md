@@ -102,9 +102,14 @@ host-side, never printed, never committed.
 - It does not flip `OKF_SCOPE_MODE`, and it does not change the deployment's
   posture beyond the two fences.
 - It does not create an Evaluation Context object, a carrier writer, or any
-  product code. Phase 2's entry criterion is unchanged and still unmet: the
-  carrier-trust findings **#2081** (F1 and F2) must be fixed before a
-  substituting writer may exist.
+  product code. It was authored BEFORE phase 2 and is deliberately unaware of
+  it: phase 2 (**#2101**, merged) is where the Evaluation Context and its
+  carrier writer live, and the carrier-trust findings **#2081** (F1 and F2)
+  remain open as their own security-model epic — **#2081** states explicitly
+  that it does NOT block phase 2, because the epic takes the
+  carrier-as-enforcement-contract model as an explicit non-goal. This fixture
+  therefore stays orthogonal to both: it measures the deployment, and the
+  carrier that consumes the measurement is phase 2's business.
 - It does not decide what the Lab's scoped universe should BE. It makes the
   question answerable: with two fences and a union-carrying principal in
   place, E-2's "which repositories are in the evaluated set" has a case that

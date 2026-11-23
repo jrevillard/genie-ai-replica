@@ -119,5 +119,12 @@ the preferred wording above.
 
 - Keep `fr` informal-neutral: "vous" in the slides, the speaker notes in
   the same register.
+- In French, the text a slide shows is written in the infinitive: a title,
+  a row or a takeaway opens with `Choisir la plateforme`, not `Choisissez la
+  plateforme`, and a coordinated verb follows (`… et placer le GPU`). The
+  imperative is for the speaker notes and for what the deck quotes — the
+  assistant's answer, the excerpt of the source document — which keep their
+  own voice. The build refuses a `-ez` form anywhere else in the visible
+  French text.
 - In French, use French quotation marks and narrow non-breaking spaces before
   `:` `;` `?` and `!`, and inside `« … »`.

@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from html import escape
 from json import dumps, loads
 from pathlib import Path
-from re import findall, sub
+from re import IGNORECASE, findall, match, sub
 
 from fetch_fonts import characters
 
@@ -261,6 +261,44 @@ def first_drift(mine, theirs):
         if candidate != english:
             return f'slide {index}: {candidate} does not match the English structure {english}'
     return f'the file has {len(mine)} slides against {len(theirs)} in English'
+
+
+# French shows the infinitive. The imperative is the voice of the speaker
+# notes and of what the deck quotes, and a `-ez` ending marks its second
+# person plural.
+IMPERATIVE = r'[a-zà-öø-ÿ]+ez\b'
+QUOTED = r'«[^»]*»'
+# The text a chapter divider shows.
+DIVIDER_TEXT = r'chapter\.\d+\.(title|summary|steps(\.\d+)?)$'
+# What the deck quotes keeps its own voice: a chat slide shows what the
+# assistant said, the ingestion slide an excerpt of the source document.
+QUOTING = ('chat', 'ingestion')
+
+
+def register_problems(code, slides):
+    """The imperative forms in the French text a slide shows."""
+    if code != 'fr':
+        return []
+    shown = []
+    for number, slide in enumerate(slides, 1):
+        texts = [(field, getattr(slide, field)) for field in ('title', 'eyebrow', 'takeaway')]
+        if slide.layout not in QUOTING:
+            texts += [(f'row {index}', '|'.join(row)) for index, row in enumerate(slide.items, 1)]
+        shown += [(f'slide {number} {field}', text) for field, text in texts]
+    shown += [(key, CHROME[code][key]) for key in CHROME[code] if match(DIVIDER_TEXT, key)]
+    found = [
+        (where, word)
+        for where, text in shown
+        for word in findall(IMPERATIVE, sub(QUOTED, '', text), IGNORECASE)
+    ]
+    if not found:
+        return []
+    return [
+        (
+            'fr: the text a slide shows is written in the infinitive; the imperative is for the '
+            'speaker notes and for what the deck quotes:'
+        )
+    ] + [f'  {where}: {word}' for where, word in found]
 
 
 def e(value):
@@ -886,6 +924,9 @@ def collect(variant):
                 f"{code}.txt does not match the English structure: "
                 f"{first_drift(structure(slides), reference)}"
             )
+        problems = register_problems(code, slides)
+        if problems:
+            raise SystemExit('\n'.join(problems))
         rendered = build_slides(slides, keep(slides, variant))
         if code == CODES[0]:
             content = rendered

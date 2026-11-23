@@ -75,7 +75,8 @@ local preview.
 
 The GENIE.AI walkthrough is introduced from the Get started Welcome page, linked
 from `content/en/docs/get-started/presentation.md` and listed in the main
-menu. It is served at `/presentations/genie-ai/`. Its editable sources and build commands are in the
+menu. It is served at `/presentations/genie-ai/`, with a 30-minute version at
+`/presentations/genie-ai-30/`. Its editable sources and build commands are in the
 [overview README](../docs/presentations/genie-ai-overview/README.md).
 
 ## i18n

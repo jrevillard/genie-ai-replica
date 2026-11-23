@@ -1,8 +1,21 @@
 # GENIE.AI walkthrough
 
-This 43-slide briefing uses Reveal.js for presentation controls and Mermaid for
+This briefing uses Reveal.js for presentation controls and Mermaid for
 diagrams. The standalone HTML embeds the presentation code, fonts, artwork,
 logos and rendered diagrams.
+
+It comes in two lengths, built from the same sources:
+
+| Variant | Slides | Length | Published at |
+| --- | --- | --- | --- |
+| full | 43 | 60 minutes | `/presentations/genie-ai/index.html` |
+| light | 27 | 30 minutes | `/presentations/genie-ai-30/index.html` |
+
+The short deck leaves out the OKF tooling, the web and mobile screens, the
+retrieval, reranking and generation detail, the observability and
+troubleshooting slides, the testing-lab slide, the GPU API and sizing
+slides, the deployment matrix, the access simulation and the configuration
+overview. Each slide names the variants that show it.
 
 It speaks six United Nations languages — English, French, Spanish, Russian,
 Arabic and Chinese — from one file. The reader picks a language in the
@@ -15,8 +28,9 @@ and the clock. Open it with **Speaker notes** or the **S** key.
 
 | Path | Edit here to change |
 | --- | --- |
-| `src/slides/en.txt` | Slide order, titles, copy, chapter timings and speaker notes |
+| `src/slides/en.txt` | Slide order, titles, copy, chapter timings, speaker notes and the variants that show each slide |
 | `src/slides/<lang>.txt` | The same slides in another language |
+| `src/variants.json` | The chapter timings of each length of the deck |
 | `src/i18n/en.json` | Interface strings — buttons, link names, chapter openers |
 | `src/i18n/<lang>.json` | The same interface strings in another language |
 | `src/GLOSSARY.md` | The terms every language uses, and how to translate them |
@@ -65,7 +79,8 @@ Two rules keep the six versions honest:
 1. Read `src/GLOSSARY.md`.
 2. Copy `src/slides/en.txt` to `src/slides/<lang>.txt` and translate it, keeping
    every line, every prefix and every `|`-separated field. The `~` lines hold
-   reference keys, not prose: copy them unchanged.
+   reference keys, not prose: copy them unchanged. The `|+<variant>` field at
+   the end of an `@` line is machine data too: copy it unchanged.
 3. Copy `src/i18n/en.json` to `src/i18n/<lang>.json` and translate the values.
    The keys stay byte-identical.
 4. Check it:
@@ -84,6 +99,10 @@ Two rules keep the six versions honest:
    npm run check
    ```
 
+   The build refuses a face that was cut for an older text, or a face or a
+   note that went missing, so a skipped step fails the build instead of
+   leaving squares.
+
 ### The fonts
 
 Carlito carries the Latin and Cyrillic text. The Arabic and Chinese faces are
@@ -101,7 +120,10 @@ PATH=.venv/bin:$PATH python3 src/fetch_fonts.py
 ```
 
 The generated files live under `src/assets/fonts/` and are committed: the
-build reads them and never reaches the network.
+build reads them and never reaches the network. Each face travels with the
+list of the characters it was cut for: the build refuses a face whose list
+no longer covers what the translation prints, and the script keeps a face on
+disk only while its list still does.
 
 ### Arabic and the reading direction
 
@@ -145,6 +167,35 @@ The speaker-notes window follows the language and the reading direction of the
 slide it shows. It is Reveal's own speaker view: the current slide, the next
 one, the notes and a clock. The deck's own controls stay out of it.
 
+## The two lengths
+
+The two decks are one source read twice. A slide names the variants that
+show it on its own line:
+
+```
+@cover|Whose knowledge shapes an AI answer?|+light
+```
+
+A slide whose line does not end with `|+<variant>` is in the full deck
+only. Everything between the layout and that field is the title, so a
+title may carry a pipe. The field is machine data, so every language
+carries the same one — the build refuses a file that drifted.
+
+A slide keeps the number it holds in the slide file, whatever the length,
+so the short deck does not renumber what it keeps: the brand marks, the
+Mermaid diagrams, the translation slots and the source links all keep their
+keys. Inserting a slide does not change what the other length shows.
+
+`src/variants.json` holds the chapter timings of each length. A variant's
+table names every chapter the variant shows; the build refuses a table that
+misses one. The timings ride on each slide as `data-timing`; the deck does
+not display them.
+
+A slide the short deck leaves out may still be referenced by a slide it
+keeps. The short deck names the format once, as the second way knowledge
+enters the assistant, and never presents the tooling: the slides it keeps
+speak of knowledge repositories, not of a studio.
+
 ## Build
 
 Run these commands from this directory with Node.js, npm and Python 3.10 or later.
@@ -154,9 +205,16 @@ npm ci
 npm run build
 ```
 
-The generator writes
-`site/static/presentations/genie-ai/index.html` at repository root.
+The generator writes both decks at repository root:
+`site/static/presentations/genie-ai/index.html` and
+`site/static/presentations/genie-ai-30/index.html`.
 It uses the checked-in SVGs for a text, style or script edit.
+
+To build one of them, name it:
+
+```bash
+python3 src/build_deck.py --variant=light
+```
 
 After editing the Mermaid sources, regenerate the SVGs and rebuild the HTML.
 
@@ -166,6 +224,8 @@ npm run build:diagrams
 npm run build
 npm run check
 ```
+
+`npm run check` runs the browser checks against both decks.
 
 Set `GENIE_OVERVIEW_CHROMIUM` to an executable path if you use a system
 Chromium. For example, set it to `/usr/bin/chromium` on Linux.

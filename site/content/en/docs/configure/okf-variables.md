@@ -483,6 +483,41 @@ only when you have measured the same symptom.
 | `OKF_GUARD_SELF_SUBJECT` | `0.55` | Suggestion guardrail: a proposed forbidden tag scoring at/above this against ANY of the repository's own topic/entity/keyword head vectors is rejected as self-forbidding. |
 | `OKF_GUARD_DUPLICATE_FORBIDDEN` | `0.9` | Suggestion guardrail: a proposal scoring at/above this against an existing forbidden vector is rejected as a near-duplicate. |
 
+### The Testing Lab's routing thresholds
+
+The Lab replays the production head gate, so it is scored under the **same
+thresholds the retriever runs** — these are the `RETRIEVER_ROUTE_*` knobs, and
+the Lab reads them from the deployment's own environment. A retune therefore
+changes the Lab's verdict on the next run, with no restart.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RETRIEVER_ROUTE_TOP_K` | `40` | How many chunk scores the routing probe keeps per repository. |
+| `RETRIEVER_ROUTE_MIN_CHUNKS` | `3` | How many of those chunks a repository needs before it qualifies for a query. |
+| `RETRIEVER_ROUTE_PROBE_TIMEOUT_MS` | `2000` | Per-probe timeout; a probe that exceeds it is marked errored, never a pass. |
+| `RETRIEVER_ROUTE_RETRY` | `1` | How many times a failed probe is retried. |
+| `RETRIEVER_ROUTE_HEAD_MARGIN` | `0.01` | How far the head must beat the nearest competitor to claim the query. |
+| `RETRIEVER_ROUTE_HEAD_FLOOR` | `0.55` | The domain floor: a query below it is unrelated to the repository's subject. |
+| `RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX` | `0.55` | A single forbidden tag matching at/above this vetoes the claim. |
+
+Every run records the values it was scored under, so a stored run can say
+which thresholds produced it — a pass-rate difference between two runs means
+the thresholds or the tags changed, and the record says which.
+
+**Three of these knobs change the routing outcome, not a threshold**, and
+the Lab's verdict only stands for production while they are at their
+defaults:
+
+| Variable | Default | Why it matters for the Lab |
+|---|---|---|
+| `RETRIEVER_ROUTE_ENABLED` | `true` | When routing is off, the head gate decides nothing in the deployment — the Lab would be scoring a gate that never ran. |
+| `RETRIEVER_ROUTE_HEADS_SUPERSEDE` | `true` | When heads do not supersede the chunk competition, the chunk pool decides routing, so a suppressed head can still be routed and the Lab's gate verdict says nothing about it. |
+| `RETRIEVER_ROUTE_HEAD_WEIGHT` | `1.0` | The head pseudo-row's weight in the chunk pool. The Lab replays the competition without that row, so any weight other than 1 makes its replay differ. |
+
+Under any of those, the Lab says so — the run carries **"this run does not
+stand for production"** with the reason, instead of a pass rate that reads
+like a production verdict. |
+
 ## The PII sidecar
 
 | Variable | Default | Purpose |

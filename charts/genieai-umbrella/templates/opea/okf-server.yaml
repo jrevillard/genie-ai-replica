@@ -33,6 +33,12 @@ a delivery gap. They are read from the dataprep block (not a second copy
 of the numbers) so one override moves both derivations together, exactly
 as one .env line does in Compose. */ -}}
 {{- $opeaDataprep := index ($opea | default dict) "dataprep" | default dict -}}
+{{- /* The ROUTE GATE knobs (#2061 phase 1b). The Testing Lab replays the
+production routing gate locally, so it must be scored under the thresholds
+the deployment is ACTUALLY running. The values are read from the RETRIEVER
+block (not a second copy of the numbers), so one override moves the
+retriever and the Lab together — exactly as one .env line does in Compose. */ -}}
+{{- $opeaRetriever := index ($opea | default dict) "retriever" | default dict -}}
 {{- $keycloakEnv := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakPublicIssuer" .))
     (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
@@ -157,6 +163,21 @@ as one .env line does in Compose. */ -}}
     (dict "name" "OKF_FRONTMATTER_VALIDATE_BATCH_SIZE" "value" "4")
     (dict "name" "OKF_SETTLE_LEASE_MS" "value" "600000")
 -}}
+{{- /* The ROUTE GATE knobs the Testing Lab scores under (#2061 phase 1b).
+Read from the RETRIEVER values block, so one override moves the retriever
+and the Lab together — the same one-line rule Compose follows. */ -}}
+{{- $routeGateEnv := list
+    (dict "name" "RETRIEVER_ROUTE_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverRouteEnabled "default" true)))
+    (dict "name" "RETRIEVER_ROUTE_TOP_K" "value" ($opeaRetriever.retrieverRouteTopK | default "40" | toString))
+    (dict "name" "RETRIEVER_ROUTE_MIN_CHUNKS" "value" ($opeaRetriever.retrieverRouteMinChunks | default "3" | toString))
+    (dict "name" "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS" "value" ($opeaRetriever.retrieverRouteProbeTimeoutMs | default "2000" | toString))
+    (dict "name" "RETRIEVER_ROUTE_RETRY" "value" ($opeaRetriever.retrieverRouteRetry | default "1" | toString))
+    (dict "name" "RETRIEVER_ROUTE_HEAD_WEIGHT" "value" ($opeaRetriever.retrieverRouteHeadWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_ROUTE_HEAD_MARGIN" "value" ($opeaRetriever.retrieverRouteHeadMargin | default "0.01" | toString))
+    (dict "name" "RETRIEVER_ROUTE_HEAD_FLOOR" "value" ($opeaRetriever.retrieverRouteHeadFloor | default "0.55" | toString))
+    (dict "name" "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX" "value" ($opeaRetriever.retrieverRouteForbiddenTagMax | default "0.55" | toString))
+    (dict "name" "RETRIEVER_ROUTE_HEADS_SUPERSEDE" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverRouteHeadsSupersede "default" true)))
+-}}
 {{- /* opea-style env override map, applied last so an operator's value
 wins over a derived row of the same name. */ -}}
 {{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($okfServer.env | default dict) | fromJsonArray -}}
@@ -169,7 +190,7 @@ variant suffix (this image has no slim build). */ -}}
     "image" (merge (deepCopy ($okfServer.image | default dict)) (dict "repository" "genie-ai-okf-server" "tag" (include "genieai-umbrella.opeaImageTag" (dict "root" . "key" "okf-server" "serviceTag" (($okfServer.image).tag | default "")))))
     "port" 3002
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
-    "env" (include "genieai-umbrella.envRowsDedupe" (concat $keycloakEnv $obsEnv $arangoEnv $arangoSecretEnv $kcSecretEnv $ragasSecretEnv $gpuSecretEnv $tuningEnv $opeaEnvRows | toJson) | fromJsonArray)
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $keycloakEnv $obsEnv $arangoEnv $arangoSecretEnv $kcSecretEnv $ragasSecretEnv $gpuSecretEnv $tuningEnv $routeGateEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
       "readiness" (dict "httpGet" (dict "path" "/health" "port" 3002) "initialDelaySeconds" 10 "periodSeconds" 10 "failureThreshold" 5)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" 3002) "initialDelaySeconds" 30 "periodSeconds" 10 "failureThreshold" 5)

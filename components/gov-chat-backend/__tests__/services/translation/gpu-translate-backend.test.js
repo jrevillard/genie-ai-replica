@@ -17,13 +17,16 @@ const http = require('http');
 const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
 
-// The one http.request double for this file. Each block used to hand-roll the
-// same scaffolding (an EventEmitter req with write/setTimeout/destroy stubs,
-// `end -> cb(res)`), and the copies drifted: the non-2xx health refusal
-// drains the response (`res.resume()`), a piece only some copies modelled.
-// One builder models the request/response interface the service touches;
-// each block parameterizes only the behavior it pins (status, body chunks,
-// whether the request times out).
+// The shared http.request double for this file's single-request scenarios
+// (the init test's two sequential responses and the abort test's incomplete
+// response stay hand-rolled — one-off shapes this builder does not
+// parameterize). Each block used to hand-roll the same scaffolding (an
+// EventEmitter req with write/setTimeout/destroy stubs, `end -> cb(res)`),
+// and the copies drifted: the non-2xx health refusal drains the response
+// (`res.resume()`), a piece only some copies modelled. One builder models
+// the request/response interface the service touches; each block
+// parameterizes only the behavior it pins (status, body chunks, whether
+// the request times out).
 const serveRequest = ({ client = http, statusCode = 200, body = null, timeout = false } = {}) => {
   const capturedOpts = [];
   const writtenBodies = [];
@@ -50,14 +53,15 @@ const serveRequest = ({ client = http, statusCode = 200, body = null, timeout = 
     // carries it, so the double models it as a jest.fn the tests can pin.
     res.resume = jest.fn();
     responses.push(res);
-    req.end = () => {};
-    process.nextTick(() => {
-      cb(res);
-      // `healthCheck` reads only `statusCode`; the body readers ('data' +
-      // 'end') get the body here, then the response finishes itself.
-      if (body !== null) res.emit('data', typeof body === 'string' ? body : JSON.stringify(body));
-      res.emit('end');
-    });
+    // A request that never ends never gets a response, like a real socket:
+    // the answer is delivered by `end`, then finishes itself (`healthCheck`
+    // reads only `statusCode`; the body readers get 'data' + 'end').
+    req.end = () =>
+      process.nextTick(() => {
+        cb(res);
+        if (body !== null) res.emit('data', typeof body === 'string' ? body : JSON.stringify(body));
+        res.emit('end');
+      });
     return req;
   });
   return { capturedOpts, writtenBodies, responses };
@@ -640,8 +644,10 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   });
 
   it('answers an empty array with no usage and no estimate', async () => {
+    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
     const r = await backend.translateWithUsage([], 'en', 'es');
     expect(r).toEqual({ translations: [], usage: null, estimated: false });
+    expect(probe.capturedOpts).toHaveLength(0);
   });
 
   it('answers an input of only empty texts with usage null — no-call is not zero-usage', async () => {

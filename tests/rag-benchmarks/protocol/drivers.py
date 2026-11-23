@@ -362,8 +362,9 @@ def run_config_a_capture(
     the capture ran under; it is STAMPED into the rows file together with the
     assessment-set digest, and the E01 join refuses a capture whose stamp
     does not match the manifests (a capture over another set or corpus never
-    joins). The stamp lands on disk BEFORE the first query, so even a
-    converged resume leaves a stamped file. A prior rows file that carries
+    joins). The stamp lands on disk with the first written case; a converged
+    resume keeps the stamp its prior file already carries. A prior rows file
+    that carries
     cases but no stamp — or a stamp over another set or corpus — REFUSES the
     resume: the rows file certifies the set it was captured over, and a resume
     by case id across another set would certify one set's digest over another

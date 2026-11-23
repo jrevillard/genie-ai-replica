@@ -108,10 +108,13 @@ canonical-JSON `digest` recomputable via `e01_report_digest`.
 in-function), per-case rows (`answer`, `http_status`, `wall_ms` monotonic at
 the protocol layer, the response's source/citation/abstention fields only when the
 response carries them), per-case failure rows with the run continuing, resume
-over the missing ids only, atomic `config-a.captured.json`.
+over the missing ids only — a prior rows file that carries cases without a stamp,
+or with a stamp over another set or corpus, REFUSES the resume — atomic
+`config-a.captured.json` stamped with the assessment-set digest and the corpus
+fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 48 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 54 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -129,12 +132,16 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 227 passed; `cd eval && pytest -q` → 196 passed (the count
-depends on the env's optional deps — one test skips without openpyxl);
-`python3 -m py_compile protocol/*.py` clean; `ruff check --config
-components/agent-service/pyproject.toml protocol/ test_protocol_e01.py` clean (checked with
-ruff 0.16.3 pinned AND the current release; the tree has no CI lint lane — per story
-4.1's precedent, `py_compile` stands in CI).
+test_protocol_e01.py` → 233 passed; `cd eval && pytest -q` → 196 passed WITH
+openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
+the ten test functions of `test_enrich_xlsx_v2.py`);
+`python3 -m py_compile protocol/*.py` clean; `cd tests/rag-benchmarks && ruff check
+--config ../../components/agent-service/pyproject.toml protocol/
+test_protocol_e01.py` clean (ruff 0.16.3 pinned). The lint invocation is cwd-sensitive
+— from the repository root the same config reports I001 for the WHOLE protocol test
+tree (story 4.1's and 4.2's files included), so the benchmark-relative form is the
+one that holds; the tree has no CI lint lane (per story 4.1's precedent, `py_compile`
+stands in CI).
 The test env needs `requests` (the `capabilities.contract` import chain) plus
 pydantic/openpyxl — without `requests` the B-driver helper test fails on an
 import, not on a defect.
@@ -217,6 +224,25 @@ each fix; the four "survived" mutations are what this round closed.
 | F7' | Only the set half of the resume refusal was tested | confirmed | **Fixed**: the corpus half is tested too |
 | F8' | The story's eval-suite count and ruff sentence were stale | confirmed | **Fixed**: both re-measured and stated with their env caveat |
 | F9' | The Implementation Notes omitted the `skipped` flag, the resume refusal and the abstention facts | confirmed | **Fixed**: all three are in the paragraph |
+
+**FIX-REVIEW (f=2) on the f=1 correction diff — 11 findings (every claim
+confirmed by the reviewer), all fixed. This round spent the fix chain's budget
+(F=3), so the corrections below are locally verified but NOT re-reviewed — the
+seat parks awaiting the operator's decision.**
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F10' | The M-1 redaction dropped `n_unmapped_chunk_keys` — the marker `key` matched the counter's own name | confirmed | **Fixed**: the anchor's evidence counters are whitelisted, and a test pins it |
+| F11'' | The capture stamp was spread verbatim into `inputs` — the one write path the credential rule had left open | confirmed | **Fixed**: the stamp goes through the redaction |
+| F12' | The manifests' `prompt_digests` / `model_ids` were copied verbatim into the uncontrolled-differences section | confirmed | **Fixed**: both maps are redacted before the comparison |
+| F13' | `cases_that_never_queried` named an ANSWERED case that merely carried no scope | confirmed | **Fixed**: the two cases are split — a non-ok row is never-queried, an ok row without a scope is `cases_without_a_recorded_scope` |
+| F14' | The report-side `status != "ok"` half of the scope restriction was untested | confirmed | **Fixed**: a failed row carrying a scope is tested (absent from the sent map, named as never-queried) |
+| F15' | The capture docstring described the pre-loop write the diff removed | confirmed | **Fixed**: the sentence states the stamp lands with the first written case |
+| F16' | The removal of the pre-loop stamp write was pinned by no test | confirmed | **Fixed**: the seam observes that the rows file does not exist while the first case is queried |
+| F17' | The story's F9' row claimed the resume refusal was documented — it was not | confirmed | **Fixed**: the Implementation Notes paragraph names the refusal |
+| F18' | The story's ruff sentence was not reproducible as written | confirmed | **Fixed**: the working invocation is quoted, the cwd sensitivity is stated |
+| F19' | The story's eval count caveat understated the loss without openpyxl | confirmed | **Fixed**: both numbers are stated |
+| F20' | The measurement allowlist kept three token-count names while the docstring promised "the token counts" | confirmed (latent) | **Fixed**: `input_tokens` / `output_tokens` are whitelisted too |
 
 ## Design Notes
 

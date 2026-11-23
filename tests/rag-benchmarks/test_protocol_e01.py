@@ -22,6 +22,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from protocol import drivers
 from protocol.e01 import (
     E01Refusal,
@@ -1250,3 +1251,81 @@ def test_e01_redacts_the_m1_aggregate_and_the_recorded_scopes():
     scope = report["uncontrolled_differences"]["retrieval_scope"]["A"]["labels_sent_per_case"]["c1"]
     assert "client_secret" not in scope["service_labels"]
     assert "LEAK" not in json.dumps(report)
+
+
+def test_e01_keeps_the_anchors_evidence_counters():
+    """The anchor's own counters are evidence, not credentials — "…_keys"
+    matches the KEY marker, so the names are whitelisted explicitly."""
+    anchor = _anchor_report()
+    anchor["n_unmapped_chunk_keys"] = 7
+    report = _build(anchor_report=anchor)
+    values = report["dimensions"]["M-1"]["A"]["values"]
+    assert values["n_unmapped_chunk_keys"] == 7
+    assert values["n_missed_traces"] == 0
+
+
+def test_e01_redacts_the_capture_stamp_it_records():
+    """The capture stamp is spread into the report — it goes through the
+    redaction like every other written value."""
+    stamp = _capture_stamp()
+    stamp["api_key"] = "LEAK"
+    report = _build(capture_stamp=stamp)
+    assert "api_key" not in report["inputs"]["capture_stamp"]
+    assert "LEAK" not in json.dumps(report)
+
+
+def test_e01_redacts_the_manifest_maps_it_copies():
+    """The prompt/model maps come from the manifests — a configuration block
+    is not a sanitised surface."""
+    reference, gated = _manifests()
+    reference["configuration"]["A"]["model_ids"]["api_key"] = "LEAK"
+    gated["configuration"]["B"]["prompt_digests"]["client_secret"] = "LEAK"
+    gated["lineage"]["reference_manifest_sha256"] = manifest_digest(reference)
+    report = _build(reference=reference, gated=gated)
+    assert "api_key" not in report["uncontrolled_differences"]["model_ids"]["A"]
+    assert "client_secret" not in report["uncontrolled_differences"]["prompt_digests"]["B"]
+    assert "LEAK" not in json.dumps(report)
+
+
+def test_e01_names_a_failed_row_that_carries_a_scope_as_never_queried():
+    """The report-side scope check: a failed row never queried, so its scope
+    is not reported as sent."""
+    captured = _captured_rows()
+    captured["c3"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": ["Forestry"], "service_labels": []},
+        "case_requested_labels": [],
+    }
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]["A"]
+    assert "c3" not in scope["labels_sent_per_case"]
+    assert "c3" in scope["cases_that_never_queried"]
+
+
+def test_e01_does_not_call_an_answered_case_never_queried():
+    """An ok row that carries no recorded scope DID query (it has an answer) —
+    it is scope-less, not never-queried."""
+    captured = _captured_rows()
+    captured["c1"].pop("retrieval_scope")
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]["A"]
+    assert "c1" not in scope["cases_that_never_queried"]
+    assert "c1" in scope["cases_without_a_recorded_scope"]
+
+
+def test_capture_a_writes_the_rows_file_only_through_the_case_loop(tmp_path):
+    """The stamp lands on disk WITH the first written case — the capture does
+    not create the file before it has a row to write."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+    rows_path = tmp_path / "out" / "config-a.captured.json"
+    seen = []
+
+    def seam(entry):
+        seen.append(rows_path.exists())
+        return {"http_status": 200, "body": json.dumps({"metadata": {}}), "answer": "an answer"}
+
+    drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    # The file did not exist while the first case was being queried.
+    assert seen[0] is False
+    # It carries the stamp once the rows are written.
+    on_disk = json.loads(rows_path.read_text(encoding="utf-8"))
+    assert on_disk["capture"]["corpus_fingerprint"] == CORPUS

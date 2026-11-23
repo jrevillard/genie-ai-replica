@@ -162,8 +162,13 @@ MEASUREMENT_KEY_NAMES = frozenset(
         "prompt_tokens",
         "completion_tokens",
         "total_tokens",
+        "input_tokens",
+        "output_tokens",
         "token_count",
         "tokens",
+        # The anchor's own evidence counters — "…_keys" matches the KEY
+        # marker, and the counter is evidence, not a credential.
+        "n_unmapped_chunk_keys",
     }
 )
 
@@ -625,7 +630,12 @@ def _build_m5(b_rows: dict) -> tuple[dict, dict]:
 def _recorded_comparison(ref_value, b_value, note: str) -> dict:
     """A per-leg comparison that never claims equality from ABSENCE: an
     unrecorded side is 'not recorded', never 'identical' (the harness records
-    no prompt digests and no model ids unless the run was given them)."""
+    no prompt digests and no model ids unless the run was given them).
+
+    Both sides are redacted: the maps come from the run manifests, and a
+    manifest's configuration block is not a sanitised surface."""
+    ref_value = _redact_deep(ref_value)
+    b_value = _redact_deep(b_value)
     ref_recorded = bool(ref_value)
     b_recorded = bool(b_value)
     if ref_recorded and b_recorded:
@@ -654,12 +664,21 @@ def _retrieval_scope_record(captured_rows: dict) -> dict:
     sent: dict = {}
     differing: list = []
     never_queried: list = []
+    without_scope: list = []
     for case_id, row in sorted(captured_rows.items()):
-        scope = row.get("retrieval_scope") if isinstance(row, dict) else None
-        if not isinstance(row, dict) or row.get("status") != "ok" or not isinstance(scope, dict):
-            # A row that never queried (failed, skipped) carries no scope — it
-            # is named as never-queried instead of vanishing from the record.
+        if not isinstance(row, dict):
             never_queried.append(case_id)
+            continue
+        if row.get("status") != "ok":
+            # A row that did not query (failed, skipped) carries no scope —
+            # it is named as never-queried instead of vanishing from the record.
+            never_queried.append(case_id)
+            continue
+        scope = row.get("retrieval_scope")
+        if not isinstance(scope, dict):
+            # An ok row without a recorded scope DID query (it carries an
+            # answer) — it is not a never-queried case, it is a scope-less one.
+            without_scope.append(case_id)
             continue
         sent_labels = _redact_deep(scope.get("sent_labels") or {})
         requested = scope.get("case_requested_labels") or []
@@ -671,6 +690,7 @@ def _retrieval_scope_record(captured_rows: dict) -> dict:
             "labels_sent_per_case": sent,
             "cases_whose_requested_labels_never_reached_the_A_query": differing,
             "cases_that_never_queried": never_queried,
+            "cases_without_a_recorded_scope": without_scope,
         },
         "B": {
             "labels_source": "the case context's requested_labels (the B rows carry no scope field)",
@@ -868,7 +888,7 @@ def build_e01_report(
             "captured_rows_sha256": sha256_json(captured_rows),
             "b_rows_sha256": sha256_json(b_rows),
             "capture_stamp": {
-                **capture_stamp,
+                **_redact_deep(capture_stamp),
                 "verified": {
                     "assessment_set_sha256": True,
                     "corpus_fingerprint": False,

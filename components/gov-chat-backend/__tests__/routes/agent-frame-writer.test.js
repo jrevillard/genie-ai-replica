@@ -1259,13 +1259,11 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
   });
 
   it('the terminal keeps the SSE keepalive emitting during the post-stream translation window', async () => {
-    // The terminal used to clear the keepalive at its start: the whole-answer
-    // translation (tens of seconds are legal behind the translation reserve)
-    // then ran on a zero-byte wire — an idle-timeout proxy severs the SSE,
-    // and the client never sees `done` for an answer that completed and was
-    // persisted. The keepalive keeps emitting through the window (SSE
-    // comments — the pinned frame order cannot move), the legacy terminal's
-    // own discipline.
+    // The keepalive keeps emitting through the whole-answer translation
+    // window (tens of seconds are legal behind the translation reserve — a
+    // zero-byte wire there lets an idle-timeout proxy sever the SSE before
+    // `done`). SSE comments cannot move the pinned frame order; this is the
+    // legacy terminal's own discipline.
     delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
     // The keepalive interval is hardcoded 15000ms — the spy shortens ONLY the
@@ -1320,17 +1318,19 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
 
       // Wait PAST the first tick while the translation is still pending.
       const response = await responsePromise;
-      setIntervalSpy.mockRestore();
 
       const text = response.text;
       const metaPos = text.indexOf('"type":"metadata"');
       const translationPos = text.indexOf('"type":"translation"');
-      const keepalivePos = text.indexOf(': keepalive');
+      // The FIRST keepalive AT OR AFTER the metadata frame: a setup tick that
+      // fired before the terminal (possible on a loaded runner) lands earlier
+      // in the stream and must not satisfy the window assertion.
+      const keepalivePos = text.indexOf(': keepalive', metaPos);
       expect(metaPos).toBeGreaterThan(-1);
       expect(translationPos).toBeGreaterThan(-1);
       // The keepalive ticked DURING the translation window (after metadata,
       // before the translation frame) — the wire never went silent.
-      expect(keepalivePos).toBeGreaterThan(metaPos);
+      expect(keepalivePos).toBeGreaterThan(-1);
       expect(keepalivePos).toBeLessThan(translationPos);
       const frames = parseSSEEvents(text);
       expect(frames[frames.length - 1].type).toBe('done');

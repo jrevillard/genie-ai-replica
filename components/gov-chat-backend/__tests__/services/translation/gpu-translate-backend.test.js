@@ -26,7 +26,7 @@ const GpuTranslateBackend = require('../../../services/translation/gpu-translate
 // `end -> cb(res)`), and the copies drifted: the non-2xx health refusal
 // drains the response (`res.resume()`), a piece only some copies modelled.
 // One builder models the request/response interface the service touches;
-// each block parameterizes only the behavior it pins (status, body chunks,
+// each block parameterizes only the behavior it pins (status, response body,
 // whether the request times out).
 const serveRequest = ({ client = http, statusCode = 200, body = null, timeout = false } = {}) => {
   const capturedOpts = [];
@@ -60,13 +60,16 @@ const serveRequest = ({ client = http, statusCode = 200, body = null, timeout = 
     req.end = () =>
       process.nextTick(() => {
         cb(res);
-        if (body !== null) res.emit('data', typeof body === 'string' ? body : JSON.stringify(body));
+        if (body !== null) res.emit('data', JSON.stringify(body));
         res.emit('end');
       });
     return req;
   });
   return { capturedOpts, writtenBodies, responses };
 };
+
+// The standard completed chat answer most usage tests serve.
+const serveHola = () => serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
 
 describe('GpuTranslateBackend translation', () => {
   let backend;
@@ -462,7 +465,7 @@ describe('GpuTranslateBackend endpoint addressing', () => {
         'chat completion',
         (b) => b.callVllmService({ messages: [] }),
         '/v1/chat/completions',
-        JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })
+        { choices: [{ message: { content: 'traduit' } }] }
       ]
     ])('prefixes the %s path with the endpoint path', async (_label, invoke, suffix, body) => {
       process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
@@ -511,7 +514,7 @@ describe('GpuTranslateBackend endpoint addressing', () => {
     it('carries the bearer token on a real request, not just on the helper', async () => {
       const probe = serveRequest({
         client: https,
-        body: JSON.stringify({ choices: [{ message: { content: 'traduit' } }] })
+        body: { choices: [{ message: { content: 'traduit' } }] }
       });
       process.env.VLLM_TRANSLATION_ENDPOINT = REMOTE;
 
@@ -552,7 +555,7 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   });
 
   it('estimates chars/4, flagged estimated, when the response carries no usage', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     const r = await backend.translateWithUsage(['Hello'], 'en', 'es');
     expect(r.estimated).toBe(true);
     expect(r.usage).toEqual({
@@ -562,7 +565,7 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   });
 
   it('caps the output budget at options.maxTokens on top of the window math', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     await backend.translateWithUsage(['Hello world'], 'en', 'es', { maxTokens: 40 });
     // A request the window math would have budgeted far above 40 comes out
     // capped at the caller's bound.
@@ -570,13 +573,13 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   });
 
   it('overrides the request timeout with options.timeoutMs', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: 4321 });
     expect(probe.capturedOpts[0].timeout).toBe(4321);
   });
 
   it('shrinks the timeout across texts so a later one cannot start past the deadline', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     // A 50ms budget with two texts: after the first call the elapsed time is
     // subtracted before the second request is built. Both requests carry a
     // positive, non-increasing timeout bounded by the caller's value.
@@ -593,7 +596,7 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
     // Third read (the per-text deadline check) jumps far ahead: the second
     // text never starts.
     dateSpy.mockReturnValue(realNow() + 60000);
-    serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    serveHola();
     await expect(backend.translateWithUsage(['Hello', 'world'], 'en', 'es', { timeoutMs: 50 })).rejects.toThrow(
       /request timeout/
     );
@@ -630,7 +633,7 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   it('rejects immediately, without a request, on an already-aborted signal', async () => {
     const controller = new AbortController();
     controller.abort();
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     await expect(backend.translateWithUsage(['Hello'], 'en', 'es', { signal: controller.signal })).rejects.toThrow(
       /aborted/
     );
@@ -638,21 +641,21 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   });
 
   it('skips empty texts without a call, like translate', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     const r = await backend.translateWithUsage(['', 'Hello', '   '], 'en', 'es');
     expect(r.translations).toEqual(['', 'Hola', '']);
     expect(probe.writtenBodies).toHaveLength(1);
   });
 
   it('answers an empty array with no usage and no estimate', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     const r = await backend.translateWithUsage([], 'en', 'es');
     expect(r).toEqual({ translations: [], usage: null, estimated: false });
     expect(probe.capturedOpts).toHaveLength(0);
   });
 
   it('answers an input of only empty texts with usage null — no-call is not zero-usage', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     const r = await backend.translateWithUsage(['', '   '], 'en', 'es');
     expect(r.translations).toEqual(['', '']);
     expect(r.usage).toBeNull();
@@ -661,17 +664,17 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   });
 
   it('treats a non-finite timeoutMs as not provided (the 30s default)', async () => {
-    const probeNaN = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probeNaN = serveHola();
     await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: NaN });
     expect(probeNaN.capturedOpts[0].timeout).toBe(30000);
 
-    const probeInf = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probeInf = serveHola();
     await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: Infinity });
     expect(probeInf.capturedOpts[0].timeout).toBe(30000);
   });
 
   it('accepts options: null on both entry points (no TypeError)', async () => {
-    const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+    const probe = serveHola();
     await expect(
       backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }], max_tokens: 10 }, null)
     ).resolves.toBe('Hola');
@@ -683,7 +686,7 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
 
   describe('legacy behavior pins', () => {
     it('callVllmService keeps the deployed 30s timeout when called without options', async () => {
-      const probe = serveRequest({ body: { choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] } });
+      const probe = serveHola();
       await backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
       expect(probe.capturedOpts[0].timeout).toBe(30000);
     });

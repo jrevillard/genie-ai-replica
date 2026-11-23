@@ -637,6 +637,16 @@ def _add_corpus_args(p: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_created_utc_arg(p: argparse.ArgumentParser) -> None:
+    """The report timestamp pin — the digest covers it, so pinning makes two
+    rebuilds of the same inputs digest-comparable."""
+    p.add_argument(
+        "--created-utc",
+        default=None,
+        help="pin the report timestamp (the digest covers it — the reproducibility pin)",
+    )
+
+
 def _add_common_manifest_args(p: argparse.ArgumentParser) -> None:
     _add_corpus_args(p)
     p.add_argument("--models-endpoint", default=None, help="the serving endpoint to read model ids from")
@@ -713,11 +723,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="the reference-defects ledger (lineage-verified before application; absent = recorded absent)",
     )
     e.add_argument("--out", required=True, help="the e01.report.json path to write")
-    e.add_argument(
-        "--created-utc",
-        default=None,
-        help="pin the report timestamp (the digest covers it — the reproducibility pin)",
-    )
+    _add_created_utc_arg(e)
     e.add_argument("--seed", type=int, default=None, help="the runs' seed (recorded as an execution condition)")
     e.set_defaults(func=cmd_e01)
 
@@ -730,11 +736,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     t.add_argument("--out", default=None, help="the signed thresholds artifact path (when the promotion is allowed)")
     t.add_argument("--report", default=None, help="the threshold report path to write")
-    t.add_argument(
-        "--created-utc",
-        default=None,
-        help="pin the report timestamp (the digest covers it — the reproducibility pin)",
-    )
+    _add_created_utc_arg(t)
     t.set_defaults(func=cmd_thresholds)
 
     c = sub.add_parser("counters", help="the counter-metrics report (story 4.4)")
@@ -751,11 +753,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="the reference-correctness ledger (CM-2's denominator; absent = recorded absent)",
     )
     c.add_argument("--out", required=True, help="the counter-metrics report path to write")
-    c.add_argument(
-        "--created-utc",
-        default=None,
-        help="pin the report timestamp (the digest covers it — the reproducibility pin)",
-    )
+    _add_created_utc_arg(c)
     c.set_defaults(func=cmd_counters)
     return p
 

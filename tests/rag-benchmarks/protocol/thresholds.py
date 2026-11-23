@@ -37,7 +37,7 @@ from pathlib import Path
 from . import PROTOCOL_VERSION
 from .e01 import M_DIMENSIONS
 from .gate import thresholds_file
-from .manifest import sha256_json
+from .manifest import digest_without_embedded, manifest_lineage, sha256_json
 
 THRESHOLD_REGISTRY_VERSION = "1.0.0"
 THRESHOLD_REGISTRY_ARTIFACT = "evaluation-threshold-registry"
@@ -317,10 +317,12 @@ def _validate_entry(entry, *, code: str, source: str) -> None:
 
 
 def _sign_off_record(registry: dict) -> dict:
-    sign_off = registry.get("sign_off") or {}
+    """The sign-off header as the report carries it — the registry is
+    validated by the time this runs, so ``signed`` is the validated boolean."""
+    sign_off = registry["sign_off"]
     return {
         "owner": sign_off.get("owner"),
-        "signed": bool(sign_off.get("signed")),
+        "signed": sign_off["signed"],
         "agreed_on": sign_off.get("agreed_on"),
         "signed_on": sign_off.get("signed_on"),
         "note": sign_off.get("note"),
@@ -360,24 +362,12 @@ def promotion_decision(registry: dict) -> dict:
     as satisfied and no value is ever substituted for it.
     """
     validate_registry(registry)
-    dimensions = registry.get("dimensions") or {}
+    dimensions = registry["dimensions"]
     sign_off = _sign_off_record(registry)
     blocking: list[dict] = []
     records: dict[str, dict] = {}
     for code in MEASURED_DIMENSIONS:
-        entry = dimensions.get(code)
-        if not isinstance(entry, dict):
-            blocking.append(
-                {
-                    "code": BLOCK_DIMENSION_ABSENT,
-                    "dimension": code,
-                    "message": (
-                        f"{code} ({M_DIMENSIONS.get(code)}) has no entry in the registry — an"
-                        " absent dimension blocks promotion and is never reported as satisfied"
-                    ),
-                }
-            )
-            continue
+        entry = dimensions[code]
         records[code] = _dimension_record(code, entry)
         if entry.get("status") != STATUS_AGREED or entry.get("value") is None:
             reason = entry.get("absent_reason") or "no agreed value is recorded"
@@ -424,26 +414,14 @@ def promotion_decision(registry: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _manifest_lineage(reference_manifest: dict) -> tuple[str | None, str | None]:
-    corpus = (reference_manifest.get("corpus") or {}).get("fingerprint")
-    assessment = ((reference_manifest.get("sets") or {}).get("assessment") or {}).get("sha256")
-    return corpus, assessment
-
-
-def derive_thresholds_artifact(
-    registry: dict,
-    *,
-    reference_manifest: dict,
-    corpus_fingerprint: str | None = None,
-    assessment_set_sha256: str | None = None,
-) -> dict:
+def derive_thresholds_artifact(registry: dict, *, reference_manifest: dict) -> dict:
     """Derive the gate-compatible thresholds artifact FROM the registry.
 
     The artifact carries the registry's agreed values bound to the reference
-    lineage — the gate verifies its presence, integrity and lineage, never its
-    numbers. It is derived, never authored: a second home for the same
-    decision would drift, and the gate would verify a lineage while the
-    numbers came from somewhere else.
+    lineage (read from the reference manifest) — the gate verifies its
+    presence, integrity and lineage, never its numbers. It is derived, never
+    authored: a second home for the same decision would drift, and the gate
+    would verify a lineage while the numbers came from somewhere else.
 
     Refuses when the promotion decision is blocked (an incomplete registry
     produces NO signed artifact) and when the reference manifest carries no
@@ -462,9 +440,7 @@ def derive_thresholds_artifact(
             "the thresholds are bound to a measured reference — no reference manifest was"
             " supplied, so no signed artifact is produced",
         )
-    manifest_corpus, manifest_set = _manifest_lineage(reference_manifest)
-    corpus = corpus_fingerprint or manifest_corpus
-    assessment = assessment_set_sha256 or manifest_set
+    corpus, assessment = manifest_lineage(reference_manifest)
     if not corpus or not assessment:
         absent = []
         if not corpus:
@@ -476,11 +452,10 @@ def derive_thresholds_artifact(
             f"the reference manifest carries no {' and '.join(absent)} — the thresholds are"
             " bound to the measured reference, so no signed artifact is produced",
         )
-    dimensions = registry.get("dimensions") or {}
+    dimensions = registry["dimensions"]
     thresholds = {}
     for code in MEASURED_DIMENSIONS:
-        entry = dimensions.get(code)
-        entry = entry if isinstance(entry, dict) else {}
+        entry = dimensions[code]
         thresholds[code] = {
             "value": entry.get("value"),
             "dimension": M_DIMENSIONS.get(code),
@@ -511,8 +486,7 @@ def derive_thresholds_artifact(
 def thresholds_report_digest(report: dict) -> str:
     """The report's digest, recomputed over the body minus the embedded
     ``digest`` key — the verifiable identity a rebuild must reproduce."""
-    body = {key: value for key, value in report.items() if key != "digest"}
-    return sha256_json(body)
+    return digest_without_embedded(report)
 
 
 def build_thresholds_report(

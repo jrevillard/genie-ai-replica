@@ -19,7 +19,6 @@ registries, fake reference manifests, no live venue:
 
 import argparse
 import copy
-import inspect
 import json
 from pathlib import Path
 
@@ -44,16 +43,22 @@ OWNER = "jrevillard (ITU)"
 # ---------------------------------------------------------------------------
 
 
-def _agreed_dimension(code: str, value) -> dict:
+def _dimension(code: str, *, status: str, value, absent_reason: str | None = None) -> dict:
+    """One fixture dimension entry: the shape the registry contract asks for,
+    written once."""
     return {
         "dimension": thresholds_mod.M_DIMENSIONS[code],
         "surface": "the fixture measurement surface",
-        "status": thresholds_mod.STATUS_AGREED,
+        "status": status,
         "value": value,
-        "absent_reason": None,
+        "absent_reason": absent_reason,
         "rationale": "the fixture rationale",
-        "agreement_date": "2026-11-23",
+        "agreement_date": None if status == thresholds_mod.STATUS_ABSENT else "2026-11-23",
     }
+
+
+def _agreed_dimension(code: str, value) -> dict:
+    return _dimension(code, status=thresholds_mod.STATUS_AGREED, value=value)
 
 
 def _registry(*, signed: bool = True, owner: str = OWNER, absent: tuple = ()) -> dict:
@@ -63,15 +68,12 @@ def _registry(*, signed: bool = True, owner: str = OWNER, absent: tuple = ()) ->
         code: _agreed_dimension(code, 0.5) for code in thresholds_mod.MEASURED_DIMENSIONS
     }
     for code in absent:
-        dimensions[code] = {
-            "dimension": thresholds_mod.M_DIMENSIONS[code],
-            "surface": "the fixture measurement surface",
-            "status": thresholds_mod.STATUS_ABSENT,
-            "value": None,
-            "absent_reason": "the fixture reason: the measured reference is pending",
-            "rationale": "the fixture rationale",
-            "agreement_date": None,
-        }
+        dimensions[code] = _dimension(
+            code,
+            status=thresholds_mod.STATUS_ABSENT,
+            value=None,
+            absent_reason="the fixture reason: the measured reference is pending",
+        )
     return {
         "registry_version": "1.0.0",
         "artifact": thresholds_mod.THRESHOLD_REGISTRY_ARTIFACT,
@@ -412,12 +414,6 @@ def test_the_report_carries_no_path_in_its_digested_body():
     registry = thresholds_mod.load_registry(REGISTRY)
     report = thresholds_mod.build_thresholds_report(registry, created_utc=CREATED)
     assert "path" not in report["registry"]
-    assert "registry_path" not in inspect.signature(thresholds_mod.build_thresholds_report).parameters
-
-
-def test_the_dead_helpers_are_gone():
-    assert not hasattr(thresholds_mod, "registry_sha256")
-    assert not hasattr(thresholds_mod, "reference_manifest_digest")
 
 
 # ---------------------------------------------------------------------------

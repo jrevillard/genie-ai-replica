@@ -273,6 +273,50 @@ family; it is now gated on `status == "ok"` (the `result_budget_exhausted`
 limit check keeps its place before it) — a failing row keeps the failure
 family whatever abstention fact rides beside it.
 
+**/simplify (quality phase) — 15 consolidations applied, no behavior change
+(pins updated to the identical-behavior form where they touched a changed
+line).** Two shared helpers moved INTO `manifest.py`, beside
+`manifest_digest`: `manifest_lineage` (the `(corpus.fingerprint,
+sets.assessment.sha256)` extraction) and `digest_without_embedded`
+(`sha256_json` over a record minus its embedded `digest` key) — the thresholds
+loader uses the first, both report digest functions delegate to the second
+(public names kept). The dead defensive branches behind the validation choke
+point are gone (`promotion_decision` reads `dimensions[code]` directly,
+`derive_thresholds_artifact` drops its non-dict-entry fallback,
+`_sign_off_record` reads the validated `sign_off` and its boolean `signed`
+without the wrap), and `derive_thresholds_artifact` drops the dead optional
+`corpus_fingerprint`/`assessment_set_sha256` parameters — the lineage comes
+from the reference manifest only. The counter-metrics module now speaks the
+drivers' outcome vocabulary (`OUTCOME_ERROR`/`OUTCOME_STREAM_ERROR`/
+`OUTCOME_HTTP_ERROR`/`OUTCOME_CONFIGURATION_ERROR`/`OUTCOME_INVALID_REQUEST`
+build `FAILURE_STATES`, with the deliberate `OUTCOME_ADMISSION_REFUSED`
+exclusion explicit in the comment; `OUTCOME_CANCELLED`/`OUTCOME_ANSWERED`
+replace the local literals; `LIMIT_MARKER_C`/`LIMIT_MARKER_B` stay local — no
+existing home in this package), `CM1_SURFACE` is built from `COST_COUNTERS`
+(byte-identical string — the declared surface can never disagree with the
+summed counters), `_terminal_state` returns a `TerminalState` NamedTuple
+instead of a 5-element positional tuple, `_cm_record`/`_unavailable` stamp the
+metric identity and the absence envelope once, CM-1 walks `paired` in ONE pass
+(row readers run once per case; the totals accumulate in the same pass),
+CM-3 counts its four counters in the same loop that emits the per-case rows,
+the correctness ledger is hashed once and the digest passed into CM-2, and the
+delta distribution uses the capture machinery's `median` (the tree's one
+median) instead of a fresh `statistics` import. The CLI's three identical
+`--created-utc` blocks share `_add_created_utc_arg` (the `_add_corpus_args`
+pattern). Test-side: the tombstone dead-helper test is deleted (it names
+helpers that never exist in the final module) and the fixture registry's
+absent-entry dict is built by the shared `_dimension` helper.
+
+Skipped with reasons: the e01-side duplications are PRE-EXISTING or deliberate
+pattern reuse — its private `_manifest_lineage`, its
+`verify_correctness_lineage` sibling (`verify_defects_lineage`) and its
+`reference_correctness_file` sibling (`reference_defects_file`) were story
+4.3's delivered surfaces, and consolidating them means rewriting that module,
+so they were left; the e01/thresholds/counter_metrics digest trio likewise
+stays (the two NEW digest functions delegate to the shared helper, the e01 one
+keeps its own body for the same reason). The nested latency/cost/agentic value
+blocks keep their shapes — only the envelope construction consolidated.
+
 ## Spec Change Log
 
 ## Review Triage Log

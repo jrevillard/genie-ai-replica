@@ -17,8 +17,8 @@ const http = require('http');
 const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
 
-// The shared http.request double for this file's single-request scenarios
-// (the init test's two sequential responses and the abort test's incomplete
+// The shared http.request double for this file's standard request/response
+// scenarios — every request gets the same uniform response (the init test's
 // response stay hand-rolled — one-off shapes this builder does not
 // parameterize). Each block used to hand-roll the same scaffolding (an
 // EventEmitter req with write/setTimeout/destroy stubs, `end -> cb(res)`),

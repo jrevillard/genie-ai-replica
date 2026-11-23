@@ -77,7 +77,7 @@ async function check() {
         slides.map(node => [node.id, node.textContent]));
       const mentions = sections.filter(([, text]) => text.includes("OKF")).map(([id]) => id).sort();
       assert.deepEqual(mentions, ["slide-06"],
-        "the short deck names the format outside the ingestion slide in " + code);
+        "the short deck names OKF outside slide 6 in " + code);
       for (const [id, text] of sections) {
         assert.ok(!text.includes("OKF Studio"), "the short deck presents the tooling on " + id + " in " + code);
       }

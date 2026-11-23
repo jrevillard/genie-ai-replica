@@ -186,16 +186,10 @@ so the short deck does not renumber what it keeps: the brand marks, the
 Mermaid diagrams, the translation slots and the source links all keep their
 keys. Inserting a slide does not change what the other length shows.
 
-`src/variants.json` holds the chapter timings of each length, so the two
-decks do not carry the same clock:
-
-```json
-{
-  "light": {
-    "timings": {"1": "00:00–04:00"}
-  }
-}
-```
+`src/variants.json` holds the chapter timings of each length. A variant's
+table names every chapter the variant shows; the build refuses a table that
+misses one. The timings ride on each slide as `data-timing`; the deck does
+not display them.
 
 A slide the short deck leaves out may still be referenced by a slide it
 keeps. The short deck names the format once, as the second way knowledge

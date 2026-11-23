@@ -52,10 +52,9 @@ whichever length is built.
 - **A slide keeps its number in both decks.** The short deck does not
   renumber what it keeps, so the brand marks, the Mermaid diagrams, the
   translation slots and the source links keep their keys.
-- **A slide the short deck drops may still be named by one it keeps.** The
-  short deck names the format once, as the second way knowledge enters the
-  assistant, and never presents the tooling. Keep it that way in every
-  language.
+- **The short deck names OKF once.** A slide it keeps, the ingestion slide,
+  names the format as the second way knowledge enters the assistant; the
+  tooling is never presented there. Keep it that way in every language.
 - **`npm run build` writes both decks** and `npm run check` checks both.
 
 ## Existing Marp decks

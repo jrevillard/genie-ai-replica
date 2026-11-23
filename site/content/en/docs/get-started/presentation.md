@@ -11,11 +11,7 @@ deployment.
 
 [Open the animated presentation](/presentations/genie-ai/index.html)
 
-A 30-minute version tells the same story without the OKF tooling, the web
-and mobile screens, the retrieval, reranking and generation detail, the
-observability and troubleshooting slides, the testing-lab slide, the GPU
-API and sizing slides, the deployment matrix, the access simulation and the
-configuration overview.
+A 30-minute version tells the same story in 27 slides.
 
 [Open the 30-minute presentation](/presentations/genie-ai-30/index.html)
 

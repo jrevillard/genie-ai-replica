@@ -92,21 +92,18 @@ SOURCES = {
     'web': DOC + '/docs/frontend/chat-ux/',
     'branding': DOC + '/docs/configure/branding-customization/',
     'locale': DOC + '/docs/configure/locale-whitelist/',
-    'routes': DOC + '/docs/reference/routes/',
     'ingestPipeline': DOC + '/docs/rag-pipeline/ingestion/',
     'rerank': DOC + '/docs/rag-pipeline/reranking/',
     'generation': DOC + '/docs/rag-pipeline/generation/',
     'okfConfig': DOC + '/docs/knowledge-base/okf-variables/',
     'okfResolver': REPO + '/-/blob/main/components/okf-server/services/authz-resolver-service.js',
     'idp': DOC + '/docs/configure/external-idp-integration-guide/',
-    'security': DOC + '/docs/architecture/trust-boundaries/',
     'observeOverview': DOC + '/docs/observe/overview/',
     'observeConfig': DOC + '/docs/observe/configuration/',
     'compose': DOC + '/docs/deploy/docker-compose-setup/#6e-remote-gpu-node-optional',
     'swarm': DOC + '/docs/deploy/docker-swarm-setup/#remote-gpu-node',
     'topologies': DOC + '/docs/deploy/topologies/',
     'gpu': DOC + '/docs/deploy/gpu/',
-    'slim': DOC + '/docs/deploy/slim-images/',
     'tracing': DOC + '/docs/operate/tracing-howto/',
     'repo': REPO,
 }
@@ -206,6 +203,9 @@ def parse(code):
         elif line.startswith('@'):
             fields = line[1:].split('|')
             layout, title, variants = fields[0], '|'.join(fields[1:]), {'full'}
+            first = fields[1].strip() if len(fields) > 1 else ''
+            if not first or first.startswith('+') or first in VARIANTS:
+                raise SystemExit(f'{code}.txt: slide {len(slides) + 1} names no title before its variants field')
             if any(field.strip().startswith('+') or field.strip() in VARIANTS for field in fields[1:-1]):
                 raise SystemExit(f'{code}.txt: slide "{title}": the variants field comes last')
             if len(fields) > 2:
@@ -214,7 +214,10 @@ def parse(code):
                     if not last[1:].strip():
                         raise SystemExit(f'{code}.txt: slide "{title}": the variants field names no variant')
                     title = '|'.join(fields[1:-1])
-                    variants.update(name.strip() for name in last[1:].split(',') if name.strip())
+                    names = last[1:].split(',')
+                    if any(not name.strip() for name in names):
+                        raise SystemExit(f'{code}.txt: slide "{title}": the variants field names no variant')
+                    variants.update(name.strip() for name in names)
                 elif last in VARIANTS:
                     # The mark lost its `+`: without this it would be
                     # swallowed by the title, in silence.
@@ -272,7 +275,9 @@ def first_drift(mine, theirs):
 # and `faites` and `dites` are its two irregular forms.
 IMPERATIVE = r'\b(?:[a-zà-öø-ÿ]+ez|faites|dites)\b'
 QUOTED = r'«[^»]*»'
-# The glossary sets a narrow no-break space before each of these.
+# The glossary sets a narrow no-break space before each of these. An ordinary
+# word that ends like an imperative, or a clock time, would be refused too:
+# the deck has none, and the message names what it refused.
 SPACED = ':;?!'
 NARROW = '\u202f'
 # The text a chapter divider shows.
@@ -426,7 +431,7 @@ def blocks(prefix, items, css='blocks', guided=False, marks=()):
     ) + '</div>'
 
 
-def marks(n):
+def slide_marks(n):
     """The brand marks of a slide whose rows carry logos.
 
     The marks are keyed by the slide's number, so they follow the slide
@@ -439,7 +444,7 @@ def marks(n):
 
 
 def stack(prefix, slide, n):
-    return blocks(prefix, slide.items, 'stack-grid', marks=marks(n))
+    return blocks(prefix, slide.items, 'stack-grid', marks=slide_marks(n))
 
 
 def matrix(prefix, slide, n):
@@ -454,7 +459,7 @@ def matrix(prefix, slide, n):
     rows = []
     for i, item in enumerate(slide.items):
         rows.append(
-            f'<tr><th scope="row">{brand_strip(marks(n)[i])}'
+            f'<tr><th scope="row">{brand_strip(slide_marks(n)[i])}'
             f'<span{A(f"{prefix}.items.{i}.f0")}>{e(t(f"{prefix}.items.{i}.f0", item[0]))}</span></th>'
             + ''.join(
                 f'<td{A(f"{prefix}.items.{i}.f{j + 1}")}>{e(t(f"{prefix}.items.{i}.f{j + 1}", cell))}</td>'
@@ -519,7 +524,7 @@ def surfaces(prefix, slide, n):
         f'<div class="device-phone" data-light="1"><span class="earpiece"></span>'
         f'<b{A("chrome.surfaces.browserTitle")}>{e(T("chrome.surfaces.browserTitle"))}</b>'
         f'<span{A("chrome.surfaces.example")}>{e(T("chrome.surfaces.example"))}</span><div class="ghost-lines"></div></div>'
-        f'</div>{blocks(prefix, slide.items, "device-notes", True, marks(n))}{stages(len(slide.items))}</div>'
+        f'</div>{blocks(prefix, slide.items, "device-notes", True, slide_marks(n))}{stages(len(slide.items))}</div>'
     )
 
 

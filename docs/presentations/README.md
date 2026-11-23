@@ -6,6 +6,10 @@ Use **Reveal.js and Mermaid** for new GENIE.AI presentations. The
 [GENIE.AI walkthrough](genie-ai-overview/README.md) is the reference for the
 source layout, slide design, build and Hugo integration.
 
+The walkthrough itself ships in two lengths — 60 minutes and 30 minutes —
+built from the same sources. See
+[the two lengths](genie-ai-overview/README.md#the-two-lengths).
+
 1. Keep the editable slide text, speaker notes, styles, scripts, assets and
    Mermaid diagrams together in a named directory under `docs/presentations/`.
 2. Build a self-contained HTML deck. Follow the overview README for the build

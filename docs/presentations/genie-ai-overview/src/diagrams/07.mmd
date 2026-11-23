@@ -1,9 +1,10 @@
 flowchart LR
- P["Government portal"]:::channel --> G["Configured<br/>API edge"]:::core
- G --> A["Node.js backend<br/>assistant API"]:::core
- G --> D["Document<br/>Repository"]:::data
- K["Keycloak"]:::model -.-> P
- class P,K step0
- class A step1
+ K["Your identity<br/>provider"]:::channel -.-> P["Your portals<br/>and apps"]:::channel
+ P --> G["API edge<br/>/api/*"]:::core
+ G --> A["Assistant API<br/>/api/queries"]:::core
+ G --> D["Document APIs<br/>/api/files"]:::data
+ A --> M["Model endpoints<br/>your GPU or GPU API"]:::model
+ class P,G,A step0
+ class K step1
  class D step2
- class G step3
+ class M step3

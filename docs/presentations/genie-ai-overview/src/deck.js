@@ -17,6 +17,17 @@
   // not be swallowed by the Latin name before it.
   const INNER_NEUTRAL = /[.,:;!?()[\]{}<>/\\@#$%&*+=_|'"`~^·–—]/;
   const TRAILING_NEUTRAL = /[.,:;!?·–—]/;
+  // A space, a hyphen or a separator that leads to another Latin word is
+  // part of the same name.
+  const JOINING = /[\s\-.,:;!?()[\]{}<>/\\@#$%&*+=_|'"`~^·–—]/;
+
+  // The index of the Latin character a run of spaces and separators leads
+  // to, or -1 when it leads to another script or to the end of the text.
+  function joinsLatin(value, from) {
+    let index = from;
+    while (index < value.length && JOINING.test(value[index])) index += 1;
+    return index < value.length && LATIN.test(value[index]) ? index : -1;
+  }
 
   function writeText(node, value, rtl) {
     if (!rtl) {
@@ -35,7 +46,15 @@
         continue;
       }
       let end = index;
-      while (end < value.length && (LATIN.test(value[end]) || INNER_NEUTRAL.test(value[end]))) end += 1;
+      for (;;) {
+        while (end < value.length && (LATIN.test(value[end]) || INNER_NEUTRAL.test(value[end]))) end += 1;
+        // Two Latin words with a space, a hyphen or a separator between
+        // them are one name. Split there and the right-to-left line would
+        // place the second word first: "OKF Studio" would read "Studio OKF".
+        const join = joinsLatin(value, end);
+        if (join < 0) break;
+        end = join;
+      }
       let run = value.slice(index, end);
       // The sentence keeps its own full stop: it is not part of the
       // name that precedes it.

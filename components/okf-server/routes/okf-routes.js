@@ -369,6 +369,24 @@ router.use('/repos', require('./repos-routes'));
 // provider APIs). Platform-level: tools-admin inside the sub-router.
 router.use('/model-configs', require('./model-config-routes'));
 
+// #2061 phase 2 — E-1, the Evaluation Context catalogue: named, versioned,
+// snapshot-resolved authorization principals. Superadmin-gated on BOTH
+// populations (the tools-admin realm role OR a wildcard okf:*:*:admin scope)
+// — a context may name ANY repository, so writing one is a deployment-wide
+// power. The READ surface carries the same gate: a context names the
+// repositories a PRINCIPAL traverses, which is exactly the information a
+// non-superadmin caller has no business reading. The consumers are the
+// operator surfaces (the Studio editor, the Lab), which are admin-gated.
+const evalContextController = require('../controllers/evaluation-context-controller');
+router.post('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.createContext);
+router.get('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.listContexts);
+router.get('/eval-contexts/:id', evalContextController.requireSuperadmin, evalContextController.getContext);
+router.post(
+  '/eval-contexts/:id/refresh',
+  evalContextController.requireSuperadmin,
+  evalContextController.refreshContext
+);
+
 // Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the governance
 // write is tools-admin only and audited before→after in the service.
 router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigController.putRetrievalConfig);

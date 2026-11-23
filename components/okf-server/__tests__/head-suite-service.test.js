@@ -407,6 +407,42 @@ describe('runSuite + summarizeRun', () => {
     expect(Object.keys(__mockDb._stores.okf_head_test_runs)).toHaveLength(2); // suite + run
   });
 
+  it('#2061 E-2: a scoped run races the CARRIER and records it', async () => {
+    // The universe the run races is the carrier's — narrowed BEFORE the race
+    // (the prefetch), not after — and the record says which carrier, which
+    // version and which resolved set produced the score.
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 1));
+    const carrier = {
+      context: { id: 'ec-9', name: 'analysts', version: 4, hash: 'hash9' },
+      repo_ids: ['r-in', 'r-other'],
+      graph_names: ['OKF_in_v1', 'OKF_other_v1'],
+      // The MEASURED set's own hash — beside the context's hash, which
+      // identifies the version over the FULL frozen set.
+      measured_hash: 'measured9'
+    };
+    const run = await svc.runSuite('me', suite._key, { carrier });
+    expect(headTestService.loadSiblings).toHaveBeenCalledWith(expect.anything(), 'me', {
+      repoIds: ['r-in', 'r-other']
+    });
+    expect(run.payload.carrier).toEqual({
+      context_id: 'ec-9',
+      context_version: 4,
+      context_hash: 'hash9',
+      measured_hash: 'measured9',
+      repo_ids: ['r-in', 'r-other'],
+      graph_names: ['OKF_in_v1', 'OKF_other_v1']
+    });
+  });
+
+  it('#2061 E-2: an unscoped run records NO carrier (the deployment-wide universe)', async () => {
+    const suite = await seedSuite({ positive: 1, negativeForbidden: 1 });
+    headTestService.routingTest.mockResolvedValue(fakeResult(true, 0.7, 1));
+    const run = await svc.runSuite('me', suite._key, {});
+    expect(run.payload.carrier).toBeNull();
+    expect(headTestService.loadSiblings).toHaveBeenCalledWith(expect.anything(), 'me', { repoIds: null });
+  });
+
   it('reports negative metrics as null in a one-repo universe (never fake 100%)', async () => {
     // Story 1-8a — the gate makes negatives meaningful in any universe. A
     // legacy response (no head_claimed) in a one-repo universe still

@@ -12,7 +12,7 @@ and is verified before the next begins.
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | E-3 pair-level reporting + F7 steal accounting + F6 knob unification + the blank-principal fix | CODE COMPLETE — verification green |
-| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | pending — NOT gated (see the corrected phasing consequence below; the carrier-trust findings are their own epic) |
+| 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | CODE COMPLETE on `feat/okf-lab-eval-context` — E-1 + E-2 + E-4 (the serve carrier and the source attribution). E-4's remaining half (the suite-side binding and the generation pool) is E-7's, Phase 3 |
 | 3 | E-7 context-native generation + suite binding | pending |
 | 4 | E-4 attribution metrics + E-5 evidence-grade run records | pending |
 | 5 | E-6 offline harness parity + the tenant-segment decision | pending |
@@ -329,3 +329,211 @@ which is the shape E-1's `principal_refs[]` has to resolve to. The
 group-scoped fixture that proves it (`feat/okf-lab-scoped-scenario`, MR !1039)
 measured 12 / 13 / 13 / 14 traversable graphs for the control, the two group
 holders and the union, through the carrier's own read.
+
+## Phase 2 — E-1 + E-2 + E-4 (2026-11-22, branch `feat/okf-lab-eval-context`)
+
+**Status: code complete, verification green.** Stacked on the phase-1 branch;
+okf-server **98 suites / 2487 tests green** (29 new).
+
+### What landed
+
+| Epic item | What it does | Where |
+|---|---|---|
+| **E-1** | The Evaluation Context: a named, versioned, snapshot-resolved authorization principal. Resolution goes through the ONE authority (`resolveGraphSet`) with the UNION of the groups' scope lists — byte-identical to the authority's answer for the same list, asserted by a test. The inputs are scopes and group references ONLY; there is no way to hand a context a graph list. The OPEN context (no scopes, no groups) resolves as the deployment's default posture, and in closed mode it is an EMPTY carrier WITH a loud warning. A refresh re-resolves, BUMPS the version and audits. | `services/evaluation-context-service.js`, `controllers/evaluation-context-controller.js`, `routes/okf-routes.js` (`/api/okf/eval-contexts`), `db/collections.js` |
+| **E-2** | The carrier-scoped head test: a request may name a context; the Lab races the CONTEXT's repositories instead of the deployment's. The narrowing happens BEFORE the race (the prefetched sibling list IS the universe), it is a SUBSET, and without a carrier the query is byte-identical to what it always was. The verdict says which carrier it was measured over; the run record carries the carrier with its resolved set. | `services/head-test-service.js` (`loadSiblings`, `routingTest`), `services/head-suite-service.js` (`runSuite`), `controllers/repository-controller.js` |
+| **E-4** | The scoped RAGAS serve: the served retrieval set is the carrier's, and the array rides the EXISTING `context.authorized_graph_names` field — chatqna and the retriever are UNCHANGED, so the served pipeline is the production one measured over the group the benchmark asks about. The per-source provenance chatqna already emits (`graph_name` / `repo_id` / `bundle_version`) is carried through instead of stopping at the text and the document id, which makes two new numbers possible: WHICH repository answered (the histogram) and how often an answer was grounded OUTSIDE the carrier (the wrong-source rate). "Not measured" is null throughout. | `services/ragas-suite-service.js` (`serveGraphNames`, `serveAnswer`, the row and the run roll-up), `controllers/repository-controller.js` |
+
+### The gate that was withdrawn, and why it was wrong
+
+The phase-1 artifact said phase 2 must not land until the carrier-trust
+findings F1/F2 have a fix. **That was wrong** — it contradicted the epic's
+own EXPLICIT NON-GOAL, which says the BFF-as-trusted-side /
+carrier-as-enforcement-contract model stands, that changing it is a separate
+security-model epic, and that a scoped evaluation is faithful without it
+because the carrier array *is* the membership emulation. E-4's own
+acceptance criterion is "no modification to chatqna/retriever required for
+scoped runs" — and that is what shipped. The findings stay real and stay
+filed (**#2081**), on their own timeline.
+
+### What Phase 2 does NOT do
+
+- **E-7 is Phase 3**: the context-native GENERATION (the prompt pool becomes
+  the carrier's rivals, the rows carry `intended_carrier: in|out`, the suite
+  binds a context snapshot, the cross-context pairing gate) is not here.
+- **E-5 is Phase 4**: the evidence-grade run records (schema v2, the
+  principal digest, the repo-set hash, the retention change, the read-time
+  redaction) are not here. What phase 2 adds is the carrier ON the record —
+  the first of the evidence fields.
+- The supersede modelling (`ROUTE_HEADS_SUPERSEDE` in the verdict) is
+  measured but not yet modelled: the retriever skips the chunk probe when a
+  head claims (`genieai_retriever_arangodb.py:2644`), and the Lab still runs
+  its probe leg. That is a real fidelity gap and it is the first thing
+  phase 3 should close.
+
+### The live build found a defect the unit suite could not (2026-11-22)
+
+Phase 2 was deployed to the local build and driven against the RUNNING
+service, and the first run answered **HTTP 500 on the context LIST**:
+`no value specified for declared bind parameter '@collection'`.
+
+The AQL placeholder `@@collection` is a COLLECTION-NAME bind parameter, and
+ArangoDB reads its value under the key **`@collection`** — the sigil stays
+in the key. The key `collection` leaves the placeholder empty and the engine
+refuses the whole query. Three services in this repo already use the form the
+engine wants (`pii-service` `'@meta'`, `graph-lifecycle-service` `'@edge'`,
+`graph-retract-service` `'@collections'`); the new service was the only one
+that did not.
+
+**Every unit test was green because the mock never resolved a bind
+parameter** — the wrong key could not fail. The mock now refuses a query
+whose collection-name placeholder has no value, exactly as the engine refuses
+it, and it really runs a BARE collection scan so a LIST endpoint's rows are
+the ones it saved. A query with a FILTER is still not executed by the mock:
+it has no AQL engine, and pretending to filter would hand a caller rows the
+real database would never return.
+
+The snapshot also now records the **EFFECTIVE** scopes it resolved from, not
+only the input list. A context that names only groups has an empty INPUT
+scope list, and storing that alone under-reported the principal the snapshot
+was measured against — and the audit row counted zero scopes.
+
+### Phase 2 — the live build (2026-11-22, deployed)
+
+The local build carries phase 1 + phase 2 (`verify-local-build.sh`: 47 pass,
+0 fail). Measured against the RUNNING service, through the API:
+
+| Check | Result |
+|---|---|
+| A context naming ONE group | created (201); resolves to **13** repositories |
+| A context naming the OTHER group | created (201); resolves to **13** repositories |
+| A context naming BOTH groups | created (201); resolves to **14** repositories |
+| The union | **exactly** the union of the two single-group contexts (14 = 13 + 13 − 12 shared) |
+| The effective scopes | group A → `okf:t:<fence-a>:read`; group B → `okf:t:<fence-b>:read`; A+B → **both** |
+| The repo-set hash | differs between two different carriers; 32 chars, stable across a refresh |
+| The version | a new context is v1; a refresh answers 200 and **bumps to v2** |
+| The LIST | **200** with the created context in it (was 500 — see above) |
+| An unknown context | **404** — an honest refusal, not a crash |
+| A non-superadmin | **403** on the list AND on the create |
+| The carrier-scoped routing test | 200; the response carries the carrier: id, **version 2**, hash, **14 repositories** |
+
+The probe contexts were removed from the local build's Arango afterwards (six
+rows), so the fixture leaves nothing behind.
+
+### The phase issues the triage demands (2026-11-22)
+
+Jerome's triage note on the epic (2026-11-21) pins the dispatch scope to
+**Phase 1 only**: "Phases 2-5 must be split into their own issues (or
+re-scoped) before any of them is dispatched — this issue is the epic
+tracker, not a single work order." Each phase therefore now carries its own
+work issue, all related to the epic:
+
+| Phase | Issue | Work | Status |
+|---|---|---|---|
+| 2 | **#2101** | E-1 + E-2 + E-4 | `status::in-progress` (MR !1043) |
+| 3 | **#2102** | E-7 — context-native generation + suite binding | `status::backlog` |
+| 4 | **#2103** | E-5 — evidence-grade run records + the attribution metrics | `status::backlog` |
+| 5 | **#2104** | E-6 + the tenant decision | `status::backlog` |
+
+
+### The review round (2026-11-22) — what the reviews found and what changed
+
+A `/security-review` and a `/code-review` (high) of the phase-2 diff found
+real defects. Every finding is FIXED, each with a regression test proven RED
+against the pre-fix code. okf-server: **2501 tests green** (16 new in the
+branch).
+
+**The carrier was a side-door around the superadmin-gated catalogue.** The
+catalogue is gated because "a context names the repositories a PRINCIPAL
+traverses" — but `carrierOf` was a second, UNGATED read of the same
+document, and any caller of the run routes (repo-scoped-admin, with
+read-scoped run records) could name any context id: a foreign, possibly
+restricted, repository set was measured and persisted into a record that
+caller could read. **FIXED:** the carrier is now filtered through the
+CALLER's own authority, resolved the same way a live caller's is
+(`resolveGraphSet` — mode + scope + acl, one rule); an empty intersection is
+REFUSED (403 `CARRIER_NOT_TRAVERSABLE`); `carrierOf` is no longer exported,
+so the carrier boundary is the only way in.
+
+**An unreadable principal must not widen.** A group Keycloak could not answer
+for resolved to an EMPTY scope list, which in the default OPEN mode resolves
+to the WHOLE public corpus — so a context that could not measure the group
+measured the deployment, silently, and the run was scored as if it had
+measured the group. **FIXED:** such a principal is REFUSED (422
+`PRINCIPAL_UNREADABLE`) at create AND at refresh, and the stored snapshot
+stands when a refresh fails. A group that resolves but carries no scope says
+so ON THE WIRE; a scope string that is not a scope is reported rather than
+dropped in silence.
+
+**An empty carrier is not the deployment.** An empty carrier used to drop the
+universe filter — the head race widened to every repository in the deployment
+while the record claimed a zero-repo universe — and the RAGAS serve fell
+back to the suite's repositories while the record said the carrier was used.
+**FIXED:** both now mean what they say (nothing); the serve refuses with
+`EMPTY_CARRIER`.
+
+**A principal reference must not reach a path.** The group id is now encoded
+in the Keycloak admin-API path, and a reference that is neither a resolvable
+name nor a uuid-shaped id never becomes a path segment at all.
+
+**A stale carrier is refused (design-panel ruling).** The snapshot froze the
+serving graph NAMES, and a re-publish renames the serving graph
+(`OKF_alpha_v1` → `OKF_alpha_v2`), so a frozen name names a corpus that no
+longer exists — and the retriever answers a missing graph with an empty
+result. The failure is silent and TOTAL in the worst case: with 13 of 14
+carrier repositories re-published, the run completes, is scored, and the
+record lists 14 graph names while 13 corpora were measured. **FIXED:** the
+carrier is refused (409 `EVAL_CONTEXT_STALE`) with the context, the version,
+every stale repository, BOTH names and the remedy. The live name comes from
+`servingRepos()` — the same derivation the snapshot was built from — and the
+comparison is per REPOSITORY, never per name (a graph name is slug-derived,
+so a freed name can be re-minted by another repository). A repository that no
+longer serves at all is stale too. Serving the LIVE names instead was
+considered and rejected: the context hash is over the (repo_id, graph_name)
+pairs on purpose — "two evaluations are comparable only if they saw the same
+set" — so following the content would make two runs with the SAME hash
+measure DIFFERENT corpora.
+
+**The record says which set it measured.** The carrier carries the context's
+own hash (over its FULL frozen set — it identifies the version) AND the
+measured set's own hash (over the repositories the run actually raced, after
+the narrowing). After a narrowing those are different populations; all three
+record writers carry the same shape.
+
+**One pre-existing defect the new mock exposed.** The graph teardown's orphan
+sweep had TWO independent reasons never to run: its AQL took its bind
+variable from the second argument of an `aql` template — which the engine
+never reads, so ArangoDB refused the query ("no value specified for declared
+bind parameter '@collections'") and the error was swallowed — and `slugFor`
+was destructured from a module that does not export it, so the slug was
+always empty. **FIXED:** the sweep lists the GRAPHS through the driver's own
+listing (the same route the teardown drops through) and finds the draft
+graphs a mid-drain retract leaves behind.
+
+### The license-compliance gate (2026-11-22) — a comparison artifact, not a new dependency
+
+The MR's "License Compliance" panel reported **17 licenses and policy
+violations for the source branch only**. Measured, not assumed:
+
+- The source pipeline's dependency set and main's are **IDENTICAL** — 2018
+  components on both sides, zero difference (the SBOMs of the gemnasium
+  job, compared component by component). Neither phase 1 nor phase 2
+  touched a single manifest or lockfile, so the branch introduces NO new
+  dependency and NO new license.
+- The project's own documented rule explains the rest
+  (`docs/security/cve-triage-2026q3.md:819-835`, measured 2026-11-16): the
+  two MR approval policies (`scan_finding` `new_needs_triage`,
+  `license_finding` `newly_detected`, each `role_approvers: [maintainer]`)
+  compare against the **TARGET branch's latest pipeline** — and when the
+  target side is empty, EVERY source finding counts as newly introduced.
+- The target of !1043 was the phase-1 branch, which has **no pipeline of
+  its own** (the workflow rule suppresses branch pipelines for a branch with
+  an open MR) → the target side was empty → all 17 licenses counted as new.
+- !1037 merged into `main` (2026-11-22 17:27), GitLab auto-retargeted
+  !1043 to `main`, and main's pipeline 19098 (green, carrying the SBOM)
+  gives the comparison a real target side. The branch was rebased onto
+  main, so the MR diff is phase 2 only.
+
+**What David may still have to do:** if GitLab still asks for a maintainer
+approval on the license policy, it is Jérôme's to give — the MR author
+cannot approve their own MR (author-approval-prevention), which is the
+second half of the same documented rule.

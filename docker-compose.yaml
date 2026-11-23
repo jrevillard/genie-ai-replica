@@ -3083,7 +3083,17 @@ services:
     # here so compose and chart state the same identity (#1227). Pinned by
     # name: the image's USER is the numeric source of truth.
     user: "keycloak:root"
-    image: quay.io/keycloak/keycloak:26.7.0
+    # 26.8.2 bundles Red Hat OpenJDK 21.0.13.1 — the fix for CVE-2026-114938
+    # ("Java4Shell", memory corruption in the accelerated Base64 decoder,
+    # pre-auth RCE against Keycloak). The tag MOVES: upstream republishes it
+    # on every 26.8.x rebuild, so it only ever gets newer (and more
+    # patched) than the 26.8.2-3 build that carries the fix — index digest
+    # sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3.
+    # ONE caveat: between 2026-11-05 and 2026-11-19 the tag pointed at the
+    # vulnerable 26.8.2-1 / 26.8.2-2 builds, and compose's default pull
+    # policy (missing) does not re-pull an image it already has — a host
+    # that pulled it inside that window must re-pull it (see docs/UPGRADE.md).
+    image: quay.io/keycloak/keycloak:26.8.2
     # The upstream image ships an empty CMD (kc.sh prints its usage and exits
     # without a subcommand). The dropped custom image baked `start` via its
     # Dockerfile; restore that explicit startup for both compose and swarm.

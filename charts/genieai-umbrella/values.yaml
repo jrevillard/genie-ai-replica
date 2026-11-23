@@ -375,6 +375,27 @@ data:
     # bootstrap prerequisite — NOT a chart dependency.
     enabled: true
     instances: null                   # null = inherit clusterProfileInstances (prod 2, else 1); a number pins the count in every profile
+    # The Keycloak SERVER image — the one the operator runs.
+    #
+    # 26.8.2 bundles Red Hat OpenJDK 21.0.13.1 — the fix for
+    # CVE-2026-114938 (the accelerated Base64 decoder's memory
+    # corruption, pre-auth RCE against Keycloak). The tag MOVES:
+    # upstream republishes it on every 26.8.x rebuild, so it only ever
+    # gets newer (and more patched) than the 26.8.2-3 build that carries
+    # the fix — index digest
+    # sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3.
+    #
+    # Stated HERE rather than left to the operator's default
+    # (RELATED_IMAGE_KEYCLOAK, the same tag): the CR is what the cluster
+    # runs, and an operator that never pinned it left the server image
+    # an implicit property of the operator's version.
+    #
+    # ONE caveat, for a node that pulled the tag inside the window
+    # 2026-11-05 → 2026-11-19 (the tag then pointed at the vulnerable
+    # 26.8.2-1 / 26.8.2-2 builds): the operator's IfNotPresent pull
+    # policy keeps the image it already has — re-pull it on that node
+    # (see docs/UPGRADE.md).
+    image: quay.io/keycloak/keycloak:26.8.2
     # Operator contact email for the genie-admin realm user — deployment
     # data, supplied per environment. No chart default: the render fails
     # loudly when it is missing.

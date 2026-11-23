@@ -22,7 +22,7 @@ LLM. The minimum for a 7B model is 16 GB. See
 ### 2. Can I run GENIE.AI fully air-gapped?
 
 Yes. Pull the 15 Docker images from the GitLab Container Registry, plus
-`quay.io/keycloak/keycloak:26.7.0` (Keycloak runs from its upstream image
+`quay.io/keycloak/keycloak:26.8.2` (Keycloak runs from its upstream image
 rather than a GENIE.AI-built one), onto a machine with internet, copy them
 (`docker save` / `docker load`), and run the Compose stack on the
 air-gapped host. Models are pulled at first start from

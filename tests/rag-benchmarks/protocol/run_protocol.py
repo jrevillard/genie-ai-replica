@@ -127,6 +127,11 @@ def _resolved_configuration(args: argparse.Namespace, config: str, driver_resolv
     non-empty."""
     if args.resolved_env:
         snapshot = json.loads(Path(args.resolved_env).read_text(encoding="utf-8"))
+        if not isinstance(snapshot, dict):
+            # A JSON array or scalar parses fine and would flow silently into
+            # the manifest as resolved_env — provenance garbage the protocol
+            # exists to keep honest.
+            raise ValueError("the resolved-env snapshot must be a JSON object")
     elif config == "B" and isinstance((driver_resolved or {}).get("env"), dict) and driver_resolved["env"]:
         snapshot = driver_resolved["env"]
     elif config == "A" and args.stack_prefix is not None:
@@ -273,6 +278,18 @@ def cmd_assess(args: argparse.Namespace) -> int:
     entries = _validated_entries(args)
     if entries is None:
         return 1
+    # A pinned --resolved-env that cannot be read, parsed or shaped is
+    # refused FIRST — before even the corpus fingerprint (no Arango needed)
+    # and before the gate: the gated run's queries are the expensive part,
+    # and a traceback after the run burns them for nothing.
+    if args.resolved_env:
+        try:
+            snapshot = json.loads(Path(args.resolved_env).read_text(encoding="utf-8"))
+            if not isinstance(snapshot, dict):
+                raise ValueError("the resolved-env snapshot must be a JSON object")
+        except (OSError, ValueError) as failed:
+            print(f"REFUSED: {args.resolved_env}: {failed}", file=sys.stderr)
+            return 1
     fingerprint = _corpus_fingerprint(args)
     set_sha256 = sha256_file(args.set_path)
     # THE GATE — before any query runs.

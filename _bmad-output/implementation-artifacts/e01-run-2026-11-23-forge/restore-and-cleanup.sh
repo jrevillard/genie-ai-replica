@@ -77,11 +77,13 @@ export KC_ADMIN_USER=$(kubectl -n $NS get secret keycloak-admin-credentials -o j
 export KC_ADMIN_PWD=$(kubectl -n $NS get secret keycloak-admin-credentials -o jsonpath='{.data.password}' | base64 -d)
 # the dataprep service account (the run granted it the 'admin' realm role)
 SAID=${SA_ID:-e33a4dd8-0856-4cce-be37-367267dece44}
-AT=$($KC -X POST "$KCURL/auth/realms/master/protocol/openid-connect/token" -d client_id=admin-cli -d "username=$KC_ADMIN_USER" -d "password=$KC_ADMIN_PWD" -d grant_type=password | python3 -c "import sys,json;print(json.load(sys.stdin).get('access_token',''))")
+AT=$($KC -X POST "$KCURL/auth/realms/master/protocol/openid-connect/token" --data-urlencode "client_id=admin-cli" --data-urlencode "username=$KC_ADMIN_USER" --data-urlencode "password=$KC_ADMIN_PWD" --data-urlencode "grant_type=password" | python3 -c "import sys,json;print(json.load(sys.stdin).get('access_token',''))")
 # An empty token means every realm step below would fail-cascade into
-# "already absent" claims — refused here, not silently "successful".
+# "already absent" claims — refused here, not silently "successful". Note
+# the refusal also skips the Keycloak-independent steps 8-10 (secrets,
+# port-forwards, proof): run them by hand or fix the credentials first.
 if [ -z "$AT" ]; then
-  echo "REFUSED: could not mint the master admin token (rotated password? missing secret?) — the realm revert (step 7) cannot run; fix the credentials before re-running"
+  echo "REFUSED: could not mint the master admin token (rotated password? missing secret? special characters?) — the realm revert (step 7) AND steps 8-10 cannot run; fix the credentials before re-running"
   exit 1
 fi
 # 7a. the 'admin' realm role the run granted to the dataprep service account
@@ -89,13 +91,15 @@ RID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/roles/a
 if [ -n "$RID" ]; then
   $KC -X DELETE -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm/$RID" -o /dev/null -w "  role removed http=%{http_code}\n"
 else
-  echo "  admin role already absent (a prior revert ran)"
+  # Empty RID means the lookup failed OR the role is gone — the state is
+  # settled authoritatively by the 7c existence gate below, never here.
+  echo "  admin role not resolved (gone, or the lookup failed — verified below by the SA-mapping gate)"
 fi
 $KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users/$SAID/role-mappings/realm" | python3 -c "import sys,json;d=json.load(sys.stdin);print('  service account roles now:',[r['name'] for r in d] if isinstance(d,list) else d)"
 # 7b. the eval user and the eval client the run created
 # (EVAL_USER_ID, never EUID — EUID is a bash readonly builtin; assigning it
 # fails silently and the DELETE would target the shell's numeric uid.)
-EVAL_USER_ID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users?username=e01-eval" | python3 -c "
+EVAL_USER_ID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/users?username=e01-eval&exact=true" | python3 -c "
 import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 if [ -n "$EVAL_USER_ID" ]; then
@@ -103,7 +107,7 @@ if [ -n "$EVAL_USER_ID" ]; then
 else
   echo "  eval user already absent"
 fi
-CID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval" | python3 -c "
+CID=$($KC -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval&exact=true" | python3 -c "
 import sys,json
 d=json.load(sys.stdin); print(d[0]['id'] if d else '')")
 if [ -n "$CID" ]; then
@@ -145,8 +149,8 @@ sys.exit(2 if not isinstance(d,list) else (1 if d else 0))" || rc=$?
     *) echo "REFUSED: could not re-query the eval $what (Keycloak unreachable?) — the cleanup state is UNKNOWN; investigate before re-running"; exit 1;;
   esac
 }
-check_gone users "$KCURL/auth/admin/realms/genie/users?username=e01-eval"
-check_gone clients "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval"
+check_gone users "$KCURL/auth/admin/realms/genie/users?username=e01-eval&exact=true"
+check_gone clients "$KCURL/auth/admin/realms/genie/clients?clientId=e01-eval&exact=true"
 
 say "8. the secrets the run restored"
 # the keycloak-proxy-client-secret Secret was missing at the baseline (its

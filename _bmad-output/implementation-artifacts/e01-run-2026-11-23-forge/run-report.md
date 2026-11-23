@@ -215,7 +215,8 @@ the smallest: nothing that Flux owns is modified.
 running pod's `imageID`, not assumed from the tag.
 
 Both pods ran: `agent-service` answers `GET /ready` with
-`{"status":"ready","agent_enabled":true}`; `okf-server` is Running and
+`{"status":"ready","agent_enabled":true}`; `okf-server` answers
+`GET /health` with `{"status":"ok","service":"okf-server"}` and is
 connected to ArangoDB. Both emit spans into VictoriaTraces.
 
 Two secrets the umbrella's okf tier needs were missing from the cluster

@@ -104,16 +104,41 @@ describe('#2061 phase 3 (E-7): the pairing between a suite and a run', () => {
     expect(out.missing_pool).toContain('r-under');
   });
 
-  test('a pool repository missing from the run carrier BLOCKS the run', () => {
+  test('a pool repository missing from the carrier SHRINKS the corpus: flagged, not blocked', () => {
     const out = pairing.pair({
       suiteContext: SNAPSHOT,
       suiteRepoId: 'r-under',
       runContext: { id: 'ctx-1', version: 1 },
       runCarrier: { repo_ids: ['r-under'] },
-      runKeys: { repo_set_hash: 'x', head_version_hash: 'y' }
+      runKeys: { repo_set_hash: 'hash-pool', head_version_hash: 'hash-heads' }
     });
-    expect(out.status).toBe('blocked');
+    // Half the pool is still there: this is the SAME experiment with a hole,
+    // so the run proceeds — and the record says the corpus was smaller and
+    // the measurement is not comparable with one over the whole.
+    expect(out.status).toBe('ok');
+    expect(out.comparable).toBe(false);
+    expect(out.reasons).toContain('pool_not_in_carrier');
     expect(out.missing_pool).toEqual(['r-rival']);
+    expect(out.pool_coverage).toBe(0.5);
+  });
+
+  test('more than half the pool gone is a DIFFERENT corpus: the run is refused', () => {
+    const out = pairing.pair({
+      suiteContext: {
+        ...SNAPSHOT,
+        repos: [...SNAPSHOT.repos, { repo_id: 'r-third', name: 'Third', graph_name: 'OKF_third_v1' }]
+      },
+      suiteRepoId: 'r-under',
+      runContext: { id: 'ctx-1', version: 1 },
+      runCarrier: { repo_ids: ['r-under'] },
+      runKeys: { repo_set_hash: 'hash-pool', head_version_hash: 'hash-heads' }
+    });
+    // One of three left — past the floor, the number would answer a
+    // different question than the operator asked, so the run is refused.
+    expect(out.status).toBe('blocked');
+    expect(out.reasons).toContain('pool_evaporated');
+    expect(out.comparable).toBe(false);
+    expect(out.pool_coverage).toBeCloseTo(1 / 3);
   });
 
   test('a carrier that GREW is flagged, not blocked', () => {
@@ -147,11 +172,25 @@ describe('#2061 phase 3 (E-7): the pairing between a suite and a run', () => {
       suiteRepoId: 'r-under',
       runContext: { id: 'ctx-1', version: 1 },
       runCarrier: { repo_ids: ['r-under'] },
-      runKeys: { repo_set_hash: 'x', head_version_hash: 'y' },
+      runKeys: { repo_set_hash: 'hash-pool', head_version_hash: 'hash-heads' },
       rows
     });
-    // The pool check fires first — the rival left, so the pool changed.
-    expect(out.status).toBe('blocked');
+    // The run PROCEEDS: the rows that depend on the missing rival are not
+    // measurable over this corpus, but the rest of the measurement is.
+    expect(out.status).toBe('ok');
+    // The rows that depend on what left are SKIPPED, with the dependency
+    // named — never silently dropped.
+    expect(out.skipped_rows).toEqual([
+      { id: 'row-1', index: 0, reason: 'dependency_not_in_carrier', dependencies: ['r-rival'] },
+      { id: 'row-3', index: 2, reason: 'dependency_not_in_carrier', dependencies: ['Gone'] }
+    ]);
+    // The abstention probe depends on NOTHING (it asserts an abstention,
+    // not an owner), so it is not skipped — and it is still in the suite.
+    expect(out.skipped_rows.map((r) => r.id)).not.toContain('row-2');
+    // A run that measured fewer rows is not comparable with one that
+    // measured them all.
+    expect(out.comparable).toBe(false);
+    expect(out.reasons).toContain('pool_not_in_carrier');
     expect(out.missing_pool).toEqual(['r-rival']);
   });
 

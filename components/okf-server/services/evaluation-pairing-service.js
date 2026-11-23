@@ -16,9 +16,13 @@
 //   experiment  — a cross-context run, lifted by a recorded superadmin
 //                 decision. It runs, it is recorded, and it is NOT
 //                 comparable.
-//   blocked     — the pairing cannot be measured at all: the under-test or
-//                 the pool is not in the run's carrier, so the run would
-//                 score a corpus the suite was never minted against.
+//   blocked     — the pairing cannot be measured AT ALL, and there are
+//                 exactly two reasons for that (the party panel, 2026-11-23):
+//                   · the repository UNDER TEST is not in the run's carrier
+//                     — the subject of the measurement is absent;
+//                   · more than half the suite's POOL is gone from the
+//                     carrier — the run is a DIFFERENT experiment, not the
+//                     same one with holes (the floor: MIN_POOL_COVERAGE).
 //
 // Inside 'ok' there are two more tiers, which never block on their own:
 //
@@ -29,9 +33,19 @@
 //                 never silently dropped: a suite that quietly loses its
 //                 hardest negatives is a suite that reports a better pass
 //                 rate than it earned.
-//   flag-only   — the carrier GREW: the run's carrier holds repositories
-//                 the suite never saw, so the suite scored a smaller world
-//                 than the one measured.
+//
+//                 Running such a row would be the worst of both worlds: a
+//                 confusable whose rival is ABSENT passes by the rival's
+//                 absence, and a benchmark question whose own repository is
+//                 absent fails because its passages are not in the served
+//                 set. Neither number is about the system.
+//
+//   flag-only   — the carrier GREW (it holds repositories the suite never
+//                 saw) OR SHRANK (the suite's pool no longer holds): the run
+//                 measured a different world than the one the suite was
+//                 minted for. Grow and shrink are the SAME failure of
+//                 comparability, seen from opposite directions — neither
+//                 blocks, and both force `comparable: false`.
 //
 // The comparison KEYS are the two hashes, never the context version: the
 // serving set refreshes on the 30s TTL, and a re-built head moves the
@@ -40,6 +54,19 @@
 'use strict';
 
 const { logger } = require('../shared-lib/logger');
+
+/**
+ * The POOL-EVAPORATION FLOOR (David, 2026-11-23): below this share of the
+ * suite's pool still present in the run's carrier, the run is not the same
+ * experiment with holes — it is a DIFFERENT corpus, and a number over it
+ * would answer a different question than the operator asked. There the run
+ * is refused, and the refusal names what it lost.
+ *
+ * Above it, a shrunken carrier is a comparability FLAG, not a block: the
+ * rows that depend on a missing repository are skipped and counted, and the
+ * record says the corpus was smaller.
+ */
+const MIN_POOL_COVERAGE = 0.5;
 
 /**
  * The repositories a row's verdict depends on.
@@ -143,21 +170,77 @@ function pair({
 
   // The POOL: what the suite was minted over. A pool repository missing
   // from the run's carrier means the suite is being measured over a
-  // different corpus — that cannot be scored, so it blocks.
+  // SMALLER world than it was minted for.
   const poolIds = (suiteContext.repos || []).map((r) => r.repo_id);
   const missingPool = poolIds.filter((id) => !carrierSet.has(id));
+
+  // The SKIP tier — computed BEFORE the pool decision, so it fires for the
+  // case it exists for: a ROW's dependency (the rival it cites, the
+  // repository it was minted from) left the carrier. That row cannot be
+  // scored over this corpus: running it would either pass the under-test by
+  // the rival's ABSENCE or fail the question because its own passages are
+  // not in the served set. Either way the number would be an artefact of
+  // the carrier, not of the system. So the row is not run: it is skipped,
+  // counted in the coverage, and carries the reason.
+  //
+  // The index is the row's position in the array the CALLER passed — the
+  // caller must index the SAME array it passes here, or the skip lands on
+  // the wrong row.
+  const skippedRows = [];
+  (rows || []).forEach((row, index) => {
+    const deps = rowDependencies(row, suiteContext);
+    const lost = deps.filter((id) => !carrierSet.has(id));
+    if (lost.length) {
+      skippedRows.push({
+        id: row.id === undefined || row.id === null ? null : row.id,
+        index,
+        reason: 'dependency_not_in_carrier',
+        dependencies: lost
+      });
+    }
+  });
+
+  // The SUBJECT: the repository under test. Without it there is no
+  // measurement at all — every row is a question about a repository that is
+  // not there. This is the ONE blocking condition inside a same-context
+  // pairing.
   if (suiteRepoId && !carrierSet.has(suiteRepoId)) {
     reasons.push('under_test_not_in_carrier');
-  }
-  if (missingPool.length) {
-    reasons.push('pool_not_in_carrier');
     return {
       status: 'blocked',
       comparable: false,
       reasons,
       missing_pool: missingPool,
       carrier_grew: [],
-      skipped_rows: []
+      skipped_rows: skippedRows
+    };
+  }
+
+  // The POOL SHRANK: a shrunken carrier is the SAME failure of
+  // comparability as a grown one, seen from the other side. The run scores
+  // the rows it can and skips the rows it cannot; the record says the
+  // corpus was smaller and the run is not comparable. A shrunken carrier
+  // must NOT be silently absorbed — but refusing the whole measurement
+  // would destroy the rows that ARE measurable, which is the one thing the
+  // coverage note exists to prevent.
+  if (missingPool.length) reasons.push('pool_not_in_carrier');
+
+  // THE FLOOR (David, 2026-11-23): past half the suite's pool is gone, the
+  // run is not the same experiment with holes — it is a DIFFERENT corpus,
+  // and a number over it would answer a different question than the one
+  // the operator asked. There the run is refused, and the refusal names the
+  // coverage it lost.
+  const poolCoverage = poolIds.length ? (poolIds.length - missingPool.length) / poolIds.length : 1;
+  if (missingPool.length && poolCoverage < MIN_POOL_COVERAGE) {
+    reasons.push('pool_evaporated');
+    return {
+      status: 'blocked',
+      comparable: false,
+      reasons,
+      missing_pool: missingPool,
+      carrier_grew: [],
+      skipped_rows: skippedRows,
+      pool_coverage: poolCoverage
     };
   }
 
@@ -176,7 +259,13 @@ function pair({
   // the extra repositories were never evaluated. The hash comparison usually
   // catches the same drift, but the tier must stand on its own — a run with
   // no keys must not be stamped comparable over a different world.
-  let comparable = carrierGrew.length === 0;
+  //
+  // The same holds for a carrier that SHRANK, and for a run that skipped
+  // rows: a measurement over a different corpus, or over fewer rows, is not
+  // comparable with one over the whole — a suite that quietly loses its
+  // hardest negatives is a suite that reports a better pass rate than it
+  // earned.
+  let comparable = carrierGrew.length === 0 && missingPool.length === 0 && skippedRows.length === 0;
   if (suiteContext.repo_set_hash && keys.repo_set_hash && suiteContext.repo_set_hash !== keys.repo_set_hash) {
     reasons.push('repo_set_drift');
     comparable = false;
@@ -189,22 +278,6 @@ function pair({
     reasons.push('head_version_drift');
     comparable = false;
   }
-
-  // The SKIP tier: a row whose dependency left the carrier cannot be
-  // scored. It is skipped, counted, and carries the reason.
-  const skippedRows = [];
-  (rows || []).forEach((row, index) => {
-    const deps = rowDependencies(row, suiteContext);
-    const lost = deps.filter((id) => !carrierSet.has(id));
-    if (lost.length) {
-      skippedRows.push({
-        id: row.id === undefined || row.id === null ? null : row.id,
-        index,
-        reason: 'dependency_not_in_carrier',
-        dependencies: lost
-      });
-    }
-  });
 
   if (reasons.length) {
     logger.info('eval_pairing.paired', {
@@ -222,7 +295,12 @@ function pair({
     reasons,
     missing_pool: missingPool,
     carrier_grew: carrierGrew,
-    skipped_rows: skippedRows
+    skipped_rows: skippedRows,
+    // The share of the suite's pool the run still measured over. The
+    // operator reads it beside the coverage: "88 of 100 rows, over 92% of
+    // the original corpus" is a measurement; "88 of 100 rows" alone is a
+    // number with a hole in it.
+    pool_coverage: poolCoverage
   };
 }
 

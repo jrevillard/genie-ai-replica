@@ -258,6 +258,31 @@ describe('#2061 phase 3 (E-7): the RAGAS run is paired with the suite', () => {
     }
   });
 
+  it('a run in which EVERY question was skipped says NOTHING MEASURED — not "every answer failed"', async () => {
+    // A suite whose only question was minted from a repository that left
+    // the carrier: nothing was attempted, nothing failed, and the envelope
+    // must say so — "every answer failed" would point the operator at a
+    // pipeline that worked perfectly.
+    const begun = await svc.beginSuiteGeneration('r-agri', { testset_size: 2 }, { actor: { user_id: 'u1' } });
+    const suite = await begun.done;
+    const entries = suite.payload.entries.map((e) => ({ ...e, source_repo_id: 'r-gone' }));
+    await __mockDb.collection('okf_head_test_runs').replace(begun.suite_key, {
+      ...suite,
+      payload: { ...suite.payload, entries, context: SUITE_CONTEXT }
+    });
+    const run = await svc.beginRunSuite(
+      'r-agri',
+      begun.suite_key,
+      { mode: 'whatif', metrics: METRICS },
+      { actor: { user_id: 'u1' }, carrier: CARRIER, keys: KEYS }
+    );
+    await run.done;
+    const doc = await svc.getRunSuite('r-agri', begun.suite_key, run.run_key);
+    expect(doc.error.code).toBe('NOTHING_MEASURED');
+    // A row that was not attempted is not a failed row.
+    expect(doc.error.failed_rows).toBe(0);
+  });
+
   it('a suite minted for ANOTHER context is REFUSED (a cross-context run is not comparable)', async () => {
     const begun = await svc.beginSuiteGeneration('r-agri', { testset_size: 2 }, { actor: { user_id: 'u1' } });
     const suite = await begun.done;

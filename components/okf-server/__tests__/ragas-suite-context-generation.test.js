@@ -161,16 +161,22 @@ describe('#2061 phase 3 (E-7): the RAGAS suite is minted FOR a context', () => {
     expect(byQuery['Who qualifies for legal aid?'].source_chunk_key).toBe('b1');
   });
 
-  it('a question whose passage is not in the pool carries NO stamp (never a guess)', async () => {
+  it('a question whose passage is not in the pool is NOT minted (never a guess, never a false failure)', async () => {
     // The carrier's pool holds the agri corpus only. The sidecar still
     // answered with a legal question citing a passage that is not in the
-    // corpus — the stamp is null, because "not measured" is null.
+    // corpus — its ground truth is not in the evaluated corpus, so it can
+    // never be scored over the carrier: the judge would score a
+    // context_recall of ~0 and file a FAILURE that is an artefact of the
+    // corpus, not of the system. Such a question is not generated into a
+    // context-bound suite at all.
     const { done } = await svc.beginSuiteGeneration('r-agri', {}, { actor: { user_id: 'u1' }, binding: BINDING });
     const suite = await done;
     const byQuery = Object.fromEntries(suite.payload.entries.map((e) => [e.query, e]));
     expect(byQuery['When should tomatoes be planted?'].source_repo_id).toBe('r-agri');
-    expect(byQuery['Who qualifies for legal aid?'].source_repo_id).toBeNull();
-    expect(byQuery['Who qualifies for legal aid?'].source_chunk_key).toBeNull();
+    // The unattributable question is ABSENT — not minted with a null stamp
+    // and not silently kept.
+    expect(byQuery['Who qualifies for legal aid?']).toBeUndefined();
+    expect(suite.payload.entries).toHaveLength(1);
   });
 
   it('the suite doc stores the context SNAPSHOT and both comparison keys', async () => {

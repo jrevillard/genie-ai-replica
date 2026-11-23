@@ -198,17 +198,20 @@ describe('#2061 phase 3 (E-7): the RUN leg of the pairing', () => {
     expect(run.payload.pairing.comparable).toBe(false);
   });
 
-  it('a pool repository missing from the run carrier REFUSES the run', async () => {
+  it('a pool repository missing from the carrier SHRINKS the run: the rest is scored, and the record says so', async () => {
     const suite = await seedBoundSuite();
-    let error = null;
-    try {
-      await svc.runSuite('me', suite._key, { carrier: { ...CARRIER, repo_ids: ['me'] } });
-    } catch (e) {
-      error = e;
-    }
-    expect(error).toBeTruthy();
-    expect(error.code).toBe('PAIRING_BLOCKED');
-    expect(error.message).toContain('r-rival');
+    // The carrier holds the under-test but NOT the rival — half the pool.
+    const run = await svc.runSuite('me', suite._key, {
+      carrier: { ...CARRIER, repo_ids: ['me'] },
+      keys: { repo_set_hash: 'pool-hash', head_version_hash: 'heads-hash' }
+    });
+    // The run PROCEEDS: a corpus with a hole is still a measurement, and
+    // the rows that do not need the missing repository are scored.
+    expect(run.payload.pairing.status).toBe('ok');
+    expect(run.payload.pairing.comparable).toBe(false);
+    expect(run.payload.pairing.reasons).toContain('pool_not_in_carrier');
+    expect(run.payload.pairing.missing_pool).toEqual(['r-rival']);
+    expect(run.payload.pairing.pool_coverage).toBe(0.5);
   });
 
   it('a row whose rival left the carrier is SKIPPED with a reason, and is not run', async () => {
@@ -221,12 +224,54 @@ describe('#2061 phase 3 (E-7): the RUN leg of the pairing', () => {
     });
     // The carrier holds the under-test but NOT the rival the row cites.
     const run = await svc.runSuite('me', suite._key, {
-      carrier: { ...CARRIER, repo_ids: ['me', 'r-rival'] },
+      carrier: { ...CARRIER, repo_ids: ['me'] },
       keys: { repo_set_hash: 'pool-hash', head_version_hash: 'heads-hash' }
     });
-    // The row's rival IS in the carrier here, so nothing is skipped.
-    expect(run.payload.pairing.skipped_rows).toEqual([]);
-    expect(run.payload.results).toHaveLength(2);
+    // The row whose rival left is SKIPPED, with the reason and the
+    // dependency named — never silently dropped.
+    expect(run.payload.pairing.skipped_rows).toHaveLength(1);
+    expect(run.payload.pairing.skipped_rows[0]).toMatchObject({
+      reason: 'dependency_not_in_carrier',
+      dependencies: ['r-rival']
+    });
+    // It was NOT run: only the row that could be scored is in the results.
+    expect(run.payload.results).toHaveLength(1);
+    expect(run.payload.results[0].query).toBe('plain query');
+    // ...and the coverage says so: one row was measured, one was not, and
+    // the population is two.
+    expect(run.payload.summary.n_skipped).toBe(1);
+    expect(run.payload.summary.n_queries).toBe(1);
+    expect(run.payload.summary.n_total).toBe(2);
+    // A run that measured fewer rows is not comparable with one that
+    // measured them all.
+    expect(run.payload.pairing.comparable).toBe(false);
+  });
+
+  it('a boundary row whose routing leg ERRORED is still in the population — the verdict shows the hole', async () => {
+    const suite = await seedBoundSuite({
+      positive: [],
+      negative: [
+        {
+          query: 'excluded repository query',
+          kind: 'negative',
+          cls: 'abstention',
+          source: 'llm',
+          expected_repo: null,
+          intended_carrier: 'out'
+        }
+      ]
+    });
+    headTestService.routingTest.mockRejectedValue(new Error('reranker unreachable'));
+    const run = await svc.runSuite('me', suite._key, {
+      carrier: CARRIER,
+      keys: { repo_set_hash: 'pool-hash', head_version_hash: 'heads-hash' }
+    });
+    // The boundary block reports the POPULATION: there WAS a boundary row,
+    // it was NOT measured, and the verdict must not read as a small
+    // boundary that held — a boundary row that was not measured is a scope
+    // question left unanswered.
+    expect(run.payload.summary.boundary).toEqual({ total: 1, evaluatable: 0, held: 0, breached: 0 });
+    expect(run.payload.summary.n_errors).toBe(1);
   });
 
   it('the boundary rows are counted apart from the routing rows', async () => {

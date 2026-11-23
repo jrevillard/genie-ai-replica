@@ -1388,7 +1388,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         sourceByPassage.set(key, d.metadata || {});
       }
     }
-    const entries = samples.slice(0, MAX_ENTRIES).map((s, i) => {
+    const stamped = samples.slice(0, MAX_ENTRIES).map((s, i) => {
       const passages = (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
         String(c).slice(0, CONTEXT_CHARS)
       );
@@ -1426,6 +1426,39 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         source: 'llm'
       };
     });
+    // #2061 phase 3 (E-7) + David (2026-11-23): the EVALUATION CONTEXT
+    // applies to the GENERATION. A question whose ground truth could not be
+    // tied to the corpus it was minted from is INVALID for a context-bound
+    // benchmark: its passages are not in the evaluated corpus, so the
+    // served retrieval cannot find them and the judge would score a
+    // context_recall of ~0 — a FAILURE that is an artefact of the corpus,
+    // not of the system. Such a question is NOT minted.
+    //
+    // Without a binding there is no context to apply and the behaviour is
+    // unchanged: the stamp is null ("not measured" is null, never a guess).
+    const unattributed = binding ? stamped.filter((e) => !e.source_repo_id) : [];
+    const entries = (binding ? stamped.filter((e) => e.source_repo_id) : stamped).map((e, i) => ({
+      ...e,
+      id: `new-${i + 1}`
+    }));
+    if (binding && unattributed.length) {
+      logger.warn('ragas-suite.generate.unattributed_questions', {
+        repo_id: repoId,
+        suite_key: opts.suiteKey,
+        discarded: unattributed.length,
+        kept: entries.length
+      });
+    }
+    if (binding && !entries.length) {
+      const err = new Error(
+        'every generated question could not be attributed to a repository in the evaluation context — ' +
+          "the corpus it was minted from does not match the context's repositories, so the benchmark " +
+          'would measure nothing. Re-mint after the corpus has drained, or widen the context.'
+      );
+      err.code = 'NO_ATTRIBUTABLE_QUESTIONS';
+      err.status = 409;
+      throw err;
+    }
     const repos = await Promise.all(repoIds.map((rid) => repositoryService.getById(rid, { authz: opts.authz })));
     const suiteDoc = {
       _key: opts.suiteKey,
@@ -2349,6 +2382,8 @@ function pairingFor(suite, repoId, opts = {}) {
 function pairingRefusal(pairingResult, suiteContext, runContext) {
   if (!pairingResult || pairingResult.status !== 'blocked') return null;
   const crossContext = pairingResult.reasons.includes('cross_context');
+  const evaporated = pairingResult.reasons.includes('pool_evaporated');
+  const poolSize = ((suiteContext && suiteContext.repos) || []).length;
   const err = new Error(
     crossContext
       ? `the benchmark suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
@@ -2357,7 +2392,13 @@ function pairingRefusal(pairingResult, suiteContext, runContext) {
           `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
           'A run may only serve the context it was minted for; a superadmin may record a deliberate ' +
           'cross-context experiment, and its result is then rendered as NOT comparable.'
-      : `the benchmark suite was minted for ${((suiteContext && suiteContext.repos) || []).length} repository(ies) and this ` +
+      : evaporated
+        ? `the benchmark suite was minted for ${poolSize} repository(ies) and only ` +
+          `${pairingResult.pool_coverage !== undefined ? Math.round(pairingResult.pool_coverage * 100) : '?'}% of them ` +
+          `are still in this run's carrier (missing: ${pairingResult.missing_pool.join(', ')}). ` +
+          'Past half the pool the run would serve a DIFFERENT corpus than the suite was minted for — ' +
+          'a number over it would answer a different question — so it is refused.'
+        : `the benchmark suite was minted for ${poolSize} repository(ies) and this ` +
           `run serves a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}).`
   );
   err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
@@ -2687,7 +2728,21 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // documented denominator).
     const inScopeIds = new Set(entries.filter((e) => e.oos).map((e) => e.id));
     const inScopeRows = results.filter((r) => r && !inScopeIds.has(r.id));
-    const erroredRows = inScopeRows.filter((r) => r.error).length;
+    // A row that was NOT ATTEMPTED is not a failure. A skipped row carries
+    // an `error` (that is how the row records its reason), but the pipeline
+    // never failed on it — it was never asked. Counting it as an error
+    // would file "the repository this question was minted from is not in
+    // the carrier" as the CAUSE of the run, which sends the operator to the
+    // wrong row: the run may have died of something else entirely, and the
+    // skipped rows are not that something.
+    const isFailure = (r) => Boolean(r && r.error) && r.error.code !== SKIPPED_DEPENDENCY_NOT_IN_CARRIER;
+    const erroredRows = inScopeRows.filter(isFailure).length;
+    // ...and the rows that were NOT ATTEMPTED. A run in which every
+    // in-scope row was skipped did not fail — it measured nothing, and the
+    // envelope must say THAT: "every answer failed" would point the
+    // operator at a pipeline that worked perfectly.
+    const skippedRows = inScopeRows.filter((r) => r.error && r.error.code === SKIPPED_DEPENDENCY_NOT_IN_CARRIER).length;
+    const nothingMeasured = inScopeRows.length > 0 && skippedRows === inScopeRows.length;
     const abstainedRows = inScopeRows.filter((r) => r && r.abstained).length;
     const answeredRows = inScopeRows.filter(isAnswered).length;
     // The dominant abstention reason, for the failed-run envelope — the
@@ -2720,7 +2775,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       // (2026-10-27: 50 refusals were judged and filed as a 0-score run).
       const abstentionOnly = abstainedRows > 0 && erroredRows === 0;
       const firstErr =
-        (results.find((r) => r.error && r.error.code !== 'SKIPPED_RUN_ABORTED') || {}).error ||
+        (
+          results.find(
+            (r) =>
+              r.error && r.error.code !== 'SKIPPED_RUN_ABORTED' && r.error.code !== SKIPPED_DEPENDENCY_NOT_IN_CARRIER
+          ) || {}
+        ).error ||
         (abstentionOnly
           ? {
               code: 'MASS_ABSTENTION',
@@ -2734,8 +2794,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
                 'not a benchmark result: fix the cause the reasons name, then run again.'
             }
           : {
-              code: 'ANSWER_LEG_FAILED',
-              message: 'every answer failed'
+              code: nothingMeasured ? 'NOTHING_MEASURED' : 'ANSWER_LEG_FAILED',
+              message: nothingMeasured
+                ? `none of the ${inScopeRows.length} in-scope rows could be measured — every one was ` +
+                  'not attempted because the repository it was minted from is not in the carrier. ' +
+                  'This is not a pipeline failure: refresh the context (or widen it) and run again.'
+                : 'every answer failed'
             });
       // Top-level `error` is the READ contract for failed runs — getRunSuite
       // strips a failed doc to {run_key, suite_key, status, error} and the
@@ -2948,6 +3012,8 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           reasons: pairingResult.reasons,
           missing_pool: pairingResult.missing_pool,
           carrier_grew: pairingResult.carrier_grew,
+          // The share of the suite's pool this run still measured over.
+          pool_coverage: pairingResult.pool_coverage === undefined ? null : pairingResult.pool_coverage,
           skipped_rows: pairingResult.skipped_rows.map((r) => ({
             id: r.id,
             query: (entries[r.index] || {}).query || null,

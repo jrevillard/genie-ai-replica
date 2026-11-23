@@ -616,3 +616,34 @@ The second round (F5–F12 in the phase-3 artifact) found eight more, all FIXED 
 - **The out-set formula in the artifact named the wrong set** — the code always implemented
   the intended semantics (`caller_traversable − context.resolved.repos`); only the formula
   was wrong. Corrected in the artifact; the code is unchanged.
+
+A third round found the one that mattered, and it changed a DESIGN, so the party
+panel ruled on it and David decided the one policy number in it:
+
+- **The skip tier was unreachable for the case it exists for.** `pair()` refused the
+  whole run when a pool repository left the carrier — and a row's dependency IS a pool
+  member by construction — so the row-level skip the module's own header promised
+  could never fire. **FIXED** per the panel's rule set and David's ruling (50% floor):
+  only the repository UNDER TEST being absent refuses a run; a pool that shrank skips
+  the rows that depend on what left, counts them, and stamps the run not comparable
+  with the share of the corpus it covered; past half the pool gone the run is refused
+  as a different experiment. A grown carrier and a shrunken one are now the same
+  tier.
+- **The context binds the GENERATION too (David).** An invalid suite or benchmark is
+  no longer generated: the prompt states the closed set, and a row citing anything
+  outside it — a competitor outside the carrier, a probe naming a repository the
+  scope does not exclude, a benchmark question whose ground truth is not in the
+  evaluated corpus — is discarded at mint time.
+- **The accounting caught up.** A not-attempted row is not a failed row (the failed
+  envelope says NOTHING MEASURED when every row was skipped), the boundary block
+  reports the population (a boundary row that was not measured is a scope question
+  left unanswered), and the summary carries `n_total` beside `n_queries`.
+- **The security review found no HIGH or MEDIUM finding** introduced by the diff;
+  its four candidates were refuted with file:line evidence, and its two carry-overs
+  (a pre-existing read-level wildcard that bypasses the per-repo fence, and the
+  phase-4 UI gap where a scope breach is not yet on the summary bar) are recorded in
+  the phase-3 artifact rather than smuggled into this MR.
+- **The decisions are documented where both audiences read them**: the phase-3
+  artifact carries the panel's verdicts, David's ruling, every finding and the
+  live-build evidence; `.claude/rules/TESTING-LAB-SCOPING.md` is the agent-facing rule
+  for the model (the tiers, the generation rules, and the traps).

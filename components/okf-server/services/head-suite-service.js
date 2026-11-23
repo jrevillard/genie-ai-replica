@@ -255,10 +255,10 @@ function suitePrompt(
       '\n'
     : '';
   const abstentionInstruction = nAbstention
-    ? `\n- ${nAbstention} ABSTENTION queries that look like they belong to the EXCLUDED\n  repositories above, but that this repository must NOT answer: the evaluated\n  scope does not include that content, so the correct behaviour is to ABSTAIN,\n  not to route it here. Leave "expected_repo" empty. 5-15 words each.`
+    ? `\n- ${nAbstention} ABSTENTION queries that look like they belong to the EXCLUDED\n  repositories above, but that this repository must NOT answer: the evaluated\n  scope does not include that content, so the correct behaviour is to ABSTAIN,\n  not to route it here. Set "out_repo" to the EXACT name of the EXCLUDED\n  repository the query is about (copied verbatim from that list) — a query\n  that is not about one of them measures nothing. Leave "expected_repo"\n  empty. 5-15 words each.`
     : '';
   const abstentionOutputField = nAbstention
-    ? '\n    "abstention": [ {"query": "...", "reason": "<one sentence>"} ],'
+    ? '\n    "abstention": [ {"query": "...", "out_repo": "...", "reason": "<one sentence>"} ],'
     : '';
   const forbiddenText = (fm.forbidden || []).join(', ') || '(none declared)';
   return `You are building a ROUTING TEST SUITE for one repository in a
@@ -288,6 +288,12 @@ Generate:
   (empty string if there are no competitors). 5-15 words each.${
     nConfusable ? '' : '\n  There are NO competing repositories — return an empty "negative" array.'
   }
+  CLOSED SET (CRITICAL — a name that is not in the COMPETING REPOSITORIES
+  list above is INVALID): "expected_repo" MUST be copied VERBATIM from that
+  list. A name you invent, or one from outside the list, is DISCARDED and
+  the row is never part of the suite — a negative that cites a competitor
+  which does not exist measures nothing, and a suite that carries one
+  reports a pass rate it never earned.
 - ${nNearMiss} NEAR-MISS queries (the hardest negatives): use THIS
   repository's own vocabulary and adjacent topics, but ask for something
   it does NOT cover — a different intent (treatment, medications,
@@ -619,6 +625,74 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       };
       const topicSeen = new Set();
       const takeTopics = (arr) => arr.filter((t) => !topicSeen.has(t) && topicSeen.add(t));
+
+      // #2061 phase 3 (E-7) + David (2026-11-23): the EVALUATION CONTEXT
+      // applies to the GENERATION, and an invalid row is NOT generated.
+      //
+      // The prompt lists the carrier's repositories as the CLOSED set of
+      // competitors and the excluded repositories as the CLOSED set of
+      // abstention probes. The model can still answer with a name from
+      // outside those sets — a rival that does not exist, or a repository
+      // the evaluated scope does not exclude. Such a row is INVALID: it
+      // cites a corpus the run will never score, so it can only ever be
+      // skipped or (worse) counted as a row that measured nothing. It is
+      // DISCARDED at mint time — before it becomes part of the suite — and
+      // the generation loop asks again for the shortfall, exactly like the
+      // uniqueness rule.
+      //
+      // Without a binding there is no context to apply: the suite is the
+      // deployment's, and the behaviour is unchanged.
+      const discarded = [];
+      const carrierNames = new Set(
+        siblings.map((s) =>
+          String((s && s.name) || '')
+            .trim()
+            .toLowerCase()
+        )
+      );
+      const outNames = new Set(
+        outSiblings.map((s) =>
+          String((s && s.name) || '')
+            .trim()
+            .toLowerCase()
+        )
+      );
+      const discard = (row, why) => {
+        discarded.push({
+          query: row && typeof row.query === 'string' ? row.query.trim().slice(0, 160) : null,
+          named: row && typeof row.expected_repo === 'string' ? row.expected_repo.trim() : null,
+          reason: why
+        });
+      };
+      /** A confusable is valid when it names NO rival or a rival in the carrier. */
+      const validConfusables = (rows) => {
+        if (!binding) return rows;
+        return (Array.isArray(rows) ? rows : []).filter((r) => {
+          const raw = typeof (r && r.expected_repo) === 'string' ? r.expected_repo.trim() : '';
+          // A negative that names NO competitor is still a valid negative:
+          // it asserts "the under-test must not claim this" and nothing more.
+          if (!raw) return true;
+          if (carrierNames.has(raw.toLowerCase())) return true;
+          discard(r, 'rival_not_in_context');
+          return false;
+        });
+      };
+      /**
+       * An abstention probe is valid when it names an EXCLUDED repository.
+       * A probe that names a repository the scope does NOT exclude is
+       * invalid: it claims a provenance the evaluated scope does not have,
+       * and it would "hold" for the wrong reason.
+       */
+      const validAbstentions = (rows) => {
+        if (!binding) return rows;
+        return (Array.isArray(rows) ? rows : []).filter((r) => {
+          const raw = typeof (r && r.out_repo) === 'string' ? r.out_repo.trim() : '';
+          if (!raw) return true; // unnamed: the provenance is the construction
+          if (outNames.has(raw.toLowerCase())) return true;
+          discard(r, 'probe_not_an_excluded_repository');
+          return false;
+        });
+      };
       const keywordsAdd = (arr) => {
         llm.keywords = [
           ...llm.keywords,
@@ -661,11 +735,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           llm.abstention.length;
         if (parsed) {
           llm.positive.push(...takeNew(parsed.positive, 'positive'));
-          llm.negative.push(...takeNew(parsed.negative, 'negative'));
+          llm.negative.push(...takeNew(validConfusables(parsed.negative), 'negative'));
           llm.near_miss.push(...takeNew(parsed.near_miss, 'near_miss'));
           llm.meta.push(...takeNew(parsed.meta, 'meta'));
           llm.off_domain.push(...takeNew(parsed.off_domain, 'off_domain'));
-          llm.abstention.push(...takeNew(parsed.abstention, 'abstention'));
+          llm.abstention.push(...takeNew(validAbstentions(parsed.abstention), 'abstention'));
           keywordsAdd(parsed.keywords);
         }
         const after =
@@ -752,6 +826,10 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
             source: 'llm',
             expected_repo: null,
             intended_carrier: 'out',
+            // The EXCLUDED repository the probe is about (the prompt asks
+            // for it; a model that does not name one leaves it null — the
+            // provenance is still the construction).
+            out_repo: typeof p.out_repo === 'string' ? p.out_repo.trim() : null,
             reason: p.reason || ''
           }))
       : [];
@@ -1885,13 +1963,18 @@ function pairingFor(suite, repoId, opts = {}) {
   const payload = (suite && suite.payload) || {};
   const suiteContext = payload.context || null;
   const runContext = carrier && carrier.context ? carrier.context : null;
+  // The rows the pairing indexes. The caller that will INDEX the skip
+  // positions passes the SAME array it hands here — the pairing's index is
+  // positional, so a caller that filtered its rows before pairing would
+  // skip the wrong row (a measurable one skipped, an unmeasurable one run).
+  const rows = Array.isArray(opts.rows) ? opts.rows : [...(payload.positive || []), ...(payload.negative || [])];
   const pairingResult = pairingService.pair({
     suiteContext,
     suiteRepoId: repoId,
     runContext,
     runCarrier: carrier,
     runKeys: opts.keys || null,
-    rows: [...(payload.positive || []), ...(payload.negative || [])],
+    rows,
     experiment: opts.experiment || null
   });
   return {
@@ -1907,6 +1990,8 @@ function pairingFor(suite, repoId, opts = {}) {
 function pairingRefusal(pairingResult, suiteContext, runContext) {
   if (!pairingResult || pairingResult.status !== 'blocked') return null;
   const crossContext = pairingResult.reasons.includes('cross_context');
+  const evaporated = pairingResult.reasons.includes('pool_evaporated');
+  const poolSize = ((suiteContext && suiteContext.repos) || []).length;
   const err = new Error(
     crossContext
       ? `the suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
@@ -1916,7 +2001,14 @@ function pairingRefusal(pairingResult, suiteContext, runContext) {
           'A run may only measure the context it was minted for; a superadmin may record a ' +
           'deliberate cross-context experiment (allow_cross_context + a reason), and its result ' +
           'is then rendered as NOT comparable.'
-      : `the suite was minted for ${((suiteContext && suiteContext.repos) || []).length} repository(ies) and this run ` +
+      : evaporated
+        ? `the suite was minted for ${poolSize} repository(ies) and only ` +
+          `${pairingResult.pool_coverage !== undefined ? Math.round(pairingResult.pool_coverage * 100) : '?'}% of them ` +
+          `are still in this run's carrier (missing: ${pairingResult.missing_pool.join(', ')}). ` +
+          'Past half the pool the run would measure a DIFFERENT corpus than the suite was minted ' +
+          'for — a number over it would answer a different question — so it is refused. Refresh the ' +
+          'context, or mint the suite again against the carrier as it stands.'
+        : `the suite was minted for ${poolSize} repository(ies) and this run ` +
           `measures over a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}). ` +
           'The run would score a corpus the suite was never minted against, so it is refused.'
   );
@@ -1954,7 +2046,18 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // (or not); this run measures over a carrier (or not). The pairing says
     // whether the two are about the same thing — and refuses when they are
     // not, rather than scoring a corpus the suite never saw.
-    const { carrier, suiteContext, runContext, pairingResult, refusal } = pairingFor(suite, repoId, opts);
+    //
+    // The rows are built BEFORE the pairing and handed to it, so the
+    // pairing's positional skip index is the index into the SAME array this
+    // run filters.
+    const allRows = [
+      ...suite.payload.positive.map((q) => ({ ...q })),
+      ...suite.payload.negative.map((q) => ({ ...q }))
+    ];
+    const { carrier, suiteContext, runContext, pairingResult, refusal } = pairingFor(suite, repoId, {
+      ...opts,
+      rows: allRows
+    });
     if (refusal) throw refusal;
     // The rows whose dependency left the carrier: they cannot be scored, so
     // they are skipped — counted, with a reason, never silently dropped.
@@ -1972,10 +2075,6 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // set IS the scoring set and not merely one that happened to be in
     // force while the run went on.
     const knobs = routeKnobs();
-    const allRows = [
-      ...suite.payload.positive.map((q) => ({ ...q })),
-      ...suite.payload.negative.map((q) => ({ ...q }))
-    ];
     // The skipped rows are NOT run — the summary says how many, and the
     // pairing block names each one and why.
     const all = allRows.filter((_, i) => !skippedIndexes.has(i));
@@ -2204,6 +2303,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
           missing_pool: pairingResult.missing_pool,
           carrier_grew: pairingResult.carrier_grew,
           skipped_rows: skippedRows,
+          // The share of the suite's pool this run still measured over —
+          // the operator reads it beside the coverage ("88 of 100 rows, over
+          // 92% of the original corpus").
+          pool_coverage: pairingResult.pool_coverage === undefined ? null : pairingResult.pool_coverage,
           suite_context_id: suiteContext ? suiteContext.id : null,
           suite_context_version: suiteContext ? suiteContext.version : null,
           run_context_id: runContext ? runContext.id : null,
@@ -2691,7 +2794,15 @@ function summarizeRun(results, ctx = {}) {
   // this"), not a routing preference, so they are counted apart from the
   // routing negatives: a scope breach must never flatter (or ruin) the
   // routing pass rate.
-  const boundaryRows = done.filter((r) => r.intended_carrier === 'out');
+  //
+  // The boundary block reports the POPULATION — every boundary row in this
+  // run's scope, including one whose routing leg ERRORED. A boundary row
+  // that was not measured is a scope question left unanswered, and that is
+  // exactly what this verdict exists to surface: `total` says how many
+  // there were, `evaluatable` how many were actually judged, and
+  // total − evaluatable is the hole. (The routing buckets keep the
+  // summary's long-standing convention of counting the EVALUATED rows.)
+  const boundaryRows = results.filter((r) => r && r.intended_carrier === 'out');
   const routingNegatives = negatives.filter((r) => r.intended_carrier !== 'out');
   // The UNIVERSE the score was measured over: every head that competed,
   // not the truncated display list. `loadSiblings` returns every
@@ -2717,7 +2828,9 @@ function summarizeRun(results, ctx = {}) {
   // the repository under test did NOT claim it — the evaluated scope held.
   // It is BREACHED when it did: the group saw content it must not. This is
   // the evidence phase 2 did not have.
-  const boundaryEvaluable = boundaryRows.filter((r) => r.head_claimed !== null || (r.sibling_count || 0) > 0);
+  const boundaryEvaluable = boundaryRows.filter(
+    (r) => !r.error && (r.head_claimed !== null || (r.sibling_count || 0) > 0)
+  );
   const boundaryHeld = boundaryEvaluable.filter(underTestSilent).length;
   const boundaryBreached = boundaryEvaluable.length - boundaryHeld;
   // ... and a repository OTHER than the one it was meant for claimed it
@@ -2763,6 +2876,11 @@ function summarizeRun(results, ctx = {}) {
     // The rows that were skipped — they were NOT run, and they are not in
     // n_queries. "Not measured" is never a zero.
     n_skipped: Number(ctx.skipped) || 0,
+    // The POPULATION: every row this suite offered the run, measured or
+    // not. A reader who sees n_queries alone has been told a smaller
+    // experiment than the one that ran — "18 of 20 rows" is the honest
+    // sentence, and n_total is the 20.
+    n_total: results.length + (Number(ctx.skipped) || 0),
     n_errors: results.length - done.length,
     sibling_count: siblingCount,
     positive_total: positives.length,

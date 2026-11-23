@@ -66,13 +66,90 @@ The suite is bound to a context snapshot; the run happens under a carrier. The t
 
 | tier | condition | behaviour |
 |---|---|---|
-| **block** | the under-test repository, or the suite's pool, is not in the run's carrier | the run is REFUSED (409) — it cannot measure what the suite was minted for |
+| **block** | the **under-test repository** is not in the run's carrier | the run is REFUSED (409) — the subject of the measurement is absent, so there is no measurement |
+| **block** | **more than half the suite's pool** is gone from the carrier (`pool_evaporated`) | the run is REFUSED (409) — past the floor it is a DIFFERENT experiment, not the same one with holes |
 | **skip-with-reason** | a row's rival/source repository left the carrier | that ROW is skipped, counted in the coverage, never silent |
-| **flag-only** | the carrier GREW (the run's carrier has repositories the suite never saw) | the run proceeds, flagged: the extra repositories were not evaluated |
+| **flag-only** | the carrier GREW (it has repositories the suite never saw) **or SHRANK** (the suite's pool no longer holds) | the run proceeds, flagged `comparable: false`: the corpus was not the one the suite was minted for |
+
+**This table was CORRECTED on 2026-11-23** (the party panel's ruling, below). It
+first read "block: the under-test repository, **or the suite's pool**, is not in the
+run's carrier" — and the code implemented exactly that. The two rules then
+CONTRADICTED each other for the same event: a row's dependency IS a pool member by
+construction (a confusable's rival is minted from the carrier's repositories; a
+benchmark question's source repository is the corpus it was minted from), so the
+pool check fired FIRST and the **skip tier was dead code for its stated purpose**.
+The code was resolving the contradiction silently, and in the direction that threw
+the whole measurement away.
+
+The corrected rule set, in one sentence — the operator-facing form:
+
+> **A question is measured only if the repository it depends on is in the context. A
+> question whose repository is missing is not measured — it is counted as *not
+> measured*, with the reason. If the repository under test itself is missing, the run
+> is refused.**
 
 Cross-context execution is **blocked by default**. A superadmin lifts it with a run-request flag
 (`allow_cross_context` + a reason): the run writes an audit record, stamps itself
 `comparable: false`, and the UI renders it as a recorded experiment. **No new collection.**
+
+### The party panel's ruling (2026-11-23) — and David's decision
+
+The review round found the dead skip tier (finding F13). The fix is a DESIGN
+change, so the panel was convened (Winston architect, Mary analyst, Amelia dev,
+John PM) and one policy number was put to David.
+
+**What the panel settled** (its four verdicts, condensed):
+
+- **Winston (architect)** — "the code contradicts the design, and the design's block
+  row is the half that is wrong." The tier boundary belongs between the **subject**
+  of the measurement and the **context** of the measurement: without the
+  under-test there is no measurement (BLOCK); a shrunken pool means the run
+  measures a smaller world than the suite assumed — the same epistemic class as a
+  grown carrier, which the code already refuses to block on. "Blocking on shrink
+  while flagging on grow is incoherent." The pool check stops being a block; the
+  skip tier moves BEFORE the pool decision; a floor replaces the blanket block.
+- **Mary (analyst)** — today the operator gets a 409 and **no number at all**, and
+  the loss is invisible in the run history (no run doc is written, because the gate
+  asks before the doc exists). Under the corrected rule the operator gets "your run
+  scored 88 of 100 questions; 12 were not measured because repository X is not in
+  this context's corpus; the number is not comparable with your previous runs" — one
+  sentence, one number, one named cause. A refusal is not in the history; a
+  non-comparable run that exists is.
+- **Amelia (dev)** — the change is one service restructure, one summary
+  denominator, one envelope exclusion, one test rewrite, one doc row. The test
+  that encoded the old behaviour (titled "a row's dependency that left the carrier
+  is SKIPPED with a reason" while asserting `blocked`) is **rewritten, not deleted**.
+- **John (PM)** — the cheapest honest rule to explain to a curator is the one
+  sentence above; it has exactly one special case (the subject), which is why it
+  survives contact with the operator.
+
+**The one question that needed David — the evaporation floor.** Below the floor, the
+run is the same corpus with holes (scored, coverage says so, marked not
+comparable); above it, the operator is reading a different experiment and needs to
+be told, not scored. **David's answer (2026-11-23): 50% — refuse above half
+gone.** The panel's recommendation, taken as offered.
+
+### The generation is inside the context too (David, 2026-11-23)
+
+> "the prompts used for building the test suites MUST ensure that invalid suites and
+> RAGAS benchmarks are NOT generated in the first place" … "the evaluation context
+> must also apply to generations"
+
+The context's scope is not only a RUN-time fence: it bounds what may be MINTED.
+An invalid row is never generated — it is discarded at mint time, and the
+generation loop asks again for the shortfall (the same rule the prompt already
+states for duplicated queries).
+
+| leg | the invalid row | what happens to it |
+|---|---|---|
+| head suite | a confusable naming a repository OUTSIDE the carrier | DISCARDED at mint time; the loop asks again |
+| head suite | an abstention probe naming a repository the scope does NOT exclude | DISCARDED at mint time |
+| RAGAS | a question whose ground truth cannot be attributed to a context repository | DISCARDED at mint time; `NO_ATTRIBUTABLE_QUESTIONS` if that empties the suite |
+
+The prompt states the closed set and the consequence ("a name you invent … is
+DISCARDED"), so the model is told the rule it is being held to. The corpus is
+already the carrier's, so the RAGAS leg's context reaches the generator through
+the documents it is given.
 
 ### Migration
 
@@ -391,6 +468,162 @@ the caller. The code never implemented it: `bindingFor` computes
 `caller_traversable − context.resolved.repos`, which is the intended semantics ("what the
 caller may read but the context does not name"). The formula, not the code, was wrong; the
 formula above is corrected and the code is unchanged.
+
+### The third review round (2026-11-23) — the findings the second round's fixes exposed
+
+A `/code-review` (high) of the full diff, run over the phase-3 branch after the
+second round's fixes. Four findings; every one ends FIXED.
+
+**F13 — CRITICAL — "the skip tier is unreachable for the exact scenario it exists
+for" — FIXED (the party panel's rule set; David ruled on the floor).** `pair()`
+computed the pool check FIRST and returned `blocked` before the skip tier was ever
+computed. A row's dependency IS a pool member by construction — a confusable's
+rival is minted from the carrier's repositories, a benchmark question's source
+repository is the corpus it was minted from — so the moment such a dependency left
+the carrier, the whole run was REFUSED instead of that one row being skipped. The
+skip tier could only fire for a dependency that was never in the pool, which in
+this phase's flow never happens. The module's own header promised a guarantee the
+code did not make ("a suite that quietly loses its hardest negatives is a suite
+that reports a better pass rate than it earned"). The reviewer reproduced it
+against the real service: a RAGAS row whose source repository left the carrier
+returned `{status: "blocked", reasons: ["pool_not_in_carrier"], skipped: []}`.
+**FIXED** per the panel's rule set above (the subject blocks; the pool shrinks →
+flag + skip; the floor refuses a different experiment). RED proof: the four tests
+that encoded the old behaviour failed against the new code, and the two new tier
+tests (the shrink and the floor) fail against the old code.
+
+**F14 — IMPORTANT — "a never-attempted skipped row is counted as an error in the
+failed-run envelope" — FIXED.** `erroredRows` counted every row carrying an
+`error`, and a skipped row carries one (that is how it records its reason), so a
+run whose rows were skipped filed "the repository this question was minted from is
+not in the carrier" as the CAUSE of the run — sending the operator to a row that
+was never attempted while the real cause went unnamed. The adjacent `firstErr`
+search already excluded `SKIPPED_RUN_ABORTED`; the dependency-skip code was simply
+never added to the same exclusion. **FIXED:** the skipped rows are excluded from
+the error count and from the cause search, and a run in which EVERY in-scope row
+was skipped now reports `NOTHING_MEASURED` — "every answer failed" would point at
+a pipeline that worked perfectly. RED proof: with the exclusion neutralised the
+new test fails (the envelope names the skip code instead).
+
+**F15 — MINOR — "the boundary metric's total hides boundary rows that errored" —
+FIXED.** `boundary.total` was computed over the rows that did NOT error, so a
+suite with ten boundary rows of which three errored reported `total: 7` — reading
+as "the suite had seven boundary rows". The verdict itself was honest (a
+never-evaluated row cannot be counted as held); the DENOMINATOR was not. **FIXED:**
+the boundary block reports the POPULATION (`total` = the boundary rows in the
+run's scope, `evaluatable` = the ones judged), and the difference is the hole.
+
+**F16 — "the generation must not produce an invalid suite or benchmark" (David,
+2026-11-23) — FIXED.** The context's scope was a RUN-time fence only: a
+generation could still mint a confusable citing a repository outside the carrier,
+an abstention probe claiming a provenance the scope does not have, or a benchmark
+question whose ground truth was not in the evaluated corpus. Such a row cannot
+ever be scored — it would either be skipped at run time or, worse, counted as a
+row that measured nothing. **FIXED** at the mint (see the generation table above):
+the invalid row is discarded before it becomes part of the suite, the prompt
+states the closed set and the consequence, and the generation loop asks again for
+the shortfall. RED proof: with the validation neutralised, the two new generation
+tests fail (7 pass / 2 fail).
+
+**The risks the review raised that were NOT defects, and why.** The pairing gate is
+computed identically at both call sites (`beginRunSuite` and `runSuite` both ask
+the same helper), so the record and the gate cannot drift. Both comparison hashes
+are over the measured set. The progress denominator covers every question in the
+run's scope, so the bar cannot pass 100%. The completeness sweep excludes the
+skipped rows, so a skipped row is never retried and never answered. The rebind
+cannot double-bind, and it can only target a context whose PERSISTED inputs
+resolve as open. The experiment gate is superadmin-gated, requires a reason, and is
+audited. The supersede modelling mirrors the retriever's own selection.
+
+**One risk the review raised that WAS a defect, and is now closed:** the pairing's
+skip index is POSITIONAL — the position in the array the caller passed. The head
+suite built that array twice (once for the pairing, once for the run), so an
+off-by-one would have skipped a measurable row and run an unmeasurable one. The
+array is now built ONCE and handed to the pairing, so the index cannot drift.
+
+### The security review of the final diff (2026-11-23)
+
+A `/security-review` of the full diff (and of the working tree on top of it).
+**No HIGH or MEDIUM security finding is introduced by this diff.** Four candidates
+were raised and each was refuted with file:line evidence — the dispositions, so
+none of them is silently dropped:
+
+- **"the new persisted `payload.context.repos` discloses ACL-restricted repository
+  identity" — FALSE POSITIVE (justified).** The split-brain that makes it
+  reachable (`deriveScopeAuthz` treats ANY wildcard repo segment as privileged) is
+  real and pre-existing, but the SAME disclosure already exists on `main` and is
+  strictly broader: main's `loadSiblingContext` scans every repository with a head
+  with no ACL or serving filter and persists `sibling_names` at read scope. This
+  diff **reduces** the leak (the staleness refusal withholds the repositories the
+  caller may not traverse). No shipped tooling mints `okf:*:*:read` — the realm
+  config and the grant facility emit only `okf:*:*:admin` or per-repo scopes — and
+  a holder of such a scope is blocked from minting, binding and the context
+  catalogue.
+- **"a scope breach is invisible to `pass_rate`" — NOT A SECURITY FINDING; a
+  PHASE-4 UI GAP, recorded.** The boundary rows are deliberately outside the
+  routing pass rate (a scope breach must never flatter or ruin the routing
+  number), and the breach lands in `summary.boundary.breached` — which no frontend
+  binds yet. The Lab UI wave (phase 4) must surface it, so a 100% headline can
+  never sit beside a breach.
+- **"a skipped row is counted as a failed row (RAGAS)" — FIXED** in this change
+  (F14 above), and even before the fix it had no authorization effect: the failed
+  path writes `summary: null`, so no score was claimed.
+- **"the repo-agnostic passage key can collide across repositories" — FALSE
+  POSITIVE (justified).** The stamp has exactly one functional consumer (the skip
+  tier), the corpus read is scoped by the carrier's graphs and never by the
+  stamp, and no content outside the carrier can be read through it.
+
+**Checked and clean:** both superadmin powers (the `tools-admin` realm role or a
+wildcard **admin** scope only — strictly narrower than the read-side authority,
+one call site each, both behind the repo's admin scope); the carrier boundary
+(the narrowing refuses an empty intersection, the head race and the served
+retrieval are both bounded by the carrier); the `out_set` (derived from the
+caller's own authority and never persisted to any document); no injection (every
+new AQL uses bind parameters, the group references are URI-escaped, no shell, exec
+or filesystem surface in the diff).
+
+### Two carry-overs, filed rather than fixed here
+
+- **The read-level wildcard bypasses the per-repo fence (PRE-EXISTING, not
+  introduced by this diff).** `scope-authz-service.js` treats `okf:*:*:read` as
+  unrestricted, which contradicts the codebase's own `isSuperadminCaller`
+  predicate and bypasses `acl.restricted` for a READ-level wildcard. The file is
+  untouched by this change; the fix belongs in the authority layer, and it is
+  filed as a backlog issue rather than smuggled into a scoped-evaluation MR.
+- **The boundary breach must be visible in the UI (PHASE 4).** Recorded above —
+  the summary bar has to carry `summary.boundary.breached`, or a 100% routing
+  headline can sit beside a scope breach.
+
+### The live build (2026-11-23) — the phase's visible delta
+
+The phase was deployed to the local build BEFORE the merge, against the
+group-scoped fixture (two fenced repositories, two groups, four principals — the
+verifier reports 12 / 13 / 13 / 14 traversable graphs for the control, the two
+group holders and the union).
+
+**What the running service did.** A context naming one group was created
+(superadmin), it resolved to **13 repositories** (the group's set), and a suite
+was minted FOR it. The suite carried the context snapshot, and its rows carried
+their provenance: **16 `in` rows and 2 `out` rows** — the two abstention probes
+asked about the EXCLUDED repository (the other group's fence), exactly as the
+design says. The run was paired with the same context:
+
+```
+pairing:  status ok · comparable true · reasons [] · missing_pool [] · carrier_grew []
+          suite_context_id == run_context_id   (the SAME context)
+          repo_set_hash 85c0176aff03691b2d989cc2be42256c
+          head_version_hash 0f6a63b8b18f8cd34320576f9c04f7d5
+          experiment null
+summary:  n_queries 18 · n_skipped 0 · n_errors 0
+          positive 4 (pass rate 0.75) · routing negatives 12 (pass rate 0.83)
+          boundary { total 2, evaluatable 2, held 2, breached 0 }
+          pass_rate 0.8125
+```
+
+**`held: 2, breached: 0`** is the evidence a scoped evaluation exists to produce:
+the group's scope held — the repository under test did not claim either query
+about the excluded repository. The run was measured over the carrier's **13**
+repositories, and the pairing says so.
 
 ### The T7 ruling — the site page rides phase 4 (2026-11-23)
 

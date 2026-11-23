@@ -179,6 +179,68 @@ describe('#2061 phase 3 (E-7): the suite is minted FOR a context', () => {
     expect(prompt).toContain('Solar System');
   });
 
+  it('a confusable that names a repository OUTSIDE the carrier is NOT minted', async () => {
+    // The model answered with a rival that is not in the evaluated scope —
+    // the EXCLUDED repository. Such a row cites a corpus the run will never
+    // score, so it is discarded at MINT time: it is never generated into
+    // the suite. (A suite carrying it would report a pass rate it never
+    // earned.)
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [{ query: 'breast cancer screening age recommendations', reason: 'topic hit' }],
+        negative: [
+          { query: 'hospital bed capacity statistics', expected_repo: 'Kenya Services', reason: 'sibling' },
+          { query: 'solar system exploration missions', expected_repo: 'Solar System', reason: 'outside the scope' }
+        ],
+        keywords: ['screening']
+      })
+    );
+    const suite = await svc.generateSuite(
+      'me',
+      { n_positive: 2, n_negative: 2 },
+      { actor: { user_id: 'u1' }, binding: BINDING }
+    );
+    const confusables = suite.payload.negative.filter((q) => q.cls === 'confusable');
+    // Only the rival that IS in the carrier survived.
+    expect(confusables).toHaveLength(1);
+    expect(confusables[0].expected_repo).toBe('Kenya Services');
+    expect(suite.payload.negative.some((q) => q.query === 'solar system exploration missions')).toBe(false);
+  });
+
+  it('an abstention probe that names a repository the scope does NOT exclude is NOT minted', async () => {
+    // The probe claims to be about an excluded repository but names one
+    // that is INSIDE the evaluated scope: it would "hold" for the wrong
+    // reason, so it is discarded at mint time.
+    frontmatterService.vllmChatCompletions.mockResolvedValue(
+      llmResponse({
+        positive: [{ query: 'breast cancer screening age recommendations', reason: 'topic hit' }],
+        negative: [],
+        abstention: [
+          { query: 'hospital bed capacity statistics', out_repo: 'Kenya Services', reason: 'not excluded' },
+          { query: 'how far is the moon from earth', out_repo: 'Solar System', reason: 'excluded' }
+        ],
+        keywords: ['screening']
+      })
+    );
+    const suite = await svc.generateSuite(
+      'me',
+      { n_positive: 2, n_negative: 2 },
+      { actor: { user_id: 'u1' }, binding: BINDING }
+    );
+    const abstentions = suite.payload.negative.filter((q) => q.cls === 'abstention');
+    expect(abstentions).toHaveLength(1);
+    expect(abstentions[0].out_repo).toBe('Solar System');
+  });
+
+  it('the prompt states the CLOSED set — the model is told what happens to a name outside it', async () => {
+    await svc.generateSuite('me', { n_positive: 2, n_negative: 2 }, { actor: { user_id: 'u1' }, binding: BINDING });
+    const prompt = frontmatterService.vllmChatCompletions.mock.calls[0][0][0].content;
+    // The prompt is part of the contract: the competing set is closed, and
+    // the consequence of naming outside it is stated.
+    expect(prompt).toContain('CLOSED SET');
+    expect(prompt).toContain('DISCARDED');
+  });
+
   it('every row carries its intended_carrier stamp', async () => {
     const suite = await svc.generateSuite(
       'me',

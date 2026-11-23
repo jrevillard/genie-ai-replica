@@ -10,6 +10,55 @@ change requires manual action from deployers.
 
 ### Breaking Changes
 
+#### Keycloak moves to 26.8.2 — the runtime fix for CVE-2026-114938 ("Java4Shell")
+
+The Keycloak the stack runs shipped a Java runtime affected by
+CVE-2026-114938: a memory-corruption bug in OpenJDK's accelerated Base64
+decoder, demonstrated as a **pre-authentication remote code execution against
+Keycloak** — a malformed Base64 value is decoded on requests that arrive
+*BEFORE* authentication, so the login page does not protect an affected
+instance. The stack now runs `quay.io/keycloak/keycloak:26.8.2`, whose Red Hat
+OpenJDK 21.0.13.1 carries the fix.
+
+**Migration — Compose.** The image tag changed, and `docker compose up -d`
+alone is NOT enough: compose's default pull policy (`missing`) keeps an image
+it already has, and between 2026-11-05 and 2026-11-19 the `26.8.2` tag pointed
+at the vulnerable builds (`26.8.2-1` / `26.8.2-2`). A host that pulled the tag
+inside that window keeps the vulnerable runtime until it re-pulls:
+
+```bash
+docker compose pull keycloak
+docker compose up -d keycloak
+```
+
+**Migration — Kubernetes.** The server image follows the Keycloak operator.
+The chart's `Keycloak` CR now states the image explicitly, but the operator
+must be at the matching version — re-run the operator installer on every
+cluster:
+
+```bash
+./scripts/install-prereqs.sh
+```
+
+then confirm the server picked up the new image and runtime:
+
+```bash
+kubectl -n genieai get statefulset keycloak -o jsonpath='{.spec.template.spec.containers[0].image}'
+kubectl -n genieai exec keycloak-0 -c keycloak -- java -version   # expect 21.0.13.1
+```
+
+A node that pulled the `26.8.2` tag inside the 2026-11-05 → 2026-11-19 window
+keeps the vulnerable image under the operator's `IfNotPresent` pull policy —
+re-pull it on that node.
+
+**The realm import changed with it.** Keycloak 26.8.2 checks the audience of
+an Admin REST API token: the token must carry the `kc-admin-api` client scope
+(its mapper puts the realm's Admin API URL in `aud`), which upstream assigns
+to the built-in `admin-cli` / `security-admin-console` only. The stack's own
+service client (`genie-proxy-client`) now carries that scope, so the import
+applies it — the backend's user/role administration and the OKF access
+facility keep working. Without it, every Admin API call answers 401.
+
 #### Image tag variable renamed: `GENIE_AI_GLOBAL_TAG` / `genie_ai_global_tag` → `GENIE_AI_IMAGE_TAG` / `genie_ai_image_tag`
 
 The variable that carries the stack's version was named differently in every
@@ -226,7 +275,7 @@ the site comes up without any branding.
 
 #### Keycloak is no longer a GENIE.AI image
 
-The stack runs `quay.io/keycloak/keycloak:26.8.2` straight from upstream —
+The stack runs `quay.io/keycloak/keycloak:26.7.0` straight from upstream —
 15 GENIE.AI images instead of 16.
 
 **Migration (air-gapped)**: mirror the upstream Keycloak image in addition to

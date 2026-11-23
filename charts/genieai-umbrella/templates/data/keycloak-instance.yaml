@@ -42,6 +42,15 @@ spec:
     user:
       secret: {{ $kcBootstrap.userSecret | default "keycloak-admin-credentials" }}
   instances: {{ $instances }}
+  # The server image (data.keycloak.image). Stated here rather than left
+  # to the operator's default (RELATED_IMAGE_KEYCLOAK): the CR is what
+  # the cluster runs, and 26.8.2 is the release whose Red Hat OpenJDK
+  # 21.0.13.1 fixes CVE-2026-114938 — the accelerated Base64 decoder's
+  # memory corruption, demonstrated as a pre-auth RCE against Keycloak.
+  # The tag moves upstream (always towards a newer, more patched build);
+  # a node that pulled it inside the 2026-11-05 → 2026-11-19 window
+  # holds the vulnerable build until it re-pulls.
+  image: {{ $kc.image | default "quay.io/keycloak/keycloak:26.8.2" }}
   # The pull credentials for the Keycloak StatefulSet. The OPERATOR owns
   # that StatefulSet, so the chart cannot write its pod spec directly —
   # and the podTemplate is NOT the way either: the operator overwrites

@@ -18,9 +18,9 @@
 # Operators installed:
 #   - keycloak-operator 26.8.2   (namespace keycloak-system; Kustomize install of the official modern Quarkus-based operator; 4 CRDs in k8s.keycloak.org group)
 #   - cloudnative-pg 0.22.0      (namespace cnpg-system)
-#   - kube-arangodb 1.4.5        (namespace arango-system)
+#   - kube-arangodb 1.4.7        (namespace arango-system)
 #   - sealed-secrets 0.40.0      (namespace sealed-secrets; for the deploy repo's overlays — the chart renders no SealedSecret)
-#   - cert-manager v1.18.2       (namespace cert-manager; required by the otel-operator webhooks)
+#   - cert-manager v1.21.3       (namespace cert-manager; required by the otel-operator webhooks)
 #   - victoria-metrics-operator 0.68.1 (namespace vmoperator-system; reconciles the
 #     chart's VLSingle/VMSingle/VTSingle/VMServiceScrape CRs — the log tier is on by default)
 #   - opentelemetry-operator 0.126.0  (namespace opentelemetry-operator-system; reconciles the

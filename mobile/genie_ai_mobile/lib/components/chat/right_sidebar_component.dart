@@ -16,6 +16,7 @@ import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_modal.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_spinner.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/utils/okf_citation.dart';
@@ -51,12 +52,6 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   /// The concepts whose open is in flight — their card shows the spinner and
   /// a second tap on them is ignored.
   final Set<String> _openingConcepts = <String>{};
-
-  /// The longest concept body the modal renders. A concept may carry up to
-  /// the deployment's ceiling (~250 000 characters) and flutter_markdown
-  /// builds a document eagerly: rendering all of it on a phone freezes the UI
-  /// thread. The preview says when it stops short.
-  static const int _maxRenderedConceptChars = 20000;
 
   @override
   void initState() {
@@ -401,23 +396,19 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     // One fetch per concept at a time: a second tap while the first is in
     // flight would open a second modal on top of the first. The key carries
     // the repository — the same concept id can live in two of them.
-    final String openKey = okfConceptOpenKey(doc);
+    final String openKey = conceptRef.openKey;
     if (_openingConcepts.contains(openKey)) return;
 
     setState(() => _openingConcepts.add(openKey));
     final service = ref.read(okfConceptServiceProvider);
     try {
-      String repoId = conceptRef.repoId;
-      if (!conceptRef.hasRepoId) {
-        repoId = await service.resolveRepoId(conceptRef.conceptId) ?? '';
-        if (repoId.isEmpty) {
-          if (!mounted) return;
-          _showNotice(tr('sidebar.okfSourceUnavailable'));
-          return;
-        }
-      }
-
-      final concept = await service.fetchConcept(repoId, conceptRef.conceptId);
+      // The service owns the whole open: it resolves the repository when the
+      // citation lost that identity, and it bounds the body the renderer
+      // shows. Null = the concept cannot be served.
+      final concept = await service.openConcept(
+        conceptRef.repoId,
+        conceptRef.conceptId,
+      );
       if (concept == null) {
         if (!mounted) return;
         _showNotice(tr('sidebar.okfSourceUnavailable'));
@@ -426,12 +417,6 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       if (!mounted) return;
 
       final tokens = ThemeManager().tokens;
-      // The rendered body is bounded: flutter_markdown builds the whole
-      // document eagerly, and a concept may carry up to the deployment's
-      // ceiling (~250 000 characters) — rendering all of it on a phone
-      // freezes the UI thread. The preview says so when it truncates.
-      final bool truncated = concept.body.length > _maxRenderedConceptChars;
-      final String body = _boundedPreview(concept.body, truncated);
       await DsModal.show<void>(
         context: context,
         title: concept.title,
@@ -441,16 +426,10 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
           mainAxisSize: MainAxisSize.min,
           children: [
             MarkdownBody(
-              data: body,
-              styleSheet: MarkdownStyleSheet(
-                p: TextStyle(
-                  fontSize: tokens.textSm,
-                  color: tokens.fg70,
-                  height: 1.4,
-                ),
-              ),
+              data: concept.body,
+              styleSheet: _markdownStyle(tokens),
             ),
-            if (truncated) ...[
+            if (concept.truncated) ...[
               const SizedBox(height: DsSpacing.sm),
               Text(
                 tr('sidebar.okfConceptTruncated'),
@@ -475,24 +454,12 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     }
   }
 
-  /// The body the modal renders: the concept's markdown, cut to the render
-  /// bound when it is longer.
-  ///
-  /// The cut lands on a UTF-16 code unit, so it can split an astral
-  /// character (an emoji) in half: a lone surrogate makes the renderer throw
-  /// "string is not well-formed UTF-16" while it lays the text out. A
-  /// trailing high surrogate is dropped, which costs one character and keeps
-  /// the text well-formed.
-  static String _boundedPreview(String body, bool truncated) {
-    if (!truncated) return body;
-    String preview = body.substring(0, _maxRenderedConceptChars);
-    if (preview.isNotEmpty) {
-      final int last = preview.codeUnitAt(preview.length - 1);
-      if (last >= 0xD800 && last <= 0xDBFF) {
-        preview = preview.substring(0, preview.length - 1);
-      }
-    }
-    return preview;
+  /// The markdown style the sidebar renders prose with — the concept body
+  /// and the FAQ answer read the same.
+  static MarkdownStyleSheet _markdownStyle(AppTokens tokens) {
+    return MarkdownStyleSheet(
+      p: TextStyle(fontSize: tokens.textSm, color: tokens.fg70, height: 1.4),
+    );
   }
 
   /// A one-line notice in the interface language.
@@ -756,9 +723,8 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
         "";
     // A concept whose open is in flight shows the spinner in place of its
     // icon — the sidebar's own idiom for "loading" (the FAQ does the same).
-    final String openKey = okfConceptOpenKey(doc);
-    final bool isOpening =
-        openKey.isNotEmpty && _openingConcepts.contains(openKey);
+    final String openKey = okfConceptRef(doc)?.openKey ?? '';
+    final bool isOpening = _openingConcepts.contains(openKey);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: DsSpacing.md),
@@ -778,14 +744,7 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (isOpening)
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: tokens.accent,
-                      ),
-                    )
+                    const DsSpinner(size: DsSpinnerSize.sm)
                   else
                     Icon(_getDocumentIcon(doc), size: 20, color: tokens.accent),
                   const SizedBox(width: 10),

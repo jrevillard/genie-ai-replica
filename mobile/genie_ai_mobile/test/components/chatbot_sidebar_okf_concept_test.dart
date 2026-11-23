@@ -10,6 +10,7 @@ import 'package:genie_ai_mobile/services/okf_concept_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../helpers/pump_frames.dart';
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
 
@@ -17,6 +18,36 @@ import '../helpers/theme_helper.dart';
 /// carries the okf-concept identity resolves through okf-server (the concept
 /// route), never through the document-repository `/api/files/<id>/view` URL
 /// — which 404s by construction for a concept (content-only chunking).
+
+/// The longest run of letters and digits in a rendered body.
+int _longestAlnumRun(String body) {
+  int longest = 0;
+  int run = 0;
+  for (final unit in body.codeUnits) {
+    final bool isAlnum =
+        (unit >= 0x30 && unit <= 0x39) ||
+        (unit >= 0x41 && unit <= 0x5A) ||
+        (unit >= 0x61 && unit <= 0x7A);
+    if (isAlnum) {
+      run++;
+      if (run > longest) longest = run;
+    } else {
+      run = 0;
+    }
+  }
+  return longest;
+}
+
+/// Taps a citation row and lets the open settle.
+Future<void> tapCitation(
+  WidgetTester tester,
+  String title, {
+  int frames = 5,
+}) async {
+  await tester.tap(find.text(title));
+  await pumpFrames(tester, frames: frames);
+}
+
 void main() {
   setUp(() {
     setupLightTokens();
@@ -84,23 +115,14 @@ void main() {
     'score': 0.8,
   };
 
-  /// A bounded settle: the FAQ's loading spinner animates forever while the
-  /// asset load is in flight, so pumpAndSettle never returns.
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 5; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-  }
-
   testWidgets('a concept row opens the concept through okf-server', (
     tester,
   ) async {
     final requests = <Uri>[];
     await tester.pumpWidget(sidebar([conceptRow()], requests: requests));
-    await settle(tester);
+    await pumpFrames(tester, frames: 5);
 
-    await tester.tap(find.text('hadith nawawi 36'));
-    await settle(tester);
+    await tapCitation(tester, 'hadith nawawi 36');
 
     // The concept route — NOT the document-repository URL family.
     expect(
@@ -125,10 +147,9 @@ void main() {
     await tester.pumpWidget(
       sidebar([conceptRow(withRepoId: false)], requests: requests),
     );
-    await settle(tester);
+    await pumpFrames(tester, frames: 5);
 
-    await tester.tap(find.text('hadith nawawi 36'));
-    await settle(tester);
+    await tapCitation(tester, 'hadith nawawi 36');
 
     expect(
       requests.map((u) => u.path),
@@ -148,10 +169,9 @@ void main() {
     await tester.pumpWidget(
       sidebar([conceptRow()], requests: requests, conceptStatus: 404),
     );
-    await settle(tester);
+    await pumpFrames(tester, frames: 5);
 
-    await tester.tap(find.text('hadith nawawi 36'));
-    await settle(tester);
+    await tapCitation(tester, 'hadith nawawi 36');
 
     expect(find.byKey(const ValueKey('ds-modal')), findsNothing);
     expect(find.text('This source is not available to view.'), findsOneWidget);
@@ -167,10 +187,9 @@ void main() {
     await tester.pumpWidget(
       sidebar([conceptRow()], requests: requests, conceptBody: longBody),
     );
-    await settle(tester);
+    await pumpFrames(tester, frames: 5);
 
-    await tester.tap(find.text('hadith nawawi 36'));
-    await settle(tester);
+    await tapCitation(tester, 'hadith nawawi 36');
 
     expect(find.byKey(const ValueKey('ds-modal')), findsOneWidget);
     expect(
@@ -192,21 +211,47 @@ void main() {
     expect(rendered.data.length, lessThan(longBody.length));
   });
 
+  testWidgets('a long unbroken run is broken so the renderer stays fast', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // One unbroken run (a base64 blob, a hex digest) is what makes the
+    // markdown inline parser backtrack quadratically: 20 000 characters in
+    // one run cost ~1.4 s on the UI thread, the same characters broken every
+    // 500 cost ~4 ms. The preview therefore breaks the run itself.
+    final blob = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo' * 1000;
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptBody: blob),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'hadith nawawi 36');
+
+    final MarkdownBody rendered = tester.widget<MarkdownBody>(
+      find.descendant(
+        of: find.byKey(const ValueKey('ds-modal')),
+        matching: find.byType(MarkdownBody),
+      ),
+    );
+    expect(_longestAlnumRun(rendered.data), lessThanOrEqualTo(500));
+  });
+
   testWidgets('a cut that lands inside an emoji keeps the text well-formed', (
     tester,
   ) async {
     final requests = <Uri>[];
     // An emoji (a surrogate pair) straddling the render bound: cutting
     // between the halves leaves a lone surrogate, and the renderer throws
-    // "string is not well-formed UTF-16" while it lays the text out.
-    final longBody = '${'x' * 19999}\u{1F600}${'y' * 5000}';
+    // "string is not well-formed UTF-16" while it lays the text out. The
+    // body is line-broken so the preview keeps the body one-for-one and the
+    // cut lands exactly at the bound.
+    final longBody = '${'ab ' * 6666}x\u{1F600}${'y' * 5000}';
     await tester.pumpWidget(
       sidebar([conceptRow()], requests: requests, conceptBody: longBody),
     );
-    await settle(tester);
+    await pumpFrames(tester, frames: 5);
 
-    await tester.tap(find.text('hadith nawawi 36'));
-    await settle(tester);
+    await tapCitation(tester, 'hadith nawawi 36');
 
     expect(tester.takeException(), isNull);
     final MarkdownBody rendered = tester.widget<MarkdownBody>(
@@ -216,6 +261,35 @@ void main() {
       ),
     );
     expect(rendered.data.length, lessThanOrEqualTo(20000));
+  });
+
+  testWidgets('a second tap while the concept loads opens no second modal', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    await tester.pumpWidget(
+      sidebar(
+        [conceptRow()],
+        requests: requests,
+        delay: const Duration(milliseconds: 300),
+      ),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tester.tap(find.text('hadith nawawi 36'));
+    await tester.pump();
+    await tester.tap(find.text('hadith nawawi 36'));
+    await pumpFrames(tester, frames: 12);
+
+    // One fetch, one modal: the guard swallows the second tap while the
+    // first is in flight.
+    expect(
+      requests
+          .where((u) => u.path.endsWith('/concepts/hadith_nawawi_36'))
+          .length,
+      1,
+    );
+    expect(find.byKey(const ValueKey('ds-modal')), findsOneWidget);
   });
 
   testWidgets('the same concept id in two repositories opens twice', (
@@ -240,14 +314,12 @@ void main() {
         delay: const Duration(milliseconds: 300),
       ),
     );
-    await settle(tester);
+    await pumpFrames(tester, frames: 5);
 
     await tester.tap(find.text('hadith nawawi 36 (repo-1)'));
     await tester.pump();
     await tester.tap(find.text('hadith nawawi 36 (repo-2)'));
-    for (var i = 0; i < 12; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await pumpFrames(tester, frames: 12);
 
     expect(
       requests.map((u) => u.path),
@@ -272,10 +344,9 @@ void main() {
         },
       ], requests: requests),
     );
-    await settle(tester);
+    await pumpFrames(tester, frames: 5);
 
-    await tester.tap(find.text('Report.pdf'));
-    await settle(tester);
+    await tapCitation(tester, 'Report.pdf');
 
     // A legacy document row keeps the document-repository path: it never
     // asks okf-server for anything.

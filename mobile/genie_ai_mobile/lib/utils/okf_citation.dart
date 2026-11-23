@@ -24,15 +24,19 @@ class OkfConceptRef {
 
   const OkfConceptRef({required this.repoId, required this.conceptId});
 
-  bool get hasRepoId => repoId.isNotEmpty;
+  /// The key an open concept is tracked by: the concept id ALONE is not
+  /// enough — the same concept id can live in two repositories (okf-server
+  /// resolves a concept against every candidate repository), so the key
+  /// carries the repository too.
+  String get openKey => '$repoId/$conceptId';
 }
 
 /// Whether a citation row is an OKF concept rather than a repository document.
 ///
-/// The mobile holds the RAW streamed/persisted citation (snake_case, as
-/// chatqna sends it and the backend persists it). The translated spelling
-/// (camelCase) is accepted too — the web's shared predicate takes both
-/// shapes, and a caller must not have to know which one it is holding.
+/// The mobile reads the RAW streamed/persisted citation (snake_case, as
+/// chatqna sends it and the backend persists it) — and, from the message
+/// metadata's `sources` key, a mapped row (camelCase). Both shapes are
+/// accepted, so a caller must not have to know which one it is holding.
 bool isOkfConceptCitation(Map<String, dynamic> doc) {
   if (doc['source'] == kOkfConceptSource) return true;
   return _firstNonEmpty(doc, const ['concept_id', 'conceptId']) != null;
@@ -44,22 +48,13 @@ bool isOkfConceptCitation(Map<String, dynamic> doc) {
 /// document id FROM the concept id, so a row that carries the marker but no
 /// explicit `concept_id` still names its concept.
 OkfConceptRef? okfConceptRef(Map<String, dynamic> doc) {
+  if (!isOkfConceptCitation(doc)) return null;
   final conceptId =
       _firstNonEmpty(doc, const ['concept_id', 'conceptId']) ??
       _firstNonEmpty(doc, const ['document_id', 'documentId', 'id', '_id']);
   if (conceptId == null) return null;
   final repoId = _firstNonEmpty(doc, const ['repo_id', 'repoId']) ?? '';
   return OkfConceptRef(repoId: repoId, conceptId: conceptId);
-}
-
-/// The key an open concept is tracked by: the concept id ALONE is not
-/// enough — the same concept id can live in two repositories (okf-server
-/// resolves a concept against every candidate repository), so the key
-/// carries the repository too.
-String okfConceptOpenKey(Map<String, dynamic> doc) {
-  final OkfConceptRef? ref = okfConceptRef(doc);
-  if (ref == null) return '';
-  return '${ref.repoId}/${ref.conceptId}';
 }
 
 String? _firstNonEmpty(Map<String, dynamic> doc, List<String> keys) {

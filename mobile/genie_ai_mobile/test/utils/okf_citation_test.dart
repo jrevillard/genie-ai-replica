@@ -52,6 +52,42 @@ void main() {
     });
   });
 
+  group('the open key', () {
+    test('carries the repository and the concept id', () {
+      expect(
+        okfConceptRef({
+          'source': 'okf-concept',
+          'concept_id': 'hadith_nawawi_36',
+          'repo_id': 'repo-1',
+        })!.openKey,
+        'repo-1/hadith_nawawi_36',
+      );
+    });
+
+    test(
+      'a concept without a repository identity is keyed by the concept alone',
+      () {
+        expect(
+          okfConceptRef({
+            'source': 'okf-concept',
+            'concept_id': 'hadith_nawawi_36',
+          })!.openKey,
+          '/hadith_nawawi_36',
+        );
+      },
+    );
+
+    test('a legacy document row names no concept', () {
+      expect(
+        okfConceptRef({
+          'document_id': 'hadith_nawawi_36',
+          'document_name': 'Report.pdf',
+        }),
+        isNull,
+      );
+    });
+  });
+
   group('okfConceptRef', () {
     test('reads the stable ids', () {
       final ref = okfConceptRef({
@@ -63,7 +99,7 @@ void main() {
       expect(ref, isNotNull);
       expect(ref!.conceptId, 'hadith_nawawi_36');
       expect(ref.repoId, 'repo-1');
-      expect(ref.hasRepoId, isTrue);
+      expect(ref.repoId, 'repo-1');
     });
 
     test('the concept id falls back to the citation document id', () {
@@ -81,7 +117,6 @@ void main() {
         'concept_id': 'hadith_nawawi_36',
       });
       expect(ref!.repoId, '');
-      expect(ref.hasRepoId, isFalse);
     });
 
     test('a row that names no concept has no reference', () {

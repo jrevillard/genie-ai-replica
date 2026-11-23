@@ -207,9 +207,20 @@ def verify(requirement_paths, evidence_path):
     pins = all_pins(requirement_paths)
     with open(evidence_path, encoding="utf-8") as handle:
         evidence = json.load(handle)
-    entries = {entry["name"]: entry for entry in evidence.get("packages", [])}
-    pinned = {name for name, _ in pins}
+    entries = {}
     problems = []
+    for index, entry in enumerate(evidence.get("packages", [])):
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            problems.append(
+                f"packages[{index}]: an evidence row carries no usable 'name' - the row "
+                f"cannot be matched against any pin ({json.dumps(entry)[:80]})"
+            )
+            continue
+        if name in entries:
+            problems.append(f"{name}: a duplicate evidence row - the last one read wins")
+        entries[name] = entry
+    pinned = {name for name, _ in pins}
 
     for name, version in pins:
         entry = entries.get(name)

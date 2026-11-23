@@ -21,6 +21,29 @@ const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFA
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
 const translationBackend = process.env.TRANSLATION_BACKEND || 'auto';
 
+// The `auto` readiness window. A vLLM that is still loading answers its boot
+// health check non-2xx: a single probe would then pin the CPU model for the
+// life of the process even though the GPU becomes usable seconds later. The
+// `auto` branch therefore retries its probe with backoff until this deadline,
+// then settles — the CPU fallback after the window is final, so a GPU that is
+// genuinely absent still ends the boot on CPU at a bounded time cost. Code
+// constants, not env knobs: the trade-off is boot latency against GPU pickup,
+// and it has no per-deployment answer an operator could size better than this.
+//
+// The window is bounded by the container healthcheck budget, not only by this
+// constant: backend init runs before the HTTP server listens, so every second
+// spent probing is a second of boot. 30s picks up an in-cluster worker that
+// becomes ready within low tens of seconds while keeping the worst boot
+// (window + one in-flight probe budget + CPU model load) inside the envelope
+// the compose healthcheck `start_period` (90s) and the chart startupProbe
+// (~120s) were sized for. A probe that hangs for its full
+// TRANSLATION_PROBE_TIMEOUT_SECONDS budget consumes the window in one
+// attempt and lands on CPU after a single probe — the one-shot behavior this
+// window replaces, never worse.
+const AUTO_GPU_READINESS_WINDOW_MS = 30000;
+const AUTO_GPU_RETRY_BACKOFF_START_MS = 2000;
+const AUTO_GPU_RETRY_BACKOFF_MAX_MS = 10000;
+
 // A GPU API is "configured" when the deployment named one. Two independent
 // signals say so, and either is enough: a remote GPU node host, or an explicit
 // translation endpoint (a deployment may route through a proxy that sets only
@@ -132,33 +155,54 @@ class TranslationService {
       }
 
       if (translationBackend === 'auto') {
-        // One-shot choice between the two available backends, made once at
+        // One choice between the two available backends, settled once at
         // startup — the same pattern as the dataprep device resolution
         // (`_resolve_docling_device`). A backend that dies later is a failure
         // to report, not a reason to switch models for the rest of the
         // process's life.
+        //
+        // The probe is retried inside the bounded readiness window (constants
+        // above); the CPU fallback once it elapses is final.
         //
         // Each backend is assigned only after its init resolves. An instance
         // whose worker never started is not a backend, and `selectBackend`
         // short-circuits on `this.backend` — caching one that failed to
         // initialise would hand it to every later request for the life of the
         // process, with the service reporting itself ready.
-        try {
-          logger.info('[TRANSLATION-SERVICE] Auto mode: Probing GPU backend');
-          await gpuBackend.init();
-          this.backend = gpuBackend;
-          this.backendType = 'gpu';
-          logger.info('[TRANSLATION-SERVICE] Auto mode: GPU backend selected');
-          return this.backend;
-        } catch (gpuError) {
-          logger.warn(`[TRANSLATION-SERVICE] Auto mode: GPU unavailable (${gpuError.message}), selecting CPU`);
-          const cpuBackend = new CpuTranslateBackend();
-          await cpuBackend.init();
-          this.backend = cpuBackend;
-          this.backendType = 'cpu';
-          logger.info('[TRANSLATION-SERVICE] Auto mode: CPU backend selected');
-          return this.backend;
+        const readinessDeadline = Date.now() + AUTO_GPU_READINESS_WINDOW_MS;
+        let backoffMs = AUTO_GPU_RETRY_BACKOFF_START_MS;
+        let probes = 0;
+        for (;;) {
+          probes += 1;
+          try {
+            logger.info(`[TRANSLATION-SERVICE] Auto mode: Probing GPU backend (probe ${probes})`);
+            await gpuBackend.init();
+            this.backend = gpuBackend;
+            this.backendType = 'gpu';
+            logger.info(`[TRANSLATION-SERVICE] Auto mode: GPU backend selected (probe ${probes} succeeded)`);
+            return this.backend;
+          } catch (gpuError) {
+            const remainingMs = readinessDeadline - Date.now();
+            if (remainingMs <= 0) {
+              logger.warn(
+                `[TRANSLATION-SERVICE] Auto mode: GPU unavailable (${gpuError.message}) after ${probes} probe(s) within the ${AUTO_GPU_READINESS_WINDOW_MS / 1000}s readiness window, selecting CPU`
+              );
+              break;
+            }
+            logger.warn(
+              `[TRANSLATION-SERVICE] Auto mode: GPU probe ${probes} failed (${gpuError.message}), retrying within the readiness window`
+            );
+            await new Promise((resolve) => setTimeout(resolve, Math.min(backoffMs, remainingMs)));
+            backoffMs = Math.min(backoffMs * 2, AUTO_GPU_RETRY_BACKOFF_MAX_MS);
+          }
         }
+
+        const cpuBackend = new CpuTranslateBackend();
+        await cpuBackend.init();
+        this.backend = cpuBackend;
+        this.backendType = 'cpu';
+        logger.info('[TRANSLATION-SERVICE] Auto mode: CPU backend selected');
+        return this.backend;
       }
 
       throw new Error(`Invalid TRANSLATION_BACKEND value: ${translationBackend}. Must be 'cpu', 'gpu', or 'auto'`);

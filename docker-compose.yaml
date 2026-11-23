@@ -838,8 +838,9 @@ services:
       # answering. The backend is its only reader: the Python services discover
       # their model id and endpoints at runtime.
       - GPU_NODE_HOST=${GPU_NODE_HOST:-}
-      # Backend preference. `auto` (default) probes once and commits; `cpu` and
-      # `gpu` skip the probe. Ignored when a GPU API is configured — see above.
+      # Backend preference. `auto` (default) probes with backoff inside a 30s
+      # readiness window and commits; `cpu` and `gpu` skip the probe. Ignored
+      # when a GPU API is configured — see above.
       - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-auto}
       # Budget for the startup translation probe. Failing it stops the service,
       # so it must cover a cold TLS handshake to a remote GPU node.

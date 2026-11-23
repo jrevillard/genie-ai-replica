@@ -161,12 +161,27 @@ CREDENTIAL_MARKERS = (
 
 # "auth" names a credential in EVERY spelling — the joined and camelCase ones
 # ("authHeader", "authheader") a word-boundary match alone would let through.
-# The rule is applied PER WORD: a word that carries "author" is evidence (an
-# author is not a secret), while any OTHER "auth"-bearing word is a credential
-# — so "author_auth_header" is a credential (its "auth" word) and "doc_authors"
-# is evidence (its author word).
+# The rule is applied PER WORD: a word that is one of the AUTHOR stems is
+# evidence (an author is not a secret), while any OTHER auth-bearing word is
+# a credential — so "author_auth_header" is a credential (its "auth" word) and
+# "doc_authors" is evidence (its author word).
+#
+# The stems are matched EXACTLY: a permission word that merely starts with
+# "author" ("authorisation", "authorizer", "authorized") is a credential, and
+# a word that only CONTAINS a stem ("authorname") is redacted rather than
+# kept — losing an evidence key is the safe side of that trade.
 _AUTH_MARKER = "auth"
-_AUTHOR_WORD_MARKER = "author"
+_AUTHOR_WORDS = frozenset(
+    {
+        "author",
+        "authors",
+        "authored",
+        "authoring",
+        "authorship",
+        "coauthor",
+        "coauthors",
+    }
+)
 
 MEASUREMENT_KEY_NAMES = frozenset(
     {
@@ -226,7 +241,7 @@ def _is_credential_key(key) -> bool:
         # only — most keys never carry the marker.
         for word in _key_words(raw):
             word = word.lower()
-            if _AUTHOR_WORD_MARKER in word:
+            if word in _AUTHOR_WORDS:
                 continue
             if _AUTH_MARKER in word:
                 return True
@@ -734,10 +749,10 @@ def _sent_label_set(sent_labels: dict) -> set[str]:
     return set(values)
 
 
-def _labels_missing(requested: list, present: set) -> bool:
-    """True when a requested label is not among the labels a leg carries.
-    The present set is built once, by the caller."""
-    return any(label not in present for label in requested)
+def _labels_missing(requested: list, present: set) -> list:
+    """The requested labels that are not among the labels a leg carries. The
+    present set is built once, by the caller."""
+    return [label for label in requested if label not in present]
 
 
 def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
@@ -751,24 +766,24 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
     REQUESTED label that never became an effective filter is itself a finding
     (FR-27).
 
-    Two A-side findings, kept apart because they compare DIFFERENT things: a
-    requested label the MEASURED effective filter never carried (the cause is
-    chatqna's collapse — the request carried it, the filter dropped it) and a
-    requested label the query never SENT (the cause is the REQUEST — the
-    label was never on the wire). The two lists can name the same case: a
-    label that was never sent also never became an effective filter, and the
-    note says which cause to read.
+    Two A-side findings, kept apart because they compare DIFFERENT things: the
+    requested labels the MEASURED effective filter never carried, and the
+    requested labels the query never SENT. Both are recorded PER LABEL (the
+    labels that are missing), not per case: one case can carry both, and only
+    the labels say which is which. The report records the EFFECT — it does
+    not claim to know WHY a label is missing from the filter.
 
-    A scope is a SET of labels — the retriever filters on the UNION of them,
-    so a repeated label carries no scope meaning. The two legs' effective
-    filters are therefore compared as sets (chatqna dedups the filter it
-    builds; the noagent lane applies the request verbatim).
+    A scope is a SET of labels — under the default OR strategy the retriever
+    filters on their union, under the AND strategy it requires all of them,
+    and a repeated label is not a scope difference under either. The two legs'
+    effective filters are therefore compared as sets (chatqna dedups the
+    filter it builds; the noagent lane applies the request verbatim).
     """
     sent: dict = {}
     a_effective: dict = {}
     b_effective: dict = {}
-    never_effective: list = []
-    not_sent: list = []
+    missing_from_filter: dict = {}
+    missing_from_sent: dict = {}
     without_effective: list = []
     never_queried: list = []
     without_scope: list = []
@@ -796,11 +811,12 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         sent_labels = _redact_deep(scope.get("sent_labels") or {})
         requested = as_label_list(scope.get("case_requested_labels"))
         sent[case_id] = sent_labels
-        # The request-side fact, independent of what came back: a requested
-        # label the query never SENT is the cause of a scope difference, and
-        # it is true whether or not the response carried a measured filter.
-        if _labels_missing(requested, _sent_label_set(sent_labels)):
-            not_sent.append(case_id)
+        # The request-side fact, independent of what came back: the requested
+        # labels the query never SENT — true whether or not the response
+        # carried a measured filter.
+        not_sent = _labels_missing(requested, _sent_label_set(sent_labels))
+        if not_sent:
+            missing_from_sent[case_id] = not_sent
         effective = _effective_filter_labels(row)
         if effective is None:
             # The response carried no effective filter (an error row, or a
@@ -812,8 +828,9 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         # The effective filter is a list of label STRINGS — there is no
         # credential key in it to redact.
         a_effective[case_id] = effective
-        if _labels_missing(requested, set(effective)):
-            never_effective.append(case_id)
+        never_effective = _labels_missing(requested, set(effective))
+        if never_effective:
+            missing_from_filter[case_id] = never_effective
     for case_id, row in sorted(b_rows.items()):
         effective = _effective_filter_labels(row)
         if effective is not None:
@@ -821,7 +838,8 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         elif isinstance(row, dict) and row.get("status") in ("ok", "http_error"):
             b_without_scope.append(case_id)
     compared = sorted(set(a_effective) & set(b_effective))
-    # A scope is a SET of labels (the retriever filters on their union), so a
+    # A scope is a SET of labels (under the default OR strategy the retriever
+    # filters on their union, under AND it requires all of them), so a
     # repeated label is not a scope difference — chatqna dedups the filter it
     # builds, the noagent lane applies the request verbatim.
     mismatched = [
@@ -846,8 +864,10 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         "A": {
             "effective_filter_labels_per_case": a_effective,
             "labels_sent_per_case": sent,
-            "cases_whose_requested_labels_never_became_an_effective_filter": never_effective,
-            "cases_whose_requested_labels_were_not_sent": not_sent,
+            "requested_labels_missing_from_the_effective_filter": missing_from_filter,
+            "requested_labels_not_sent": missing_from_sent,
+            "cases_whose_requested_labels_never_became_an_effective_filter": sorted(missing_from_filter),
+            "cases_whose_requested_labels_were_not_sent": sorted(missing_from_sent),
             "cases_without_a_measured_effective_filter": without_effective,
             "cases_that_never_queried": never_queried,
             "cases_without_a_recorded_scope": without_scope,
@@ -863,16 +883,16 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         "cases_with_a_different_effective_scope": mismatched,
         "note": (
             "the comparison is the EFFECTIVE filter each lane applied (chatqna's response metadata"
-            " against the noagent row metadata), compared as a SET of labels (the retriever filters on"
-            " their union, so a repeated label is not a scope difference); an observed mismatch"
-            " publishes false even over a partial comparison, and null means the comparison was"
-            " partial (a case scoped on one leg only, or a scope recorded without a measured filter) or"
-            " absent — the report never claims a scope match it did not measure (FR-27). The two"
-            " A-side lists name DIFFERENT causes: a case in"
-            " 'cases_whose_requested_labels_were_not_sent' never carried the label on the wire (the"
-            " scope was the request's), while a case in"
-            " 'cases_whose_requested_labels_never_became_an_effective_filter' that is NOT in the"
-            " not-sent list carried it and chatqna's collapse dropped it"
+            " against the noagent row metadata), compared as a SET of labels (under the default OR"
+            " strategy the retriever filters on their union, under AND it requires all of them — a"
+            " repeated label is not a scope difference under either); an observed mismatch publishes"
+            " false even over a partial comparison, and null means the comparison was partial (a case"
+            " scoped on one leg only, or a scope recorded without a measured filter) or absent — the"
+            " report never claims a scope match it did not measure (FR-27). The A-side scope records"
+            " are PER LABEL: 'requested_labels_not_sent' names the requested labels the query never"
+            " carried, 'requested_labels_missing_from_the_effective_filter' the requested labels the"
+            " measured filter did not carry — one case can appear in both, and the report records the"
+            " EFFECT, not why a label is missing"
         ),
     }
 

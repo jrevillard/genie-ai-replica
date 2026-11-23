@@ -217,22 +217,26 @@ manifest records it).
   config A's response metadata (`filter_labels`, after chatqna's
   service-over-category collapse) and config B's row metadata
   (`filter_labels`, the noagent lane's requested labels). A scope is a SET of
-  labels — the retriever filters on their union — so a repeated label is not
-  a scope difference (chatqna dedups the filter it builds; the noagent lane
-  applies the request verbatim). The report states
+  labels — under the default OR strategy the retriever filters on their
+  union, under the AND strategy it requires all of them — so a repeated label
+  is not a scope difference under either (chatqna dedups the filter it builds;
+  the noagent lane applies the request verbatim). The report states
   whether the two match (`scope_matched`), names the cases whose effective
-  scopes differ, records the labels the A capture SENT beside them, names the
-  cases whose REQUESTED labels never became an effective filter, names the
-  cases whose REQUESTED labels were never SENT, and names the cases that issued
+  scopes differ, records the labels the A capture SENT beside them, records
+  the REQUESTED labels missing from the effective filter and the REQUESTED
+  labels the query never sent, and names the cases that issued
   no request at all (a skipped capture). `scope_matched` is `null` when the
   comparison was partial (a case scoped on one leg only) or absent, and
   `false` when a mismatch was observed — the report never claims a scope match
   it did not measure. For a case whose scopes differ, a retrieval
   or grounding difference reflects the SCOPE, not the pipeline.
-- **The two A-side scope lists name DIFFERENT causes — read the one that
-  applies.** `cases_whose_requested_labels_were_not_sent`: the label was
-  never on the wire, so the SCOPE was the request's (the lane never asked for
-  it). `cases_whose_requested_labels_never_became_an_effective_filter`: the
-  label is not in the filter the lane applied — when the case is NOT in the
-  not-sent list, chatqna's collapse dropped it (the request carried it). The
-  two lists can name the same case; the not-sent list is then the cause.
+- **The A-side scope records are PER LABEL, and they record the EFFECT —
+  read them as facts, not as causes.** `requested_labels_not_sent`: these
+  requested labels were never on the wire (the request did not carry them).
+  `requested_labels_missing_from_the_effective_filter`: these requested
+  labels are not in the filter the leg applied (chatqna's collapse is one
+  reason; the report does not claim to know which). One case can appear in
+  both — the case-id lists are derived from the per-label records, and the
+  labels are what say which is which. The report does not state a cause:
+  attribute the difference to the SCOPE, and read the per-label records for
+  what was and was not on the wire.

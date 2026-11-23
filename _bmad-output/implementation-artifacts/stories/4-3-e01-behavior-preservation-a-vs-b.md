@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 79 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 80 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,7 +132,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 258 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 259 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
 the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
 ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
@@ -418,6 +418,25 @@ needs" is superseded by F68' below — the per-word rule needs the whole list.
 | F75' | The word split ran for every key, though only the marker branch consumes it | efficiency | nit | **Fixed**: it is computed only under the marker branch (a 200-case report build: 133 ms → 62 ms) |
 | F76' | Four small duplications: the coercion's redundant string branch, the stale scope docstring, the thrice-written set-file shape, three parallel lists in the bearer fake | simplification | nit | **Fixed**: all four |
 | F77' | The scope record's docstring still described the pre-F62' rule, and the judge contract did not name the not-sent list | simplification, test-audit | nit | **Fixed**: the docstring, the note and the judge contract now state the two causes |
+
+**GLOBAL REVIEW (xhigh, 6 angles) over the quality increment — 6 important
+findings, 3 nits, ALL fixed.** The global was required by the standing rule:
+the quality increment is behavioral and no FIX budget was left in the chain,
+so it needed a global within the remaining C. Two findings were defects the
+round-4 FIX review had not seen — one of them a credential leak in the
+round-3 fix the quality pass had introduced.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F78' | The author exemption matched any word CONTAINING "author" — `authorisation`, `authorizer`, `authorized`, `unauthorized` fell through as evidence, so a Bearer value could reach the report | important | **Fixed**: the exemption is the author STEM, matched exactly; a permission word that merely starts with "author" is a credential |
+| F79' | The scope rationale claimed "the retriever filters on their UNION" unconditionally — the filter strategy is configurable (`RETRIEVER_ARANGO_FILTER_STRATEGY=AND` requires all of them), so the judge's reading could invert | important | **Fixed**: the wording names both strategies (the duplicate-insensitivity argument holds under either) — in the report, the note and the judge contract |
+| F80' | The note's per-case causal rule claimed a cause the report does not measure — the lists are per case, the causes are per label, and one case can carry both | important | **Fixed**: the two findings are recorded PER LABEL (the missing labels per case), the case-id lists are derived from them, and the note states the EFFECT, not a cause |
+| F81' | The container-read test wrapped the value in `tuple()`, so it passed even when the driver handed over the raw list | important | **Fixed**: the exact value is asserted against the container's REAL contract model, and the character-split case is pinned |
+| F82' | The parity pin was dark: the CI job that runs it triggers only on `tests/rag-benchmarks/**/*`, so a change to the server's rule alone never ran it | important | **Fixed**: the job's path filter now includes `genie-ai-overlay/core/label_contract.py` |
+| F83' | The pin compared the coercion with the server's filter BUILDER, which also applies the collapse and the dedup — the collapse was never exercised, and a dedup change turned the pin red for a rule the client does not mirror | important | **Fixed**: the pin is split per rule (the shape rule against `_as_label_list`, the falsy drop against the filter builder, the collapse asserted explicitly) and the dedup divergence stays a documented, asserted one |
+| F84' | The coercion's docstring attributed the falsy drop to the server's rule for a list, where it is the client's own loop | nit | **Fixed**: the docstring names what is mirrored and records the falsy-service-label divergence |
+| F85' | The test file carried a function-local `import sys` shadowing the module import | nit | **Fixed**: dropped |
+| F86' | The container-read test hand-rolled a `pytest.MonkeyPatch` instead of taking the fixture | nit | **Fixed**: the fixture is used |
 
 ## Design Notes
 

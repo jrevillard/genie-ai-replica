@@ -389,7 +389,6 @@ def test_capture_a_resume_re_runs_only_the_missing_ids(tmp_path):
 def test_capture_a_default_seam_is_the_run_eval_reuse(monkeypatch):
     """The default seam imports run_eval VERBATIM — drive_query + _extract_answer,
     not a re-implementation."""
-    import sys
     import types
 
     fake_run_eval = types.ModuleType("run_eval")
@@ -460,36 +459,27 @@ def test_the_b_driver_ships_the_coerced_label_scope(tmp_path):
     assert shipped[0]["context"]["requested_labels"] == ["Forestry"]
 
 
-def test_the_container_reads_the_shipped_labels_as_labels():
+def test_the_container_reads_the_shipped_labels_as_labels(monkeypatch):
     """The other end of the same wire: the in-container driver reads the
     shipped label list as N labels. A bare string there would split into
-    characters — the hazard the write boundary exists to prevent."""
-    import types
+    characters — the hazard the write boundary exists to prevent.
 
-    # The container's own contract module is not importable here (it is the
-    # agent-service's, with its own dependencies) — the driver only needs the
-    # model to construct, so the seam stands in for it.
-    capabilities = types.ModuleType("capabilities")
-    contract = types.ModuleType("capabilities.contract")
+    The container's own contract model is the REAL one (the agent-service's
+    tree is on the path, the way the driver-suite test loads it): the point
+    is the driver's OWN read of the shipped payload."""
+    agent_service = Path(__file__).resolve().parents[2] / "components" / "agent-service"
+    monkeypatch.syspath_prepend(str(agent_service))
+    from protocol import config_b_driver
 
-    class _CallerContext:
-        def __init__(self, **kwargs):
-            self.__dict__.update(kwargs)
-
-    contract.CallerContext = _CallerContext
-    capabilities.contract = contract
-    monkey = pytest.MonkeyPatch()
-    monkey.setitem(sys.modules, "capabilities", capabilities)
-    monkey.setitem(sys.modules, "capabilities.contract", contract)
-    try:
-        from protocol import config_b_driver
-
-        context = config_b_driver.build_context(
-            {"context": {"requested_labels": ["Forestry", "Timber"], "user_id": "u"}}
-        )
-    finally:
-        monkey.undo()
-    assert tuple(context.requested_labels) == ("Forestry", "Timber")
+    context = config_b_driver.build_context(
+        {"context": {"requested_labels": ["Forestry", "Timber"], "user_id": "u"}}
+    )
+    # The EXACT value — a tuple() wrapper would hide an uncoerced list.
+    assert context.requested_labels == ("Forestry", "Timber")
+    # A bare string would be split into characters: the hazard the write
+    # boundary exists to prevent.
+    bare = config_b_driver.build_context({"context": {"requested_labels": "Forestry"}})
+    assert bare.requested_labels == ("F", "o", "r", "e", "s", "t", "r", "y")
 
 
 def test_e01_keeps_an_author_key_and_drops_the_credential_names():
@@ -513,6 +503,13 @@ def test_e01_keeps_an_author_key_and_drops_the_credential_names():
     assert _is_credential_key("authHeader") is True
     assert _is_credential_key("authheader") is True
     assert _is_credential_key("authValue") is True
+    # A permission word that only STARTS with "author" is a credential, not
+    # an author — the exemption is the author stem, nothing wider.
+    assert _is_credential_key("authorisation") is True
+    assert _is_credential_key("authorisation_header") is True
+    assert _is_credential_key("authorizer") is True
+    assert _is_credential_key("authorized") is True
+    assert _is_credential_key("unauthorized") is True
     # A key that carries an author word AND an auth word is a credential.
     assert _is_credential_key("author_auth") is True
     assert _is_credential_key("author_auth_header") is True
@@ -525,6 +522,7 @@ def test_e01_keeps_an_author_key_and_drops_the_credential_names():
         "auth": "LEAK",
         "authHeader": "Bearer SUPERSECRET",
         "author_auth_header": "Bearer COMPOUNDLEAK",
+        "authorisation": "Bearer PERMLEAK",
     }
     report = _build(b_rows=rows)
     recorded = report["per_case"]["c1"]["b"]["metadata"]
@@ -533,9 +531,11 @@ def test_e01_keeps_an_author_key_and_drops_the_credential_names():
     assert "auth" not in recorded
     assert "authHeader" not in recorded
     assert "author_auth_header" not in recorded
+    assert "authorisation" not in recorded
     assert "LEAK" not in json.dumps(report)
     assert "SUPERSECRET" not in json.dumps(report)
     assert "COMPOUNDLEAK" not in json.dumps(report)
+    assert "PERMLEAK" not in json.dumps(report)
 
 
 def test_the_shared_label_coercion_mirrors_the_server_rule():
@@ -569,11 +569,20 @@ def test_the_shared_label_coercion_mirrors_the_server_rule():
 
 
 def test_the_label_coercion_matches_the_server_rule_it_mirrors():
-    """The coercion MIRRORS the server's label rule — so the two legs cannot
-    disagree about the scope they applied. The expectations are read from
-    the server's own code (loaded by path, the way the fanout parity test
-    loads its counterpart), not transcribed: a server-side change that this
-    copy did not follow turns this red instead of drifting silently.
+    """The coercion MIRRORS the server's label rules — so the two legs cannot
+    disagree about the scope they applied. The expectations are read from the
+    server's own code (loaded by path, the way the fanout parity test loads
+    its counterpart), not transcribed: a server-side change that this copy
+    did not follow turns this red instead of drifting silently.
+
+    Three rules, pinned against the server's own functions:
+    * the SHAPE rule — ``_as_label_list`` takes a list as-is and treats every
+      other truthy value as ONE scalar;
+    * the FALSY drop — ``build_filter_labels`` drops the falsy labels it is
+      given;
+    * the service-over-category COLLAPSE — the A leg's filter is built from
+      the service labels when there are any, which is why the A leg's scope
+      can be narrower than the request's.
 
     The one documented divergence: the server's filter builder DEDUPS the
     labels it builds, the coercion keeps the request's own list. The report
@@ -588,22 +597,16 @@ def test_the_label_coercion_matches_the_server_rule_it_mirrors():
     server = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(server)
 
-    values = [
-        "Forestry",
-        ["Timber", "Forestry"],
-        ["Timber", "", None],
-        ["Timber", 0],
-        ["Timber", False],
-        ["Timber", " "],
-        "",
-        [],
-        None,
-        0,
-        5,
-        ("Timber", "Forestry"),
-    ]
-    for value in values:
+    # The shape rule, against the server's own coercion.
+    for value in ["Forestry", "", [], None, 0, 5, ("Timber", "Forestry")]:
+        assert as_label_list(value) == server._as_label_list(value), value
+    # The falsy drop, against the server's filter builder (one category
+    # field, no service labels — the branch the coercion mirrors).
+    for value in [["Timber", "", None], ["Timber", 0], ["Timber", False], ["Timber", " "]]:
         assert as_label_list(value) == server.build_filter_labels({"categoryLabels": value}), value
+    # The collapse the A leg applies — recorded here so a server-side change
+    # to it turns this red.
+    assert server.build_filter_labels({"serviceLabels": ["Svc"], "categoryLabels": ["Timber"]}) == ["Svc"]
     # The documented divergence, asserted rather than left implicit.
     assert as_label_list(["Timber", "Timber"]) == ["Timber", "Timber"]
     assert server.build_filter_labels({"categoryLabels": ["Timber", "Timber"]}) == ["Timber"]
@@ -1805,6 +1808,29 @@ def test_e01_drops_a_credential_named_like_a_token_count():
     assert "password_tokens" not in recorded
     assert recorded["cached_tokens"] == 3
     assert "LEAK" not in json.dumps(report)
+
+
+def test_e01_records_the_missing_labels_per_label_not_per_case():
+    """The two scope findings are recorded PER LABEL: one case can carry both
+    — a label the request never carried AND a label the filter dropped — and
+    only the labels say which is which. The case-id lists are derived from
+    them."""
+    captured = _captured_rows()
+    captured["c1"]["retrieval_scope"] = {
+        # The request carried "Zed" but never "Xan".
+        "sent_labels": {"category_labels": ["Zed"], "service_labels": []},
+        "case_requested_labels": ["Xan", "Zed"],
+    }
+    captured["c1"]["filter_labels"] = ["Other"]
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["A"]["requested_labels_not_sent"] == {"c1": ["Xan"]}
+    assert scope["A"]["requested_labels_missing_from_the_effective_filter"] == {"c1": ["Xan", "Zed"]}
+    # The case-id lists are the index of the per-label records.
+    assert scope["A"]["cases_whose_requested_labels_were_not_sent"] == ["c1"]
+    assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == ["c1"]
+    # The report records the EFFECT, not a cause.
+    assert "the report records the EFFECT" in scope["note"]
 
 
 def test_e01_names_a_requested_label_that_never_became_a_filter():

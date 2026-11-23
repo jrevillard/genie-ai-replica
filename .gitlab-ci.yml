@@ -4514,6 +4514,9 @@ test:rag-benchmarks:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "tests/rag-benchmarks/**/*"
+        # The protocol mirrors the server's label rule and pins itself
+        # against it — a change to the server's rule must run this job.
+        - "genie-ai-overlay/core/label_contract.py"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

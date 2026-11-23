@@ -112,6 +112,7 @@
   "diagram.24.description": "应用使用各自部署所选的文件存储和索引，不依赖共享存储。",
   "diagram.26.description": "接入监测的GENIE.AI服务将数据发送到OpenTelemetry Collector，再由Collector转发到已配置的Victoria存储。",
   "diagram.30.description": "Docker Compose、Docker Swarm和Kubernetes配合Helm均可通过HTTPS将模型请求发送到专用GPU API，由其提供已配置的模型服务。",
+  "src.account": "账户设置",
   "src.admin": "管理仪表盘",
   "src.api": "API 参考",
   "src.architecture": "架构",

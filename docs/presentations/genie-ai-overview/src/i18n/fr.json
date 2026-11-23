@@ -112,6 +112,7 @@
   "diagram.24.description": "L’application utilise des magasins de fichiers et d’index choisis localement, puis appelle les modèles configurés. Les points de terminaison de modèles gérés par l’institution et ceux gérés par des tiers ont des frontières de données différentes.",
   "diagram.26.description": "Les services GENIE.AI instrumentés envoient leur télémétrie au collecteur OpenTelemetry. VictoriaMetrics, VictoriaLogs et VictoriaTraces stockent les signaux correspondants. Grafana visualise les sources de données configurées.",
   "diagram.30.description": "Docker Compose, Docker Swarm et Kubernetes avec Helm peuvent tous envoyer les requêtes des modèles à une API GPU dédiée en HTTPS. Cette API héberge les services configurés.",
+  "src.account": "Paramètres du compte",
   "src.admin": "Tableau de bord d’administration",
   "src.api": "Référence API",
   "src.architecture": "Architecture",

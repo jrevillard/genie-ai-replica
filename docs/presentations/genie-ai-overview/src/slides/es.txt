@@ -186,13 +186,14 @@ Autorización|El servidor verifica el token. Los roles de aplicación controlan 
 ! Dos perfiles, dos controles. Keycloak verifica la identidad y emite el token OIDC; la aplicación valida ese token y aplica los roles y permisos configurados. Los roles de aplicación determinan las funciones disponibles en GENIE.AI, mientras que los permisos de lectura por repositorio determinan qué repositorios se pueden consultar. Están relacionados, pero no son intercambiables. Compruebe el inicio de sesión y la búsqueda efectiva con cuentas representativas antes de poner el servicio en marcha y después de cada cambio de acceso.
 ~ authz|idp|api
 
-@spread|¿Dónde procesa el servicio sus datos?|+light
-Almacenamiento|Document Repository conserva los archivos originales. ArangoDB almacena los fragmentos consultables y los índices vectoriales o de grafo.
-Llamadas al modelo|La aplicación envía los datos a la API del modelo configurado. Puede haber una API de GPU independiente dentro de la red de la institución o más allá de un límite de red gestionado.
-Operaciones|Revise la telemetría, las copias de seguridad, la gestión de secretos y la retención frente a los requisitos de seguridad de la institución.
-= Siga dónde se procesan los documentos, las preguntas y los fragmentos seleccionados.
-! Hay dos flujos de datos distintos. Document Repository conserva el archivo cargado; ArangoDB almacena los fragmentos indexados y los datos necesarios para buscarlos. Cuando alguien hace una pregunta, el contexto seleccionado se envía con la solicitud a la API del modelo configurado. Una API de GPU independiente puede estar alojada en la red de la institución, fuera del despliegue de la aplicación. Si Slim Dataprep usa un Docling remoto, el contenido de los documentos también cruza el límite de ese servicio. Acuerde con el equipo de plataforma dónde están estos límites: red, plazo de conservación y permisos de acceso.
-~ architecture|security|gpu|slim
+@spread|La protección de datos, nivel por nivel.|+light
+? USUARIOS · EXPLOITACIÓN · INFRAESTRUCTURA
+Derechos de las personas|Cada usuario puede eliminar una conversación, restablecer sus datos o eliminar su cuenta desde la configuración. Eliminar la cuenta borra los campos personales.
+Registros y telemetría|Los datos personales se enmascaran en los registros en el momento de recogerlos. La retención de los registros, las métricas y las trazas se ajusta en el despliegue.
+Ubicación de los datos|Los archivos y los índices permanecen en el despliegue de la institución. Las llamadas al modelo van al GPU o a la API de GPU elegidos, que pueden estar fuera de su red.
+= Conecte estos niveles en el análisis de protección de datos de la institución: la plataforma aporta los mecanismos, la evaluación sigue siendo suya.
+! Tres niveles, junto al control de acceso de la diapositiva anterior. Los usuarios actúan sobre sus propios datos: una conversación se puede eliminar desde las conversaciones guardadas, y la página de configuración ofrece el restablecimiento de datos y la eliminación de la cuenta. La eliminación de la cuenta es la respuesta de la plataforma al derecho de supresión: elimina el usuario de Keycloak y anula los campos personales. La explotación decide qué se conserva: los registros de los contenedores pasan por una transformación de anonimización en el recolector antes de almacenarse, y la retención de registros, métricas y trazas se ajusta por despliegue. La infraestructura decide adónde van los datos: los archivos y los índices permanecen en el despliegue, mientras que las llamadas al modelo siguen el GPU o la API de GPU elegidos. No reivindique aquí ninguna conformidad: la plataforma aporta los mecanismos; el registro de tratamientos, los plazos de retención y el límite de una API de GPU remota corresponden a la institución y a su delegado de protección de datos. Si Slim Dataprep usa un Docling remoto, el contenido de los documentos también cruza ese límite.
+~ account|observe|gpu|security
 
 @console|Valide el enrutamiento, la búsqueda y la calidad de las respuestas.
 Antes de poner en servicio|Use Testing Lab para comprobar qué repositorio debería incluir o excluir una consulta de referencia.

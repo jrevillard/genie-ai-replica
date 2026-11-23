@@ -70,6 +70,7 @@ SOURCES = {
     'project': DOC + '/',
     'welcome': DOC + '/docs/get-started/welcome/',
     'mobile': DOC + '/docs/mobile/chat-pipeline/',
+    'account': DOC + '/docs/frontend/settings-page/',
     'api': DOC + '/docs/reference/api-contracts/',
     'architecture': DOC + '/docs/get-started/concepts/',
     'rag': DOC + '/docs/rag-pipeline/',

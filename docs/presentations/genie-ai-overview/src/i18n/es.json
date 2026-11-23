@@ -112,6 +112,7 @@
   "diagram.24.description": "La aplicación usa almacenes de archivos e índices elegidos para cada despliegue; no depende de un almacenamiento compartido.",
   "diagram.26.description": "Los servicios de GENIE.AI instrumentados envían la telemetría al Collector de OpenTelemetry, que la dirige a los almacenes de Victoria configurados.",
   "diagram.30.description": "Docker Compose, Docker Swarm y Kubernetes con Helm pueden enviar las solicitudes de modelo a una API GPU dedicada en HTTPS. La API sirve los modelos configurados.",
+  "src.account": "Configuración de la cuenta",
   "src.admin": "Panel de administración",
   "src.api": "Referencia de la API",
   "src.architecture": "Arquitectura",

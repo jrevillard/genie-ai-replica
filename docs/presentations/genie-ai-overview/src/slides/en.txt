@@ -186,13 +186,14 @@ Authorisation|The backend verifies the token. Application roles control function
 ! Two profiles, two controls. Keycloak establishes the identity and issues the OIDC token; the application validates that identity and uses the configured roles and scopes to decide the access. The application roles govern the functions in GENIE.AI, while the repository read scopes decide which knowledge repositories can be searched. The two are related but not interchangeable. Both the sign-in and the effective retrieval need testing with representative accounts, before the launch and after every access change.
 ~ authz|idp|api
 
-@spread|Where does the service process its data?|+light
-Storage|Document Repository stores files. ArangoDB stores the searchable passages and the vector or graph indexes.
-Model calls|The application sends inputs to the configured model endpoint. A separate GPU API can sit inside the institution’s network or across a managed boundary.
-Operations|Review telemetry, backups, secret handling and retention against the institution’s security requirements.
-= Trace where documents, questions and selected passages are processed.
-! Two data paths, kept separate. The uploaded file is retained by the Document Repository, while the indexed passages and their retrieval data are stored in ArangoDB. During a question, the selected context goes to the configured model endpoint along with the request. A separate GPU API can be operated on the institution's network even though it sits outside the application deployment. If the Slim Dataprep is configured to use a remote Docling, the document content crosses that service boundary too. These are the boundaries to map with the platform team: the network, the retention and the access.
-~ architecture|security|gpu|slim
+@spread|Data protection, level by level.|+light
+? USERS · OPERATIONS · INFRASTRUCTURE
+People’s rights|Each user can delete a conversation, reset their data or delete their account from the settings. Deleting the account erases the personal fields.
+Logs and telemetry|Personal data is masked in the logs as they are collected. The retention of logs, metrics and traces is a deployment setting.
+Where the data lives|Files and indexes stay in the institution’s deployment. Model calls go to the GPU or GPU API chosen, which may sit beyond its network.
+= Connect these levels in the institution’s data protection analysis: the platform provides the mechanisms, the assessment remains its own.
+! Three levels, next to the access control of the previous slide. Users act on their own data: a conversation can be deleted from the saved chats, and the settings page offers a data reset and an account deletion. The account deletion is the platform’s answer to the right to erasure: it deletes the Keycloak user and nulls the personal fields. Operations decide what is kept: container logs pass a redaction transform in the collector before they are stored, and the retention of logs, metrics and traces is set per deployment. Infrastructure decides where the data goes: files and indexes stay in the deployment, while model calls follow the GPU or GPU API chosen. Make no compliance claim here: the platform provides the mechanisms; the record of processing, the retention periods and the boundary of a remote GPU API are for the institution and its data protection officer to assess. If the Slim Dataprep uses a remote Docling, the document content crosses that boundary too.
+~ account|observe|gpu|security
 
 @console|Validate routing, retrieval and answer quality.
 Before serving|Use the Testing Lab to check which repository a reference query should select or exclude.

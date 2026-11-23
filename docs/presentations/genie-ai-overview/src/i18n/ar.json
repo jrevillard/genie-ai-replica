@@ -112,6 +112,7 @@
   "diagram.24.description": "يستخدم التطبيق مخازن الملفات والفهارس المضبوطة لكل نشر، ولا يعتمد على مخزن مشترك.",
   "diagram.26.description": "ترسل خدمات GENIE.AI المهيأة بيانات القياس إلى OpenTelemetry Collector، الذي يوجهها إلى مخازن Victoria المضبوطة.",
   "diagram.30.description": "يمكن لـDocker Compose وDocker Swarm وKubernetes مع Helm إرسال طلبات النماذج إلى واجهة GPU مخصصة عبر HTTPS، لتوفير خدمات النماذج المضبوطة.",
+  "src.account": "إعدادات الحساب",
   "src.admin": "لوحة الإدارة",
   "src.api": "مرجع الواجهات البرمجية",
   "src.architecture": "البنية",

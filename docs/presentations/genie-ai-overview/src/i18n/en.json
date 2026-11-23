@@ -112,6 +112,7 @@
   "diagram.24.description": "The application uses locally selected file and index stores, then calls configured models. Institution-managed and third-party model endpoints have different data boundaries.",
   "diagram.26.description": "Instrumented GENIE.AI services send telemetry to the OpenTelemetry Collector. VictoriaMetrics, VictoriaLogs and VictoriaTraces store the corresponding signals. Grafana visualises configured data sources.",
   "diagram.30.description": "Docker Compose, Docker Swarm and Kubernetes via Helm can all send model operations to a dedicated HTTPS GPU API. The GPU endpoint serves the configured workloads.",
+  "src.account": "Account settings",
   "src.admin": "Admin dashboard",
   "src.api": "API reference",
   "src.architecture": "Architecture",

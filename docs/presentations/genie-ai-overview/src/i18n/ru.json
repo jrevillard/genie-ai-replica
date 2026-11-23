@@ -112,6 +112,7 @@
   "diagram.24.description": "Приложение использует настроенные для этого развёртывания хранилища файлов и индексов, не полагаясь на общее хранилище.",
   "diagram.26.description": "Сервисы GENIE.AI передают телеметрию в OpenTelemetry Collector, который направляет её в настроенные хранилища Victoria.",
   "diagram.30.description": "Docker Compose, Docker Swarm и Kubernetes с Helm могут направлять запросы моделей на выделенный GPU API по HTTPS. Через него доступны настроенные модельные сервисы.",
+  "src.account": "Настройки учётной записи",
   "src.admin": "Панель администратора",
   "src.api": "Справочник API",
   "src.architecture": "Архитектура",

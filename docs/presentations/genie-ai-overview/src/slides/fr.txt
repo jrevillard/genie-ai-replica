@@ -186,13 +186,14 @@ Autorisation|Le serveur vérifie le jeton. Les rôles applicatifs contrôlent le
 ! Deux profils, deux contrôles. Keycloak vérifie l’identité et émet un jeton OIDC ; l’application valide ce jeton et applique les rôles et autorisations configurés. Les rôles applicatifs déterminent les fonctions accessibles dans GENIE.AI, tandis que les droits de lecture par dépôt déterminent les dépôts consultables. Ces contrôles sont liés, mais ne se substituent pas l’un à l’autre. Testez la connexion et l’accès réel à la recherche avec des comptes représentatifs avant la mise en production, puis après chaque changement des droits.
 ~ authz|idp|api
 
-@spread|Où le service traite-t-il ses données?|+light
-Stockage|Document Repository conserve les fichiers d’origine. ArangoDB stocke les fragments consultables et les index vectoriels ou graphiques.
-Appels au modèle|L’application envoie les entrées à l’API du modèle configurée. Une API GPU distincte peut se trouver sur le réseau de l’institution ou au-delà d’une frontière réseau gérée.
-Opérations|Examiner la télémétrie, les sauvegardes, la gestion des secrets et la conservation des données au regard des exigences de sécurité de l’institution.
-= Suivre où sont traités les documents, les questions et les fragments sélectionnés.
-! Deux circuits de données distincts. Le fichier déposé reste dans Document Repository ; ArangoDB conserve les fragments indexés et les données utiles à leur recherche. Lorsqu’une personne pose une question, le contexte sélectionné est transmis avec la requête à l’API du modèle configurée. Une API GPU séparée peut être hébergée sur le réseau de l’institution, hors du déploiement applicatif. Si Slim Dataprep utilise un Docling distant, le contenu des documents franchit aussi la frontière de ce service. Avec l’équipe plateforme, cartographiez ces frontières : réseau, durée de conservation et droits d’accès.
-~ architecture|security|gpu|slim
+@spread|La protection des données, niveau par niveau.|+light
+? UTILISATEURS · EXPLOITATION · INFRASTRUCTURE
+Droits des personnes|Chaque utilisateur peut supprimer une conversation, réinitialiser ses données ou supprimer son compte depuis les paramètres. La suppression du compte efface les champs personnels.
+Journaux et télémétrie|Les données personnelles sont masquées dans les journaux à la collecte. La durée de conservation des journaux, des métriques et des traces se règle au déploiement.
+Emplacement des données|Les fichiers et les index restent dans le déploiement de l’institution. Les appels au modèle suivent le GPU ou l’API GPU choisi, qui peut se trouver au-delà de son réseau.
+= Relier ces niveaux dans l’analyse de protection des données de l’institution : la plateforme fournit les mécanismes, l’analyse reste la sienne.
+! Trois niveaux, à côté du contrôle d’accès de la diapositive précédente. Côté utilisateurs : chacun agit sur ses propres données — une conversation se supprime depuis les conversations enregistrées, et la page des paramètres propose la réinitialisation des données et la suppression du compte ; la suppression du compte est la réponse de la plateforme au droit à l’effacement, elle supprime l’utilisateur Keycloak et vide les champs personnels. Côté exploitation : les journaux des conteneurs passent par une transformation d’anonymisation dans le collecteur avant d’être stockés, et la conservation des journaux, des métriques et des traces se règle par déploiement. Côté infrastructure : les fichiers et les index restent dans le déploiement, tandis que les appels au modèle suivent le GPU ou l’API GPU choisi. Ne revendiquez aucune conformité ici : la plateforme fournit les mécanismes ; le registre des traitements, les durées de conservation et la frontière d’une API GPU distante relèvent de l’institution et de son délégué à la protection des données. Si le Slim Dataprep utilise un Docling distant, le contenu des documents franchit aussi cette frontière.
+~ account|observe|gpu|security
 
 @console|Valider le routage, la recherche et la qualité des réponses.
 Avant mise en service|Utiliser le Testing Lab pour vérifier quel dépôt une requête de référence doit sélectionner ou exclure.

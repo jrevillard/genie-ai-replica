@@ -369,6 +369,16 @@ async function check() {
         });
         assert.deepEqual(issues, [], "Content out of bounds on slide " + id + " in " + code);
       }
+      // The Arabic and Chinese faces travel inside the deck, so those two
+      // languages look the same on every machine. A face is used only when
+      // the stack names it, and a face nothing draws stays unloaded.
+      const embedded = code === "ar" ? "Noto Sans Arabic" : code === "zh" ? "Noto Sans SC" : null;
+      if (embedded) {
+        const faces = await page.evaluate((family) =>
+          [...document.fonts].filter((face) => face.family === family).map((face) => face.status), embedded);
+        assert.ok(faces.length === 2 && faces.every((status) => status === "loaded"),
+          `${code}: the embedded face ${embedded} is not used (${faces.join(", ")})`);
+      }
       // The prose must be the language's own. The runtime swaps every slot
       // in the page, so a slide that kept its English text would pass
       // every check above.

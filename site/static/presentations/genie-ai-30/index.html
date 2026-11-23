@@ -53,13 +53,16 @@
   --ink: #070b14; --muted: #17202e; --rule: #dce5f6; --paper: #f7f8fd;
   --blue: #1d4a9a; --cyan: #75dcec; --violet: #573394; --magenta: #641b79;
   --navy: #071638;
+  --fonts: Carlito, "Noto Sans Arabic", "Noto Sans SC", Calibri, Arial, sans-serif;
 }
 html, body { margin: 0; background: #071330; }
 /* Carlito carries the Latin and Cyrillic text. The Arabic and Chinese
    faces are added by the build, each covering only the characters its
-   translation prints; the browser picks whichever face holds the
-   character, so the stack below never has to name them. */
-.reveal { font-family: Carlito, Calibri, Arial, sans-serif; color: var(--ink); }
+   translation prints. A face is used only when the stack names it: the
+   browser takes each character from the first family that holds it, so
+   Carlito draws the Latin text of every language and the other two draw
+   what it lacks. */
+.reveal { font-family: var(--fonts); color: var(--ink); }
 .reveal .slides { text-align: start; }
 .reveal .slides > section.deck-slide {
   box-sizing: border-box; width: 1280px; height: 720px; padding: 0; overflow: hidden;
@@ -144,6 +147,9 @@ html, body { margin: 0; background: #071330; }
 .cover-content { margin-top: 108px; max-width: 823px; }
 .title-tag { display: inline-block; padding: 9px 14px; background: #1e3765; color: #fff; border-radius: 6px; }
 .cover-content h1 { max-width: 790px; margin: 22px 0 21px; font-size: 94px; line-height: .94; letter-spacing: -.04em; text-wrap: balance; }
+/* The Arabic face is wider: at 94px the title takes four lines and pushes
+   the introduction over the footer. At 84px it takes three. */
+[dir="rtl"] .cover-content h1 { font-size: 84px; }
 .cover-intro { max-width: 663px; color: #fff; border-top: 2px solid #34bdf0; padding-top: 19px; margin: 33px 0 0; font-size: 30px; line-height: 1.13; }
 .readout h2, .scene h2, .field-grid h2 { margin: 0 0 8px; font-size: 27px; font-weight: 700; line-height: 1.06; letter-spacing: -.01em; }
 .readout p, .scene p, .field-grid p { margin: 0; font-size: 23px; line-height: 1.17; }
@@ -282,7 +288,7 @@ html, body { margin: 0; background: #071330; }
 .resources { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px 15px; }
 .resources a { display: block; padding: 12px 15px; border-radius: 8px; background: #eaf2fe; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 4px; font-size: 23px; font-weight: 700; }
 #deck-ui { position: fixed; z-index: 40; top: 7px; inset-inline-end: 8px; display: flex; gap: 4px; }
-#deck-ui button { padding: 6px 9px; border: 0; border-radius: 5px; background: #13224b; color: #fff; font: 700 14px Arial,sans-serif; cursor: pointer; }
+#deck-ui button { padding: 6px 9px; border: 0; border-radius: 5px; background: #13224b; color: #fff; font: 700 14px var(--fonts); cursor: pointer; }
 #deck-ui button:hover, #deck-ui button:focus-visible { opacity: 1; outline: 2px solid #7eb2ff; }
 /* The speaker view shows the deck in a frame. The frame is a view of the
    slide, not a presentation, so its controls stay out of the way. */
@@ -322,7 +328,7 @@ body.receiver #deck-ui { display: none; }
   border-radius: 5px;
   background: #13224b;
   color: #fff;
-  font: 700 14px Arial,sans-serif;
+  font: 700 14px var(--fonts);
   cursor: pointer;
   background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
   background-position: right 11px center, right 6px center;

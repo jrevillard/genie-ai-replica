@@ -94,13 +94,14 @@ Two rules keep the six versions honest:
 5. Regenerate the fonts, rebuild and check the browser:
 
    ```bash
-   python3 src/fetch_fonts.py --force --code <lang>
+   python3 src/fetch_fonts.py --code <lang>
    npm run build
    npm run check
    ```
 
-   The build refuses a face that was cut for an older text, so a skipped
-   step fails the build instead of leaving squares.
+   The build refuses a face that was cut for an older text, or a face or a
+   note that went missing, so a skipped step fails the build instead of
+   leaving squares.
 
 ### The fonts
 
@@ -120,8 +121,9 @@ PATH=.venv/bin:$PATH python3 src/fetch_fonts.py
 
 The generated files live under `src/assets/fonts/` and are committed: the
 build reads them and never reaches the network. Each face travels with the
-list of the characters it was cut for, and the build refuses a face whose
-list no longer covers what the translation prints.
+list of the characters it was cut for: the build refuses a face whose list
+no longer covers what the translation prints, and the script keeps a face on
+disk only while its list still does.
 
 ### Arabic and the reading direction
 

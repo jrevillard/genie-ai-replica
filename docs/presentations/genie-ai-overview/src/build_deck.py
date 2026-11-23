@@ -29,7 +29,7 @@ from json import dumps, loads
 from pathlib import Path
 from re import IGNORECASE, findall, match, sub
 
-from fetch_fonts import characters
+from fetch_fonts import FACES, characters
 
 WORK = Path(__file__).parent
 ASSETS = WORK / 'assets'
@@ -340,27 +340,30 @@ def language_fonts():
     The browser hides a face that fell behind its translation: a missing
     character is drawn by another font and nothing reports it. So the
     characters the language prints are checked against the list the face
-    was cut for, and a stale face fails the build.
+    was cut for. A face that fell behind, a missing note or a missing face
+    fails the build.
     """
     faces = ''
     directory = ASSETS / 'fonts'
     if not directory.exists():
         return faces
-    for coverage_path in sorted(directory.glob('*.json')):
+    rerun = 'Rerun: python3 src/fetch_fonts.py --code {code}'
+    for code in sorted(FACES):
+        coverage_path = directory / f'{code}.json'
+        if not coverage_path.exists():
+            raise SystemExit(f'assets/fonts/{coverage_path.name} is missing. ' + rerun.format(code=code))
         coverage = loads(coverage_path.read_text(encoding='utf-8'))
-        code = coverage_path.stem
         uncut = sorted(set(characters(code)) - set(coverage.get('characters', '')))
         if uncut:
             raise SystemExit(
                 f'assets/fonts/{coverage_path.name}: the {code} face was cut before the translation '
-                f'printed {len(uncut)} of its characters ({"".join(uncut[:12])}). '
-                f'Rerun: python3 src/fetch_fonts.py --force --code {code}'
+                f'printed {len(uncut)} of its characters ({"".join(uncut[:12])}). ' + rerun.format(code=code)
             )
         family = coverage['family']
         for name in coverage['files']:
             path = directory / name
             if not path.exists():
-                continue
+                raise SystemExit(f'assets/fonts/{name}: the face the coverage note lists is missing. ' + rerun.format(code=code))
             weight = findall(r'-(\d+)\.woff2$', name)
             faces += (
                 '@font-face{font-family:"%s";font-style:normal;font-weight:%s;'

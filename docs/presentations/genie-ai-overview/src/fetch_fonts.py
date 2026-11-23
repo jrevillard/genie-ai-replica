@@ -11,10 +11,10 @@ request carries every character of the translation, and the URL grows past
 what the service accepts — it answers with the whole face instead.
 
 The generated files live under assets/fonts/ and are committed: the build
-reads them and never reaches the network. Re-run this script with --force
-whenever a translation changes: each face travels with the list of the
-characters it was cut for, and the build refuses a face whose list no
-longer covers what the translation prints.
+reads them and never reaches the network. Re-run this script whenever a
+translation changes: a face on disk is reused only behind a note that lists
+exactly the characters the translation prints today, and the build refuses
+a face whose note no longer covers them.
 
 Usage: python3 src/fetch_fonts.py [--force] [--code CODE ...]
 """
@@ -97,22 +97,32 @@ def subset(source, target, glyphs):
 
 
 def build(code, force):
-    """Write the subset faces of one language, and its coverage note."""
+    """Write the subset faces of one language, and its coverage note.
+
+    A face on disk is kept only when a note lists exactly the characters
+    the translation prints today and every face the note names is present.
+    Anything else is cut again, so a note never vouches for a face that was
+    not cut for its own text.
+    """
     family = FACES[code]
     glyphs = ''.join(characters(code))
     if not glyphs:
         print(f'{code}: no text yet, skipped')
         return True
     note = FONTS / f'{code}.json'
-    if not force and note.exists():
-        cut_for = set(loads(note.read_text(encoding='utf-8')).get('characters', ''))
-        if cut_for != set(glyphs):
-            print(f'{code}: the translation changed since the face was cut; rerun with --force')
-            return False
+    kept = False
+    if note.exists() and not force:
+        saved = loads(note.read_text(encoding='utf-8'))
+        faces = [FONTS / name for name in saved.get('files', [])]
+        kept = (
+            set(saved.get('characters', '')) == set(glyphs)
+            and len(faces) == len(WEIGHTS)
+            and all(face.exists() for face in faces)
+        )
     written = []
     for weight in WEIGHTS:
         target = FONTS / f'{code}-{weight}.woff2'
-        if target.exists() and not force:
+        if kept:
             written.append(target)
             continue
         url = face_url(family, weight)
@@ -140,7 +150,7 @@ def build(code, force):
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Subset the deck fonts per language.')
-    parser.add_argument('--force', action='store_true', help='rewrite faces that already exist')
+    parser.add_argument('--force', action='store_true', help='cut the faces again even when the note matches the text')
     parser.add_argument('--code', action='append', help='limit to these languages')
     arguments = parser.parse_args()
     FONTS.mkdir(parents=True, exist_ok=True)

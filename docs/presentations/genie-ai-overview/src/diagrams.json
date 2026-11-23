@@ -1,7 +1,7 @@
 {
   "07": {
     "layout": "wide",
-    "description": "An authenticated government portal calls the assistant API. Role-controlled document operations are exposed by the Document Repository."
+    "description": "The institution's identity provider signs users into its portals and apps, which call the assistant through the API edge. The document APIs feed the knowledge base, and the model calls go to the institution's GPU or to a GPU API."
   },
   "09": {
     "layout": "wide",

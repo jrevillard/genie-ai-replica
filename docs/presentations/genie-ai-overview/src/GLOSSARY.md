@@ -11,7 +11,7 @@ before translating, so the six versions say the same thing the same way.
 `Grafana`, `VictoriaMetrics`, `VictoriaLogs`, `VictoriaTraces`, `vLLM`, `TEI`,
 `Hugging Face`, `ClamAV`, `Apache 2.0`, `BM25`, `RAG`, `PDF`, `DOCX`,
 `XLSX`, `CSV`, `MD`, `HTML`, `TXT`, `JSON`, `API`, `GPU`, `CPU`, `CUDA`,
-`ROCm`, `NVIDIA`, `AMD`, `Flutter`, `ClamAV`.
+`ROCm`, `NVIDIA`, `AMD`, `OKF`, `OKF Studio`, `Testing Lab`, `Query Inspector`.
 
 Product names keep their Latin spelling in every language, including the
 right-to-left ones. They are never given an Arabic or Chinese translation.
@@ -125,7 +125,7 @@ the preferred wording above.
   plateforme`, and a coordinated verb follows (`… et placer le GPU`). The
   imperative is for the speaker notes and for what the deck quotes — the
   assistant's answer, the excerpt of the source document — which keep their
-  own voice. The build refuses a `-ez` form anywhere else in the visible
-  French text.
-- In French, use French quotation marks and narrow non-breaking spaces before
-  `:` `;` `?` and `!`, and inside `« … »`.
+  own voice. The build refuses a `-ez` form anywhere else in the text a
+  slide shows.
+- In French, put a narrow no-break space (U+202F) before `:` `;` `?` and `!`,
+  an ordinary no-break space (U+00A0) inside `« … »`, and the apostrophe `’`.

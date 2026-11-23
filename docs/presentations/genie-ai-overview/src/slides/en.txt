@@ -45,10 +45,10 @@ Model and retrieval|Select compatible models and tune retrieval, reranking and p
 @flow|Several ways to fit GENIE.AI into an existing ecosystem.|+light
 ? FOUR INTEGRATION POINTS
 Your applications|A government portal or staff application calls the assistant API and shows the answer with its sources in its own pages, as the web and mobile apps do.
-Your sign-in|Users sign in with the institution's own identity provider. GENIE.AI accepts its OIDC tokens, and the user's roles travel with every request.
+Your sign-in|Users sign in with the institution's own identity provider. The platform trusts it, and each request carries the user's roles.
 Your documents|Existing documents reach the knowledge base through the document APIs or the dashboard: upload, ingestion and search, in the usual office formats.
 Your models|The model services can run on the institution's own GPU hosts or behind a dedicated GPU API.
-! Four ways into an existing ecosystem, one per card. An agency portal or staff application calls the assistant API and presents the answer itself; the web and mobile clients are clients of that same API. Users keep the identity they already have: GENIE.AI accepts the institution's OIDC tokens, and the roles in the token decide what each request may read. Documents already published reach the knowledge base through the document APIs or the dashboard. The model services can run on the institution's own GPU hosts or behind a GPU API it controls. The integrating agency remains responsible for its application logic and for any decision it makes from the response.
+! Four ways into an existing ecosystem, one per card. An agency portal or staff application calls the assistant API and presents the answer itself; the web and mobile clients are clients of that same API. Users keep the identity they already have: the platform's sign-in service (Keycloak) brokers the institution's provider and issues the token the applications present, and the roles in that token decide what each request may read. Documents already published reach the knowledge base through the document APIs or the dashboard. The model services can run on the institution's own GPU hosts or behind a GPU API it controls. The integrating agency remains responsible for its application logic and for any decision it makes from the response.
 ~ api|idp|ingest|gpu
 
 @field|The same software can serve very different local needs.|+light
@@ -69,7 +69,7 @@ Deployment settings|Upload limits and antivirus scanning. Chunk size by file typ
 ~ ingest|uploadFormats|ingestPipeline
 
 @flow|Follow a question through the RAG pipeline.|+light
-? RETRIEVAL-AUGMENTED GENERATION
+? RETRIEVAL-AUGMENTED GENERATION (RAG)
 Ask|The Node.js backend accepts the authenticated question. OPEA ChatQnA coordinates the model and retrieval calls.
 Find|TEI embeds the question in the standard stack. The retriever searches ArangoDB within the account’s available knowledge.
 Rank|The optional reranker re-scores the retrieved passages and can drop weak matches.
@@ -165,8 +165,8 @@ Authorised caseworker|The caseworker can consult both the public guide and the r
 
 @rail|Published knowledge needs a place in daily operations.|+light
 Business ownership|Assign responsibility for each official source and define the events that trigger a review.
-Editorial control|Review the affected sources when the source changes, publish the updated version and replay reference questions.
-Operational follow-up|Check the serving version and the ingestion log. Use the audit history to review lifecycle changes, grants and imports.
+Editorial control|When a source changes, review the affected sources, publish the updated version and replay reference questions.
+Operational follow-up|Check the serving version and the ingestion log. Use the audit history to review changes, grants and imports.
 ! Knowledge ownership is an operating responsibility, and a changed requirement shows why. The policy owner confirms what changed and which source is authoritative; the editor updates the affected sources and their published versions, reviews and publishes the revision; the operations or service team confirms the ingestion and checks the expected answer. The audit history and the ingestion log help investigate what changed and whether the new version is serving. The handoff has to be defined by the institution, not assumed from the software.
 ~ ingest|admin
 
@@ -181,19 +181,19 @@ Service health|Check service status, operational logs and Query Inspector when i
 
 @split|Keycloak identifies the user. GENIE.AI applies access rules.|+light
 Authentication|Keycloak issues OIDC tokens and can broker sign-in through an institution’s configured identity provider.
-Authorisation|The backend verifies the token. Application roles control functions, and repository read scopes govern access to knowledge repositories.
+Authorisation|The backend verifies the token. Application roles control functions, and repository read scopes decide which knowledge repositories a user can search.
 = Test the sign-in flow and the effective document access separately.
 ! Two profiles, two controls. Keycloak establishes the identity and issues the OIDC token; the application validates that identity and uses the configured roles and scopes to decide the access. The application roles govern the functions in GENIE.AI, while the repository read scopes decide which knowledge repositories can be searched. The two are related but not interchangeable. Both the sign-in and the effective retrieval need testing with representative accounts, before the launch and after every access change.
 ~ authz|idp|api
 
 @spread|Data protection, level by level.|+light
 ? USERS · OPERATIONS · INFRASTRUCTURE
-People’s rights|Each user can delete a conversation, reset their data or delete their account from the settings. Deleting the account erases the personal fields.
-Logs and telemetry|Personal data is masked in the logs as they are collected. The retention of logs, metrics and traces is a deployment setting.
+People’s rights|Each user can delete a conversation. The settings offer a data reset and an account deletion; deleting the account erases the personal data in the profile.
+Logs and telemetry|Passwords, tokens, e-mail addresses and the text of questions, answers and documents are masked in the logs as they are collected. The retention of logs, metrics and traces is a deployment setting.
 Where the data lives|Files and indexes stay in the institution’s deployment. Model calls go to the GPU or GPU API chosen, which may sit beyond its network.
-= Connect these levels in the institution’s data protection analysis: the platform provides the mechanisms, the assessment remains its own.
-! Three levels, next to the access control of the previous slide. Users act on their own data: a conversation can be deleted from the saved chats, and the settings page offers a data reset and an account deletion. The account deletion is the platform’s answer to the right to erasure: it deletes the Keycloak user and nulls the personal fields. Operations decide what is kept: container logs pass a redaction transform in the collector before they are stored, and the retention of logs, metrics and traces is set per deployment. Infrastructure decides where the data goes: files and indexes stay in the deployment, while model calls follow the GPU or GPU API chosen. Make no compliance claim here: the platform provides the mechanisms; the record of processing, the retention periods and the boundary of a remote GPU API are for the institution and its data protection officer to assess. If the Slim Dataprep uses a remote Docling, the document content crosses that boundary too.
-~ account|observe|gpu|security
+= Connect these levels in the institution’s data protection analysis: the platform provides the mechanisms, the institution makes the assessment.
+! Three levels, next to the access control of the previous slide. Users act on their own data: a conversation can be deleted from the saved chats — it disappears from the user for good; what the platform keeps beyond it, backups and logs, is a point to confirm with the platform team. The settings page offers a data reset and an account deletion. The account deletion is the mechanism the platform provides for an erasure request: it deletes the Keycloak user and nulls the personal data in the profile. Operations decide what is kept: container logs pass a redaction transform in the collector before they are stored — it works from a fixed list of keys and patterns, and anything outside it, a name or a phone number in free text, is stored as written — and the retention of logs, metrics and traces is set per deployment. Infrastructure decides where the data goes: files and indexes stay in the deployment, while model calls follow the GPU or GPU API chosen. Make no compliance claim here: the platform provides the mechanisms; the record of processing, the retention periods and the boundary of a remote GPU API are for the institution and its data protection officer to assess. If the Slim Dataprep uses a remote Docling, the document content crosses that boundary too.
+~ account|observe|gpu
 
 @console|Validate routing, retrieval and answer quality.
 Before serving|Use the Testing Lab to check which repository a reference query should select or exclude.
@@ -287,7 +287,7 @@ The service|Operators can verify knowledge scope and publication status. When tr
 
 @finale|One framework. Three layers of institutional control.|+light
 The service|Choose audiences, languages, channels and integrations.
-The knowledge|Curate sources, manage serving versions, set access policy and test the answers.
+The knowledge|Curate sources, manage published versions, set access policy and test the answers.
 The infrastructure|Choose the models and where they run. Inspect metrics or traces when the corresponding services are enabled.
 ! Three layers, in the order of the story. Define the audiences and the channels; govern the knowledge and its access; then choose the models and the infrastructure that serve it. The institution's control comes from making these choices explicit and assigning an owner to each. The opening question shows where the service design, the knowledge governance and the operations meet in a single answer.
 ~ itu|welcome

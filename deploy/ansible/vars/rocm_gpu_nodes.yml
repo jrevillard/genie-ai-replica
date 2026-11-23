@@ -33,14 +33,13 @@ nginx_image: nginx:1.28-alpine
 # Served model ids — MANDATORY (issue #2119): the GPU overlay renders them
 # into --model / --served-model-name with NO template default and
 # deploy-gpu.yml's preflight asserts both before any node change. Values are
-# the template's historical defaults (this file carried no pin, so the
-# template default was the effective value here). The operator's
-# vault-rocm-gpu.yml loads AFTER this file, so a vault pin overrides these —
-# keep the override deliberate. SIZING NOTE: env.strixhalo (the node's
-# sizing env) carries VLLM_LLM_MODEL_ID=ibm-granite/granite-3.1-2b-instruct /
-# VLLM_TRANSLATION_MODEL_ID=google/gemma-3-1b-it as the venue's intended
-# 2B-class set — reconcile that intent here (or in the vault) before
-# trusting a fresh ROCm deploy.
+# the template's historical defaults (the template was the only definition
+# before the ids became mandatory). The operator's vault-rocm-gpu.yml loads
+# AFTER this file, so a vault pin overrides these — keep the override
+# deliberate. SIZING NOTE: env.strixhalo (the node's sizing env) carries
+# VLLM_LLM_MODEL_ID=granite-3.1-2b / VLLM_TRANSLATION_MODEL_ID=gemma-3-1b-it
+# as the venue's intended 2B-class set — reconcile that intent here (or in
+# the vault) before trusting a fresh ROCm deploy.
 vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct
 vllm_translation_model_id: google/gemma-3-4b-it
 

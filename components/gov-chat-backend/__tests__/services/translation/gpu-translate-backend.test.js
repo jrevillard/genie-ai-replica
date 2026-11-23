@@ -18,15 +18,16 @@ const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
 
 // The shared http.request double for this file's standard request/response
-// scenarios — every request gets the same uniform response (the init test's
-// response stay hand-rolled — one-off shapes this builder does not
-// parameterize). Each block used to hand-roll the same scaffolding (an
-// EventEmitter req with write/setTimeout/destroy stubs, `end -> cb(res)`),
-// and the copies drifted: the non-2xx health refusal drains the response
-// (`res.resume()`), a piece only some copies modelled. One builder models
-// the request/response interface the service touches; each block
-// parameterizes only the behavior it pins (status, body chunks, whether
-// the request times out).
+// scenarios — every request that completes gets the same response, and the
+// timed-out ones all time out. The init test's two sequential responses and
+// the abort test's incomplete response stay hand-rolled — one-off shapes
+// this builder does not parameterize. Each block used to hand-roll the same
+// scaffolding (an EventEmitter req with write/setTimeout/destroy stubs,
+// `end -> cb(res)`), and the copies drifted: the non-2xx health refusal
+// drains the response (`res.resume()`), a piece only some copies modelled.
+// One builder models the request/response interface the service touches;
+// each block parameterizes only the behavior it pins (status, body chunks,
+// whether the request times out).
 const serveRequest = ({ client = http, statusCode = 200, body = null, timeout = false } = {}) => {
   const capturedOpts = [];
   const writtenBodies = [];

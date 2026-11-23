@@ -4187,6 +4187,11 @@ docs:validate:
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm-granite4.yaml'))['services']['vllm-llm']; assert '--tool-call-parser granite4' in s['command'] and any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-nvidia.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']"
+    # The explicit parser lever (ansible spelling of VLLM_TOOL_CALL_PARSER,
+    # #2052 parity): an override on a Granite 3.x model renders the flags
+    # with THAT parser instead of the derived default (absent for 3.x).
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-parser-override.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it vllm_tool_call_parser=granite"
+    - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-parser-override.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite' in s['command']"
     # #2119: the served-model ids are MANDATORY — a render without them must
     # FAIL, and the error must NAME the variable (never a silent default).
     # The runner script carries set -e: capture the expected failure with

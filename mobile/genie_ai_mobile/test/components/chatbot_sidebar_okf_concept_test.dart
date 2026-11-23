@@ -243,6 +243,31 @@ void main() {
     );
   });
 
+  testWidgets('a body that is broken but drops nothing is not truncated', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // The slow path (a body with a 500+ alphanumeric run) that drops
+    // NOTHING: the preview breaks the run, but no body character is lost.
+    // The notice must not appear — a preview that always claims to be
+    // truncated on this path would lie about a body shown whole.
+    final body = 'x' * 600;
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptBody: body),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'hadith nawawi 36');
+
+    expect(find.byKey(const ValueKey('ds-modal')), findsOneWidget);
+    expect(
+      find.text(
+        'The preview is truncated — the document is longer than can be shown here.',
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('a long unbroken run is broken so the renderer stays fast', (
     tester,
   ) async {
@@ -311,6 +336,11 @@ void main() {
     await tapCitation(tester, 'hadith nawawi 36');
 
     expect(tester.takeException(), isNull);
+    // The concept route — the tap opened the concept, not a document.
+    expect(
+      requests.map((u) => u.path),
+      contains('/api/okf/repos/repo-1/concepts/hadith_nawawi_36'),
+    );
     expect(
       find.text(
         'The preview is truncated — the document is longer than can be shown here.',

@@ -184,6 +184,15 @@ class TestResolveK8sPod:
         # (venues collect them) must never be resolved.
         assert "status.phase=Running" in args
 
+    def test_multi_replica_stdout_yields_one_pod_name(self, monkeypatch):
+        """The `[*]` jsonpath emits ALL matching pods space-separated on one
+        line; the resolution must take the first name, never the whole
+        string — a two-replica venue would otherwise be handed the
+        concatenated names as one pod name."""
+        monkeypatch.delenv("EVAL_K8S_POD_CHATQNA", raising=False)
+        with mock.patch("harness._run_kubectl", return_value="pod-a pod-b\n"):
+            assert resolve_k8s_pod("chatqna") == "pod-a"
+
     def test_namespace_is_normalized_and_defaults_to_genieai(self, monkeypatch):
         """An ambient namespace with a stray space (a quoted multi-line
         export) is stripped, not sent at a namespace nothing lives in; unset

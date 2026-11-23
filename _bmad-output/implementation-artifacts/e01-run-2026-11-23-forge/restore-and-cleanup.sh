@@ -64,6 +64,10 @@ say "7. the run's realm changes are reverted"
 # return empty (the json.loads then dies on the realm revert, silently).
 KC_POD=$(kubectl -n $NS get pod -l app=keycloak --field-selector status.phase=Running -o jsonpath='{.items[*].metadata.name}' | awk '{print $1}')
 KC_IP=$(kubectl -n $NS get pod "$KC_POD" -o jsonpath='{.status.podIP}')
+if [ -z "$KC_IP" ]; then
+  echo "REFUSED: no running keycloak pod in $NS — the realm revert (step 7) cannot run; fix the venue or set KC_IP by hand before re-running"
+  exit 1
+fi
 KC="curl -sk --resolve genieai-forge.local:4443:$KC_IP"
 KCURL="https://genieai-forge.local:4443"
 echo "  keycloak pod $KC_POD @ $KC_IP"

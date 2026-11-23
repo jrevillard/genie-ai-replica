@@ -29,9 +29,9 @@ in one HTML file: English, French, Spanish, Russian, Arabic and Chinese.
 - **Read `src/GLOSSARY.md`** before translating or reviewing a translation.
   Product names stay in Latin script in every language, including Arabic.
 - **Regenerate the fonts** after a translation changes:
-  `PATH=.venv/bin:$PATH python3 src/fetch_fonts.py --code <lang>`. The Arabic
-  and Chinese faces are cut down to the characters the deck prints; without
-  that step those languages render in squares or in a system font.
+  `PATH=.venv/bin:$PATH python3 src/fetch_fonts.py --force --code <lang>`. The
+  Arabic and Chinese faces are cut down to the characters the deck prints; a
+  face that fell behind fails the build, which names the characters it lacks.
 - **The layout adapts at runtime.** Titles are measured, not counted, and the
   blocks of a slide shrink when a translation needs more room. Do not "fix" a
   long translation by shortening it — the deck handles the length.

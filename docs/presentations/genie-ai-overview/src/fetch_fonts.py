@@ -11,8 +11,10 @@ request carries every character of the translation, and the URL grows past
 what the service accepts — it answers with the whole face instead.
 
 The generated files live under assets/fonts/ and are committed: the build
-reads them and never reaches the network. Re-run this script whenever a
-translation changes.
+reads them and never reaches the network. Re-run this script with --force
+whenever a translation changes: each face travels with the list of the
+characters it was cut for, and the build refuses a face whose list no
+longer covers what the translation prints.
 
 Usage: python3 src/fetch_fonts.py [--force] [--code CODE ...]
 """
@@ -101,6 +103,12 @@ def build(code, force):
     if not glyphs:
         print(f'{code}: no text yet, skipped')
         return True
+    note = FONTS / f'{code}.json'
+    if not force and note.exists():
+        cut_for = set(loads(note.read_text(encoding='utf-8')).get('characters', ''))
+        if cut_for != set(glyphs):
+            print(f'{code}: the translation changed since the face was cut; rerun with --force')
+            return False
     written = []
     for weight in WEIGHTS:
         target = FONTS / f'{code}-{weight}.woff2'
@@ -120,6 +128,9 @@ def build(code, force):
         'family': family,
         'glyphs': len(glyphs),
         'files': [part.name for part in written],
+        # The build compares this list with the characters the translation
+        # prints, and refuses a face that fell behind it.
+        'characters': glyphs,
     }
     (FONTS / f'{code}.json').write_text(dumps(coverage, indent=2) + '\n', encoding='utf-8')
     total = sum(part.stat().st_size for part in written)

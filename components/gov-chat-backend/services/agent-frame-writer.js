@@ -387,7 +387,13 @@ async function proxyAgentRun({
   const doAgentTerminal = async () => {
     if (streamFinished || res.writableEnded || res.destroyed) return;
     streamFinished = true;
-    cleanupKeepalive();
+    // The keepalive stays emitting THROUGH the terminal: the post-stream
+    // whole-answer translation below is bounded by the translation reserve
+    // (tens of seconds are legal), and a zero-byte wire in that window lets
+    // an idle-timeout proxy sever the SSE before `done`. SSE comments cannot
+    // move the pinned frame order — this is the legacy terminal's discipline
+    // (its interval runs through handleStreamDone and self-retires on the
+    // writableEnded guard). Retired below once the response has ended.
     clearStreamDeadline();
     try {
       let alreadyFailedTranslation = false;
@@ -469,6 +475,10 @@ async function proxyAgentRun({
     } catch (error) {
       logger.error('AgentFrameWriter.stream_done_failed', { queryId, error: error.message });
     }
+    // handleStreamDone ends the response (every path: done, client-gone early
+    // return) — retire the interval deterministically; its writableEnded
+    // self-guard covers anything that slips past this line.
+    cleanupKeepalive();
   };
 
   const onSeamEvent = (event) => {

@@ -1258,6 +1258,84 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     );
   });
 
+  it('the terminal keeps the SSE keepalive emitting during the post-stream translation window', async () => {
+    // The terminal used to clear the keepalive at its start: the whole-answer
+    // translation (tens of seconds are legal behind the translation reserve)
+    // then ran on a zero-byte wire — an idle-timeout proxy severs the SSE,
+    // and the client never sees `done` for an answer that completed and was
+    // persisted. The keepalive keeps emitting through the window (SSE
+    // comments — the pinned frame order cannot move), the legacy terminal's
+    // own discipline.
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    // The keepalive interval is hardcoded 15000ms — the spy shortens ONLY the
+    // period (the real interval machinery, real clock, real wire bytes run
+    // unchanged) so the test can watch ticks inside a sub-second window.
+    // Faking the timer globals instead leaks into supertest's socket teardown
+    // and hangs the run.
+    const realSetInterval = global.setInterval.bind(global);
+    const setIntervalSpy = jest
+      .spyOn(global, 'setInterval')
+      .mockImplementation((fn) => realSetInterval(fn, 50));
+    // The translation holds the window for 250ms: the shortened interval
+    // (50ms) must tick INSIDE it.
+    const translationGate = new Promise((resolve) => {
+      setTimeout(resolve, 250);
+    });
+    createWholeAnswerTranslator.mockImplementation(
+      () =>
+        jest.fn(() =>
+          translationGate.then(() => ({
+            text: 'Bonjour le monde.',
+            failed: false,
+            queryTranslationStatus: 'translated',
+            accounting: { outcome: 'translated', queryTranslationStatus: 'translated', configError: null, mode: 'full-answer' },
+            error: null
+          }))
+        )
+    );
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    try {
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'q' }],
+        context: { language: 'DE' }
+      });
+      responsePromise.catch(() => {});
+      for (let i = 0; i < 500 && mockStream.listenerCount('data') === 0; i++) {
+        await flush(10);
+      }
+      expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+      mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify(envelope('verdict', GROUNDED_VERDICT, { seq: 1 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify(envelope('run_finished', { outcome: 'answered' }, { seq: 2 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify({ usage_record: USAGE_RECORD })}\n\n`);
+      mockStream.emit('end'); // the terminal runs; the translation holds the window
+
+      // Wait PAST the first tick while the translation is still pending.
+      const response = await responsePromise;
+      setIntervalSpy.mockRestore();
+
+      const text = response.text;
+      const metaPos = text.indexOf('"type":"metadata"');
+      const translationPos = text.indexOf('"type":"translation"');
+      const keepalivePos = text.indexOf(': keepalive');
+      expect(metaPos).toBeGreaterThan(-1);
+      expect(translationPos).toBeGreaterThan(-1);
+      // The keepalive ticked DURING the translation window (after metadata,
+      // before the translation frame) — the wire never went silent.
+      expect(keepalivePos).toBeGreaterThan(metaPos);
+      expect(keepalivePos).toBeLessThan(translationPos);
+      const frames = parseSSEEvents(text);
+      expect(frames[frames.length - 1].type).toBe('done');
+      expect(frames[frames.length - 1].translationFailed).toBe(false);
+    } finally {
+      setIntervalSpy.mockRestore();
+    }
+  });
+
   it('a failed leg translation reports translationFailed on done; the English answer stands', async () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();

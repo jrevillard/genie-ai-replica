@@ -231,10 +231,13 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
     if exec_backend() == "kubectl":
         raise RuntimeError(
             "resolve_containers is docker-only (docker ps): capture_baseline"
-            " has no Kubernetes path yet — produce the baseline through the"
-            " protocol driver instead (protocol/run_protocol.py reference"
-            " --resolved-env <snapshot.json>): the pinned snapshot file wins"
-            " over --stack-prefix, so no docker lookup is attempted"
+            " has no Kubernetes path, and no command can produce this"
+            " baseline artifact (N runs + median/MAD tolerance) on k8s yet."
+            " The closest protocol-side substitute is protocol/run_protocol.py"
+            " reference --resolved-env <snapshot.json> — a ONE-run reference"
+            " manifest without the tolerance layer this driver builds — with"
+            " the snapshot file pinned by hand (the pinned file wins over"
+            " --stack-prefix, so no docker lookup is attempted)"
         )
     out = _run(
         ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}"],

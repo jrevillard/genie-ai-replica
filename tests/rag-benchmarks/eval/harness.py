@@ -77,7 +77,11 @@ def exec_backend() -> str:
 
 
 def _k8s_namespace() -> str:
-    return os.getenv(K8S_NAMESPACE_ENV) or DEFAULT_K8S_NAMESPACE
+    """The venue's namespace: ``EVAL_K8S_NAMESPACE`` stripped, else the
+    default. Normalized like ``exec_backend`` — a stray space in a quoted
+    multi-line export would otherwise send every lookup at a namespace
+    nothing lives in."""
+    return os.getenv(K8S_NAMESPACE_ENV, "").strip() or DEFAULT_K8S_NAMESPACE
 
 
 def _pod_env_key(container: str) -> str:
@@ -177,16 +181,21 @@ def resolve_k8s_pod(container: str) -> str:
         f"genieai.io/component={container}",
         f"app.kubernetes.io/component={container}",
     ):
-        name = _run_kubectl(
+        # `.items[*]`, never `.items[0]`: on an empty match the [0] form makes
+        # kubectl exit 1 with "array index out of bounds" (live-verified), which
+        # would abort the loop before the second selector is consulted; the [*]
+        # form exits 0 with empty stdout, which is exactly the "no match" the
+        # loop is designed to fall through on.
+        stdout = _run_kubectl(
             [
                 "kubectl", "get", "pods", "-n", ns,
                 "-l", label,
                 "--field-selector", "status.phase=Running",
-                "-o", "jsonpath={.items[0].metadata.name}",
+                "-o", "jsonpath={.items[*].metadata.name}",
             ]
         ).strip()
-        if name:
-            return name
+        if stdout:
+            return stdout.split()[0]
     raise HarnessError(
         f"no running pod found for container identity {container!r} in"
         f" namespace {ns!r} — the identity must be the deployment's"

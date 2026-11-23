@@ -184,6 +184,21 @@ class TestResolveK8sPod:
         # (venues collect them) must never be resolved.
         assert "status.phase=Running" in args
 
+    def test_namespace_is_normalized_and_defaults_to_genieai(self, monkeypatch):
+        """An ambient namespace with a stray space (a quoted multi-line
+        export) is stripped, not sent at a namespace nothing lives in; unset
+        falls to the chart's default."""
+        monkeypatch.setenv("EVAL_K8S_NAMESPACE", "  other-ns ")
+        with mock.patch("harness._run_kubectl", return_value="pod-x\n") as run:
+            resolve_k8s_pod("chatqna")
+        argv = run.call_args.args[0]
+        assert argv[argv.index("-n") + 1] == "other-ns"
+        monkeypatch.delenv("EVAL_K8S_NAMESPACE", raising=False)
+        with mock.patch("harness._run_kubectl", return_value="pod-y\n") as run:
+            resolve_k8s_pod("chatqna")
+        argv = run.call_args.args[0]
+        assert argv[argv.index("-n") + 1] == "genieai"
+
     def test_a_failed_lookup_names_the_real_cause(self, monkeypatch):
         """A kubectl failure (wrong namespace, RBAC denial) is not quietly
         read as 'no pod found' — the refusal carries kubectl's own stderr."""

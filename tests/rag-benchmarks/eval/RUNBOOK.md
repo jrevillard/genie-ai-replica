@@ -76,8 +76,13 @@ never detected (`EVAL_EXEC_BACKEND`, default `docker`):
 On a Kubernetes venue, replace the `ssh … docker service ls` / `docker ps`
 / `docker exec` lines with their `kubectl` equivalents
 (`kubectl -n <ns> get pods,svc`, `kubectl -n <ns> logs`, and the harness's
-own exec). The env-var table in `tests/rag-benchmarks/CLAUDE.md` is the
-authoritative list.
+own exec). **The wrapper script (`run_anchor_with_cleanup.sh`, the TL;DR
+above) is docker-only**: it resolves `CHATQNA_CONTAINER` via `docker ps` and
+`VICTORIATRACES_SVC` via `docker service ls`, and aborts under `set -euo
+pipefail` on a host without docker — on a Kubernetes venue, pre-export both
+variables (the component name / the VT service name) before invoking the
+harness directly. The env-var table in `tests/rag-benchmarks/CLAUDE.md` is
+the authoritative list.
 
 ```bash
 # 0.1 Confirm OIDC, ArangoDB and chatqna are reachable

@@ -78,8 +78,11 @@ from keycloak import KeycloakError, fetch_realm_token
 # CHATQNA_CONTAINER holds the LIVE identity, refreshed by the docker
 # re-resolution below. The operator's pin and the venue-shaped default are
 # both read at CALL time (see ``_chatqna_identity``), so an ambient export
-# cannot be frozen into the module at import and a backend flipped after
-# import no longer leaves a stale identity behind.
+# cannot be frozen into the module at import. The live identity follows the
+# backend the process STARTED with: once the docker re-resolution has written
+# it, flipping EVAL_EXEC_BACKEND to kubectl in the same process does NOT
+# reset it (a long-lived process switching venues mid-run is not a supported
+# flow — restart the run instead).
 CHATQNA_CONTAINER = ""
 
 

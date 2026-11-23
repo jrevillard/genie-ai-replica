@@ -225,7 +225,13 @@ def cmd_reference(args: argparse.Namespace) -> int:
     if entries is None:
         return 1
     fingerprint = _corpus_fingerprint(args)
-    configuration = _resolved_configuration(args, "A")
+    try:
+        configuration = _resolved_configuration(args, "A")
+    except RuntimeError as failed:
+        # capture_baseline's docker-only guard raises RuntimeError; the CLI
+        # prints it as a refusal (the gate's shape), never a traceback.
+        print(f"REFUSED: {failed}", file=sys.stderr)
+        return 1
     configuration["model_ids"] = _model_ids(args)
     result = run_config_a(args.set_path, args.out_dir, seed=args.seed, entries=entries)
     manifest = build_manifest(

@@ -232,15 +232,28 @@ context is the permitted rebind target) and audits it.
 
 ## Delivery record (2026-11-23)
 
-**Status: CODE COMPLETE, verification green.** okf-server **2551 tests green** (49 new in
+**Status: CODE COMPLETE, verification green.** okf-server **2558 tests green** (56 new in
 the branch: 11 pairing + 6 head-suite generation + 9 head-suite run + 4 bind + 4 RAGAS
-generation + 4 RAGAS run + 4 evaluation-context + 3 head-test supersede + 4 more).
+generation + 4 RAGAS run + 4 evaluation-context + 3 head-test supersede + 7 controller
+powers + 4 more).
 
 **The gates, measured on the branch.** okf-server `eslint .` → no issues; the component's
-own `prettier --check "**/*.js"` → clean (the eight phase-3 files were the only ones the
-gate saw, and they are formatted); the full suite → 2551 green, 0 failed; the component's
-coverage totals → statements **88.08%**, branches **75.40%**, functions **89.11%**,
-measured the same way as the base (no coverage decrease).
+own `prettier --check "**/*.js"` → clean; the full suite → 2558 green, 0 failed. The
+coverage bar is measured against `origin/main` in an isolated worktree, the same way:
+
+| | statements | branches | functions |
+|---|---|---|---|
+| `origin/main` (base) | 88.12% | 75.49% | 89.02% |
+| this branch | **88.32%** | **75.65%** | **89.25%** |
+
+Every figure is ABOVE the base — no decrease. The first measurement did not clear the bar
+(statements 88.08% against the base's 88.12%): the phase-3 controller code was the
+cause, and the two NEW superadmin powers it introduced — binding a suite to a context,
+and lifting the cross-context block — had NO test at all. Seven tests now drive them at
+the controller surface (a scoped admin is refused with `FORBIDDEN_SCOPE` and nothing is
+bound; an unexplained experiment is a 400; a superadmin's bind is audited; a run without
+the flag carries no experiment), which is both the coverage fix and the security
+contract those two powers needed.
 
 | Task | What landed | Where |
 |---|---|---|

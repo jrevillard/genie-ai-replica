@@ -540,9 +540,12 @@ second half of the same documented rule.
 
 ## Phase 3 — E-7: context-native generation + suite binding (2026-11-23, branch `feat/okf-lab-context-native`)
 
-**Status: code complete, verification green.** okf-server **2551 tests green** (49 new in
+**Status: code complete, verification green.** okf-server **2558 tests green** (56 new in
 the branch). The task-by-task table and the full review rounds live in the phase-3 artifact
 (`issue-2102-testing-lab-context-native-generation.md`); this is the epic-level summary.
+The component's coverage is measured against `origin/main` in an isolated worktree, the
+same way: statements **88.32%** (base 88.12%), branches **75.65%** (base 75.49%),
+functions **89.25%** (base 89.02%) — every figure above the base.
 
 ### What landed
 

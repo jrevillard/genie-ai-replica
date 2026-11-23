@@ -101,17 +101,17 @@ ledger into M-1..M-5 records (each naming its measurement surface, unavailable
 surfaces recorded WITH their reason), an `uncontrolled_differences` section
 (prompt digests + model ids from the manifests, execution conditions, cache
 state recorded as unrecorded, the retrieval-surface asymmetry), per-case
-judgment inputs with the `reference_defect` flag, digested `inputs`, and a
+judgment inputs with the `reference_defect` and `skipped` flags, digested `inputs`, and a
 canonical-JSON `digest` recomputable via `e01_report_digest`.
 `protocol/drivers.py` gains `run_config_a_capture` — a fakeable query seam
 (default wraps `run_eval.drive_query` + `_extract_answer`, imported
 in-function), per-case rows (`answer`, `http_status`, `wall_ms` monotonic at
-the protocol layer, the response's source/citation fields only when the
+the protocol layer, the response's source/citation/abstention fields only when the
 response carries them), per-case failure rows with the run continuing, resume
 over the missing ids only, atomic `config-a.captured.json`.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 43 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 48 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -129,9 +129,12 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 222 passed; `cd eval && pytest -q` → 196 passed;
+test_protocol_e01.py` → 227 passed; `cd eval && pytest -q` → 196 passed (the count
+depends on the env's optional deps — one test skips without openpyxl);
 `python3 -m py_compile protocol/*.py` clean; `ruff check --config
-components/agent-service/pyproject.toml protocol/ test_protocol_e01.py` clean.
+components/agent-service/pyproject.toml protocol/ test_protocol_e01.py` clean (checked with
+ruff 0.16.3 pinned AND the current release; the tree has no CI lint lane — per story
+4.1's precedent, `py_compile` stands in CI).
 The test env needs `requests` (the `capabilities.contract` import chain) plus
 pydantic/openpyxl — without `requests` the B-driver helper test fails on an
 import, not on a defect.
@@ -198,6 +201,22 @@ mutation-verified (the reviewer reverted each fix in isolation), all fixed.**
 | F11 | Two credential vocabularies (manifest vs report) diverged in both directions | medium | **Fixed**: the divergence is deliberate and stated — the report keeps the measurement names the judge needs, and applies its own rule on every path it writes |
 | F12 | The capture's field typing had a dead branch (both arms identical) and two structures that could drift | low | **Fixed**: one dict drives both |
 | F13 | The instructions called a skipped A row "not a comparison case" while the report counted it | medium | **Fixed**: the report marks the skipped rows (`skipped` flag, `counts.skipped_cases`) and the instructions say the judge excludes them |
+
+**FIX-REVIEW (f=1) on the f=0 correction diff — 9 findings (four of them showed
+the previous fixes were not covered), all fixed.** The reviewer mutation-tested
+each fix; the four "survived" mutations are what this round closed.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F2' | The stamp-on-disk fix was untested (a converged resume's stamp came from the loop's write, not the pre-loop one) | not confirmed | **Fixed**: a stamp-less rows file with rows now REFUSES the resume, and a converged resume over a stamped file keeps that stamp — the pre-loop write is gone as dead code |
+| F1' | The resume refusal did not fire when the prior file carried cases but no stamp — exactly the file shape the earlier code left behind | not confirmed | **Fixed**: rows without a stamp refuse the resume |
+| F10' | The scope restriction had no test, and it dropped the FR-27 naming for the cases that never queried | not confirmed | **Fixed**: the scope is recorded only on the queried rows, the cases that never queried are named (`cases_that_never_queried`), and both are tested |
+| F11' | "One credential rule on every path" was false — the M-1 aggregate and the recorded label scopes were written unredacted | not confirmed | **Fixed**: both go through the redaction; the module docstring states the rule and the paths it covers |
+| F5' | The module docstring still described the manifest's rule (the opposite of the code after F11) | confirmed | **Fixed**: the bullet names the report's own rule, the measurement exceptions and the paths |
+| F6' | `run_config_a_capture`'s docstring was stale (no resume refusal, no stamp, scope not mentioned) | confirmed | **Fixed**: the docstring carries all three |
+| F7' | Only the set half of the resume refusal was tested | confirmed | **Fixed**: the corpus half is tested too |
+| F8' | The story's eval-suite count and ruff sentence were stale | confirmed | **Fixed**: both re-measured and stated with their env caveat |
+| F9' | The Implementation Notes omitted the `skipped` flag, the resume refusal and the abstention facts | confirmed | **Fixed**: all three are in the paragraph |
 
 ## Design Notes
 

@@ -34,11 +34,11 @@ const translationBackend = process.env.TRANSLATION_BACKEND || 'auto';
 // constant: backend init runs before the HTTP server listens, so every second
 // spent probing is a second of boot. 30s picks up an in-cluster worker that
 // becomes ready within low tens of seconds while keeping the worst boot
-// (window + CPU model load) inside the envelope the compose/chart healthcheck
-// `start_period` was sized for. A probe that hangs for its full
-// TRANSLATION_PROBE_TIMEOUT_SECONDS budget consumes the window in one
-// attempt and lands on CPU after a single probe — the one-shot behavior this
-// window replaces, never worse.
+// (window + CPU model load) inside the envelope the compose healthcheck
+// `start_period` (90s) and the chart startupProbe (~120s) were sized for. A
+// probe that hangs for its full TRANSLATION_PROBE_TIMEOUT_SECONDS budget
+// consumes the window in one attempt and lands on CPU after a single probe —
+// the one-shot behavior this window replaces, never worse.
 const AUTO_GPU_READINESS_WINDOW_MS = 30000;
 const AUTO_GPU_RETRY_BACKOFF_START_MS = 2000;
 const AUTO_GPU_RETRY_BACKOFF_MAX_MS = 10000;

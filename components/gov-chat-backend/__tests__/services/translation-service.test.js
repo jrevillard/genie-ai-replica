@@ -329,9 +329,10 @@ describe('TranslationService', () => {
 
     it('settles on CPU by 30s so the boot stays inside the container healthcheck budget', async () => {
       // Backend init runs before the server listens: every probing second is
-      // boot time against the compose/chart healthcheck start_period (90s).
-      // A window that grew past that envelope would restart-loop the task on
-      // slow hosts — the bound is part of the contract.
+      // boot time against the compose healthcheck start_period (90s) and the
+      // chart startupProbe (~120s). A window that grew past that envelope
+      // would restart-loop the task on slow hosts — the bound is part of the
+      // contract.
       const svc = serviceInAuto();
       const gpu = gpuApi({
         endpointExplicit: false,

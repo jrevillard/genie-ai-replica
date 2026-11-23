@@ -302,6 +302,11 @@ const Map<String, dynamic> frLocale = {
     "faq": "Foire aux questions",
     "faqTranslationUnavailable":
         "Traduction indisponible — la version originale en anglais est affichée.",
+    "okfConceptTruncated":
+        "L’aperçu est tronqué — le document est plus long que ce qui peut être affiché ici.",
+    "okfSourceUnavailable":
+        "Cette source n’est pas disponible pour consultation.",
+    "documentOpenError": "Impossible de consulter le document",
     "tab": {
       "all": "Tous les chats",
       "folders": "Dossiers",

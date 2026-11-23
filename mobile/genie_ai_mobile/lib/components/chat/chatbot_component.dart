@@ -21,6 +21,7 @@ import 'package:genie_ai_mobile/services/language_refusal.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
 import 'package:genie_ai_mobile/services/translation_status.dart';
+import 'package:genie_ai_mobile/utils/okf_citation.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:http/http.dart' as http;
 import 'package:openapi/api.dart';
@@ -1711,6 +1712,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     return tr('chatbot.processingError');
   }
 
+  /// The identity a citation row is deduplicated by.
+  ///
+  /// An OKF concept's identity is the (repository, concept) PAIR: the same
+  /// concept id can live in two repositories, and the open key carries the
+  /// repository for that reason. Every other row keeps its own id.
+  String? _citationKey(dynamic doc) {
+    if (doc is Map<String, dynamic>) {
+      final OkfConceptRef? conceptRef = okfConceptRef(doc);
+      if (conceptRef != null) return conceptRef.openKey;
+    }
+    return doc['id'] ?? doc['_id'] ?? doc['document_id'];
+  }
+
   List<dynamic> _mergeUniqueDocs(
     List<dynamic> priorityDocs,
     List<dynamic> secondaryDocs,
@@ -1718,14 +1732,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final List<dynamic> merged = List.from(priorityDocs);
 
     for (var doc in secondaryDocs) {
-      final String? docId = doc['id'] ?? doc['_id'] ?? doc['document_id'];
+      final String? docId = _citationKey(doc);
       bool exists = false;
 
       if (docId != null) {
-        exists = merged.any((m) {
-          final String? mId = m['id'] ?? m['_id'] ?? m['document_id'];
-          return mId == docId;
-        });
+        exists = merged.any((m) => _citationKey(m) == docId);
       } else {
         exists = merged.contains(doc);
       }

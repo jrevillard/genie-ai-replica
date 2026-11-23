@@ -18,7 +18,7 @@ delete process.env.STREAMING_TRANSLATION_ENABLED;
 
 const { Readable } = require('stream');
 const translationService = require('../../services/translation-service');
-const { createAgenticTranslationLeg } = require('../../services/translation/agentic-translation-leg');
+const { createWholeAnswerTranslator } = require('../../services/translation/agentic-translation-leg');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
@@ -91,9 +91,7 @@ jest.mock('../../services/translation-service', () => ({
 // suite pins the frame writer's contract (construction args, outcome
 // plumbing, the delivery frame + the persisted status).
 jest.mock('../../services/translation/agentic-translation-leg', () => ({
-  createAgenticTranslationLeg: jest.fn(),
-  translateWholeAnswerWithLeg: jest.requireActual('../../services/translation/agentic-translation-leg')
-    .translateWholeAnswerWithLeg
+  createWholeAnswerTranslator: jest.fn()
 }));
 jest.mock('../../services/session-service', () => ({
   getUserSessions: jest.fn(),
@@ -170,27 +168,25 @@ afterEach(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // The leg stub (a SKIP by default — the fail-closed shape): every
-  // non-relay translated request builds one at the terminal, so the suite
-  // owns a sane default; tests that exercise the translate/failed outcomes
-  // override it per leg.
-  createAgenticTranslationLeg.mockImplementation(() => ({
-    configError: 'AGENT_TRANSLATION_MAX_TOKENS',
-    translateFullAnswer: jest.fn().mockResolvedValue({
-      outcome: 'skipped',
-      translated: null,
+  // The bound translator stub (a SKIP by default — the fail-closed shape):
+  // every non-relay translated request builds one at the terminal, so the
+  // suite owns a sane default; tests that exercise the translate/failed
+  // outcomes override it per shape. The delivery shape is the leg module's
+  // helper output (never raises) — the leg's own suite pins that layer.
+  createWholeAnswerTranslator.mockImplementation(() =>
+    jest.fn().mockResolvedValue({
+      text: null,
+      failed: false,
+      queryTranslationStatus: 'passthrough_english',
       accounting: {
-        backend: 'gpu-vllm',
-        decision: 'skip',
-        status: null,
         outcome: 'skipped',
         queryTranslationStatus: 'passthrough_english',
-        usage: null,
         configError: 'AGENT_TRANSLATION_MAX_TOKENS',
         mode: 'full-answer'
-      }
+      },
+      error: null
     })
-  }));
+  );
   keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
     req.user = { iss_sub: 'http://localhost:8080/realms/genie#user-123', _key: 'user-123' };
     next();
@@ -1220,33 +1216,21 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     // delivered text.
     delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
-    createAgenticTranslationLeg.mockImplementation(() => ({
-      configError: null,
-      translateFullAnswer: jest.fn().mockResolvedValue({
-        outcome: 'translated',
-        translated: 'Bonjour le monde.',
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn().mockResolvedValue({
+        text: 'Bonjour le monde.',
+        failed: false,
+        queryTranslationStatus: 'translated',
         accounting: {
-          backend: 'gpu-vllm',
-          decision: 'translate',
-          status: null,
           outcome: 'translated',
           queryTranslationStatus: 'translated',
-          usage: { prompt_tokens: 20, completion_tokens: 10, estimated: false },
           configError: null,
           mode: 'full-answer'
-        }
+        },
+        error: null
       })
-    }));
-    axios.post.mockResolvedValue({
-      status: 200,
-      headers: {},
-      data: seamStream([
-        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
-        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
-        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
-        { usage_record: USAGE_RECORD }
-      ])
-    });
+    );
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     const response = await authPost('/api/queries/stream', {
       sessionId: 's1',
@@ -1254,11 +1238,13 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
       context: { language: 'DE' }
     });
 
-    // The leg is constructed with the routing decision, the terminal usage
-    // record and the requested language.
-    expect(createAgenticTranslationLeg).toHaveBeenCalledWith(
-      expect.objectContaining({ routingDecision: 'agentic', runUsage: USAGE_RECORD, targetLanguage: 'de' })
+    // The bound translator is constructed with the terminal usage record,
+    // the requested language and the request's signal.
+    expect(createWholeAnswerTranslator).toHaveBeenCalledWith(
+      expect.objectContaining({ runUsage: USAGE_RECORD, targetLanguage: 'de', signal: expect.anything() })
     );
+    const bound = createWholeAnswerTranslator.mock.results[0].value;
+    expect(bound).toHaveBeenCalledWith('Hello world.');
     const frames = parseSSEEvents(response.text);
     expect(frames.find((f) => f.type === 'translation').content).toBe('Bonjour le monde.');
     const done = frames[frames.length - 1];
@@ -1275,33 +1261,21 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
   it('a failed leg translation reports translationFailed on done; the English answer stands', async () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
-    createAgenticTranslationLeg.mockImplementation(() => ({
-      configError: null,
-      translateFullAnswer: jest.fn().mockResolvedValue({
-        outcome: 'failed',
-        translated: null,
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn().mockResolvedValue({
+        text: null,
+        failed: true,
+        queryTranslationStatus: 'fallback_timeout',
         accounting: {
-          backend: 'gpu-vllm',
-          decision: 'translate',
-          status: null,
           outcome: 'failed',
           queryTranslationStatus: 'fallback_timeout',
-          usage: { prompt_tokens: 6, completion_tokens: 6, estimated: true },
           configError: null,
           mode: 'full-answer'
-        }
+        },
+        error: null
       })
-    }));
-    axios.post.mockResolvedValue({
-      status: 200,
-      headers: {},
-      data: seamStream([
-        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
-        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
-        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
-        { usage_record: USAGE_RECORD }
-      ])
-    });
+    );
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     const response = await authPost('/api/queries/stream', {
       sessionId: 's1',
@@ -1320,21 +1294,12 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
   });
 
   it('a skipped leg translation (a missing knob) keeps the English answer, never latched', async () => {
-    // The default beforeEach leg stub IS the skip: the REQUIRED knobs are
-    // unread/unset, the translation cannot be bounded, so it never starts —
-    // V05: a skip is not a failure.
+    // The default beforeEach translator stub IS the skip: the REQUIRED knobs
+    // are unread/unset, the translation cannot be bounded, so it never
+    // starts — V05: a skip is not a failure.
     delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
-    axios.post.mockResolvedValue({
-      status: 200,
-      headers: {},
-      data: seamStream([
-        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
-        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
-        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
-        { usage_record: USAGE_RECORD }
-      ])
-    });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     const response = await authPost('/api/queries/stream', {
       sessionId: 's1',
@@ -1352,59 +1317,12 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     );
   });
 
-  it('a leg rejection past its contract is fail-soft: done latches, the persisted status stays classifiable', async () => {
-    // The streaming terminal's guard: a leg that rejects despite its
-    // resolve-every-outcome contract ends the response honestly (English
-    // stands, translationFailed rides) and the persisted metadata still
-    // carries a V05 status — an unclassified failure is indistinguishable
-    // from a translation never asked for.
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
-    setupAgentQuery();
-    createAgenticTranslationLeg.mockImplementation(() => ({
-      configError: null,
-      translateFullAnswer: jest.fn().mockRejectedValue(new Error('leg exploded'))
-    }));
-    axios.post.mockResolvedValue({
-      status: 200,
-      headers: {},
-      data: seamStream([
-        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
-        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
-        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
-        { usage_record: USAGE_RECORD }
-      ])
-    });
-
-    const response = await authPost('/api/queries/stream', {
-      sessionId: 's1',
-      messages: [{ role: 'user', content: 'q' }],
-      context: { language: 'DE' }
-    });
-
-    const frames = parseSSEEvents(response.text);
-    const done = frames[frames.length - 1];
-    expect(done.type).toBe('done');
-    expect(done.translationFailed).toBe(true);
-    expect(queryService.finalizeStreamQuery.mock.calls[0][3]).toEqual(
-      expect.objectContaining({ query_translation_status: 'fallback_error' })
-    );
-  });
-
   it('streaming translation ON: the relay owns the units — the leg is never built', async () => {
     process.env.STREAMING_TRANSLATION_ENABLED = '1';
     setupAgentQuery();
     translationService.init.mockResolvedValue(undefined);
     translationService.translateMarkdown.mockResolvedValue('bon');
-    axios.post.mockResolvedValue({
-      status: 200,
-      headers: {},
-      data: seamStream([
-        envelope('text_message_content', { text: 'Hello world. ' }, { seq: 0 }),
-        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
-        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
-        { usage_record: USAGE_RECORD }
-      ])
-    });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     await authPost('/api/queries/stream', {
       sessionId: 's1',
@@ -1413,9 +1331,9 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     });
 
     // The relay handled the whole answer: no post-stream translation, no
-    // leg construction (the units run mid-stream, before any usage record
+    // bound translator (the units run mid-stream, before any usage record
     // the residual plan could read).
-    expect(createAgenticTranslationLeg).not.toHaveBeenCalled();
+    expect(createWholeAnswerTranslator).not.toHaveBeenCalled();
   });
 });
 

@@ -25,7 +25,7 @@ const { writeSSEFrame } = require('./sse-frame');
 const { applyAbstentionOverlay } = require('./agent-json-result');
 const { wantsTranslation, streamingTranslationEnabled } = require('./translation/language-request');
 const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
-const { createAgenticTranslationLeg, translateWholeAnswerWithLeg } = require('./translation/agentic-translation-leg');
+const { createWholeAnswerTranslator } = require('./translation/agentic-translation-leg');
 
 // Story 2.4 — the BFF frame writer. The BFF parses the agent-service SEAM
 // stream (POST /v1/runs, the `{run_id, call_id, seq, kind, payload}` envelope
@@ -436,20 +436,24 @@ async function proxyAgentRun({
       // bounded by the run's residual budget — the terminal usage record —
       // and the remaining end-to-end deadline, fail-closed on the REQUIRED
       // knobs). The relay path skips the post-stream translation entirely
-      // (its units were the delivery) and never builds a leg.
+      // (its units were the delivery) and never builds one; the writability
+      // check keeps a client-gone request from constructing anything (the
+      // construction is where a missing knob logs its ERROR).
       let translateFullAnswer = null;
-      if (!streamRelay && wantsTranslation(targetLanguage) && fullResponseText) {
-        const leg = createAgenticTranslationLeg({
-          routingDecision: 'agentic',
+      if (
+        !streamRelay &&
+        wantsTranslation(targetLanguage) &&
+        fullResponseText &&
+        !res.writableEnded &&
+        !res.destroyed
+      ) {
+        translateFullAnswer = createWholeAnswerTranslator({
           runUsage: usageRecord,
-          targetLanguage
+          targetLanguage,
+          deadlineStartMs: streamStartTime,
+          timeoutMs: effectiveTimeoutMs,
+          signal: controller.signal
         });
-        translateFullAnswer = (text) =>
-          translateWholeAnswerWithLeg(leg, {
-            text,
-            remainingMs: Math.max(0, streamStartTime + effectiveTimeoutMs - Date.now()),
-            signal: controller.signal
-          });
       }
       await handleStreamDone(queryId, fullResponseText, streamStartTime, res, metadata, {
         targetLanguage,

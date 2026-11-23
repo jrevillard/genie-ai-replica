@@ -20,10 +20,7 @@ delete process.env.STREAMING_TRANSLATION_ENABLED;
 
 const { Readable } = require('stream');
 const translationService = require('../../services/translation-service');
-const {
-  createAgenticTranslationLeg,
-  translateWholeAnswerWithLeg
-} = require('../../services/translation/agentic-translation-leg');
+const { createWholeAnswerTranslator } = require('../../services/translation/agentic-translation-leg');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
@@ -72,13 +69,13 @@ jest.mock('../../services/translation-service', () => ({
   createMarkdownTranslator: jest.fn(),
   resolveLanguagePair: jest.fn()
 }));
-// The agentic translation leg — the JSON consumer's whole-answer translator
-// (story 2.10's leg wired in place of the request-resolved one). The leg's
-// own suite pins the leg's internals; this suite pins the consumer's
-// contract: construction args, outcome plumbing, V05 status persistence.
+// The agentic translation leg — the JSON consumer's bound whole-answer
+// translator (story 2.10's leg wired in place of the request-resolved one).
+// The leg's own suite pins the leg's internals (including its fail-soft
+// never-raises delivery); this suite pins the consumer's contract:
+// construction args, outcome plumbing, V05 status persistence.
 jest.mock('../../services/translation/agentic-translation-leg', () => ({
-  createAgenticTranslationLeg: jest.fn(),
-  translateWholeAnswerWithLeg: jest.fn()
+  createWholeAnswerTranslator: jest.fn()
 }));
 jest.mock('../../services/session-service', () => ({
   getUserSessions: jest.fn(),
@@ -810,23 +807,24 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
 });
 
 describe('POST /api/queries — whole-answer translation (the agentic translation leg)', () => {
-  beforeEach(() => {
-    // The leg stub: construction returns a handle (the delivery helper is
-    // mocked separately — this suite pins the consumer contract, not the
-    // leg's internals; the leg's own suite pins those).
-    createAgenticTranslationLeg.mockImplementation(() => ({ configError: null }));
-    // Default: a translated answer. Individual tests override the outcome.
-    translateWholeAnswerWithLeg.mockResolvedValue({
-      text: 'Bonjour le monde.',
-      failed: false,
+  // The delivery shape the leg module's helper resolves (never raises) —
+  // this suite stubs it at the factory boundary.
+  const deliveryShape = (overrides = {}) => ({
+    text: 'Bonjour le monde.',
+    failed: false,
+    queryTranslationStatus: 'translated',
+    accounting: {
+      outcome: 'translated',
       queryTranslationStatus: 'translated',
-      accounting: {
-        outcome: 'translated',
-        queryTranslationStatus: 'translated',
-        configError: null,
-        mode: 'full-answer'
-      }
-    });
+      configError: null,
+      mode: 'full-answer'
+    },
+    error: null,
+    ...overrides
+  });
+  beforeEach(() => {
+    // Default: a translated answer. Individual tests override the shape.
+    createWholeAnswerTranslator.mockImplementation(() => jest.fn().mockResolvedValue(deliveryShape()));
   });
 
   it('translates the whole answer post-run through the leg; no translationFailed key on success', async () => {
@@ -834,16 +832,14 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
 
     const response = await postQuery({ context: { language: 'FR' } });
 
-    // The leg is constructed per request with the routing decision, the
-    // TERMINAL usage record (the one place it exists is post-run — what the
-    // residual plan reads) and the requested language.
-    expect(createAgenticTranslationLeg).toHaveBeenCalledWith(
-      expect.objectContaining({ routingDecision: 'agentic', runUsage: USAGE_RECORD, targetLanguage: 'fr' })
+    // The bound translator is constructed per request with the TERMINAL
+    // usage record (the one place it exists is post-run — what the residual
+    // plan reads), the requested language and the request's signal.
+    expect(createWholeAnswerTranslator).toHaveBeenCalledWith(
+      expect.objectContaining({ runUsage: USAGE_RECORD, targetLanguage: 'fr', signal: expect.anything() })
     );
-    expect(translateWholeAnswerWithLeg).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ text: 'Hello world.', signal: expect.anything() })
-    );
+    const bound = createWholeAnswerTranslator.mock.results[0].value;
+    expect(bound).toHaveBeenCalledWith('Hello world.');
     expect(response.status).toBe(201);
     expect(response.body.response).toBe('Bonjour le monde.');
     // Additive-only: the key is ABSENT when translation succeeded.
@@ -861,17 +857,21 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
   });
 
   it('a failed leg translation is fail-soft: the English answer stands, translationFailed rides additively', async () => {
-    translateWholeAnswerWithLeg.mockResolvedValue({
-      text: null,
-      failed: true,
-      queryTranslationStatus: 'fallback_timeout',
-      accounting: {
-        outcome: 'failed',
-        queryTranslationStatus: 'fallback_timeout',
-        configError: null,
-        mode: 'full-answer'
-      }
-    });
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn().mockResolvedValue(
+        deliveryShape({
+          text: null,
+          failed: true,
+          queryTranslationStatus: 'fallback_timeout',
+          accounting: {
+            outcome: 'failed',
+            queryTranslationStatus: 'fallback_timeout',
+            configError: null,
+            mode: 'full-answer'
+          }
+        })
+      )
+    );
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     const response = await postQuery({ context: { language: 'FR' } });
@@ -892,17 +892,21 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
     // Fail-closed on the REQUIRED knobs: the answer translation cannot be
     // bounded, so it never starts — the English answer stays and the skip is
     // not a failure (V05).
-    translateWholeAnswerWithLeg.mockResolvedValue({
-      text: null,
-      failed: false,
-      queryTranslationStatus: 'passthrough_english',
-      accounting: {
-        outcome: 'skipped',
-        queryTranslationStatus: 'passthrough_english',
-        configError: 'AGENT_TRANSLATION_MAX_TOKENS',
-        mode: 'full-answer'
-      }
-    });
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn().mockResolvedValue(
+        deliveryShape({
+          text: null,
+          failed: false,
+          queryTranslationStatus: 'passthrough_english',
+          accounting: {
+            outcome: 'skipped',
+            queryTranslationStatus: 'passthrough_english',
+            configError: 'AGENT_TRANSLATION_MAX_TOKENS',
+            mode: 'full-answer'
+          }
+        })
+      )
+    );
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     const response = await postQuery({ context: { language: 'FR' } });
@@ -918,34 +922,12 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
     );
   });
 
-  it('a leg rejection past its contract is fail-soft: the English answer stands, the failure stays classifiable', async () => {
-    // The delivery core is fail-soft (the streaming terminal carries the same
-    // guard): a leg that rejects despite its resolve-every-outcome contract
-    // must never turn a completed answer into a 500 — the English text
-    // stands, the latch rides, and the persisted status stays in the V05
-    // vocabulary.
-    translateWholeAnswerWithLeg.mockRejectedValue(new Error('leg exploded'));
-    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
-
-    const response = await postQuery({ context: { language: 'FR' } });
-
-    expect(response.status).toBe(201);
-    expect(response.body.response).toBe('Hello world.');
-    expect(response.body.translationFailed).toBe(true);
-    expect(collections.update).toHaveBeenCalledWith(
-      'q1',
-      expect.objectContaining({
-        metadata: expect.objectContaining({ query_translation_status: 'fallback_error' })
-      })
-    );
-  });
-
   it('no translation is asked for: the leg is never built, the answer rides as-is', async () => {
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     const response = await postQuery({ context: { language: 'auto' } });
 
-    expect(createAgenticTranslationLeg).not.toHaveBeenCalled();
+    expect(createWholeAnswerTranslator).not.toHaveBeenCalled();
     expect(response.status).toBe(201);
     expect(response.body.response).toBe('Hello world.');
     expect(response.body).not.toHaveProperty('translationFailed');

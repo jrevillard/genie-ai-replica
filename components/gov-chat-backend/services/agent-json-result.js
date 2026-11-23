@@ -17,7 +17,7 @@ const {
   agentHttpsAgent
 } = require('./agent-run-contract');
 const { wantsTranslation } = require('./translation/language-request');
-const { createAgenticTranslationLeg, translateWholeAnswerWithLeg } = require('./translation/agentic-translation-leg');
+const { createWholeAnswerTranslator } = require('./translation/agentic-translation-leg');
 
 // Story 2.4b — the non-streaming JSON consumer of the agent-service seam.
 // The streaming entry (agent-frame-writer.js) projects the seam onto client
@@ -469,39 +469,23 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   let translationFailed = false;
   let translationStatus = null;
   if (wantsTranslation(targetLanguage) && fullResponseText) {
-    const leg = createAgenticTranslationLeg({
-      routingDecision: 'agentic',
+    // The bound translator: construction, deadline clock and fail-soft
+    // delivery are the leg module's one home (the helper never raises).
+    const translateFullAnswer = createWholeAnswerTranslator({
       runUsage: usageRecord,
-      targetLanguage
+      targetLanguage,
+      deadlineStartMs: turnStartTime,
+      timeoutMs: effectiveTimeoutMs,
+      signal: controller.signal
     });
-    let result;
-    try {
-      result = await translateWholeAnswerWithLeg(leg, {
-        text: fullResponseText,
-        remainingMs: Math.max(0, turnStartTime + effectiveTimeoutMs - Date.now()),
-        signal: controller.signal
-      });
-    } catch (error) {
-      // The delivery core is fail-soft (the streaming terminal carries the
-      // same guard): a leg that rejects past its resolve-every-outcome
-      // contract never turns a completed answer into a thrown error — the
-      // English text stands, the latch rides, and the persisted status stays
-      // in the V05 vocabulary.
-      result = {
-        text: null,
-        failed: true,
-        queryTranslationStatus: 'fallback_error',
-        accounting: { outcome: 'failed', queryTranslationStatus: 'fallback_error' }
-      };
-      logger.warn('AgentJsonResult.translation_leg_defect', { queryId, error: error?.message });
-    }
-    logger.info('AgentJsonResult.agentic_translation_accounting', { queryId, accounting: result.accounting });
-    translationStatus = result.queryTranslationStatus;
-    if (result.failed) {
-      logger.warn('AgentJsonResult.translation_failed', { queryId, status: result.queryTranslationStatus });
+    const legResult = await translateFullAnswer(fullResponseText);
+    logger.info('AgentJsonResult.agentic_translation_accounting', { queryId, accounting: legResult.accounting });
+    translationStatus = legResult.queryTranslationStatus;
+    if (legResult.failed) {
+      logger.warn('AgentJsonResult.translation_failed', { queryId, status: legResult.queryTranslationStatus });
       translationFailed = true;
-    } else if (result.text) {
-      deliveredText = result.text;
+    } else if (legResult.text) {
+      deliveredText = legResult.text;
     }
   }
 

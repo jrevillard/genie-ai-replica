@@ -109,10 +109,11 @@ function languageRefusalOrNull(error, targetLanguage) {
  * Refuses a request for a language the deployment cannot answer in — without
  * preparing a translator.
  *
- * This is the check of the paths that do not translate in this service: the
- * answer of a non-streamed request is translated by the chatqna service, so
- * the backend only has to answer "may this request proceed". Preparing a
- * translator here would build one the path never uses.
+ * This is the language check of the non-streaming entry, both branches: the
+ * legacy branch's answer is translated by the chatqna service server-side,
+ * and the agentic branch's whole-answer translation runs through the agentic
+ * translation leg inside the turn — neither consumes a request-resolved
+ * translator, so preparing one here would build one the path never uses.
  *
  * @param {string} targetLanguage - The normalized language the caller asked for.
  * @returns {Promise<object|null>} The body to refuse with, or null when the
@@ -672,31 +673,19 @@ module.exports = (queryService) => {
     // stay here (delivery-mode specific).
     const translationExpected = wantsTranslation(targetLanguage);
     if (!skipPostStreamTranslation && translationExpected && fullResponseText) {
-      let result;
-      try {
-        result = translateFullAnswer
-          ? await translateFullAnswer(fullResponseText)
-          : await translateWholeAnswer(translator, fullResponseText);
-      } catch (error) {
-        // The translation core is fail-soft; a rejection past it (a leg
-        // defect — its own contract resolves every outcome) is still never a
-        // dropped answer: the English text stands and the failure travels
-        // on `done`. The catch result stays classifiable — a V05 status and
-        // a minimal accounting block, so the persisted metadata never reads
-        // this failure as "translation never asked for".
-        result = {
-          text: null,
-          failed: true,
-          error,
-          queryTranslationStatus: 'fallback_error',
-          accounting: { outcome: 'failed', queryTranslationStatus: 'fallback_error' }
-        };
-      }
-      if (translateFullAnswer && result.accounting) {
+      // Both delivery cores are fail-soft — translateWholeAnswer (legacy) by
+      // its own contract, the leg's bound translator by the leg module's
+      // never-raises helper — so no caller-side guard lives here: the English
+      // text stands on any failure and the failure travels on `done`.
+      const result = translateFullAnswer
+        ? await translateFullAnswer(fullResponseText)
+        : await translateWholeAnswer(translator, fullResponseText);
+      if (result.accounting) {
         // The leg's accounting is the observable record of WHY the answer is
         // in its language, and the V05 status rides the persisted metadata
         // (the metadata FRAME is already written — the client reads the
-        // delivery from the translation frame itself).
+        // delivery from the translation frame itself). Its presence alone
+        // discriminates the leg path: the legacy core never returns one.
         logger.info('QueryService.agentic_translation_accounting', { queryId, accounting: result.accounting });
         metadata.query_translation_status = result.queryTranslationStatus;
       }

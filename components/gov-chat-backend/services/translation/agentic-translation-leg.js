@@ -660,30 +660,83 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
 
 /**
  * The whole-answer delivery one post-stream caller consumes — ONE home for
- * the outcome→delivery mapping both agentic consumers share (the frame
- * writer's non-relay terminal and the non-streaming JSON consumer). The
- * shape mirrors whole-answer.js's `{text, failed}` so the delivery-mode call
- * sites read the same fields either way, plus the V05 status and the
- * accounting block the callers persist/log.
+ * the outcome→delivery mapping AND the fail-soft core both agentic consumers
+ * share (the frame writer's non-relay terminal and the non-streaming JSON
+ * consumer; whole-answer.js's same never-raises contract, leg side). The
+ * shape mirrors whole-answer.js's `{text, failed, error}` so the
+ * delivery-mode call sites read the same fields either way, plus the V05
+ * status and the accounting block the callers persist/log.
  *
  * The V05 latch rides `outcome` only: a `failed` translation is the
  * attempted-and-failed case (`translationFailed` true); `skipped` and
  * `cancelled` leave the English answer standing, never latched — a skip is
- * not a failure.
+ * not a failure. A leg that rejects past its resolve-every-outcome contract
+ * (or resolves without an accounting block) never raises past this helper:
+ * the fallback delivery keeps the English answer, the latch and a V05
+ * status, so the persisted metadata stays classifiable.
  *
  * @param {Object} leg - A leg createAgenticTranslationLeg returned.
  * @param {Object} params - `{text, remainingMs, signal}` — passed through to
  *   `translateFullAnswer` verbatim.
- * @returns {Promise<{text: string|null, failed: boolean, queryTranslationStatus: string, accounting: Object}>}
+ * @returns {Promise<{text: string|null, failed: boolean, queryTranslationStatus: string, accounting: Object, error: Error|null}>}
  */
 async function translateWholeAnswerWithLeg(leg, { text, remainingMs, signal }) {
-  const result = await leg.translateFullAnswer({ text, remainingMs, signal });
+  let result;
+  let error = null;
+  try {
+    result = await leg.translateFullAnswer({ text, remainingMs, signal });
+  } catch (caught) {
+    logger.warn(`[AGENTIC-TRANSLATION] Delivery defect: the leg rejected past its contract (${caught?.message})`);
+    result = { outcome: 'failed', translated: null };
+    error = caught instanceof Error ? caught : new Error(String(caught));
+  }
+  const accounting = result.accounting && typeof result.accounting === 'object' ? result.accounting : null;
   return {
     text: result.outcome === 'translated' ? result.translated : null,
     failed: result.outcome === 'failed',
-    queryTranslationStatus: result.accounting.queryTranslationStatus,
-    accounting: result.accounting
+    queryTranslationStatus: accounting?.queryTranslationStatus ?? V05_STATUS.FALLBACK_ERROR,
+    accounting: accounting || {
+      outcome: result.outcome ?? 'failed',
+      queryTranslationStatus: V05_STATUS.FALLBACK_ERROR
+    },
+    error
   };
 }
 
-module.exports = { createAgenticTranslationLeg, translateWholeAnswerWithLeg, loadMarkdownLibs };
+/**
+ * The bound whole-answer translator one post-stream caller consumes — the
+ * construction stanza (routing decision, terminal usage record, requested
+ * language) and the remaining-deadline clock in ONE home: both agentic
+ * consumers build this exact closure, none of them re-hardcodes the routing
+ * decision or re-derives the remaining deadline.
+ *
+ * @param {Object} params
+ * @param {Object|null} params.runUsage - The terminal usage record the
+ *   residual plan reads (null skips every translation).
+ * @param {string} params.targetLanguage - The requested UI language.
+ * @param {number} params.deadlineStartMs - The request's deadline anchor
+ *   (ms epoch): route entry on the streaming entry, the post-mint turn
+ *   start on the JSON entry.
+ * @param {number} params.timeoutMs - The effective upstream timeout — the
+ *   request's end-to-end bound (both consumers resolve it through the
+ *   shared pair derivation).
+ * @param {AbortSignal} [params.signal] - The request's disconnect/deadline
+ *   signal, raced by the leg.
+ * @returns {(text: string) => Promise<{text: string|null, failed: boolean, queryTranslationStatus: string, accounting: Object, error: Error|null}>}
+ */
+function createWholeAnswerTranslator({ runUsage, targetLanguage, deadlineStartMs, timeoutMs, signal }) {
+  const leg = createAgenticTranslationLeg({ routingDecision: AGENTIC_ROUTING, runUsage, targetLanguage });
+  return (text) =>
+    translateWholeAnswerWithLeg(leg, {
+      text,
+      remainingMs: Math.max(0, deadlineStartMs + timeoutMs - Date.now()),
+      signal
+    });
+}
+
+module.exports = {
+  createAgenticTranslationLeg,
+  createWholeAnswerTranslator,
+  translateWholeAnswerWithLeg,
+  loadMarkdownLibs
+};

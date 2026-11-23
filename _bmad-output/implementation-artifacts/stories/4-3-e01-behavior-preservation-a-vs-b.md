@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 54 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 58 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,16 +132,20 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 233 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 237 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
-the ten test functions of `test_enrich_xlsx_v2.py`);
+the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
+ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
+the call-order assertion `gen-1,gen-2,gen-3` depends on the iteration order, so
+some runs report 1 failed / 195 passed);
 `python3 -m py_compile protocol/*.py` clean; `cd tests/rag-benchmarks && ruff check
 --config ../../components/agent-service/pyproject.toml protocol/
 test_protocol_e01.py` clean (ruff 0.16.3 pinned). The lint invocation is cwd-sensitive
-— from the repository root the same config reports I001 for the WHOLE protocol test
-tree (story 4.1's and 4.2's files included), so the benchmark-relative form is the
-one that holds; the tree has no CI lint lane (per story 4.1's precedent, `py_compile`
-stands in CI).
+— from the repository root the same config reports I001 for the protocol test tree
+(story 4.1's and 4.2's files AND this story's `test_protocol_e01.py`), so the
+benchmark-relative form is the one that holds. The CI lane for this tree is pytest
+only (`.gitlab-ci.yml` `test:rag-benchmarks`): there is no ruff lane and no
+compile job over `tests/rag-benchmarks`.
 The test env needs `requests` (the `capabilities.contract` import chain) plus
 pydantic/openpyxl — without `requests` the B-driver helper test fails on an
 import, not on a defect.
@@ -243,6 +247,22 @@ seat parks awaiting the operator's decision.**
 | F18' | The story's ruff sentence was not reproducible as written | confirmed | **Fixed**: the working invocation is quoted, the cwd sensitivity is stated |
 | F19' | The story's eval count caveat understated the loss without openpyxl | confirmed | **Fixed**: both numbers are stated |
 | F20' | The measurement allowlist kept three token-count names while the docstring promised "the token counts" | confirmed (latent) | **Fixed**: `input_tokens` / `output_tokens` are whitelisted too |
+
+**Authorized extra fix-review round (cap exception, orchestrator-ruled) on
+`9b06a7ff8..0109ff9fd` — 9 findings, every claim confirmed, all fixed.** The
+round was authorized because the f=2 corrections had never been re-reviewed.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F21' | The `input_tokens` / `output_tokens` allowlist entries had no test | confirmed | **Fixed**: a test asserts an M-5 usage record keeps them |
+| F22' | The measurement allowlist was unpinned — six of its entries could be deleted with the suite green | confirmed | **Fixed**: a table-driven test asserts every declared name survives the redaction |
+| F23' | The redaction ran BEFORE the comparison, so `identical` was computed on the redacted maps (a credential-named difference read as "identical") | confirmed | **Fixed**: the comparison runs on the raw maps; only the emitted copies are redacted |
+| F24' | `cases_that_never_queried` named an `http_error` row that DID issue a request | confirmed | **Fixed**: only a skipped row is never-queried; the others are scope-less, and the capture records the scope it SENT (an http_error row sent one) |
+| F25' | The redacted-path enumeration named two paths of six | confirmed | **Fixed**: the docstring and the rule's comment list all six |
+| F26' | The M-5 redaction truncated the usage detail sub-dicts (`*_tokens_details`) | confirmed (latent) | **Fixed**: a token-COUNT suffix rule keeps the counts (and the names inside the detail sub-dicts) while the credential qualifiers stay excluded |
+| F27' | The story presented the eval count as a measured fact (the suite is order-flaky) | confirmed | **Fixed**: both counts and the flake are stated |
+| F28' | The story claimed `py_compile` stands in CI — no compile job exists over this tree | confirmed | **Fixed**: the sentence states what CI actually runs |
+| F29' | The cwd-sensitivity sentence implied this story's own test file was clean under both invocations | confirmed | **Fixed**: the file is named in the root-dirty set |
 
 ## Design Notes
 

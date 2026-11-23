@@ -36,11 +36,11 @@ The report's contract:
   lineage-mismatched ledger.
 * **No credentials anywhere in the report.** The report applies its OWN
   credential rule (:func:`_is_credential_key`) at every depth on every path it
-  writes — the per-case rows, the M-5 values, the M-1 aggregate and the
-  recorded label scopes. The rule is deliberately narrower than the manifest's
-  (which drops every marker-named key): the report keeps the measurement names
-  the judge needs (``chunk_key``, the token counts) and drops the credential
-  names explicitly.
+  writes — the per-case rows, the M-5 values, the M-1 aggregate, the recorded
+  label scopes, the capture stamp and the manifests' prompt/model maps. The
+  rule is deliberately narrower than the manifest's (which drops every
+  marker-named key): the report keeps the measurement names the judge needs
+  (``chunk_key``, the token counts) and drops the credential names explicitly.
 * **No judging in code**: M-2/M-3 verdicts belong to the judge layer under
   the versioned evaluator instructions; the report carries the judgment
   inputs (answers, abstention facts, sources), never verdicts.
@@ -143,8 +143,9 @@ _RESOURCE_KEY_HINTS = ("usage", "resource", "cost")
 # records measurement fields the judge needs (``chunk_key``, the token
 # counts), so it keeps those and drops the credential names explicitly. The
 # two rules diverge ON PURPOSE and the report applies this one on every path
-# it writes (the per-case rows and the M-5 values) — it never states two
-# different things about the same datum.
+# it writes (the per-case rows, the M-5 values, the M-1 aggregate, the
+# recorded label scopes, the capture stamp and the manifests' prompt/model
+# maps) — it never states two different things about the same datum.
 CREDENTIAL_MARKERS = (
     "password",
     "secret",
@@ -164,6 +165,8 @@ MEASUREMENT_KEY_NAMES = frozenset(
         "total_tokens",
         "input_tokens",
         "output_tokens",
+        "prompt_tokens_details",
+        "completion_tokens_details",
         "token_count",
         "tokens",
         # The anchor's own evidence counters — "…_keys" matches the KEY
@@ -173,12 +176,22 @@ MEASUREMENT_KEY_NAMES = frozenset(
 )
 
 
+# A token COUNT is a measurement; a token CREDENTIAL is not. The suffix rule
+# covers the counts the allowlist cannot enumerate (the names inside the
+# usage detail sub-dicts: cached_tokens, reasoning_tokens), and the qualifier
+# list keeps the credential names out of it.
+_TOKEN_COUNT_SUFFIXES = ("_tokens", "_token_count")
+_CREDENTIAL_QUALIFIERS = ("access", "refresh", "auth", "bearer", "api", "secret", "session", "id_token")
+
+
 def _is_credential_key(key) -> bool:
     """True when the key names a credential. The measurement names are the
     explicit exceptions — they are values the judge needs, not secrets."""
     name = str(key).lower()
     if name in MEASUREMENT_KEY_NAMES:
         return False
+    if name.endswith(_TOKEN_COUNT_SUFFIXES):
+        return any(qualifier in name for qualifier in _CREDENTIAL_QUALIFIERS)
     return any(marker in name for marker in CREDENTIAL_MARKERS)
 
 
@@ -632,23 +645,23 @@ def _recorded_comparison(ref_value, b_value, note: str) -> dict:
     unrecorded side is 'not recorded', never 'identical' (the harness records
     no prompt digests and no model ids unless the run was given them).
 
-    Both sides are redacted: the maps come from the run manifests, and a
-    manifest's configuration block is not a sanitised surface."""
-    ref_value = _redact_deep(ref_value)
-    b_value = _redact_deep(b_value)
+    The comparison runs on the RAW maps — the recorded evidence decides
+    whether the two legs recorded the same thing; only the EMITTED copies are
+    redacted (the maps come from the run manifests, and a manifest's
+    configuration block is not a sanitised surface)."""
     ref_recorded = bool(ref_value)
     b_recorded = bool(b_value)
     if ref_recorded and b_recorded:
         return {
-            "A": ref_value,
-            "B": b_value,
+            "A": _redact_deep(ref_value),
+            "B": _redact_deep(b_value),
             "state": "compared",
             "identical": ref_value == b_value,
             "note": note,
         }
     return {
-        "A": ref_value,
-        "B": b_value,
+        "A": _redact_deep(ref_value),
+        "B": _redact_deep(b_value),
         "state": "not_recorded",
         "identical": None,
         "note": note + " — at least one side recorded nothing, so no comparison is claimed",
@@ -667,17 +680,22 @@ def _retrieval_scope_record(captured_rows: dict) -> dict:
     without_scope: list = []
     for case_id, row in sorted(captured_rows.items()):
         if not isinstance(row, dict):
+            without_scope.append(case_id)
+            continue
+        if row.get("status") == "skipped":
+            # A skipped row issued NO request (the protocol declared the case
+            # inapplicable to this leg) — the only case that never queried.
             never_queried.append(case_id)
             continue
-        if row.get("status") != "ok":
-            # A row that did not query (failed, skipped) carries no scope —
-            # it is named as never-queried instead of vanishing from the record.
-            never_queried.append(case_id)
+        if row.get("status") not in ("ok", "http_error"):
+            # The transport died — the row may never have sent the request, so
+            # any scope it carries is not evidence of what was queried.
+            without_scope.append(case_id)
             continue
         scope = row.get("retrieval_scope")
         if not isinstance(scope, dict):
-            # An ok row without a recorded scope DID query (it carries an
-            # answer) — it is not a never-queried case, it is a scope-less one.
+            # The row issued a request but recorded no scope (a capture that
+            # lost the field) — it is scope-less, never "never queried".
             without_scope.append(case_id)
             continue
         sent_labels = _redact_deep(scope.get("sent_labels") or {})

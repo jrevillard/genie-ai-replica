@@ -323,16 +323,16 @@ def _capture_one_entry(entry: dict, query) -> dict:
             row["http_status"] = status
             body = result.get("body")
             row["error"] = body[:_ERROR_PREVIEW_CHARS] if isinstance(body, str) else ""
+        # The scope is what the A leg SENT — the request was issued, whatever
+        # the server answered. A row whose transport died (or that was
+        # skipped) sent nothing, so it records no scope.
+        row["retrieval_scope"] = _retrieval_scope(entry)
     except Exception as failed:  # noqa: BLE001 — a per-case failure is a row, not a crash
         wall_ms = round((time.monotonic() - started) * 1000.0, 1)
         row["status"] = "failure"
         row["error_type"] = type(failed).__name__
         row["error"] = _error_preview(failed)
     row["wall_ms"] = wall_ms
-    if row.get("status") == "ok":
-        # The scope is what the A leg QUERIED under — a failed or skipped row
-        # queried nothing, so it records no scope.
-        row["retrieval_scope"] = _retrieval_scope(entry)
     row.update(_turn_field(entry))
     return row
 

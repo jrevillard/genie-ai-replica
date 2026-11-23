@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from protocol import drivers
+from protocol import e01 as e01_mod
 from protocol.e01 import (
     E01Refusal,
     build_e01_report,
@@ -531,8 +532,10 @@ def test_e01_uncontrolled_differences_identified_from_recorded_evidence():
         "category_labels": [],
         "service_labels": [],
     }
-    # The rows that never queried are named apart (they carry no scope).
-    assert diff["retrieval_scope"]["A"]["cases_that_never_queried"] == ["c2", "c3"]
+    # The rows that issued no request are named apart; the rows that sent a
+    # request but recorded no scope are scope-less, not "never queried".
+    assert diff["retrieval_scope"]["A"]["cases_that_never_queried"] == []
+    assert diff["retrieval_scope"]["A"]["cases_without_a_recorded_scope"] == ["c2", "c3"]
     # Without a seed the fact records as not recorded — never invented.
     unseeded = _build(reference=reference, gated=gated)
     assert unseeded["uncontrolled_differences"]["execution_conditions"]["seed"]["value"] is None
@@ -1234,6 +1237,12 @@ def test_capture_a_records_the_scope_only_on_the_rows_that_queried(tmp_path):
     )
     assert "retrieval_scope" in result["rows"]["c1"]
     assert "retrieval_scope" not in result["rows"]["c2"]
+    # An http_error row DID send the request — it records the scope it sent.
+    http_error_seam, _ = _seam({"c1": "a1"}, statuses={"c2": 500})
+    http_result = drivers.run_config_a_capture(
+        set_path, tmp_path / "out2", query=http_error_seam, corpus_fingerprint=CORPUS
+    )
+    assert "retrieval_scope" in http_result["rows"]["c2"]
 
 
 def test_e01_redacts_the_m1_aggregate_and_the_recorded_scopes():
@@ -1287,9 +1296,9 @@ def test_e01_redacts_the_manifest_maps_it_copies():
     assert "LEAK" not in json.dumps(report)
 
 
-def test_e01_names_a_failed_row_that_carries_a_scope_as_never_queried():
-    """The report-side scope check: a failed row never queried, so its scope
-    is not reported as sent."""
+def test_e01_names_a_failed_row_that_carries_a_scope_as_scope_less():
+    """A failed row sent nothing that can be reported as a scope, but it is
+    NOT a never-queried case (only a skipped row is)."""
     captured = _captured_rows()
     captured["c3"]["retrieval_scope"] = {
         "sent_labels": {"category_labels": ["Forestry"], "service_labels": []},
@@ -1298,7 +1307,19 @@ def test_e01_names_a_failed_row_that_carries_a_scope_as_never_queried():
     report = _build(captured_rows=captured)
     scope = report["uncontrolled_differences"]["retrieval_scope"]["A"]
     assert "c3" not in scope["labels_sent_per_case"]
+    assert "c3" in scope["cases_without_a_recorded_scope"]
+    assert "c3" not in scope["cases_that_never_queried"]
+
+
+def test_e01_names_a_skipped_row_as_never_queried():
+    """A skipped row issued NO request (the protocol declared the case
+    inapplicable to this leg) — it is the never-queried case."""
+    captured = _captured_rows()
+    captured["c3"] = {"case_id": "c3", "status": "skipped", "reason": "no agent surface", "wall_ms": 0.0}
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]["A"]
     assert "c3" in scope["cases_that_never_queried"]
+    assert "c3" not in scope["cases_without_a_recorded_scope"]
 
 
 def test_e01_does_not_call_an_answered_case_never_queried():
@@ -1329,3 +1350,46 @@ def test_capture_a_writes_the_rows_file_only_through_the_case_loop(tmp_path):
     # It carries the stamp once the rows are written.
     on_disk = json.loads(rows_path.read_text(encoding="utf-8"))
     assert on_disk["capture"]["corpus_fingerprint"] == CORPUS
+
+
+def test_e01_keeps_every_measurement_name_it_declares():
+    """The measurement-name allowlist is a CONTRACT with the judge — every
+    entry must survive the redaction."""
+    from protocol.e01 import MEASUREMENT_KEY_NAMES
+
+    for name in MEASUREMENT_KEY_NAMES:
+        kept = e01_mod._redact_deep({name: 1})
+        assert name in kept, f"{name} is allowlisted but the redaction drops it"
+
+
+def test_e01_m5_keeps_the_token_counts_the_judge_reads():
+    """The usage record's token counts (and their detail sub-dicts) are
+    measurements, not credentials."""
+    rows = _b_rows()
+    rows["c1"]["metadata"] = {
+        "usage": {
+            "input_tokens": 5,
+            "output_tokens": 7,
+            "prompt_tokens": 5,
+            "total_tokens": 12,
+            "prompt_tokens_details": {"cached_tokens": 3},
+        }
+    }
+    report = _build(b_rows=rows)
+    usage = report["dimensions"]["M-5"]["B"]["values"]["usage"]
+    assert usage["input_tokens"] == 5
+    assert usage["output_tokens"] == 7
+    assert usage["prompt_tokens_details"] == {"cached_tokens": 3}
+
+
+def test_e01_compares_the_raw_maps_and_emits_the_redacted_ones():
+    """The comparison runs on the recorded evidence; only the emitted copies
+    are redacted — a credential-named difference must still be a difference."""
+    reference, gated = _manifests()
+    gated["configuration"]["B"]["model_ids"]["api_key"] = "B-KEY"
+    gated["lineage"]["reference_manifest_sha256"] = manifest_digest(reference)
+    report = _build(reference=reference, gated=gated)
+    model_ids = report["uncontrolled_differences"]["model_ids"]
+    assert model_ids["identical"] is False
+    assert "api_key" not in model_ids["B"]
+    assert "B-KEY" not in json.dumps(report)

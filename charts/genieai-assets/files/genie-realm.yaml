@@ -167,8 +167,8 @@ clients:
   # start), and nothing here mints through genie's admin-cli — all
   # admin mints use the MASTER realm's admin-cli (helpers/auth.js).
   #
-  # Verified against a fresh Keycloak 26.8.0 with the real kcc
-  # 6.5.0-26 (2026-11-15): this exact set imports cleanly and every
+  # Verified against a fresh Keycloak 26.8.2 with the real kcc
+  # 6.5.0-26 (2026-11-23): this exact set imports cleanly and every
   # client of the imported realm reads back directAccessGrantsEnabled
   # =false, admin-cli included. realm-management and
   # security-admin-console are deliberately NOT declared: kcc refuses
@@ -245,6 +245,31 @@ clients:
     implicitFlowEnabled: false
     serviceAccountsEnabled: true
     secret: $(env:KC_PROXY_CLIENT_SECRET)
+    # Keycloak 26.8.2's Admin REST API audience check: a token that calls
+    # /admin/realms/... must carry the `kc-admin-api` client scope — that
+    # scope's mapper puts the realm's Admin API URL in `aud`. Upstream
+    # assigns the scope to the built-in admin-cli / security-admin-console
+    # only, so a CUSTOM service client has to carry it explicitly.
+    # Without it every Admin API call from this service account answers
+    # 401 (measured live on 26.8.2: HTTP 401 before the scope, HTTP 200
+    # after) — which silently breaks the backend's user/role
+    # administration and the OKF access facility (grant/revoke).
+    #
+    # The list is the server's own default set PLUS that scope: the
+    # `service_account` scope is what carries the service account's realm
+    # roles, and dropping it would break the mints themselves. Naming the
+    # scope requires a Keycloak that ships it (26.8.2+) — the CR and the
+    # compose service both pin the server image, so the import cannot run
+    # against a server without it.
+    defaultClientScopes:
+      - service_account
+      - web-origins
+      - acr
+      - roles
+      - profile
+      - basic
+      - email
+      - kc-admin-api
 
   # Service account for Dataprep ingestion pipeline → document-repository
   # Uses client_credentials grant to obtain tokens for service-to-service calls.

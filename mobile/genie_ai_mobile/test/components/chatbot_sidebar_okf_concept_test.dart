@@ -330,6 +330,26 @@ void main() {
     );
   });
 
+  testWidgets('a legacy row is handled by the legacy path, not by okf-server', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // A legacy row with no document id: the legacy path answers it with a
+    // notice. The notice is the proof the tap was HANDLED — without it, a
+    // swallowed tap and a legacy path look the same from okf-server's side.
+    await tester.pumpWidget(
+      sidebar([
+        {'document_name': 'Report.pdf', 'file_name': 'Report.pdf', 'url': ''},
+      ], requests: requests),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'Report.pdf');
+
+    expect(requests, isEmpty);
+    expect(find.byType(SnackBar), findsOneWidget);
+  });
+
   testWidgets('a legacy document row does not go through okf-server', (
     tester,
   ) async {
@@ -349,7 +369,8 @@ void main() {
     await tapCitation(tester, 'Report.pdf');
 
     // A legacy document row keeps the document-repository path: it never
-    // asks okf-server for anything.
+    // asks okf-server for anything, and it opens no concept modal.
     expect(requests, isEmpty);
+    expect(find.byKey(const ValueKey('ds-modal')), findsNothing);
   });
 }

@@ -53,27 +53,20 @@ void main() {
   });
 
   group('the open key', () {
-    test('carries the repository and the concept id', () {
-      expect(
-        okfConceptRef({
+    test(
+      'tells two repositories apart — the same concept id can live in both',
+      () {
+        final String first = okfConceptRef({
           'source': 'okf-concept',
           'concept_id': 'hadith_nawawi_36',
           'repo_id': 'repo-1',
-        })!.openKey,
-        'repo-1/hadith_nawawi_36',
-      );
-    });
-
-    test(
-      'a concept without a repository identity is keyed by the concept alone',
-      () {
-        expect(
-          okfConceptRef({
-            'source': 'okf-concept',
-            'concept_id': 'hadith_nawawi_36',
-          })!.openKey,
-          '/hadith_nawawi_36',
-        );
+        })!.openKey;
+        final String second = okfConceptRef({
+          'source': 'okf-concept',
+          'concept_id': 'hadith_nawawi_36',
+          'repo_id': 'repo-2',
+        })!.openKey;
+        expect(first, isNot(second));
       },
     );
 
@@ -98,7 +91,6 @@ void main() {
       });
       expect(ref, isNotNull);
       expect(ref!.conceptId, 'hadith_nawawi_36');
-      expect(ref.repoId, 'repo-1');
       expect(ref.repoId, 'repo-1');
     });
 

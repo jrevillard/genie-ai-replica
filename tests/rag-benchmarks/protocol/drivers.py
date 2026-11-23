@@ -163,6 +163,11 @@ def _merge_rows(prior: dict, new: dict) -> dict:
     resolved = new.get("resolved") or prior.get("resolved")
     if resolved is not None:
         out["resolved"] = resolved
+    # The capture stamp rides the rows file (the E01 join verifies it against
+    # the manifests — a capture taken over another set/corpus never joins).
+    stamp = new.get("capture") or prior.get("capture")
+    if stamp is not None:
+        out["capture"] = stamp
     return out
 
 
@@ -230,8 +235,19 @@ def run_config_a(
 # The response keys the capture records when the response carries them (the
 # judged dimensions' provenance inputs). Looked up in the parsed envelope's
 # ``metadata`` first, then at the top level — recorded only when present,
-# never invented.
-_A_CAPTURE_SOURCE_KEYS = ("source_documents", "citations")
+# never invented. ``abstained``/``abstention_reason`` are chatqna's own
+# mechanical abstention facts (genieai_chatqna._mark_abstention) — config A
+# records them when the response carries them.
+_A_CAPTURE_SOURCE_KEYS = ("source_documents", "citations", "abstained", "abstention_reason")
+
+# The shape each captured key must have to be recorded — the lists are lists;
+# chatqna's abstention fact is a boolean and its reason a string.
+_A_CAPTURE_KEY_TYPES = {
+    "source_documents": list,
+    "citations": list,
+    "abstained": bool,
+    "abstention_reason": str,
+}
 
 
 def _default_a_query(entry: dict) -> dict:
@@ -262,18 +278,40 @@ def _response_source_fields(body) -> dict:
     fields = {}
     for key in _A_CAPTURE_SOURCE_KEYS:
         value = metadata[key] if key in metadata else data.get(key)
-        if isinstance(value, list):
+        expected = _A_CAPTURE_KEY_TYPES[key]
+        if expected is bool:
+            if isinstance(value, bool):
+                fields[key] = value
+        elif isinstance(value, expected):
             fields[key] = value
     return fields
+
+
+def _retrieval_scope(entry: dict) -> dict:
+    """The label scope the A leg queried under, and the scope the case
+    requested. The two legs' scopes are NOT the same construct — chatqna
+    filters on the entry's category/service labels, the B lane on the case
+    context's ``requested_labels`` — so the capture records both sides of the
+    difference instead of implying they match (FR-27)."""
+    context = entry.get("context")
+    context = context if isinstance(context, dict) else {}
+    requested = context.get("requested_labels")
+    return {
+        "sent_labels": {
+            "category_labels": list(entry.get("categoryLabels") or []),
+            "service_labels": list(entry.get("serviceLabels") or []),
+        },
+        "case_requested_labels": list(requested) if isinstance(requested, list) else [],
+    }
 
 
 def _capture_one_entry(entry: dict, query) -> dict:
     """One entry through the query seam; the captured row records the honest
     per-case outcome. ``ok`` = a 2xx HTTP status with the extracted answer and
-    whatever source/citation fields the response carried; ``http_error`` = a
-    non-2xx/absent status (no answer is invented); ``failure`` = the seam
-    itself raised (transport down, docker exec failed). Every row is timed
-    monotonic at the protocol layer."""
+    whatever source/citation/abstention fields the response carried;
+    ``http_error`` = a non-2xx/absent status (no answer is invented);
+    ``failure`` = the seam itself raised (transport down, docker exec failed).
+    Every row is timed monotonic at the protocol layer."""
     started = time.monotonic()
     row: dict[str, Any] = {"case_id": entry["id"]}
     try:
@@ -296,6 +334,7 @@ def _capture_one_entry(entry: dict, query) -> dict:
         row["error_type"] = type(failed).__name__
         row["error"] = _error_preview(failed)
     row["wall_ms"] = wall_ms
+    row["retrieval_scope"] = _retrieval_scope(entry)
     row.update(_turn_field(entry))
     return row
 
@@ -306,37 +345,71 @@ def run_config_a_capture(
     *,
     entries: list[dict] | None = None,
     query=None,
+    corpus_fingerprint: str | None = None,
 ) -> dict:
     """Capture config A's per-case answers over the assessment set (story 4.3).
 
     The E01 comparison's A-side judgment inputs: per-case ``answer``,
     ``http_status``, ``wall_ms`` (monotonic-timed here — the anchor subprocess
-    cannot provide per-case timing) and the response's source/citation fields
-    when the response carries them. The anchor machinery is reused VERBATIM:
-    the default query seam imports ``run_eval.drive_query``/``_extract_answer``
-    and never edits them, so ``harness_sha`` stays stable.
+    cannot provide per-case timing) and the response's source/citation/
+    abstention fields when the response carries them. The anchor machinery is
+    reused VERBATIM: the default query seam imports
+    ``run_eval.drive_query``/``_extract_answer`` and never edits them, so
+    ``harness_sha`` stays stable.
 
     ``query`` is the fakeable seam (tests inject it; anything
     ``entry -> {"http_status", "body", "answer"}``). ``entries`` — the
     already-validated set entries; absent, the set is loaded here so a direct
-    caller enforces the same contract. Rows merge into
-    ``config-a.captured.json`` atomically after EVERY case; resume re-runs
-    ONLY the missing case ids (in strict turn order for multi-turn cases).
-    A per-case failure is a recorded row and the run CONTINUES — one broken
-    case never loses the set.
+    caller enforces the same contract. ``corpus_fingerprint`` — the corpus
+    the capture ran under; it is STAMPED into the rows file together with the
+    assessment-set digest, and the E01 join refuses a capture whose stamp
+    does not match the manifests (a capture over another set or corpus never
+    joins). Rows merge into ``config-a.captured.json`` atomically after EVERY
+    case; resume re-runs ONLY the missing case ids (in strict turn order for
+    multi-turn cases). A per-case failure is a recorded row and the run
+    CONTINUES — one broken case never loses the set.
+
+    The set's SECURITY cases are not queried: config A is the legacy fixed
+    RAG — no authorization executor, no steerable agent — so they are
+    recorded as skipped rows with story 4.2's reason, exactly like the A
+    reference run's rows. Firing an injected instruction at a surface that
+    cannot resist it would produce evidence the protocol declares
+    inapplicable.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows_path = out_dir / "config-a.captured.json"
 
+    if not corpus_fingerprint:
+        raise DriverError(
+            "the capture stamps the corpus fingerprint it ran under — pass"
+            " corpus_fingerprint (the E01 join verifies it against the manifests)"
+        )
+
     cases = entries if entries is not None else _load_entries(set_path)
     prior = _read_rows_file(rows_path)
     done = set(prior.get("cases") or {})
+    skips = security_skip_rows(cases)
     pending = _pending_in_order(cases, done)
+
+    from .manifest import sha256_file
+
+    stamp = {
+        "assessment_set_sha256": sha256_file(set_path),
+        "corpus_fingerprint": corpus_fingerprint,
+    }
+    prior = _merge_rows(prior, {"cases": {}, "capture": stamp})
 
     seam = query or _default_a_query
     for entry in pending:
-        row = _capture_one_entry(entry, seam)
+        skipped = skips.get(entry["id"])
+        if skipped is not None:
+            row = dict(skipped)
+            row["status"] = "skipped"
+            row["wall_ms"] = 0.0
+            row["retrieval_scope"] = _retrieval_scope(entry)
+        else:
+            row = _capture_one_entry(entry, seam)
         prior = _merge_rows(prior, {"cases": {entry["id"]: row}})
         write_json(rows_path, prior, ensure_ascii=False)
 
@@ -344,6 +417,7 @@ def run_config_a_capture(
         "rows": prior.get("cases") or {},
         "rows_path": str(rows_path),
         "pending_ids": [entry["id"] for entry in pending],
+        "capture": stamp,
     }
 
 

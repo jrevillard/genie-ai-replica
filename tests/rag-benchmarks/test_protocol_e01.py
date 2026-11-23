@@ -69,9 +69,7 @@ def _set_file(tmp_path, extra_answerable=("c1", "c2", "c3", "c4")):
         entries.append(_case("_ans-pad", "padding q", "answerable"))
     entries.append(_case("_unans", "the unanswerable question", "unanswerable"))
     entries.append(_case("_cite", "the citation question", "citation_check"))
-    entries.append(
-        _case("_lang-ru", "Как подать заявление?", "representative_language", script="non-latin")
-    )
+    entries.append(_case("_lang-ru", "Как подать заявление?", "representative_language", script="non-latin"))
     entries.append(_case("_lang-es", "¿Dónde se presenta?", "representative_language"))
     entries.append(_case("_fail", "the failure question", "failure"))
     entries.append(_case("_cancel", "the cancellation question", "cancellation"))
@@ -167,7 +165,12 @@ def _captured_rows():
             "http_status": 200,
             "answer": "the answer",
             "source_documents": [{"document_id": "d1"}],
+            "abstained": False,
             "wall_ms": 10.0,
+            "retrieval_scope": {
+                "sent_labels": {"category_labels": [], "service_labels": []},
+                "case_requested_labels": [],
+            },
         },
         "c2": {"case_id": "c2", "status": "http_error", "http_status": 500, "error": "boom", "wall_ms": 20.0},
         "c3": {
@@ -178,6 +181,12 @@ def _captured_rows():
             "wall_ms": 30.0,
         },
     }
+
+
+def _capture_stamp(set_sha=SET_SHA, corpus=CORPUS):
+    """The stamp `capture-a` writes into its rows file: the assessment-set
+    digest and the corpus fingerprint the capture ran under."""
+    return {"assessment_set_sha256": set_sha, "corpus_fingerprint": corpus}
 
 
 def _b_rows():
@@ -221,6 +230,7 @@ def _build(reference=None, gated=None, **kw):
         anchor_report=_anchor_report(),
         captured_rows=_captured_rows(),
         b_rows=_b_rows(),
+        capture_stamp=_capture_stamp(),
         created_utc=CREATED,
     )
     args.update(kw)
@@ -255,6 +265,14 @@ def _seam(answers, *, statuses=None, failures=(), sources_by_id=None):
     return seam, calls
 
 
+def _security_case_ids(set_path):
+    """The set's security-scenario case ids — config A never queries them."""
+    from protocol.evalset import load_set
+
+    _, entries = load_set(set_path, kind="assessment")
+    return {case["id"] for case in entries if case.get("security_scenario")}
+
+
 def _expected_ids(set_path):
     """The ids the capture writes: every case of the set, multi-turn cases
     expanded into their turn-indexed ids (the shared turn expansion)."""
@@ -274,9 +292,11 @@ def test_capture_a_records_per_case_rows_with_timing_and_turn_ids(tmp_path):
     set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
 
     seam, calls = _seam({"c1": "answer c1", "mt#t1": "answer t1", "mt#t2": "answer t2"})
-    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam)
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
     expected = _expected_ids(set_path)
-    assert set(calls) == expected
+    security = _security_case_ids(set_path)
+    assert set(calls) == {cid for cid in expected if cid.split("#")[0] not in security}
+    assert set(result["rows"]) == expected
     row = result["rows"]["c1"]
     assert row["status"] == "ok"
     assert row["http_status"] == 200
@@ -296,7 +316,7 @@ def test_capture_a_records_source_fields_only_when_the_response_carries_them(tmp
         {"c1": "a1", "c2": "a2"},
         sources_by_id={"c1": [{"document_id": "d1"}]},
     )
-    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam)
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
     assert result["rows"]["c1"]["source_documents"] == [{"document_id": "d1"}]
     assert result["rows"]["c1"]["citations"] == ["cit-1"]
     # Absent on the response → absent on the row (never invented).
@@ -307,7 +327,7 @@ def test_capture_a_records_source_fields_only_when_the_response_carries_them(tmp
 def test_capture_a_http_error_and_failure_rows_record_and_run_continues(tmp_path):
     set_path = _set_file(tmp_path, extra_answerable=("c1", "c2", "c3"))
     seam, _ = _seam({"c1": "a1"}, statuses={"c2": 500}, failures=("c3",))
-    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam)
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
     rows = result["rows"]
     expected = _expected_ids(set_path)
     assert set(rows) == expected
@@ -323,12 +343,13 @@ def test_capture_a_resume_re_runs_only_the_missing_ids(tmp_path):
     set_path = _set_file(tmp_path, extra_answerable=("c1", "c2", "c3"))
     expected = _expected_ids(set_path)
     first, first_calls = _seam({"c1": "a1", "c2": "a2", "c3": "a3"})
-    drivers.run_config_a_capture(set_path, tmp_path / "out", query=first)
-    assert set(first_calls) == expected
+    drivers.run_config_a_capture(set_path, tmp_path / "out", query=first, corpus_fingerprint=CORPUS)
+    security = _security_case_ids(set_path)
+    assert set(first_calls) == {cid for cid in expected if cid.split("#")[0] not in security}
 
     # A converged resume: no seam call at all.
     converged, converged_calls = _seam({})
-    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=converged)
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=converged, corpus_fingerprint=CORPUS)
     assert converged_calls == []
     assert result["pending_ids"] == []
 
@@ -338,8 +359,8 @@ def test_capture_a_resume_re_runs_only_the_missing_ids(tmp_path):
     data["cases"] = {"c2": data["cases"]["c2"]}
     rows_path.write_text(json.dumps(data), encoding="utf-8")
     resumed, resumed_calls = _seam({"c1": "a1", "c3": "a3"})
-    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=resumed)
-    assert set(resumed_calls) == expected - {"c2"}
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=resumed, corpus_fingerprint=CORPUS)
+    assert set(resumed_calls) == {cid for cid in expected if cid.split("#")[0] not in security} - {"c2"}
     assert set(result["rows"]) == expected
     assert result["rows"]["c2"]["answer"] == "a2"
 
@@ -398,9 +419,12 @@ def test_e01_reports_all_five_dimensions_for_both_configs_with_named_surfaces():
     assert dimensions["M-3"]["A"]["values"]["n_empty_answers"] == 0
     assert dimensions["M-3"]["B"]["values"]["n_abstained"] == 1
     assert dimensions["M-3"]["B"]["values"]["n_with_abstention_reason"] == 1
-    # M-4: latency triples on both sides (compute_triples), non-ok rows excluded.
+    # M-4: latency stats on both sides, in the metric's own unit, with NO
+    # tolerance band (the thresholds are story 4.4's to sign).
     assert dimensions["M-4"]["A"]["values"]["median"] == 10.0
+    assert dimensions["M-4"]["A"]["values"]["unit"] == "ms"
     assert dimensions["M-4"]["A"]["values"]["n_excluded_non_ok_rows"] == 2
+    assert "tol_low" not in dimensions["M-4"]["A"]["values"]
     assert dimensions["M-4"]["B"]["values"]["median"] == 150.0
     assert dimensions["M-4"]["B"]["values"]["n_excluded_non_ok_rows"] == 1
     # M-5: no surface on either leg — recorded not available WITH the reason.
@@ -477,7 +501,8 @@ def test_e01_uncontrolled_differences_identified_from_recorded_evidence():
     assert diff["prompt_digests"]["identical"] is False
     assert diff["model_ids"]["identical"] is False
     assert diff["model_ids"]["A"] == {"llm": "legacy-model-a"}
-    assert diff["execution_conditions"]["seed"] == 42
+    assert diff["execution_conditions"]["seed"]["value"] == 42
+    assert diff["execution_conditions"]["seed"]["verified"] is False
     assert "sequential anchor pass" in diff["execution_conditions"]["A"]
     assert "batched B lanes" in diff["execution_conditions"]["B"]
     assert diff["cache_state"] == {
@@ -485,9 +510,15 @@ def test_e01_uncontrolled_differences_identified_from_recorded_evidence():
         "note": "cache state is unrecorded by the harness (FR-27) — the two legs' cache conditions are uncontrolled",
     }
     assert diff["retrieval_surface_asymmetry"]["intentional_difference"] == "retrieval_backend"
+    # The label scopes are named, never assumed equal.
+    assert diff["retrieval_scope"]["scope_matched"] is None
+    assert diff["retrieval_scope"]["A"]["labels_sent_per_case"]["c1"] == {
+        "category_labels": [],
+        "service_labels": [],
+    }
     # Without a seed the fact records as not recorded — never invented.
     unseeded = _build(reference=reference, gated=gated)
-    assert unseeded["uncontrolled_differences"]["execution_conditions"]["seed"] == "not recorded"
+    assert unseeded["uncontrolled_differences"]["execution_conditions"]["seed"]["value"] is None
 
 
 def test_e01_inputs_are_digested_and_the_report_is_reproducible_under_the_pin():
@@ -501,6 +532,7 @@ def test_e01_inputs_are_digested_and_the_report_is_reproducible_under_the_pin():
         anchor_report=anchor,
         captured_rows=captured,
         b_rows=b_rows,
+        capture_stamp=_capture_stamp(),
     )
     first = build_e01_report(created_utc=CREATED, **kw)
     second = build_e01_report(created_utc=CREATED, **kw)
@@ -705,9 +737,19 @@ def test_capture_a_cli_writes_the_rows_file(tmp_path, monkeypatch):
     monkeypatch.setattr(
         rp,
         "run_config_a_capture",
-        lambda set_path_arg, out_dir, entries=None: original(set_path_arg, out_dir, entries=entries, query=seam),
+        lambda set_path_arg, out_dir, entries=None, **kwargs: original(
+            set_path_arg, out_dir, entries=entries, query=seam, **kwargs
+        ),
     )
-    args = type("Args", (), {"set_path": str(set_path), "out_dir": str(tmp_path / "out")})()
+    args = type(
+        "Args",
+        (),
+        {
+            "set_path": str(set_path),
+            "out_dir": str(tmp_path / "out"),
+            "corpus_fingerprint": CORPUS,
+        },
+    )()
     assert cmd_capture_a(args) == 0
     assert (tmp_path / "out" / "config-a.captured.json").exists()
 
@@ -717,7 +759,15 @@ def test_capture_a_cli_refuses_an_under_composed_set(tmp_path):
         json.dumps({"_meta": {"provenance": "assessment"}, "entries": [_case("c1", "q", "answerable")]}),
         encoding="utf-8",
     )
-    args = type("Args", (), {"set_path": str(tmp_path / "set.json"), "out_dir": str(tmp_path / "out")})()
+    args = type(
+        "Args",
+        (),
+        {
+            "set_path": str(tmp_path / "set.json"),
+            "out_dir": str(tmp_path / "out"),
+            "corpus_fingerprint": CORPUS,
+        },
+    )()
     assert cmd_capture_a(args) == 1
 
 
@@ -728,7 +778,9 @@ def test_e01_cli_builds_the_report_and_prints_the_digest(tmp_path, capsys):
     (run_dir / "reference.manifest.json").write_text(json.dumps(reference), encoding="utf-8")
     (run_dir / "config-b.manifest.json").write_text(json.dumps(gated), encoding="utf-8")
     (run_dir / "config-a.report.json").write_text(json.dumps(_anchor_report()), encoding="utf-8")
-    (run_dir / "config-a.captured.json").write_text(json.dumps({"cases": _captured_rows()}), encoding="utf-8")
+    (run_dir / "config-a.captured.json").write_text(
+        json.dumps({"cases": _captured_rows(), "capture": _capture_stamp()}), encoding="utf-8"
+    )
     (run_dir / "config-b.rows.json").write_text(json.dumps({"cases": _b_rows()}), encoding="utf-8")
     out = tmp_path / "e01.report.json"
     args = type(
@@ -765,7 +817,9 @@ def test_e01_cli_passes_the_ledger_through(tmp_path):
     (run_dir / "reference.manifest.json").write_text(json.dumps(reference), encoding="utf-8")
     (run_dir / "config-b.manifest.json").write_text(json.dumps(gated), encoding="utf-8")
     (run_dir / "config-a.report.json").write_text(json.dumps(_anchor_report()), encoding="utf-8")
-    (run_dir / "config-a.captured.json").write_text(json.dumps({"cases": _captured_rows()}), encoding="utf-8")
+    (run_dir / "config-a.captured.json").write_text(
+        json.dumps({"cases": _captured_rows(), "capture": _capture_stamp()}), encoding="utf-8"
+    )
     (run_dir / "config-b.rows.json").write_text(json.dumps({"cases": _b_rows()}), encoding="utf-8")
     ledger = reference_defects_file(
         corpus_fingerprint=CORPUS,
@@ -803,7 +857,9 @@ def test_e01_cli_refuses_a_missing_leg_artifact_naming_it(tmp_path, capsys):
     (run_dir / "reference.manifest.json").write_text(json.dumps(reference), encoding="utf-8")
     (run_dir / "config-b.manifest.json").write_text(json.dumps(gated), encoding="utf-8")
     (run_dir / "config-a.report.json").write_text(json.dumps(_anchor_report()), encoding="utf-8")
-    (run_dir / "config-a.captured.json").write_text(json.dumps({"cases": _captured_rows()}), encoding="utf-8")
+    (run_dir / "config-a.captured.json").write_text(
+        json.dumps({"cases": _captured_rows(), "capture": _capture_stamp()}), encoding="utf-8"
+    )
     # config-b.rows.json deliberately absent.
     args = type(
         "Args",
@@ -845,12 +901,18 @@ def test_e01_cli_refuses_a_lineage_mismatch_through_the_main_gate():
     )
     argv = [
         "e01",
-        "--reference-manifest", "/nonexistent/reference.json",
-        "--gated-manifest", "/nonexistent/gated.json",
-        "--anchor-report", "/nonexistent/anchor.json",
-        "--captured-rows", "/nonexistent/captured.json",
-        "--b-rows", "/nonexistent/b.json",
-        "--out", "/tmp/e01-should-not-exist.json",
+        "--reference-manifest",
+        "/nonexistent/reference.json",
+        "--gated-manifest",
+        "/nonexistent/gated.json",
+        "--anchor-report",
+        "/nonexistent/anchor.json",
+        "--captured-rows",
+        "/nonexistent/captured.json",
+        "--b-rows",
+        "/nonexistent/b.json",
+        "--out",
+        "/tmp/e01-should-not-exist.json",
     ]
     assert main(argv) == 1  # the missing files refuse before anything builds
     # And the typed refusal from the BUILDER also maps to exit 1 (unreadable
@@ -862,16 +924,179 @@ def test_e01_cli_refuses_a_lineage_mismatch_through_the_main_gate():
         (run_dir / "reference.manifest.json").write_text(json.dumps(reference), encoding="utf-8")
         (run_dir / "config-b.manifest.json").write_text(json.dumps(other), encoding="utf-8")
         (run_dir / "config-a.report.json").write_text(json.dumps(_anchor_report()), encoding="utf-8")
-        (run_dir / "config-a.captured.json").write_text(json.dumps({"cases": _captured_rows()}), encoding="utf-8")
+        (run_dir / "config-a.captured.json").write_text(
+            json.dumps({"cases": _captured_rows(), "capture": _capture_stamp()}), encoding="utf-8"
+        )
         (run_dir / "config-b.rows.json").write_text(json.dumps({"cases": _b_rows()}), encoding="utf-8")
         argv_lineage = [
             "e01",
-            "--reference-manifest", str(run_dir / "reference.manifest.json"),
-            "--gated-manifest", str(run_dir / "config-b.manifest.json"),
-            "--anchor-report", str(run_dir / "config-a.report.json"),
-            "--captured-rows", str(run_dir / "config-a.captured.json"),
-            "--b-rows", str(run_dir / "config-b.rows.json"),
-            "--out", str(run_dir / "e01.report.json"),
+            "--reference-manifest",
+            str(run_dir / "reference.manifest.json"),
+            "--gated-manifest",
+            str(run_dir / "config-b.manifest.json"),
+            "--anchor-report",
+            str(run_dir / "config-a.report.json"),
+            "--captured-rows",
+            str(run_dir / "config-a.captured.json"),
+            "--b-rows",
+            str(run_dir / "config-b.rows.json"),
+            "--out",
+            str(run_dir / "e01.report.json"),
         ]
         assert main(argv_lineage) == 1
         assert not (run_dir / "e01.report.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# The correction round's regression tests (one per fixed finding)
+# ---------------------------------------------------------------------------
+
+
+def test_capture_a_skips_the_security_scenarios_and_records_them(tmp_path):
+    """Config A has no agent surface — the security cases are the B/C legs'.
+    The capture must not fire an injected instruction at that surface."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+    seam, calls = _seam({"c1": "a1", "c2": "a2"})
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    security_ids = {
+        case_id
+        for case_id in result["rows"]
+        if case_id.startswith("_sec-") or "#t" in case_id and case_id.startswith("_sec-")
+    }
+    assert security_ids, "the set carries security cases — the capture must record them"
+    for case_id in security_ids:
+        row = result["rows"][case_id]
+        assert row["status"] == "skipped"
+        assert "no agent surface" in row["reason"]
+    # No security case was ever queried.
+    assert not [case_id for case_id in calls if case_id.startswith("_sec-")]
+
+
+def test_capture_a_records_chatqnas_mechanical_abstention_facts(tmp_path):
+    """chatqna's own abstention facts (metadata.abstained / abstention_reason)
+    are captured when the response carries them."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+
+    def seam(entry):
+        if entry["id"] == "c1":
+            body = {"metadata": {"abstained": True, "abstention_reason": "no_context"}}
+            return {"http_status": 200, "body": json.dumps(body), "answer": ""}
+        return {"http_status": 200, "body": json.dumps({"metadata": {}}), "answer": "an answer"}
+
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    assert result["rows"]["c1"]["abstained"] is True
+    assert result["rows"]["c1"]["abstention_reason"] == "no_context"
+    # Absent in the response → absent on the row (never invented).
+    assert "abstained" not in result["rows"]["c2"]
+
+
+def test_capture_a_stamps_the_set_digest_and_the_corpus(tmp_path):
+    """The capture is the one leg the manifests cannot cover — it stamps the
+    set digest and the corpus fingerprint it ran under."""
+    import hashlib
+
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+    seam, _ = _seam({"c1": "a1", "c2": "a2"})
+    result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    expected = hashlib.sha256(set_path.read_bytes()).hexdigest()
+    assert result["capture"] == {"assessment_set_sha256": expected, "corpus_fingerprint": CORPUS}
+    written = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
+    assert written["capture"] == result["capture"]
+    # Without a corpus fingerprint the capture refuses — the stamp is mandatory.
+    with pytest.raises(Exception) as failed:
+        drivers.run_config_a_capture(set_path, tmp_path / "out2", query=seam)
+    assert "corpus" in str(failed.value).lower()
+
+
+def test_e01_refuses_a_capture_stamped_over_another_set_or_corpus():
+    with pytest.raises(E01Refusal) as failed:
+        _build(capture_stamp=_capture_stamp(set_sha="9" * 64))
+    assert failed.value.reason == "lineage_mismatch"
+    assert "assessment set" in str(failed.value)
+    with pytest.raises(E01Refusal) as failed:
+        _build(capture_stamp=_capture_stamp(corpus="9" * 64))
+    assert failed.value.reason == "lineage_mismatch"
+    assert "corpus" in str(failed.value)
+
+
+def test_e01_refuses_a_leg_gated_against_another_reference():
+    """Two reference runs over the same corpus and set share the corpus and
+    set digests but not the manifest digest — pairing A from one with B gated
+    against another would apply thresholds signed for a different measurement."""
+    reference, gated = _manifests()
+    other_reference, _ = _manifests()
+    other_reference["created_utc"] = "2026-11-22T09:00:00+00:00"
+    gated["lineage"] = {"reference_manifest_sha256": manifest_digest(other_reference), "thresholds_sha256": "t" * 64}
+    with pytest.raises(E01Refusal) as failed:
+        _build(reference=reference, gated=gated)
+    assert failed.value.reason == "lineage_mismatch"
+    assert "gated against" in str(failed.value)
+
+
+def test_e01_refuses_legs_that_carry_no_lineage():
+    """Two manifests without a fingerprint would compare equal (None == None)
+    — the report must not claim a shared corpus it never checked."""
+    reference, gated = _manifests()
+    reference["corpus"] = {}
+    gated["corpus"] = {}
+    with pytest.raises(E01Refusal) as failed:
+        _build(reference=reference, gated=gated)
+    assert failed.value.reason == "lineage_mismatch"
+    assert "corpus fingerprint" in str(failed.value)
+
+
+def test_e01_refuses_rows_of_another_leg():
+    """Config C's rows carry outcome, not status — a C rows file passed as the
+    B leg must refuse, never silently filter down to an empty leg."""
+    c_rows = {"c1": {"case_id": "c1", "outcome": "answered", "wall_ms": 5.0}}
+    with pytest.raises(E01Refusal) as failed:
+        _build(b_rows=c_rows)
+    assert failed.value.reason == "wrong_leg"
+    assert "status" in str(failed.value)
+
+
+def test_e01_refuses_a_malformed_defects_file():
+    """A JSON array of defect records is not a ledger — a typed refusal, not a
+    traceback."""
+    with pytest.raises(E01Refusal) as failed:
+        _build(defects=[{"case_ids": ["c1"]}])
+    assert failed.value.reason == "defects_not_a_ledger"
+
+
+def test_e01_m4_publishes_no_tolerance_band_and_keeps_the_metric_unit():
+    """The capture machinery's tolerance band is clamped to [0, 1] — a
+    millisecond band would come out inverted. The thresholds are 4.4's."""
+    rows = _b_rows()
+    rows["c1"]["wall_ms"] = 4200.0
+    report = _build(b_rows=rows)
+    values = report["dimensions"]["M-4"]["B"]["values"]
+    assert values["max"] == 4200.0
+    assert values["median"] == 2200.0
+    assert values["unit"] == "ms"
+    assert "tol_low" not in values and "tol_high" not in values
+
+
+def test_e01_never_claims_equality_from_absence():
+    """An unrecorded side is 'not recorded', never 'identical'."""
+    reference, gated = _manifests()
+    reference["configuration"]["A"]["prompt_digests"] = {}
+    reference["configuration"]["A"]["model_ids"] = {}
+    gated["lineage"]["reference_manifest_sha256"] = manifest_digest(reference)
+    report = _build(reference=reference, gated=gated)
+    diff = report["uncontrolled_differences"]
+    assert diff["prompt_digests"]["state"] == "not_recorded"
+    assert diff["prompt_digests"]["identical"] is None
+    assert diff["model_ids"]["state"] == "not_recorded"
+    assert diff["model_ids"]["identical"] is None
+
+
+def test_e01_names_the_cases_whose_requested_labels_never_reached_the_a_query():
+    captured = _captured_rows()
+    captured["c1"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": [], "service_labels": []},
+        "case_requested_labels": ["Forestry"],
+    }
+    report = _build(captured_rows=captured)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["scope_matched"] is None
+    assert scope["A"]["cases_whose_requested_labels_never_reached_the_A_query"] == ["c1"]

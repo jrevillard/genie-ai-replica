@@ -53,7 +53,7 @@ from datetime import UTC, datetime
 
 from . import PROTOCOL_VERSION
 from . import pairs as pairs_mod
-from .manifest import SECRET_KEY_MARKERS, manifest_digest, sha256_json
+from .manifest import manifest_digest, sha256_json
 
 E01_REPORT_VERSION = "1.0.0"
 
@@ -108,22 +108,13 @@ B_M1_CHUNK_NOTE = (
     " make; the doc-level source_documents record plus the judged answer dimensions are"
     " the B side of M-1"
 )
-A_M2_SURFACE = (
-    "captured answers (capture-a) — judged from the answer text under the versioned"
-    " evaluator instructions"
-)
-B_M2_SURFACE = (
-    "B row answers + source_documents — judged under the same versioned evaluator"
-    " instructions"
-)
+A_M2_SURFACE = "captured answers (capture-a) — judged from the answer text under the versioned evaluator instructions"
+B_M2_SURFACE = "B row answers + source_documents — judged under the same versioned evaluator instructions"
 A_M3_SURFACE = (
-    "judged from the answer text (config A records no mechanical abstention field — an"
-    " empty captured answer is the abstention signal)"
+    "chatqna's mechanical abstention facts when the response carries them"
+    " (metadata.abstained / metadata.abstention_reason), otherwise judged from the answer text"
 )
-B_M3_SURFACE = (
-    "mechanical abstention fields (abstained / abstention_reason, recorded by the"
-    " noagent lane)"
-)
+B_M3_SURFACE = "mechanical abstention fields (abstained / abstention_reason, recorded by the noagent lane)"
 A_M4_SURFACE = "capture-a per-case wall_ms (monotonic timing at the protocol layer)"
 B_M4_SURFACE = "config B row wall_ms (timed in-container by the B driver)"
 A_M5_SURFACE = "none recorded"
@@ -140,6 +131,43 @@ B_M5_REASON = (
 # The metadata keys that carry a resource record (usage / resources / cost).
 # A credential-named key is never one of them — the marker list decides.
 _RESOURCE_KEY_HINTS = ("usage", "resource", "cost")
+
+# The credential-named keys the report drops, at ANY depth. The marker set is
+# the manifest's, plus the names that carry the marker as a substring — the
+# manifest's own rule drops MEASUREMENT fields too (``chunk_key`` matches
+# "KEY", ``prompt_tokens`` matches "TOKEN"), and the report must not state two
+# different things about the same datum. The measurement names below are the
+# explicit exceptions.
+CREDENTIAL_MARKERS = (
+    "password",
+    "secret",
+    "token",
+    "key",
+    "bearer",
+    "credential",
+    "authorization",
+)
+
+MEASUREMENT_KEY_NAMES = frozenset(
+    {
+        "chunk_key",
+        "content_hash",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "token_count",
+        "tokens",
+    }
+)
+
+
+def _is_credential_key(key) -> bool:
+    """True when the key names a credential. The measurement names are the
+    explicit exceptions — they are values the judge needs, not secrets."""
+    name = str(key).lower()
+    if name in MEASUREMENT_KEY_NAMES:
+        return False
+    return any(marker in name for marker in CREDENTIAL_MARKERS)
 
 
 class E01Refusal(RuntimeError):
@@ -189,6 +217,12 @@ def verify_defects_lineage(
 ) -> None:
     """Lineage-verify one ledger against THIS comparison's lineage; raise
     :class:`E01Refusal` naming the mismatch — before any report is built."""
+    if not isinstance(ledger, dict):
+        raise E01Refusal(
+            "defects_not_a_ledger",
+            f"the supplied defects file is a {type(ledger).__name__}, not a"
+            f" {REFERENCE_DEFECTS_ARTIFACT!r} artifact — refusing before the report is built",
+        )
     if ledger.get("artifact") != REFERENCE_DEFECTS_ARTIFACT:
         raise E01Refusal(
             "defects_not_a_ledger",
@@ -232,6 +266,41 @@ def _is_defect_case(case_id: str, defect_ids: set[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+# The per-leg row vocabularies: config B's rows carry ``status`` (ok|failure),
+# config A's captured rows carry ``status`` (ok|http_error|failure|skipped).
+# Config C's rows carry ``outcome`` — a rows file of another leg is refused,
+# never silently filtered down to an empty comparison leg.
+ROW_STATUS_VOCABULARY = {
+    "A": ("ok", "http_error", "failure", "skipped"),
+    "B": ("ok", "failure"),
+}
+
+
+def _verify_row_vocabulary(rows: dict, config: str) -> None:
+    """Refuse a rows file that does not speak the leg's vocabulary — a leg that
+    never ran must never be presented as a leg that scored zero."""
+    allowed = ROW_STATUS_VOCABULARY[config]
+    for case_id, row in rows.items():
+        if not isinstance(row, dict):
+            raise E01Refusal(
+                "missing_artifact",
+                f"the {config}-leg row for {case_id!r} is not a mapping — refusing before the report is built",
+            )
+        if "status" not in row:
+            raise E01Refusal(
+                "wrong_leg",
+                f"the {config}-leg row for {case_id!r} carries no status field — these rows are"
+                " another leg's (config C rows carry outcome) — refusing before the report is built",
+            )
+        status = row.get("status")
+        if status not in allowed:
+            raise E01Refusal(
+                "wrong_leg",
+                f"the {config}-leg row for {case_id!r} carries status {status!r}, outside the"
+                f" {config}-leg vocabulary {allowed} — refusing before the report is built",
+            )
+
+
 def _verify_legs(
     *,
     reference_manifest: dict,
@@ -239,6 +308,7 @@ def _verify_legs(
     anchor_report: dict,
     captured_rows: dict,
     b_rows: dict,
+    capture_stamp: dict | None = None,
 ) -> None:
     """The leg-artifact and lineage checks, in refusal order: presence, leg
     identity, lineage."""
@@ -266,8 +336,7 @@ def _verify_legs(
     if ref_kind != "reference" or ref_config != "A":
         raise E01Refusal(
             "wrong_leg",
-            f"the A leg requires a reference config-A manifest (got kind {ref_kind!r},"
-            f" config {ref_config!r})",
+            f"the A leg requires a reference config-A manifest (got kind {ref_kind!r}, config {ref_config!r})",
         )
     kind = gated_manifest.get("kind")
     config = gated_manifest.get("config")
@@ -282,10 +351,29 @@ def _verify_legs(
             "wrong_leg",
             f"the B leg requires a gated config-B manifest (got kind {kind!r}, config {config!r})",
         )
+    _verify_row_vocabulary(captured_rows, "A")
+    _verify_row_vocabulary(b_rows, "B")
     ref_corpus = (reference_manifest.get("corpus") or {}).get("fingerprint")
     b_corpus = (gated_manifest.get("corpus") or {}).get("fingerprint")
     ref_set = ((reference_manifest.get("sets") or {}).get("assessment") or {}).get("sha256")
     b_set = ((gated_manifest.get("sets") or {}).get("assessment") or {}).get("sha256")
+    # Lineage must be PRESENT on both sides: two manifests that carry no
+    # fingerprint at all would compare equal (None == None) and the report
+    # would claim a shared corpus it never checked.
+    absent = []
+    if not ref_corpus:
+        absent.append("the A leg's corpus fingerprint")
+    if not b_corpus:
+        absent.append("the B leg's corpus fingerprint")
+    if not ref_set:
+        absent.append("the A leg's assessment set digest")
+    if not b_set:
+        absent.append("the B leg's assessment set digest")
+    if absent:
+        raise E01Refusal(
+            "lineage_mismatch",
+            f"the legs carry no lineage — {' and '.join(absent)} missing — refusing before the report is built",
+        )
     mismatched = []
     if ref_corpus != b_corpus:
         mismatched.append(f"the corpus fingerprint (A {ref_corpus!r} vs B {b_corpus!r})")
@@ -294,9 +382,45 @@ def _verify_legs(
     if mismatched:
         raise E01Refusal(
             "lineage_mismatch",
-            "the legs do not share a lineage — "
-            + " and ".join(mismatched)
-            + " — refusing before the report is built",
+            "the legs do not share a lineage — " + " and ".join(mismatched) + " — refusing before the report is built",
+        )
+    # The B run was gated against a reference manifest — the gate wrote that
+    # pointer into the gated manifest. It must be THIS reference: two
+    # reference runs over the same corpus and set share the corpus and set
+    # digests but not the manifest digest, and pairing A from one with B
+    # gated against another would apply thresholds signed for a different
+    # measurement.
+    gated_against = (gated_manifest.get("lineage") or {}).get("reference_manifest_sha256")
+    reference_digest = manifest_digest(reference_manifest)
+    if gated_against != reference_digest:
+        raise E01Refusal(
+            "lineage_mismatch",
+            f"the B leg was gated against a different reference manifest ({gated_against!r} vs"
+            f" {reference_digest!r}) — pass the reference the gate selected — refusing before the"
+            " report is built",
+        )
+    # The A capture is the one leg the manifests cannot cover (it is not a
+    # run): it stamps the set digest and the corpus fingerprint it ran under,
+    # and a capture over another set or corpus never joins.
+    if not isinstance(capture_stamp, dict) or not capture_stamp:
+        raise E01Refusal(
+            "missing_artifact",
+            "the A capture carries no stamp (the assessment-set digest and the corpus fingerprint"
+            " it ran under) — refusing before the report is built",
+        )
+    stamped_set = capture_stamp.get("assessment_set_sha256")
+    stamped_corpus = capture_stamp.get("corpus_fingerprint")
+    if stamped_set != ref_set:
+        raise E01Refusal(
+            "lineage_mismatch",
+            f"the A capture ran over another assessment set ({stamped_set!r} vs {ref_set!r}) —"
+            " refusing before the report is built",
+        )
+    if stamped_corpus != ref_corpus:
+        raise E01Refusal(
+            "lineage_mismatch",
+            f"the A capture ran over another corpus ({stamped_corpus!r} vs {ref_corpus!r}) —"
+            " refusing before the report is built",
         )
 
 
@@ -371,7 +495,13 @@ def _build_m3(captured_rows: dict, b_rows: dict) -> tuple[dict, dict]:
         available=True,
         values={
             "n_ok_rows": len(a_ok),
+            "n_rows_with_abstention_fact": sum(1 for row in a_ok if "abstained" in row),
+            "n_abstained": sum(1 for row in a_ok if row.get("abstained") is True),
+            "n_with_abstention_reason": sum(1 for row in a_ok if row.get("abstention_reason")),
             "n_empty_answers": sum(1 for row in a_ok if not str(row.get("answer") or "").strip()),
+            "n_skipped_rows": sum(
+                1 for row in captured_rows.values() if isinstance(row, dict) and row.get("status") == "skipped"
+            ),
             "n_http_error_rows": sum(
                 1 for row in captured_rows.values() if isinstance(row, dict) and row.get("status") == "http_error"
             ),
@@ -384,9 +514,13 @@ def _build_m3(captured_rows: dict, b_rows: dict) -> tuple[dict, dict]:
         surface=B_M3_SURFACE,
         available=True,
         values={
+            "n_ok_rows": len(b_ok),
             "n_abstained": sum(1 for row in b_ok if row.get("abstained") is True),
             "n_with_abstention_reason": sum(1 for row in b_ok if row.get("abstention_reason")),
             "n_not_abstained": sum(1 for row in b_ok if row.get("abstained") is False),
+            "n_failure_rows": sum(
+                1 for row in b_rows.values() if isinstance(row, dict) and row.get("status") == "failure"
+            ),
         },
     )
     return a, b
@@ -400,15 +534,34 @@ def _latency_values(rows: dict) -> tuple[list[float], int]:
         for row in _ok_rows(rows)
         if isinstance(row.get("wall_ms"), (int, float)) and not isinstance(row.get("wall_ms"), bool)
     ]
-    excluded = sum(
-        1 for row in rows.values() if isinstance(row, dict) and row.get("status") != "ok"
-    )
+    excluded = sum(1 for row in rows.values() if isinstance(row, dict) and row.get("status") != "ok")
     return walls, excluded
 
 
-def _build_m4(captured_rows: dict, b_rows: dict) -> tuple[dict, dict]:
-    import capture_baseline  # local import: the sibling capture module's triples
+def _latency_stats(values: list[float]) -> dict:
+    """min / median / max / MAD in the metric's OWN unit (milliseconds).
 
+    No tolerance band is published: the capture machinery's ``compute_triples``
+    clamps its band to [0, 1] (it was written for normalized metrics), which
+    would invert a millisecond band — and the tolerance itself is story 4.4's
+    to sign, not the harness's to invent.
+    """
+    import statistics
+
+    ordered = sorted(float(value) for value in values)
+    median = statistics.median(ordered)
+    mad = float(statistics.median([abs(value - median) for value in ordered])) * 1.4826
+    return {
+        "n": len(ordered),
+        "min": ordered[0],
+        "median": median,
+        "max": ordered[-1],
+        "mad": mad,
+        "unit": "ms",
+    }
+
+
+def _build_m4(captured_rows: dict, b_rows: dict) -> tuple[dict, dict]:
     dimensions = []
     for rows, surface in ((captured_rows, A_M4_SURFACE), (b_rows, B_M4_SURFACE)):
         walls, excluded = _latency_values(rows)
@@ -425,7 +578,7 @@ def _build_m4(captured_rows: dict, b_rows: dict) -> tuple[dict, dict]:
             _surface_record(
                 surface=surface,
                 available=True,
-                values={**capture_baseline.compute_triples(walls), "n_excluded_non_ok_rows": excluded},
+                values={**_latency_stats(walls), "n_excluded_non_ok_rows": excluded},
             )
         )
     return dimensions[0], dimensions[1]
@@ -445,9 +598,9 @@ def _build_m5(b_rows: dict) -> tuple[dict, dict]:
             name = str(key).lower()
             if not any(hint in name for hint in _RESOURCE_KEY_HINTS):
                 continue
-            if any(marker in str(key).upper() for marker in SECRET_KEY_MARKERS):
+            if _is_credential_key(key):
                 continue  # a credential-named key is never a resource record
-            recorded.setdefault(str(key), value)
+            recorded.setdefault(str(key), _redact_deep(value))
     if recorded:
         b = _surface_record(surface=B_M5_SURFACE, available=True, values=recorded)
     else:
@@ -460,7 +613,63 @@ def _build_m5(b_rows: dict) -> tuple[dict, dict]:
 # ---------------------------------------------------------------------------
 
 
-def _uncontrolled_differences(reference_manifest: dict, gated_manifest: dict, seed) -> dict:
+def _recorded_comparison(ref_value, b_value, note: str) -> dict:
+    """A per-leg comparison that never claims equality from ABSENCE: an
+    unrecorded side is 'not recorded', never 'identical' (the harness records
+    no prompt digests and no model ids unless the run was given them)."""
+    ref_recorded = bool(ref_value)
+    b_recorded = bool(b_value)
+    if ref_recorded and b_recorded:
+        return {
+            "A": ref_value,
+            "B": b_value,
+            "state": "compared",
+            "identical": ref_value == b_value,
+            "note": note,
+        }
+    return {
+        "A": ref_value,
+        "B": b_value,
+        "state": "not_recorded",
+        "identical": None,
+        "note": note + " — at least one side recorded nothing, so no comparison is claimed",
+    }
+
+
+def _retrieval_scope_record(captured_rows: dict) -> dict:
+    """The label scope the A leg queried under, and the cases whose own
+    requested_labels never reached the A query. The two legs' scopes are
+    DIFFERENT constructs (chatqna filters on the entry's category/service
+    labels, the B lane on the case context's requested_labels) — the report
+    names the difference instead of implying a scope match (FR-27)."""
+    sent: dict = {}
+    differing: list = []
+    for case_id, row in sorted(captured_rows.items()):
+        scope = row.get("retrieval_scope") if isinstance(row, dict) else None
+        if not isinstance(scope, dict):
+            continue
+        sent_labels = scope.get("sent_labels") or {}
+        requested = scope.get("case_requested_labels") or []
+        sent[case_id] = sent_labels
+        if requested and not (sent_labels.get("category_labels") or sent_labels.get("service_labels")):
+            differing.append(case_id)
+    return {
+        "A": {
+            "labels_sent_per_case": sent,
+            "cases_whose_requested_labels_never_reached_the_A_query": differing,
+        },
+        "B": {
+            "labels_source": "the case context's requested_labels (the B rows carry no scope field)",
+        },
+        "scope_matched": None,
+        "note": (
+            "the legs' label scopes are different constructs — the report names the difference and"
+            " never claims the legs retrieved the same scope (FR-27)"
+        ),
+    }
+
+
+def _uncontrolled_differences(reference_manifest: dict, gated_manifest: dict, seed, captured_rows: dict) -> dict:
     ref_configuration = (reference_manifest.get("configuration") or {}).get("A") or {}
     b_configuration = (gated_manifest.get("configuration") or {}).get("B") or {}
     ref_prompts = dict(ref_configuration.get("prompt_digests") or {})
@@ -468,25 +677,29 @@ def _uncontrolled_differences(reference_manifest: dict, gated_manifest: dict, se
     ref_ids = dict(ref_configuration.get("model_ids") or {})
     b_ids = dict(b_configuration.get("model_ids") or {})
     return {
-        "prompt_digests": {
-            "A": ref_prompts,
-            "B": b_prompts,
-            "identical": ref_prompts == b_prompts,
-            "note": (
-                "prompt digests as recorded by each leg's run manifest — different digests are an"
-                " uncontrolled (recorded) difference"
-            ),
-        },
-        "model_ids": {
-            "A": ref_ids,
-            "B": b_ids,
-            "identical": ref_ids == b_ids,
-            "note": "model service ids as resolved by each leg's run manifest",
-        },
+        "prompt_digests": _recorded_comparison(
+            ref_prompts,
+            b_prompts,
+            "prompt digests as recorded by each leg's run manifest — different digests are an"
+            " uncontrolled (recorded) difference",
+        ),
+        "model_ids": _recorded_comparison(
+            ref_ids,
+            b_ids,
+            "model service ids as resolved by each leg's run manifest",
+        ),
         "execution_conditions": {
             "A": "sequential anchor pass — one whole-set run_eval.py anchor subprocess (resume via its .done sidecar)",
             "B": "batched B lanes — payload-bounded docker-exec sub-batches through the in-container config-B driver",
-            "seed": seed if seed is not None else "not recorded",
+            "seed": {
+                "value": seed,
+                "source": "operator-declared via --seed" if seed is not None else "not recorded",
+                "verified": False,
+                "note": (
+                    "the run manifests record no seed — the value is the operator's declaration,"
+                    " not a fact cross-checked against the artifacts"
+                ),
+            },
             "manifest_created_utc": {
                 "A": reference_manifest.get("created_utc"),
                 "B": gated_manifest.get("created_utc"),
@@ -495,10 +708,10 @@ def _uncontrolled_differences(reference_manifest: dict, gated_manifest: dict, se
         "cache_state": {
             "recorded": False,
             "note": (
-                "cache state is unrecorded by the harness (FR-27) — the two legs' cache conditions"
-                " are uncontrolled"
+                "cache state is unrecorded by the harness (FR-27) — the two legs' cache conditions are uncontrolled"
             ),
         },
+        "retrieval_scope": _retrieval_scope_record(captured_rows),
         "retrieval_surface_asymmetry": {
             "intentional_difference": pairs_mod.PAIR_CONDITIONS[E01_PAIR]["intentional_difference"],
             "A_surface": "chunk-level (the anchor report's per-query candidate/selected keys)",
@@ -521,15 +734,11 @@ def _redact_deep(value):
 
     The manifest's redaction is top-level only — a nested credential (a row's
     ``metadata`` carrying an api key) would survive it, and the E01 report
-    records whole rows. Depth-aware redaction here; the marker list is the
-    manifest's, never a second spelling.
+    records whole rows. Depth-aware redaction here; the rule is the report's
+    own (see :data:`MEASUREMENT_KEY_NAMES` for the measurement names it keeps).
     """
     if isinstance(value, dict):
-        return {
-            key: _redact_deep(item)
-            for key, item in value.items()
-            if not any(marker in str(key).upper() for marker in SECRET_KEY_MARKERS)
-        }
+        return {key: _redact_deep(item) for key, item in value.items() if not _is_credential_key(key)}
     if isinstance(value, list):
         return [_redact_deep(item) for item in value]
     return value
@@ -565,6 +774,7 @@ def build_e01_report(
     anchor_report: dict,
     captured_rows: dict,
     b_rows: dict,
+    capture_stamp: dict | None = None,
     defects: dict | None = None,
     created_utc: str | None = None,
     seed: int | None = None,
@@ -573,11 +783,11 @@ def build_e01_report(
     the pinned ``created_utc``.
 
     Raises :class:`E01Refusal` before any building on a missing leg artifact,
-    a lineage mismatch between the legs, a wrong-leg manifest (config C on
-    the B leg) or a lineage-mismatched ledger. ``defects`` is the LOADED
-    ledger record (or None — recorded absent). ``seed`` is the recorded
-    execution-condition fact when the caller knows it (``--seed``), else
-    ``None`` ("not recorded").
+    a lineage mismatch between the legs (corpus, assessment set, the reference
+    the gate selected, the capture's own stamp), a wrong-leg manifest (config
+    C on the B leg), rows of another leg, or a lineage-mismatched ledger.
+    ``defects`` is the LOADED ledger record (or None — recorded absent).
+    ``seed`` is the operator-declared execution-condition value (``--seed``).
     """
     # The refusals precede any report building.
     _verify_legs(
@@ -586,6 +796,7 @@ def build_e01_report(
         anchor_report=anchor_report,
         captured_rows=captured_rows,
         b_rows=b_rows,
+        capture_stamp=capture_stamp,
     )
     reference_digest = manifest_digest(reference_manifest)
     gated_digest = manifest_digest(gated_manifest)
@@ -640,13 +851,14 @@ def build_e01_report(
             "anchor_report_sha256": sha256_json(anchor_report),
             "captured_rows_sha256": sha256_json(captured_rows),
             "b_rows_sha256": sha256_json(b_rows),
+            "capture_stamp": capture_stamp,
             "reference_defects_sha256": ledger_record["sha256"],
             "corpus_fingerprint": corpus_fingerprint,
             "assessment_set_sha256": assessment_set_sha256,
         },
         "reference_defects": ledger_record,
         "dimensions": dimensions,
-        "uncontrolled_differences": _uncontrolled_differences(reference_manifest, gated_manifest, seed),
+        "uncontrolled_differences": _uncontrolled_differences(reference_manifest, gated_manifest, seed, captured_rows),
         "per_case": per_case,
         "counts": {
             "n_cases": len(per_case),

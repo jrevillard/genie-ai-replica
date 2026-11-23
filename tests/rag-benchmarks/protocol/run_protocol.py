@@ -398,13 +398,36 @@ def cmd_capture_a(args: argparse.Namespace) -> int:
     entries = _validated_entries(args)
     if entries is None:
         return 1
-    result = run_config_a_capture(args.set_path, args.out_dir, entries=entries)
+    result = run_config_a_capture(
+        args.set_path, args.out_dir, entries=entries, corpus_fingerprint=args.corpus_fingerprint
+    )
     rows = result["rows"]
     n_ok = sum(1 for row in rows.values() if row.get("status") == "ok")
-    n_non_ok = len(rows) - n_ok
-    print(f"config A capture: {len(rows)} row(s) recorded ({n_ok} ok / {n_non_ok} non-ok)")
+    n_skipped = sum(1 for row in rows.values() if row.get("status") == "skipped")
+    n_non_ok = len(rows) - n_ok - n_skipped
+    print(f"config A capture: {len(rows)} row(s) recorded ({n_ok} ok / {n_skipped} skipped / {n_non_ok} failed)")
     print(f"captured rows: {result['rows_path']}")
+    stamp = result["capture"]
+    print(
+        f"capture stamp: set {stamp['assessment_set_sha256'][:12]},"
+        f" corpus {stamp['corpus_fingerprint'][:12]}"
+    )
     return 0
+
+
+def _load_capture_refusing(path: str):
+    """The A capture file: its cases mapping AND its stamp (the assessment-set
+    digest and the corpus fingerprint it ran under). The E01 join verifies
+    the stamp against the manifests — a capture over another set or corpus
+    never joins. None (already refused) on an unreadable/malformed file."""
+    data = _load_json_refusing(path, "the A captured rows")
+    if data is None:
+        return None
+    cases = data.get("cases") if isinstance(data, dict) else None
+    if not isinstance(cases, dict):
+        print(f"REFUSED: the A captured rows ({path}) carries no cases mapping", file=sys.stderr)
+        return None
+    return cases, data.get("capture")
 
 
 def cmd_e01(args: argparse.Namespace) -> int:
@@ -420,9 +443,10 @@ def cmd_e01(args: argparse.Namespace) -> int:
     anchor_report = _load_json_refusing(args.anchor_report, "the A anchor report")
     if anchor_report is None:
         return 1
-    captured_rows = _load_rows_refusing(args.captured_rows, "the A captured rows")
-    if captured_rows is None:
+    captured = _load_capture_refusing(args.captured_rows)
+    if captured is None:
         return 1
+    captured_rows, capture_stamp = captured
     b_rows = _load_rows_refusing(args.b_rows, "the B rows")
     if b_rows is None:
         return 1
@@ -437,6 +461,7 @@ def cmd_e01(args: argparse.Namespace) -> int:
         anchor_report=anchor_report,
         captured_rows=captured_rows,
         b_rows=b_rows,
+        capture_stamp=capture_stamp,
         defects=defects,
         created_utc=args.created_utc,
         seed=args.seed,
@@ -521,6 +546,12 @@ def build_parser() -> argparse.ArgumentParser:
     cap = sub.add_parser("capture-a", help="the per-case config-A answer capture (story 4.3)")
     cap.add_argument("--set", dest="set_path", required=True)
     cap.add_argument("--out-dir", required=True)
+    cap.add_argument(
+        "--corpus-fingerprint",
+        required=True,
+        help="the corpus fingerprint the capture runs under (stamped into the rows file; the E01"
+        " join verifies it against the manifests)",
+    )
     cap.set_defaults(func=cmd_capture_a)
 
     e = sub.add_parser("e01", help="the E01 A-vs-B comparison report (story 4.3)")

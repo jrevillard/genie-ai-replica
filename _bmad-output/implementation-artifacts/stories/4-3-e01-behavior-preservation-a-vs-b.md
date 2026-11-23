@@ -158,6 +158,28 @@ run manifests.
 
 ## Review Triage Log
 
+**Global code-review (C1) on `7ab20981f` — 14 findings, every claim verified
+against the tree, all fixed.** The report's own contract is what the findings
+attack (a comparison that claims more than it measured), so each fix tightens
+a stated invariant rather than adding machinery.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | M-5 copied config-B metadata values verbatim — a nested credential survived the top-level screen | important | **Fixed**: every recorded value goes through the depth-aware redaction |
+| 2 | The gated manifest's `lineage.reference_manifest_sha256` was never compared with the passed reference — A from one reference run could be paired with B gated against another | important | **Fixed**: the B leg must be gated against THIS reference manifest |
+| 3 | Two manifests without a fingerprint compared equal (None == None) — the lineage claim was vacuous | important | **Fixed**: lineage must be present on both sides |
+| 4 | `prompt_digests.identical` / `model_ids.identical` were computed from maps the CLI never fills — equality claimed from absence | important | **Fixed**: an unrecorded side reads `not_recorded`, never `identical` |
+| 5 | `compute_triples` clamps its tolerance band to [0, 1] — the millisecond latency band came out inverted | important | **Fixed**: M-4 publishes min/median/max/MAD in ms and NO tolerance band (the thresholds are story 4.4's) |
+| 6 | The capture dropped chatqna's own `metadata.abstained` / `abstention_reason`, and the instructions claimed config A has no mechanical abstention field | important | **Fixed** (chatqna's `_mark_abstention` verified in the overlay): the facts are captured when the response carries them; the instructions describe the capture |
+| 7 | The capture queried the set's SECURITY cases — the scenarios the protocol declares inapplicable to config A | important | **Fixed**: the security cases are recorded as skipped rows with story 4.2's reason — no live query at a surface that cannot resist |
+| 8 | The A leg filtered on the entry's category/service labels while the B lane filters on the case context's `requested_labels` — the report presented a scope-matched comparison | important | **Fixed**: the capture records the labels it sent and the cases whose `requested_labels` never reached the A query; the report names the difference |
+| 9 | The capture artifact carried no set digest or corpus fingerprint — a capture over another set could join | important | **Fixed**: the capture stamps both and the join verifies them against the manifests |
+| 10 | A list-shaped defects file raised `AttributeError` — a traceback instead of the typed refusal | important | **Fixed**: the ledger's shape is checked before its keys are read |
+| 11 | M-3's B record carried no failure count — a B leg that produced no answer read as zeros | important | **Fixed**: `n_ok_rows` and `n_failure_rows` on both sides |
+| 12 | A config-C rows file passed as the B leg was silently filtered to an empty leg | nit (real) | **Fixed**: the row vocabulary is checked per leg |
+| 13 | The redaction dropped measurement names (`chunk_key`, `prompt_tokens`) on one path while keeping them on another | nit (real) | **Fixed**: an explicit measurement-name allowlist, applied on every path |
+| 14 | The recorded seed was operator-declared and never cross-checked | nit | **Fixed**: the seed is recorded as declared-and-unverified |
+
 ## Design Notes
 
 **Why capture-a is a separate command, not part of `reference`.** The anchor runs as one whole-set subprocess (per-case timing and answers are invisible from outside it, and editing `run_eval.py` would break `harness_sha`). The protocol layer times and captures per case by importing the query function; the reference command stays exactly the artifact story 4.4 consumes.

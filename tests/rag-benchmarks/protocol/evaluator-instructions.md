@@ -179,13 +179,17 @@ manifest records it).
   each dimension against ITS named surface.
 - **Abstention inputs differ by lane.** Config B's abstention is a
   mechanical field (`abstained` / `abstention_reason`, recorded by the
-  noagent lane) — the abstention verdict rules read it as-is. Config A
-  records no mechanical abstention field: the judge reads the captured
-  ANSWER TEXT — an empty (or refusal-prose) answer is the A abstention
-  signal, judged under the same rules. An A row whose HTTP status is not
-  2xx, or whose capture failed, is neither an answer nor an abstention: it
-  is a failed capture, recorded as such, and the abstention dimension is
-  not applicable to it.
+  noagent lane) — the abstention verdict rules read it as-is. Config A's
+  capture records chatqna's OWN mechanical abstention facts when the
+  response carries them (`metadata.abstained` /
+  `metadata.abstention_reason`); where the response carries none, the judge
+  reads the captured ANSWER TEXT — an empty (or refusal-prose) answer is the
+  A abstention signal, judged under the same rules. An A row whose HTTP
+  status is not 2xx, or whose capture failed, is neither an answer nor an
+  abstention: it is a failed capture, recorded as such, and the abstention
+  dimension is not applicable to it. A row the capture SKIPPED (a security
+  scenario — config A has no agent surface to authorize or steer) is not a
+  comparison case at all.
 - **Answers are the judgment inputs, never pre-verdicted.** The report
   carries the per-case answers, abstention facts and sources for both legs;
   M-2/M-3 verdicts belong to this judge layer — the report computes no
@@ -204,5 +208,14 @@ manifest records it).
   B's is the in-container driver's wall_ms (batched lanes) — the execution
   conditions differ and the uncontrolled-differences section records them;
   the judge compares the two latency surfaces with that difference in view,
-  never as a like-for-like number. M-5 carries no surface on either leg
-  (recorded, with the reason, in the report).
+  never as a like-for-like number. M-4 publishes no tolerance band: the
+  thresholds are story 4.4's to sign. M-5 carries no surface unless the rows
+  themselves record one (recorded, with the reason, in the report).
+- **The label scopes are different constructs — read the scope, never assume
+  it.** Config A's queries carry the entry's category/service labels; config
+  B's lane filters on the case context's `requested_labels`. The report
+  records the labels the A capture sent and names the cases whose
+  `requested_labels` never reached the A query: for those cases, a retrieval
+  or grounding difference reflects the SCOPE, not the pipeline. The
+  uncontrolled-differences section states the difference; it never claims the
+  legs retrieved the same scope.

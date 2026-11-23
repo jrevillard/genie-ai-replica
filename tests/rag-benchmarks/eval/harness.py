@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from typing import Any
 
 
@@ -65,7 +66,7 @@ DEFAULT_K8S_NAMESPACE = "genieai"
 
 
 def _k8s_namespace(namespace: str | None = None) -> str:
-    return namespace or os.getenv(K8S_NAMESPACE_ENV, DEFAULT_K8S_NAMESPACE)
+    return namespace or os.getenv(K8S_NAMESPACE_ENV) or DEFAULT_K8S_NAMESPACE
 
 
 def _pod_env_key(container: str) -> str:
@@ -74,15 +75,52 @@ def _pod_env_key(container: str) -> str:
     return f"EVAL_K8S_POD_{ident}"
 
 
+def _run_kubectl(args: list[str], timeout: float = 30) -> str:
+    """One kubectl call; stdout on success, a :class:`HarnessError` naming the
+    real cause otherwise (a failed lookup is never quietly read as "no pod")."""
+    try:
+        result = subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout
+        )
+    except (OSError, subprocess.TimeoutExpired) as failed:
+        raise HarnessError(f"kubectl {args[1]} failed: {failed}") from failed
+    if result.returncode != 0:
+        raise HarnessError(
+            f"kubectl {args[1]} failed: {result.stderr.strip()[:300]}"
+        )
+    return result.stdout
+
+
+def _pod_exists(pod: str, namespace: str) -> bool:
+    try:
+        _run_kubectl(
+            ["kubectl", "get", "pod", pod, "-n", namespace,
+             "-o", "jsonpath={.metadata.name}"]
+        )
+    except HarnessError:
+        return False
+    return True
+
+
 def resolve_k8s_pod(container: str, namespace: str | None = None) -> str:
     """Resolve a container identity to a live pod name on a Kubernetes venue.
 
     Resolution order — first hit wins:
 
-    1. ``EVAL_K8S_POD_<IDENT>`` — the operator's exact pin (the pod name
-       changes with every rollout, so the pin is a snapshot, not a fact);
-    2. a label selector — ``genieai.io/component=<container>`` then
-       ``app.kubernetes.io/component=<container>``.
+    1. ``EVAL_K8S_POD_<IDENT>`` — the operator's exact pin. The pin is
+       checked for liveness: a pod that no longer exists (a rollout rotated
+       it away) falls through to the labels with a warning, so a stale pin
+       cannot pin the run to a corpse;
+    2. a label selector over RUNNING pods —
+       ``genieai.io/component=<container>`` then
+       ``app.kubernetes.io/component=<container>``. The running-only filter
+       keeps a Terminating or evicted tombstone pod (venues collect them)
+       from being resolved.
+
+    The identity is the deployment's COMPONENT name (``chatqna``,
+    ``agent-service``) — the same string the chart labels pods with. A
+    docker-style container name (``chatqna-xeon-backend-server``) matches
+    nothing; the refusal says so.
 
     No match is a :class:`HarnessError`, never a guess: a wrong pod would
     answer every query with someone else's service.
@@ -90,28 +128,33 @@ def resolve_k8s_pod(container: str, namespace: str | None = None) -> str:
     ns = _k8s_namespace(namespace)
     pinned = os.getenv(_pod_env_key(container))
     if pinned:
-        return pinned
+        if _pod_exists(pinned, ns):
+            return pinned
+        print(
+            f"[harness] pinned {_pod_env_key(container)}={pinned!r} is gone;"
+            " falling back to the label selectors",
+            file=sys.stderr,
+        )
     for label in (
         f"genieai.io/component={container}",
         f"app.kubernetes.io/component={container}",
     ):
-        result = subprocess.run(
+        name = _run_kubectl(
             [
                 "kubectl", "get", "pods", "-n", ns,
                 "-l", label,
+                "--field-selector", "status.phase=Running",
                 "-o", "jsonpath={.items[0].metadata.name}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        name = result.stdout.strip()
+            ]
+        ).strip()
         if name:
             return name
     raise HarnessError(
-        f"no pod found for container identity {container!r} in namespace {ns!r}"
-        f" (labels tried: genieai.io/component, app.kubernetes.io/component;"
-        f" pin it with {_pod_env_key(container)}=<pod>)"
+        f"no running pod found for container identity {container!r} in"
+        f" namespace {ns!r} — the identity must be the deployment's"
+        " COMPONENT name (the chart labels pods"
+        " genieai.io/component=<name>), not a docker container name;"
+        f" pin a pod directly with {_pod_env_key(container)}=<pod>"
     )
 
 
@@ -127,12 +170,21 @@ def kubectl_exec(
     ``pass_env`` forwards host-side env var NAMES to the pod. ``kubectl exec``
     has no ``-e`` flag, so the values travel through the exec's STDIN and the
     shell exports them — never on argv, where the token would be visible in
-    ``ps``/procfs (the same contract ``docker exec -e`` gives).
+    ``ps``/procfs (the same contract ``docker exec -e`` gives). A value
+    carrying a newline cannot survive the line-based transport, so it is
+    refused loudly rather than silently truncated.
     """
     ns = _k8s_namespace(namespace)
     prelude = ""
     payload = ""
     if pass_env:
+        for name in pass_env:
+            value = os.environ.get(name, "")
+            if "\n" in value or "\r" in value:
+                raise HarnessError(
+                    f"cannot forward {name!r} through the kubectl exec"
+                    " stdin transport: its value contains a newline"
+                )
         prelude = 'while IFS= read -r __e; do export "$__e"; done; '
         payload = "".join(f"{name}={os.environ.get(name, '')}\n" for name in pass_env)
     args = [

@@ -66,7 +66,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # Make the eval/ subpackage importable for the shared harness primitives
-# (``docker_exec`` + atomic JSON IO) — previously duplicated locally.
+# (the venue-dispatching exec + atomic JSON IO) — previously duplicated locally.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "eval"))
 from harness import exec_in_container as _exec, write_json  # noqa: E402
 
@@ -221,7 +221,19 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
     (e.g. ``genieai-el-salvador_``) disambiguates when a node hosts several
     stacks — docker ps row order is not deterministic, so without it the wrong
     stack's env could be read (AC:5 "the stack under test").
+
+    DOCKER-ONLY identity: the resolved names are docker container names and
+    the lookup is ``docker ps``. On a Kubernetes venue (``EVAL_EXEC_BACKEND``
+    = kubectl) this is a loud refusal, not a wrong answer — the k8s identity
+    is the component name a label selector resolves, and half a migration
+    would read one venue's env and exec into another's pods.
     """
+    if os.getenv("EVAL_EXEC_BACKEND", "docker").strip().lower() == "kubectl":
+        raise RuntimeError(
+            "resolve_containers is docker-only (docker ps): on a Kubernetes"
+            " venue pass --resolved-env with a snapshot taken from the pods"
+            " instead"
+        )
     out = _run(
         ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}"],
         timeout=30,
@@ -255,7 +267,14 @@ def resolve_containers(stack_prefix: str = "") -> dict[str, dict]:
 
 
 def _image_digest(container: str) -> str:
-    """Resolve the image ID (sha256) backing a container — the practical digest."""
+    """Resolve the image ID (sha256) backing a container — the practical digest.
+
+    DOCKER-ONLY (docker inspect); same refusal as resolve_containers."""
+    if os.getenv("EVAL_EXEC_BACKEND", "docker").strip().lower() == "kubectl":
+        raise RuntimeError(
+            "_image_digest is docker-only (docker inspect): on a Kubernetes"
+            " venue read the digest from the pod's containerStatuses imageID"
+        )
     return _run(
         ["docker", "inspect", "--format", "{{.Image}}", container], timeout=30
     ).strip()
@@ -295,7 +314,10 @@ def env_grep_cmd(keys) -> str:
 
 
 def snapshot_resolved_env(containers: dict[str, dict]) -> dict:
-    """Read the RESOLVED values out of the live containers (docker exec).
+    """Read the RESOLVED values out of the live containers (the venue's exec
+    primitive — ``docker exec`` on a compose/swarm venue; on a Kubernetes
+    venue resolve_containers refuses first, so a --resolved-env snapshot is
+    the path).
 
     This is the "exact env under test, resolved values, not placeholders"
     requirement (AC:5). A var is recorded only when the container actually holds

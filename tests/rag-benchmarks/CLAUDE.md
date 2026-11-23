@@ -27,7 +27,7 @@ tests/rag-benchmarks/
 │   ├── chunk_identity.py      # content_hash (sha256 of normalized text) — identity is content-based
 │   ├── arango.py              # ArangoDB cursor helper (source_chunks + paginated cursor)
 │   ├── dump_chunks.py         # Dump chunk keys + labels from ArangoDB for gold annotation
-│   ├── harness.py             # Shared docker_exec + atomic JSON IO (HarnessError)
+│   ├── harness.py             # Venue-dispatching exec (docker\|kubectl) + atomic JSON IO
 │   ├── keycloak.py            # The only Keycloak token fetcher for the eval toolchain
 │   ├── match_gold_chunks.py   # Phase 2: preview → content_hash via ArangoDB substring
 │   ├── xlsx_to_gold.py        # Phase 1: xlsx → gold_dataset.json skeleton

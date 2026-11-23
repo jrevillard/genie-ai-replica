@@ -1,3 +1,13 @@
+# A RECORD of what this run applied to the shared forge namespace, not a
+# manifest to re-apply: the objects were deleted when the run ended (see
+# restore-and-cleanup.md). The Helm ownership labels below were on the
+# APPLIED objects (the chart's render carries them); without Helm's
+# meta.helm.sh annotations a future `helm upgrade` of an okf-enabled release
+# would refuse to adopt them — which is exactly why the run deletes them
+# rather than leaving them for a later release to trip over. Rendered from
+# charts/genieai-umbrella @ feat/agentic-foundations/prd (the template's
+# chart-version label reads 0.2.182 — the umbrella branch's Chart.yaml lags
+# the deployed 0.2.183; the templates are the payload, not the version).
 # Source: genieai-umbrella/templates/opea/okf-server.yaml
 apiVersion: v1
 kind: Service

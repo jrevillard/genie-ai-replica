@@ -5,9 +5,14 @@ The residual of story 4.3 (!1049): the E01 comparison layer shipped, but
 forge k3s (`namespace genieai`, Helm release `genieai`, chart
 `genieai-umbrella` 0.2.183), executed with the protocol's own commands.
 
-Everything in `run-artifacts/` was produced by the harness
-(`tests/rag-benchmarks/protocol/run_protocol.py`) — no row, manifest or
-report was hand-built.
+The protocol's artifacts here — the assessment set, the capture rows,
+the refusal records — were produced by the harness
+(`tests/rag-benchmarks/protocol/run_protocol.py`); no row, manifest or
+refusal was hand-built. The two exceptions are the WORKLOAD manifests the
+run applied to the cluster (`okf-server-manifests.yaml` is the chart's own
+render; `agent-service-manifests.yaml` is declared by this run because no
+chart template exists for that service — §6): they are deployment records,
+not protocol artifacts.
 
 ---
 
@@ -208,7 +213,7 @@ the smallest: nothing that Flux owns is modified.
 | workload | source | image | digest (verified from the running pod) |
 |---|---|---|---|
 | `okf-server` | the umbrella chart's `templates/opea/okf-server.yaml`, rendered locally with the deployed overlay values + `okf.enabled=true` | `registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-okf-server:feat-agentic-foundations-prd-820fc9d7` | `sha256:b0eb9df1bb7d1d7f9dc4fd5e3fda83aeeb003b9e26eface1f6c6765a2706a821` |
-| `agent-service` | **no chart template exists** (not on the umbrella either — the chart carries `okf-server` only), so the workload is declared in `run-artifacts/agent-service-manifests.yaml`, mirroring the compose service block and the V08 rehearsal record | `registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-agent-server:feat-agentic-foundations-prd-820fc9d7` | `sha256:45e4e2d04c7925d2d4249caf4fdfeb1c21bb4ac89716283007dfea366a9fab14` |
+| `agent-service` | **no chart template exists** (not on the umbrella either — the chart carries `okf-server` only), so the workload is declared in `agent-service-manifests.yaml` (this directory), mirroring the compose service block and the V08 rehearsal record | `registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-agent-server:feat-agentic-foundations-prd-820fc9d7` | `sha256:45e4e2d04c7925d2d4249caf4fdfeb1c21bb4ac89716283007dfea366a9fab14` |
 
 `feat-agentic-foundations-prd-820fc9d7` is the umbrella tip
 (`feat/agentic-foundations/prd` @ `820fc9d75`); the digest is read from the
@@ -254,7 +259,14 @@ okf-server and an agent-service to that single node.
 
 ## 8. The restore and the cleanup
 
-Recorded in `restore-and-cleanup.md` (the proof, item by item).
+Executed by `restore-and-cleanup.sh` (this directory) at the end of the
+run, after the review cycle; the proof — every step's own verification
+output — is recorded in `restore-and-cleanup.md` (this directory). The
+order matters and is stated in the script: the deploy overlay is reverted
+and the release reconciled back to main's render FIRST (while the
+OpenTelemetry operator is still installed, because the chart's collector
+resource needs its CRD to render), and only then are the operators, the
+agentic workloads, the realm changes and the port-forwards removed.
 
 ## 9. Extracted findings
 

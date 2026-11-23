@@ -9,7 +9,9 @@
   report path, atomic report writes, fail-fast on missed traces.
 * **Config B** — the story-1.9 no-agent pipeline, INVOKED never
   re-implemented: the harness ships ``config_b_driver.py`` into the
-  agent-service container over the docker-exec transport and runs it there
+  agent-service container over the venue's exec transport (``docker exec``,
+  or ``kubectl exec`` on a Kubernetes venue — ``EVAL_EXEC_BACKEND``) and
+  runs it there
   (where ``noagent.pipeline`` and the serving network position live); the
   driver consumes ``NoAgentResult`` unchanged. In tests the transport is a
   fake — the same calls, no docker.

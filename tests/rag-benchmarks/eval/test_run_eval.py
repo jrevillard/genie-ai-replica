@@ -13,6 +13,8 @@ import os
 import time
 import types
 
+import pytest
+
 import run_eval
 
 
@@ -22,6 +24,14 @@ def _entry(content_hash="abc123", chunk_key="key1"):
         "query": "What is the question?",
         "expected_chunks": [{"chunk_key": chunk_key, "content_hash": content_hash}],
     }
+
+
+@pytest.fixture(autouse=True)
+def _docker_backend(monkeypatch):
+    """The docker-path tests must not depend on the ambient EVAL_EXEC_BACKEND:
+    an operator's exported kubectl backend would flip them onto the kubectl
+    branch and fail on the docker argv."""
+    monkeypatch.delenv("EVAL_EXEC_BACKEND", raising=False)
 
 
 def test_score_anchor_projects_keys_to_content_hashes():

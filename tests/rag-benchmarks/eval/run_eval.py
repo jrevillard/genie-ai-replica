@@ -15,10 +15,12 @@ runner no longer exists. Leaving ROPC enabled in production is a security
 vulnerability. See `tests/rag-benchmarks/eval/CLAUDE.md` for the full story
 (auth, score threshold, diagnostic mode).
 
-Both modes drive gold queries through chatqna via docker exec (OIDC via
+Both modes drive gold queries through chatqna via the venue's exec
+primitive (``docker exec``, or ``kubectl exec`` on a Kubernetes venue —
+``EVAL_EXEC_BACKEND``; see ``eval/harness.py``) (OIDC via
 the wrapper — this driver refreshes its own realm bearer from EVAL_KC_*
 when set, or honors a pre-minted E2E_BEARER_TOKEN for service-account
-flows; the docker exec + chatqna label-filtered retrieval path is
+flows; the in-container curl + chatqna label-filtered retrieval path is
 otherwise faithful to production) and pull the selection from the
 chatqna.reranker_selection span in VictoriaTraces.
 
@@ -58,16 +60,24 @@ import urllib.error
 import metrics
 from arango import cursor, source_chunks
 from chunk_identity import content_hash
-from harness import HarnessError, exec_in_container, write_json
+from harness import EXEC_BACKEND_ENV, HarnessError, exec_in_container, write_json
 from keycloak import KeycloakError, fetch_realm_token
 
 # --- stack config (env-overridable) -----------------------------------------
-# Defaults are placeholders — set these for your deployment. CHATQNA_CONTAINER
-# has a dynamic Swarm replica suffix, so resolve it live:
-#   export CHATQNA_CONTAINER=$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
+# Defaults are placeholders — set these for your deployment. The chatqna
+# identity is venue-shaped (eval/harness.py's venue dispatch):
+#   docker (compose/swarm, the default backend) — a container name with a
+#     dynamic Swarm replica suffix, resolved live:
+#     export CHATQNA_CONTAINER=$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
+#   kubectl (a Kubernetes venue, EVAL_EXEC_BACKEND=kubectl) — the
+#     deployment's COMPONENT name (the chart labels pods
+#     genieai.io/component=<name>): CHATQNA_CONTAINER=chatqna
 # VICTORIATRACES_SVC = <stack>_victoriatraces (hyphenated swarm service name).
 # See tests/rag-benchmarks/CLAUDE.md for the full run recipe.
-CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER", "chatqna-xeon-backend-server")
+CHATQNA_CONTAINER = os.getenv("CHATQNA_CONTAINER") or (
+    "chatqna" if os.getenv(EXEC_BACKEND_ENV, "docker") == "kubectl"
+    else "chatqna-xeon-backend-server"
+)
 VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")
 CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
 CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "genieai-chatqna")
@@ -149,11 +159,13 @@ def _chatqna_exec(
     per-entry retry loop (3 attempts) consumes the recovered attempt
     on its next call.
 
-    The re-resolution is DOCKER-specific (``docker ps | grep``): on a
-    Kubernetes venue the pod is resolved per exec by
-    ``harness.resolve_k8s_pod`` (label selector), so a rotated pod is
-    picked up without this cache — and a failed docker re-resolve on a
-    Kubernetes venue only prints a warning.
+    The re-resolution is DOCKER-specific (``docker ps | grep``) and only
+    runs on the docker backend: on a Kubernetes venue the pod is resolved
+    per exec by ``harness.resolve_k8s_pod`` (running-only label selector),
+    so a rotated pod is picked up without this cache — and shelling out to
+    docker here would at best print noise and at worst overwrite
+    ``CHATQNA_CONTAINER`` with a docker container name that no k8s label
+    matches.
     """
     global CHATQNA_CONTAINER
     try:
@@ -161,9 +173,10 @@ def _chatqna_exec(
             CHATQNA_CONTAINER, cmd, timeout=timeout, pass_env=pass_env
         )
     except HarnessError:
-        new = _resolve_chatqna_container(force=True)
-        if new and new != CHATQNA_CONTAINER:
-            CHATQNA_CONTAINER = new
+        if os.getenv(EXEC_BACKEND_ENV, "docker").strip().lower() == "docker":
+            new = _resolve_chatqna_container(force=True)
+            if new and new != CHATQNA_CONTAINER:
+                CHATQNA_CONTAINER = new
         raise
 
 

@@ -681,8 +681,16 @@ module.exports = (queryService) => {
         // The translation core is fail-soft; a rejection past it (a leg
         // defect — its own contract resolves every outcome) is still never a
         // dropped answer: the English text stands and the failure travels
-        // on `done`.
-        result = { text: null, failed: true, error };
+        // on `done`. The catch result stays classifiable — a V05 status and
+        // a minimal accounting block, so the persisted metadata never reads
+        // this failure as "translation never asked for".
+        result = {
+          text: null,
+          failed: true,
+          error,
+          queryTranslationStatus: 'fallback_error',
+          accounting: { outcome: 'failed', queryTranslationStatus: 'fallback_error' }
+        };
       }
       if (translateFullAnswer && result.accounting) {
         // The leg's accounting is the observable record of WHY the answer is

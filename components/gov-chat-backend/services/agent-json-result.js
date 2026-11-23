@@ -474,11 +474,27 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       runUsage: usageRecord,
       targetLanguage
     });
-    const result = await translateWholeAnswerWithLeg(leg, {
-      text: fullResponseText,
-      remainingMs: Math.max(0, turnStartTime + effectiveTimeoutMs - Date.now()),
-      signal: controller.signal
-    });
+    let result;
+    try {
+      result = await translateWholeAnswerWithLeg(leg, {
+        text: fullResponseText,
+        remainingMs: Math.max(0, turnStartTime + effectiveTimeoutMs - Date.now()),
+        signal: controller.signal
+      });
+    } catch (error) {
+      // The delivery core is fail-soft (the streaming terminal carries the
+      // same guard): a leg that rejects past its resolve-every-outcome
+      // contract never turns a completed answer into a thrown error — the
+      // English text stands, the latch rides, and the persisted status stays
+      // in the V05 vocabulary.
+      result = {
+        text: null,
+        failed: true,
+        queryTranslationStatus: 'fallback_error',
+        accounting: { outcome: 'failed', queryTranslationStatus: 'fallback_error' }
+      };
+      logger.warn('AgentJsonResult.translation_leg_defect', { queryId, error: error?.message });
+    }
     logger.info('AgentJsonResult.agentic_translation_accounting', { queryId, accounting: result.accounting });
     translationStatus = result.queryTranslationStatus;
     if (result.failed) {

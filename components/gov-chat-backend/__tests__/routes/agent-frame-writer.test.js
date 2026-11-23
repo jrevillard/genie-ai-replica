@@ -497,8 +497,15 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     // wire-level timeout) read that same resolved value.
     const { logger } = require('../mocks/shared-lib');
     process.env.AGENT_UPSTREAM_TIMEOUT_MS = '20000';
-    expect(_internals.resolveUpstreamTimeoutMs()).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
-    expect(_internals.deriveDeadlineMs(_internals.resolveUpstreamTimeoutMs())).toBe(3600000 - 30000 - 5000);
+    // A fresh module registry: the warn is memoized at module level (once
+    // per process), so the assertion owns a fresh flag instead of depending
+    // on this test being the file's first under-sized call.
+    let fresh;
+    jest.isolateModules(() => {
+      fresh = require('../../services/agent-run-contract');
+    });
+    expect(fresh.resolveUpstreamTimeoutMs()).toBe(fresh._internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
+    expect(fresh._internals.deriveDeadlineMs(fresh.resolveUpstreamTimeoutMs())).toBe(3600000 - 30000 - 5000);
     expect(logger.warn).toHaveBeenCalledWith(
       'AgentRunContract.upstream_timeout_below_reserves',
       expect.objectContaining({ knob: 'AGENT_UPSTREAM_TIMEOUT_MS', configured: 20000, applied: 3600000 })
@@ -1342,6 +1349,44 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     expect(done.translationFailed).toBe(false);
     expect(queryService.finalizeStreamQuery.mock.calls[0][3]).toEqual(
       expect.objectContaining({ query_translation_status: 'passthrough_english' })
+    );
+  });
+
+  it('a leg rejection past its contract is fail-soft: done latches, the persisted status stays classifiable', async () => {
+    // The streaming terminal's guard: a leg that rejects despite its
+    // resolve-every-outcome contract ends the response honestly (English
+    // stands, translationFailed rides) and the persisted metadata still
+    // carries a V05 status — an unclassified failure is indistinguishable
+    // from a translation never asked for.
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    createAgenticTranslationLeg.mockImplementation(() => ({
+      configError: null,
+      translateFullAnswer: jest.fn().mockRejectedValue(new Error('leg exploded'))
+    }));
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'DE' }
+    });
+
+    const frames = parseSSEEvents(response.text);
+    const done = frames[frames.length - 1];
+    expect(done.type).toBe('done');
+    expect(done.translationFailed).toBe(true);
+    expect(queryService.finalizeStreamQuery.mock.calls[0][3]).toEqual(
+      expect.objectContaining({ query_translation_status: 'fallback_error' })
     );
   });
 

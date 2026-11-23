@@ -918,6 +918,28 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
     );
   });
 
+  it('a leg rejection past its contract is fail-soft: the English answer stands, the failure stays classifiable', async () => {
+    // The delivery core is fail-soft (the streaming terminal carries the same
+    // guard): a leg that rejects despite its resolve-every-outcome contract
+    // must never turn a completed answer into a 500 — the English text
+    // stands, the latch rides, and the persisted status stays in the V05
+    // vocabulary.
+    translateWholeAnswerWithLeg.mockRejectedValue(new Error('leg exploded'));
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
+
+    const response = await postQuery({ context: { language: 'FR' } });
+
+    expect(response.status).toBe(201);
+    expect(response.body.response).toBe('Hello world.');
+    expect(response.body.translationFailed).toBe(true);
+    expect(collections.update).toHaveBeenCalledWith(
+      'q1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({ query_translation_status: 'fallback_error' })
+      })
+    );
+  });
+
   it('no translation is asked for: the leg is never built, the answer rides as-is', async () => {
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 

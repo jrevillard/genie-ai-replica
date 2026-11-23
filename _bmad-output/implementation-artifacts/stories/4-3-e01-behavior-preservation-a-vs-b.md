@@ -454,6 +454,21 @@ the retriever with no label filter at all.
 | F90' | The report's note was corrected but nothing gated the wording, and the range's own test docstring kept the unconditional union claim | nit | **Fixed**: the note's wording is asserted (both strategies named) and the test docstring matches |
 | F91' | The CI path filter that makes the parity pin run was ungated — a later CI edit could re-darken it unnoticed | nit | **Fixed**: a test reads the job's `rules:changes` and asserts the server's label contract is in it (the job installs PyYAML for it) |
 
+**FIX-REVIEW (chain round 2 of the global's chain, f=1) — CLEAN** (0
+important findings, 1 nit closed below), and the quality phase's
+**TEST-AUDIT (junk-pattern lane)** returned **2 candidates**, both closed.
+The lane's evidence was decisive: the bearer test's clock assertion never
+fires — the fake's own TTL check stamps the clock before the assertion
+reads it, so the mutation its message names (the bootstrap moved after the
+drives) passes — and the fake re-implemented the anchor's TTL rule, so an
+anchor-side rule change was invisible to it.
+
+| # | Finding | Lane | Verdict | Disposition |
+|---|---|---|---|---|
+| F92' | The bearer test's clock assertion is dead: the fake's own TTL check stamps the clock, so the assertion passes under the very mutation its message names; the sibling "no refresh at all" assertion is the real detector | test-audit | nit | **Fixed**: the assertion and the clock bookkeeping are deleted — the refresh-event assertions carry the contract |
+| F93' | The fake re-implemented the anchor's TTL rule (a provider-local replay), so an anchor-side rule change was invisible to the test | test-audit | nit | **Fixed**: the test binds the ANCHOR'S OWN module and fakes only the network seam (`fetch_realm_token`) and the docker seam (`drive_query`) — an inverted TTL comparison in the anchor now turns the test red (verified) |
+| F94' | The parity test's docstring said "the one documented divergence" while the function pins two | fix-review f=1 | nit | **Fixed**: both divergences are named |
+
 ## Design Notes
 
 **Why capture-a is a separate command, not part of `reference`.** The anchor runs as one whole-set subprocess (per-case timing and answers are invisible from outside it, and editing `run_eval.py` would break `harness_sha`). The protocol layer times and captures per case by importing the query function; the reference command stays exactly the artifact story 4.4 consumes.

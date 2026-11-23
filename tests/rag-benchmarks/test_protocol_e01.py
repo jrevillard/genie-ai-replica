@@ -584,10 +584,11 @@ def test_the_label_coercion_matches_the_server_rule_it_mirrors():
       the service labels when there are any, which is why the A leg's scope
       can be narrower than the request's.
 
-    The one documented divergence: the server's filter builder DEDUPS the
-    labels it builds, the coercion keeps the request's own list. The report
-    compares the two legs' scopes as sets, so the dedup carries no scope
-    meaning."""
+    The documented divergences, asserted rather than left implicit: the
+    server's filter builder DEDUPS the labels it builds while the coercion
+    keeps the request's own list (the report compares the two legs' scopes as
+    sets, so the dedup carries no scope meaning), and the server's service
+    branch keeps a falsy service label while the client drops it."""
     import importlib.util
 
     from protocol.evalset import as_label_list
@@ -690,66 +691,52 @@ def test_capture_a_seeds_the_bearer_clock_before_the_first_drive(tmp_path, monke
     only when no static bearer was seeded. Without the seed the capture's
     first TTL check refreshes at once and replaces a pre-minted
     service-account bearer — the A leg would then answer under a different
-    identity than the reference it is compared against."""
-    import time
-    import types
+    identity than the reference it is compared against.
 
-    # The anchor's OWN constants — the fake must not restate them (the TTL
-    # window is the anchor's, not a copy of it).
-    from run_eval import _TOKEN_REFRESH_MARGIN, _TOKEN_TTL
+    The ANCHOR'S OWN module is bound (eval/ is on the path; the capture
+    imports it verbatim): only the network seam (fetch_realm_token) and the
+    docker seam (drive_query) are faked, so the TTL rule this test exercises
+    is the anchor's own — an anchor-side rule change turns this red instead
+    of drifting under a local copy of it."""
+    import run_eval
 
-    fake_run_eval = types.ModuleType("run_eval")
-    fake_run_eval._token_ts = 0.0
-    # ONE event log: ("refresh", force) and ("drive", clock-at-drive).
-    events: list[tuple] = []
+    # Refresh is opted in (the anchor's own configuration gate, read from
+    # the environment at call time).
+    monkeypatch.setenv("EVAL_KC_URL", "https://kc.example/auth")
+    monkeypatch.setenv("EVAL_KC_PASSWORD", "the-password")
+    monkeypatch.setattr(run_eval, "_token_ts", 0.0)
+    # ONE event log: the fetches and the drives, in the order they happened.
+    calls: list[str] = []
 
-    def _maybe_refresh_token(force=False):
-        """The anchor's own TTL rule: a non-forced refresh happens only when
-        the clock has aged past the TTL — which is exactly what an unseeded
-        clock looks like."""
-        if not force and time.time() - fake_run_eval._token_ts <= _TOKEN_TTL - _TOKEN_REFRESH_MARGIN:
-            return False
-        events.append(("refresh", force))
-        fake_run_eval._token_ts = time.time()
-        return True
+    def _fake_fetch(*_):
+        calls.append("fetch")
+        return "realm-token"
 
-    def _drive_query(entry):
-        # The clock the capture seeded, as the FIRST drive sees it.
-        events.append(("drive", fake_run_eval._token_ts))
-        # The anchor's per-entry TTL check (run_eval's loop does this).
-        _maybe_refresh_token()
+    def _fake_drive(entry):
+        calls.append("drive")
         return (0.0, '{"response": "parsed"}', 200)
 
-    fake_run_eval.drive_query = _drive_query
-    fake_run_eval._extract_answer = lambda body: "parsed"
-    fake_run_eval._maybe_refresh_token = _maybe_refresh_token
-    fake_run_eval._refresh_configured = lambda: True
-    monkeypatch.setitem(sys.modules, "run_eval", fake_run_eval)
-    monkeypatch.setenv("E2E_BEARER_TOKEN", "pre-minted")
+    monkeypatch.setattr(run_eval, "fetch_realm_token", _fake_fetch)
+    monkeypatch.setattr(run_eval, "drive_query", _fake_drive)
 
     set_path = _set_file(tmp_path, extra_answerable=("c1",))
-    # The DEFAULT seam (no injected query) — the path that drives chatqna.
+    # The DEFAULT seam (no injected query) — the path that drives chatqna
+    # through the anchor's own query function.
+    monkeypatch.setenv("E2E_BEARER_TOKEN", "pre-minted")
     drivers.run_config_a_capture(set_path, tmp_path / "out", corpus_fingerprint=CORPUS)
-    drives = [clock for kind, clock in events if kind == "drive"]
-    assert drives, "no case was driven"
-    # The clock was seeded BEFORE the first drive — not after the loop.
-    assert drives[0] > 0.0, "the refresh clock was seeded after the first drive"
-    # No refresh at all: the pre-minted bearer survives (the TTL check sees
-    # a fresh clock and skips).
-    assert [kind for kind, _ in events if kind == "refresh"] == [], (
-        "a pre-minted bearer must not be replaced"
-    )
+    assert "drive" in calls, "no case was driven"
+    # No refresh at all: the pre-minted bearer survives (the seeded clock
+    # keeps every TTL check inside its window). An unseeded clock would look
+    # arbitrarily old and the anchor's own rule would refresh at once.
+    assert "fetch" not in calls, "a pre-minted bearer must not be replaced"
 
-    # With no static bearer, the anchor forces ONE refresh up front.
-    fake_run_eval._token_ts = 0.0
-    events.clear()
+    # With no static bearer, the anchor forces ONE refresh up front — BEFORE
+    # the first drive (the seed block), so the loop starts authenticated.
     monkeypatch.delenv("E2E_BEARER_TOKEN")
+    calls.clear()
     drivers.run_config_a_capture(set_path, tmp_path / "out2", corpus_fingerprint=CORPUS)
-    assert [force for kind, force in events if kind == "refresh"] == [True], (
-        "no static bearer means one forced refresh"
-    )
-    # The forced refresh happened BEFORE the first drive (the seed block).
-    assert events and events[0][0] == "refresh", "the forced refresh did not run before the drives"
+    assert calls and calls[0] == "fetch", "the forced refresh did not run before the drives"
+    assert calls.count("fetch") == 1, "no static bearer means ONE forced refresh"
 
 def test_e01_reports_all_five_dimensions_for_both_configs_with_named_surfaces():
     report = _build()

@@ -63,6 +63,7 @@ void main() {
     List<dynamic> docs, {
     required List<Uri> requests,
     int conceptStatus = 200,
+    int resolveStatus = 200,
     String conceptBody = '# The concept body',
     Duration delay = Duration.zero,
   }) {
@@ -72,7 +73,7 @@ void main() {
       if (request.url.path.endsWith('/resolve-repo')) {
         return http.Response.bytes(
           utf8.encode(jsonEncode({'repo_id': 'repo-1', 'bundle_version': 2})),
-          200,
+          resolveStatus,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }
@@ -177,6 +178,65 @@ void main() {
     final requests = <Uri>[];
     await tester.pumpWidget(
       sidebar([conceptRow()], requests: requests, conceptStatus: 404),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'hadith nawawi 36');
+
+    expect(find.byKey(const ValueKey('ds-modal')), findsNothing);
+    expect(find.text('This source is not available to view.'), findsOneWidget);
+  });
+
+  testWidgets('a concept the caller may not read says so — never a dead link', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // A restricted repository: okf-server refuses the read (403). That is
+    // an honest unavailability, the same envelope a gone concept gets —
+    // not a failure.
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptStatus: 403),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'hadith nawawi 36');
+
+    expect(find.byKey(const ValueKey('ds-modal')), findsNothing);
+    expect(find.text('This source is not available to view.'), findsOneWidget);
+  });
+
+  testWidgets('a concept that cannot be reached says the open failed', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // A server failure is NOT an unavailability: the concept may be there
+    // and the deployment may be broken. The two must not be phrased the
+    // same way.
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptStatus: 500),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'hadith nawawi 36');
+
+    expect(find.byKey(const ValueKey('ds-modal')), findsNothing);
+    expect(find.text('Could not open the document'), findsOneWidget);
+  });
+
+  testWidgets('a citation whose repository may not be resolved says so', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // A citation saved before the repository identity was recorded: the
+    // repository is resolved live, and the scope gate refuses that read
+    // in closed scope mode (403) — an honest unavailability, the same
+    // envelope the concept read gives.
+    await tester.pumpWidget(
+      sidebar(
+        [conceptRow(withRepoId: false)],
+        requests: requests,
+        resolveStatus: 403,
+      ),
     );
     await pumpFrames(tester, frames: 5);
 

@@ -50,6 +50,17 @@ class OkfConceptService {
   /// a document eagerly: the client never holds more than this.
   static const int maxPreviewChars = 20000;
 
+  /// The statuses that mean "this concept cannot be SERVED": the scope
+  /// refusal (403 — okf-server denies a scopeless caller when the
+  /// deployment runs in closed scope mode), a concept that is not there
+  /// (404) and a server that does not serve the route (501).
+  ///
+  /// The concept read and the repository resolution share the set: the
+  /// scope gate stands in front of BOTH routes, so a set that listed 403
+  /// on one and not the other would phrase an authorization refusal as a
+  /// failure on one path and as an honest notice on the other.
+  static const Set<int> unavailableStatuses = {403, 404, 501};
+
   /// The longest run of letters and digits a preview shows before a soft
   /// space is inserted inside it.
   ///
@@ -78,7 +89,7 @@ class OkfConceptService {
         '$_backendUrl/api/okf/repos/${Uri.encodeComponent(repository)}'
         '/concepts/${Uri.encodeComponent(conceptId)}',
       ),
-      unavailable: const {403, 404, 501},
+      unavailable: unavailableStatuses,
       what: 'concept',
     );
     if (meta == null) return null;
@@ -154,7 +165,7 @@ class OkfConceptService {
         '$_backendUrl/api/okf/concepts/resolve-repo'
         '?concept_id=${Uri.encodeComponent(conceptId)}',
       ),
-      unavailable: const {404, 501},
+      unavailable: unavailableStatuses,
       what: 'concept repo resolution',
     );
     if (meta == null) return null;

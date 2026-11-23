@@ -27,6 +27,14 @@ turns strictly in order, each turn a full run with its own caller context;
 a turn's row carries the turn-indexed id ``<case_id>#t<n>`` and the turn
 index.
 
+Beside the three drivers, ``run_config_a_capture`` (story 4.3) captures
+config A's per-case ANSWERS — the answer/abstention/latency judgment inputs
+the E01 comparison needs and the anchor path (trace-only, whole-set) does
+not carry. It imports ``run_eval.drive_query``/``_extract_answer`` VERBATIM
+and never edits them: ``harness_sha`` is the reuse identity. The reference
+command (:func:`run_config_a`) stays exactly the artifact story 4.4
+consumes — the capture is a separate command, not a change to it.
+
 STDLIB-ONLY: no new runtime dependency (the eval toolchain's constraint).
 """
 
@@ -35,6 +43,7 @@ from __future__ import annotations
 import base64
 import http.client
 import json
+import os
 import ssl
 import sys
 import time
@@ -46,7 +55,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from harness import write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
 
-from .evalset import turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
+from .evalset import as_label_list, turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -148,13 +157,18 @@ def _read_rows_file(rows_path: Path) -> dict:
 
 
 def _merge_rows(prior: dict, new: dict) -> dict:
-    """Prior + new rows (new wins per case id) — the per-id invariant."""
+    """Prior + new rows (new wins per case id) — the per-id invariant, and the
+    ENVELOPE keys (``resolved``, ``capture``, …) ride along: the new value
+    wins, the prior's otherwise. A new envelope key needs no new branch here.
+    """
     merged = dict(prior.get("cases") or {})
     merged.update(new.get("cases") or {})
     out = {"cases": merged}
-    resolved = new.get("resolved") or prior.get("resolved")
-    if resolved is not None:
-        out["resolved"] = resolved
+    for key in set(prior) | set(new):
+        if key == "cases":
+            continue
+        value = new.get(key)
+        out[key] = value if value is not None else prior.get(key)
     return out
 
 
@@ -216,6 +230,288 @@ def run_config_a(
 
 
 # ---------------------------------------------------------------------------
+# Config A answer capture (story 4.3) — the E01 judgment inputs
+# ---------------------------------------------------------------------------
+
+# The response keys the capture records when the response carries them (the
+# judged dimensions' provenance inputs). Looked up in the parsed envelope's
+# ``metadata`` first, then at the top level — recorded only when present,
+# never invented. ``abstained``/``abstention_reason`` are chatqna's own
+# mechanical abstention facts (genieai_chatqna._mark_abstention) — config A
+# records them when the response carries them.
+# The shape each captured key must have to be recorded — the lists are lists;
+# chatqna's abstention fact is a boolean and its reason a string. ONE dict:
+# the key set and the expected types can never drift apart.
+_A_CAPTURE_KEY_TYPES = {
+    "source_documents": list,
+    "citations": list,
+    "abstained": bool,
+    "abstention_reason": str,
+    # The EFFECTIVE filter chatqna applied (its response metadata) — the A
+    # side of the scope comparison against the B lane's metadata.
+    "filter_labels": list,
+}
+
+
+def _prepare_anchor_bearer() -> None:
+    """Mirror the anchor's own bearer bootstrap (``run_eval.main``): seed the
+    in-run refresh clock when the operator opted into the refresh, and force
+    ONE refresh when no static bearer was seeded.
+
+    The anchor seeds that clock inside ``main()``; the capture imports
+    ``run_eval`` as a module and never runs ``main()``, so without this the
+    capture's FIRST TTL check sees an elapsed time of zero and refreshes at
+    once — replacing a pre-minted service-account bearer with a realm token.
+    The A leg would then answer under a DIFFERENT identity than the
+    reference it is compared against.
+    """
+    import run_eval
+
+    if not run_eval._refresh_configured():
+        return
+    run_eval._token_ts = time.time()
+    if not os.getenv("E2E_BEARER_TOKEN"):
+        run_eval._maybe_refresh_token(force=True)
+
+
+def _default_a_query(entry: dict) -> dict:
+    """The default query seam: ``run_eval.drive_query`` + ``_extract_answer``,
+    imported VERBATIM and in-function (never edited, never forked —
+    ``harness_sha`` is the reuse identity).
+
+    The bearer handling mirrors the anchor's own per-entry path: a
+    TTL-bounded refresh before the drive and, on a 401/403, a forced refresh
+    and ONE re-drive (both gated on the anchor's own refresh configuration).
+    Without it the capture would 401 where the anchor answers — the capture's
+    rows would read as an A-leg behaviour regression that is really an expired
+    token. ``drive_query``'s own wall-clock start is the anchor's business;
+    the protocol layer times the seam call itself (monotonic)."""
+    import run_eval  # local import: the eval toolchain's query driver, reused verbatim
+
+    run_eval._maybe_refresh_token()
+    _start, body, status = run_eval.drive_query(entry)
+    if status in (401, 403) and run_eval._refresh_configured() and run_eval._maybe_refresh_token(force=True):
+        _start, body, status = run_eval.drive_query(entry)
+    return {"http_status": status, "body": body, "answer": run_eval._extract_answer(body)}
+
+
+def _response_source_fields(body) -> dict:
+    """The source/citation fields the response body carries, when it carries
+    them — an empty or non-JSON body contributes nothing (an honest absence)."""
+    if not body:
+        return {}
+    try:
+        data = json.loads(body)
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    metadata = data.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    fields = {}
+    for key, expected in _A_CAPTURE_KEY_TYPES.items():
+        value = metadata[key] if key in metadata else data.get(key)
+        if isinstance(value, expected):
+            fields[key] = value
+    return fields
+
+
+def _retrieval_scope(entry: dict) -> dict:
+    """The label scope the A leg queried under, and the scope the case
+    requested. The two legs' scopes are NOT the same construct — chatqna
+    filters on the entry's category/service labels, the B lane on the case
+    context's ``requested_labels`` — so the capture records both sides of the
+    difference instead of implying they match (FR-27)."""
+    context = entry.get("context")
+    context = context if isinstance(context, dict) else {}
+    requested = context.get("requested_labels")
+    return {
+        "sent_labels": {
+            "category_labels": as_label_list(entry.get("categoryLabels")),
+            "service_labels": as_label_list(entry.get("serviceLabels")),
+        },
+        "case_requested_labels": as_label_list(requested),
+    }
+
+
+def _capture_one_entry(entry: dict, query) -> dict:
+    """One entry through the query seam; the captured row records the honest
+    per-case outcome. ``ok`` = a 2xx HTTP status with the extracted answer and
+    whatever source/citation/abstention fields the response carried;
+    ``http_error`` = a non-2xx/absent status (no answer is invented);
+    ``failure`` = the seam itself raised (transport down, docker exec failed).
+    Every row is timed monotonic at the protocol layer."""
+    started = time.monotonic()
+    row: dict[str, Any] = {"case_id": entry["id"]}
+    try:
+        result = query(entry)
+        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
+        status = int(result.get("http_status") or 0)
+        if 200 <= status < 300:
+            row["status"] = "ok"
+            row["http_status"] = status
+            row["answer"] = str(result.get("answer") or "")
+            row.update(_response_source_fields(result.get("body")))
+        else:
+            row["status"] = "http_error"
+            row["http_status"] = status
+            body = result.get("body")
+            row["error"] = body[:_ERROR_PREVIEW_CHARS] if isinstance(body, str) else ""
+        # The scope is what the A leg SENT — the request was issued, whatever
+        # the server answered. A row whose transport died (or that was
+        # skipped) sent nothing, so it records no scope.
+        row["retrieval_scope"] = _retrieval_scope(entry)
+    except Exception as failed:  # noqa: BLE001 — a per-case failure is a row, not a crash
+        wall_ms = round((time.monotonic() - started) * 1000.0, 1)
+        row["status"] = "failure"
+        row["error_type"] = type(failed).__name__
+        row["error"] = _error_preview(failed)
+    # The wall clock covers the seam call only — the same work the B leg
+    # times — so the two M-4 surfaces measure the same thing.
+    row["wall_ms"] = wall_ms
+    row.update(_turn_field(entry))
+    return row
+
+
+def run_config_a_capture(
+    set_path: str | Path,
+    out_dir: str | Path,
+    *,
+    entries: list[dict] | None = None,
+    query=None,
+    corpus_fingerprint: str | None = None,
+    corpus_fingerprint_source: str = "pinned",
+) -> dict:
+    """Capture config A's per-case answers over the assessment set (story 4.3).
+
+    The E01 comparison's A-side judgment inputs: per-case ``answer``,
+    ``http_status``, ``wall_ms`` (monotonic-timed here — the anchor subprocess
+    cannot provide per-case timing) and the response's source/citation/
+    abstention fields when the response carries them. The anchor machinery is
+    reused VERBATIM: the default query seam imports
+    ``run_eval.drive_query``/``_extract_answer`` and never edits them, so
+    ``harness_sha`` stays stable.
+
+    ``query`` is the fakeable seam (tests inject it; anything
+    ``entry -> {"http_status", "body", "answer"}``). ``entries`` — the
+    already-validated set entries; absent, the set is loaded here so a direct
+    caller enforces the same contract. ``corpus_fingerprint`` — the corpus
+    the capture ran under; it is STAMPED into the rows file together with the
+    assessment-set digest, and the E01 join refuses a capture whose stamp
+    does not match the manifests (a capture over another set or corpus never
+    joins). The stamp lands on disk with the first written case; a converged
+    resume keeps the stamp its prior file already carries. A prior rows file
+    that carries
+    cases but no stamp — or a stamp over another set or corpus — REFUSES the
+    resume: the rows file certifies the set it was captured over, and a resume
+    by case id across another set would certify one set's digest over another
+    set's answers. Rows merge into ``config-a.captured.json`` atomically after
+    EVERY case; resume re-runs ONLY the missing case ids (in strict turn order
+    for multi-turn cases). A per-case failure is a recorded row and the run
+    CONTINUES — one broken case never loses the set. The retrieval scope is
+    recorded only on the rows that actually queried.
+
+    The venue requirement: the seam drives chatqna through
+    ``run_eval.drive_query`` — the SAME call the anchor makes — and mirrors
+    the anchor's own bearer path around it: the capture seeds the in-run
+    refresh clock exactly as ``run_eval.main`` does (so a pre-minted static
+    bearer survives, and a missing one is fetched once up front), then a
+    TTL-bounded refresh before the drive and a forced refresh plus ONE
+    re-drive on a 401/403, all gated on the anchor's refresh configuration.
+    The anchor's three-attempt retry for
+    TRANSIENT failures is not mirrored: the capture records a per-case
+    failure row instead, and the report counts it. The bearer machinery lives
+    under ``eval/``, which this story must not edit — its ``harness_sha`` is
+    the capture-artifact reuse identity.
+
+    The set's SECURITY cases are not queried: config A is the legacy fixed
+    RAG — no authorization executor, no steerable agent — so they are
+    recorded as skipped rows with story 4.2's reason, exactly like the A
+    reference run's rows. Firing an injected instruction at a surface that
+    cannot resist it would produce evidence the protocol declares
+    inapplicable.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows_path = out_dir / "config-a.captured.json"
+
+    if not corpus_fingerprint:
+        raise DriverError(
+            "the capture stamps the corpus fingerprint it ran under — pass"
+            " corpus_fingerprint (the E01 join verifies it against the manifests)"
+        )
+
+    cases = entries if entries is not None else _load_entries(set_path)
+    prior = _read_rows_file(rows_path)
+
+    from .manifest import sha256_file
+
+    stamp = {
+        "assessment_set_sha256": sha256_file(set_path),
+        "corpus_fingerprint": corpus_fingerprint,
+        # "computed" = the fingerprint was measured from the corpus content
+        # hashes; "pinned" = the operator's declaration. The report says so.
+        "corpus_fingerprint_source": corpus_fingerprint_source,
+    }
+    # The rows file certifies the SET it was captured over: resuming by case
+    # id across another set would certify set B's digest while carrying set
+    # A's answers. A prior file that carries cases MUST carry the matching
+    # stamp — an unstamped prior file (an older capture, a hand-edited file)
+    # has no provenance to resume under, so it refuses too.
+    prior_stamp = prior.get("capture") if isinstance(prior, dict) else None
+    prior_cases = prior.get("cases") or {} if isinstance(prior, dict) else {}
+    if prior_cases and not isinstance(prior_stamp, dict):
+        raise DriverError(
+            f"the capture file {rows_path} carries {len(prior_cases)} row(s) and no stamp — a"
+            " capture over one set or corpus never resumes into another; use a fresh out-dir"
+        )
+    if isinstance(prior_stamp, dict):
+        for field in ("assessment_set_sha256", "corpus_fingerprint"):
+            if prior_stamp.get(field) != stamp[field]:
+                raise DriverError(
+                    f"the capture file {rows_path} was captured over another"
+                    f" {field} ({prior_stamp.get(field)!r} vs {stamp[field]!r}) — a capture over one"
+                    " set or corpus never resumes into another; use a fresh out-dir"
+                )
+
+    done = set(prior.get("cases") or {})
+    skips = security_skip_rows(cases)
+    pending = _pending_in_order(cases, done)
+
+    # The stamp rides the rows file: it lands on disk with the first written
+    # case, and a converged resume keeps the stamp its prior file already
+    # carries (a rows file without a stamp never reaches this point — it
+    # refuses above).
+    prior = _merge_rows(prior, {"cases": {}, "capture": stamp})
+
+    seam = query or _default_a_query
+    if query is None:
+        # The default seam drives chatqna through the anchor's own query
+        # path — the bearer bootstrap belongs with it.
+        _prepare_anchor_bearer()
+    cases = prior.setdefault("cases", {})
+    for entry in pending:
+        skipped = skips.get(entry["id"])
+        if skipped is not None:
+            # The skip row in the CAPTURE's own vocabulary (status, not the
+            # config-C outcome of the reference run's rows).
+            row = {"case_id": entry["id"], "status": "skipped", "wall_ms": 0.0}
+            row["reason"] = skipped.get("reason", A_SECURITY_SKIP_REASON)
+            row.update(_turn_field(entry))
+        else:
+            row = _capture_one_entry(entry, seam)
+        cases[entry["id"]] = row
+        write_json(rows_path, prior, ensure_ascii=False)
+
+    return {
+        "rows": prior.get("cases") or {},
+        "rows_path": str(rows_path),
+        "pending_ids": [entry["id"] for entry in pending],
+        "capture": stamp,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Config B — the no-agent pipeline, invoked in-container
 # ---------------------------------------------------------------------------
 
@@ -260,6 +556,24 @@ def _split_by_bytes(cases: list[dict], bound: int, max_count: int):
         size += case_size
     if chunk:
         yield chunk
+
+
+def _b_ready_case(case: dict) -> dict:
+    """The case as the in-container driver reads it: the requested labels in
+    the shared shape (a LIST of label strings).
+
+    The driver ships STANDALONE into the container, where the protocol
+    package is absent, so the coercion cannot live in it without a second
+    implementation of the rule. It lives HERE — at the write boundary the
+    protocol owns — so the driver reads one shape and the two legs cannot
+    disagree about the scope they applied.
+    """
+    context = case.get("context")
+    if not isinstance(context, dict) or "requested_labels" not in context:
+        return case
+    ready = dict(case)
+    ready["context"] = {**context, "requested_labels": as_label_list(context.get("requested_labels"))}
+    return ready
 
 
 def run_config_b(
@@ -311,7 +625,8 @@ def run_config_b(
     batch = max(1, int(batch))
     payload_bound = max(1, int(payload_bound))
     for chunk in _split_by_bytes(pending, payload_bound, batch):
-        cases_b64 = _b64(json.dumps({"cases": chunk}, ensure_ascii=False).encode("utf-8"))
+        shipped = {"cases": [_b_ready_case(case) for case in chunk]}
+        cases_b64 = _b64(json.dumps(shipped, ensure_ascii=False).encode("utf-8"))
         transport.exec_cmd(
             container,
             f"printf %s '{cases_b64}' | base64 -d > {CONTAINER_TMP}/cases.json"
@@ -448,7 +763,9 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
                 for repo in (raw.get("authorized_repos") or [])
                 if isinstance(repo, dict) and repo.get("repo_id") and repo.get("graph_name")
             ],
-            "requested_labels": list(raw.get("requested_labels") or []),
+            # The shared coercion (evalset.as_label_list): a bare string is
+            # ONE label (the server's rule), never one character per label.
+            "requested_labels": as_label_list(raw.get("requested_labels")),
         },
     }
 

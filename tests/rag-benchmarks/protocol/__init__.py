@@ -6,8 +6,9 @@ The versioned harness machinery Epic 4's experiments run on: the evaluation-set
 schema and composition validator (:mod:`evalset`), the run-manifest builder
 (:mod:`manifest`), the E01/E02 pair-conditions manifest (:mod:`pairs`), the
 A-only-first partial-order gate (:mod:`gate`), the capture-artifact suitability
-checks (:mod:`reuse`), the three configuration drivers (:mod:`drivers`), and
-the CLI (:mod:`run_protocol`).
+checks (:mod:`reuse`), the three configuration drivers (:mod:`drivers`), the
+E01 comparison report (:mod:`e01`, story 4.3), and the CLI
+(:mod:`run_protocol`).
 
 STDLIB-ONLY on the driver process: every module here imports the standard
 library plus the sibling ``eval``/``tests/rag-benchmarks`` modules it reuses

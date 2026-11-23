@@ -166,6 +166,51 @@ def case_is_non_latin(case: dict) -> bool:
     return has_non_latin_text(str(case.get("query", "")))
 
 
+def as_label_list(value) -> list[str]:
+    """The label shape a request carries: a LIST of labels, or a bare STRING
+    that is ONE label; an EMPTY value is no label at all.
+
+    The server's own rule (chatqna's ``core.label_contract``): a string is
+    one label (the legacy shape) and an empty label is not a scope. A string
+    split into characters would be a silent lie about the scope.
+
+    Mirrors the server's SHAPE rule: ``_as_label_list`` takes a LIST as-is
+    and treats every other truthy value as ONE scalar. The FALSY labels
+    (``""``, ``None``, ``0``, ``False``) are dropped by THIS function's own
+    loop — the server drops them later, in ``build_filter_labels``, and only
+    for the labels it builds. A whitespace-only label is KEPT (the wire is
+    verbatim). The server's filter builder additionally DEDUPS the labels it
+    builds; this coercion keeps the request's own list, and the report
+    compares the two legs' scopes as sets — so the dedup carries no scope
+    meaning.
+
+    ONE documented divergence, on the SERVICE field: the server takes its
+    service branch on any service label that is not ``None`` and not ``""``
+    — a falsy ``0`` keeps the branch and ECLIPSES the declared category, so
+    the server's filter ends up EMPTY (the retriever runs unfiltered). This
+    coercion drops the falsy service label, so the protocol's record of the
+    scope differs from the server's. The report compares the legs' EFFECTIVE
+    filters (what each leg really applied), so the difference surfaces as a
+    scope difference rather than as a silent claim.
+    """
+    if not value:
+        return []
+    items = value if isinstance(value, list) else [value]
+    labels = []
+    for item in items:
+        # A falsy element is not a label (the server drops it too).
+        if not item:
+            continue
+        labels.append(item if isinstance(item, str) else str(item))
+    return labels
+
+
+def base_case_id(case_id: str) -> str:
+    """The case id behind a turn-indexed row id (``<case_id>#t<n>``) — the
+    grammar :func:`turn_entries` owns, parsed in one place."""
+    return str(case_id).split("#", 1)[0]
+
+
 def turn_entries(case: dict) -> list[dict]:
     """The case's per-turn execution entries — ONE expansion, shared by the
     drivers and the verdict layer so the row ids and the verdict ids can never

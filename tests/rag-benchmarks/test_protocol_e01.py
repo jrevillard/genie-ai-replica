@@ -607,9 +607,33 @@ def test_the_label_coercion_matches_the_server_rule_it_mirrors():
     # The collapse the A leg applies — recorded here so a server-side change
     # to it turns this red.
     assert server.build_filter_labels({"serviceLabels": ["Svc"], "categoryLabels": ["Timber"]}) == ["Svc"]
+    # The DOCUMENTED divergence: the server's service branch keeps a falsy
+    # service label (so the category is eclipsed and the filter ends up
+    # empty), the client drops it. Pinned here so the divergence is a fact
+    # the suite watches, not a claim in a docstring.
+    assert server.build_filter_labels({"serviceLabels": [0], "categoryLabels": ["Timber"]}) == []
+    assert as_label_list([0]) == []
     # The documented divergence, asserted rather than left implicit.
     assert as_label_list(["Timber", "Timber"]) == ["Timber", "Timber"]
     assert server.build_filter_labels({"categoryLabels": ["Timber", "Timber"]}) == ["Timber"]
+
+
+def test_the_parity_pin_runs_when_the_server_label_rule_changes():
+    """The pin is only worth its place if it RUNS when the server's rule
+    changes: the CI job that carries the protocol suite triggers on the
+    server's label contract too. Without it the pin stays dark and the next
+    server-side drift lands unnoticed."""
+    import yaml
+
+    ci_path = Path(__file__).resolve().parents[2] / ".gitlab-ci.yml"
+    job = yaml.safe_load(ci_path.read_text(encoding="utf-8"))["test:rag-benchmarks"]
+    changes = [
+        entry
+        for rule in job["rules"]
+        if rule.get("if", "").startswith("$CI_PIPELINE_SOURCE")
+        for entry in rule.get("changes", [])
+    ]
+    assert "genie-ai-overlay/core/label_contract.py" in changes
 
 
 def test_e01_redacts_the_auth_and_session_keys():
@@ -1783,10 +1807,12 @@ def test_e01_compares_the_effective_scope_of_both_legs():
 
 
 def test_e01_compares_the_effective_scopes_as_sets():
-    """A scope is a SET of labels — the retriever filters on their union, so
-    a repeated label carries no scope meaning. chatqna dedups the filter it
-    builds; the noagent lane applies the request verbatim — comparing the
-    lists would publish a scope difference that does not exist."""
+    """A scope is a SET of labels — under the default OR strategy the
+    retriever filters on their union, under the AND strategy it requires all
+    of them, and a repeated label is not a scope difference under either.
+    chatqna dedups the filter it builds; the noagent lane applies the request
+    verbatim — comparing the lists would publish a scope difference that does
+    not exist."""
     captured, rows = _scoped_rows("c1", ["Forestry"])
     rows["c1"]["metadata"] = {"filter_labels": ["Forestry", "Forestry"]}
     report = _build(captured_rows=captured, b_rows=rows)
@@ -1796,6 +1822,10 @@ def test_e01_compares_the_effective_scopes_as_sets():
     # The recorded facts stay as they were measured.
     assert scope["A"]["effective_filter_labels_per_case"]["c1"] == ["Forestry"]
     assert scope["B"]["effective_filter_labels_per_case"]["c1"] == ["Forestry", "Forestry"]
+    # The note names BOTH filter strategies — the union claim is only the
+    # default, and the judge must not read it as unconditional.
+    assert "under the default OR strategy" in scope["note"]
+    assert "under AND it requires all of them" in scope["note"]
 
 
 def test_e01_drops_a_credential_named_like_a_token_count():

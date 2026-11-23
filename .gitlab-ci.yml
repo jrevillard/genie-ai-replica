@@ -4486,7 +4486,7 @@ test:rag-benchmarks:
     # __init__, which pulls .contract (pydantic) and .executor → adapters
     # .chunks/.docrepo/.okf → adapters/http (requests). The search capability's
     # numpy/kneed live only in the in-container driver assembly, never in CI.
-    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests
+    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests pyyaml
   cache:
     - key: test-rag-benchmarks
       paths:

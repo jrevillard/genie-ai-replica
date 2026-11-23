@@ -174,14 +174,24 @@ def as_label_list(value) -> list[str]:
     one label (the legacy shape) and an empty label is not a scope. A string
     split into characters would be a silent lie about the scope.
 
-    Mirrors the server's label rules: ``_as_label_list`` takes a LIST as-is
-    and treats every other truthy value as ONE scalar, then
-    ``build_filter_labels`` drops the FALSY labels (``""``, ``None``, ``0``,
-    ``False``) and stringifies the rest. A whitespace-only label is KEPT (the
-    wire is verbatim). The server's filter builder additionally DEDUPS the
-    labels it builds; this coercion keeps the request's own list, and the
-    report compares the two legs' scopes as sets — so the dedup carries no
-    scope meaning.
+    Mirrors the server's SHAPE rule: ``_as_label_list`` takes a LIST as-is
+    and treats every other truthy value as ONE scalar. The FALSY labels
+    (``""``, ``None``, ``0``, ``False``) are dropped by THIS function's own
+    loop — the server drops them later, in ``build_filter_labels``, and only
+    for the labels it builds. A whitespace-only label is KEPT (the wire is
+    verbatim). The server's filter builder additionally DEDUPS the labels it
+    builds; this coercion keeps the request's own list, and the report
+    compares the two legs' scopes as sets — so the dedup carries no scope
+    meaning.
+
+    ONE documented divergence, on the SERVICE field: the server takes its
+    service branch on any service label that is not ``None`` and not ``""``
+    — a falsy ``0`` keeps the branch and ECLIPSES the declared category, so
+    the server's filter ends up EMPTY (the retriever runs unfiltered). This
+    coercion drops the falsy service label, so the protocol's record of the
+    scope differs from the server's. The report compares the legs' EFFECTIVE
+    filters (what each leg really applied), so the difference surfaces as a
+    scope difference rather than as a silent claim.
     """
     if not value:
         return []

@@ -234,9 +234,11 @@ manifest records it).
   read them as facts, not as causes.** `requested_labels_not_sent`: these
   requested labels were never on the wire (the request did not carry them).
   `requested_labels_missing_from_the_effective_filter`: these requested
-  labels are not in the filter the leg applied (chatqna's collapse is one
-  reason; the report does not claim to know which). One case can appear in
-  both — the case-id lists are derived from the per-label records, and the
-  labels are what say which is which. The report does not state a cause:
-  attribute the difference to the SCOPE, and read the per-label records for
-  what was and was not on the wire.
+  labels are not in the filter the leg applied — the report does not say
+  why, and neither may you infer a cause from it. One case can appear in
+  both records. The case-id index of each record is published beside it:
+  `cases_whose_requested_labels_were_not_sent` and
+  `cases_whose_requested_labels_never_became_an_effective_filter`. The
+  labels are what say which is which: attribute the difference to the
+  SCOPE, and read the per-label records for what was and was not on the
+  wire.

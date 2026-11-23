@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 80 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 81 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,7 +132,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 259 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 260 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
 the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
 ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
@@ -437,6 +437,22 @@ round-3 fix the quality pass had introduced.
 | F84' | The coercion's docstring attributed the falsy drop to the server's rule for a list, where it is the client's own loop | nit | **Fixed**: the docstring names what is mirrored and records the falsy-service-label divergence |
 | F85' | The test file carried a function-local `import sys` shadowing the module import | nit | **Fixed**: dropped |
 | F86' | The container-read test hand-rolled a `pytest.MonkeyPatch` instead of taking the fixture | nit | **Fixed**: the fixture is used |
+
+**FIX-REVIEW (chain round 1 of the global's chain, f=0) — 1 important
+finding, 4 nits, ALL fixed.** The important one is a disposition the earlier
+round recorded as done and was not: the coercion's docstring claimed to
+mirror the server's label rules where the client drops the falsy labels
+itself, and the divergence it hides has a scope consequence — the server
+keeps a falsy SERVICE label, which eclipses the declared category and leaves
+the retriever with no label filter at all.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F87' | F84' was recorded as fixed but the file was never touched — the docstring still attributes the falsy drop to the server, and the falsy-service-label divergence (the server keeps a falsy service label, eclipses the category and filters nothing) is undocumented and unpinned | important | **Fixed**: the docstring names the client's own loop and records the divergence; the parity test pins the server's service branch and the client's behaviour on it |
+| F88' | The judge contract no longer named the two case-id lists the report publishes | nit | **Fixed**: both are named beside the per-label records |
+| F89' | The judge contract still named a cause in the bullet that says the report states none | nit | **Fixed**: the causal clause is gone |
+| F90' | The report's note was corrected but nothing gated the wording, and the range's own test docstring kept the unconditional union claim | nit | **Fixed**: the note's wording is asserted (both strategies named) and the test docstring matches |
+| F91' | The CI path filter that makes the parity pin run was ungated — a later CI edit could re-darken it unnoticed | nit | **Fixed**: a test reads the job's `rules:changes` and asserts the server's label contract is in it (the job installs PyYAML for it) |
 
 ## Design Notes
 

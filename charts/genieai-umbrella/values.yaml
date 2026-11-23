@@ -1510,6 +1510,17 @@ opea:
     # in-cluster mode only.
     llm:
       modelId: ibm-granite/granite-4.1-8b
+      # Tool-calling pin (#2052 parity with the Compose surfaces, whose
+      # lever is VLLM_TOOL_CALL_PARSER): empty/unset derives granite4 for
+      # Granite 4.x model ids and NO pin for anything else (a Granite 3.x
+      # id needs the `granite` parser PLUS a chat template the chart
+      # surface cannot reference — leave it unpinned there). Set a parser
+      # name (e.g. granite, hermes) to pin the flags explicitly; on a
+      # Granite 3.x id that combination also needs the chat template the
+      # chart cannot reference — it boots an unusable tool-calling setup.
+      # No value disables the pin on a Granite 4.x id; the flags are
+      # inert for requests that carry no tools.
+      toolCallParser: ""
       # The vLLM tuning args of the in-cluster chat model. Compose
       # exposes the same four knobs as VLLM_* (the GPU profiles
       # env.t4 / env.rtx6000 exist to set them); the chart's values

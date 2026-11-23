@@ -243,7 +243,7 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vllm_llm_model_id` | _(undefined — auto-discovery; the GPU overlay then serves its template default `ibm-granite/granite-3.3-2b-instruct`)_ | When undefined, every service discovers the served model at `/v1/models`. Define it to pin a name (must match what the GPU serves). |
+| `vllm_llm_model_id` | _(MANDATORY on the GPU node — no template default, `deploy-gpu.yml` asserts it before any node change (#2119); undefined stays valid on the app tier, where services auto-discover the served model at `/v1/models`)_ | On the GPU overlay it is rendered verbatim into `--model`/`--served-model-name`. Define it (must match what the GPU serves) in `group_vars/itu_rtx_gpu_api/vars.yml` (NVIDIA) or `vars/rocm_gpu_nodes.yml` (ROCm). |
 | `vllm_model_id` | _(undefined)_ | The raw pin spelling — okf-server's escape hatch for a deployment whose OKF legs talk to another server (a proxy whose `/v1/models` is not readable). Applied only while `vllm_llm_model_id` is undefined, and it must name a model the called endpoint serves. |
 | `vllm_max_model_len` | `65536` | Maximum context length (template default; not set in group_vars) |
 | `vllm_gpu_utilization` | `0.55` | GPU memory fraction (0.1-1.0) |
@@ -254,7 +254,8 @@ Set in `group_vars/<env>/vars.yml`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vllm_translation_model_id` | `google/gemma-3-4b-it` | Translation model |
+| `vllm_translation_model_id` | `google/gemma-3-4b-it` | Translation model. MANDATORY on the GPU node (no template default — `deploy-gpu.yml` asserts it, #2119); defined in `group_vars/all.yml` (NVIDIA) / `vars/rocm_gpu_nodes.yml` (ROCm). |
+| `vllm_tool_call_parser` | _(unset — derived: `granite4` for a Granite 4.x `vllm_llm_model_id`, no pin otherwise)_ | The ansible spelling of the main compose's `VLLM_TOOL_CALL_PARSER` lever (#2052) — note the empty-value semantics differ: compose's `${VAR:-...}` treats empty as unset, while here an explicit empty string forces the flags OFF. Unset renders `--enable-auto-tool-choice --tool-call-parser granite4` ONLY for Granite 4.x ids; set it to the model's documented parser to enable tool calling on another model (a Granite 3.x id additionally needs the `granite` parser's chat template, which this surface cannot reference — such a combo boots an unusable tool-calling setup). |
 | `vllm_translation_max_model_len` | `8192` | Maximum context length |
 | `vllm_translation_dtype` | `auto` | Data type |
 | `vllm_translation_gpu_utilization` | `0.9` | GPU memory fraction |

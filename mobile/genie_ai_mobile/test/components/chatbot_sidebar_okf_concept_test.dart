@@ -31,6 +31,7 @@ void main() {
     List<dynamic> docs, {
     required List<Uri> requests,
     int conceptStatus = 200,
+    String conceptBody = '# The concept body',
   }) {
     final client = MockClient((request) async {
       requests.add(request.url);
@@ -44,7 +45,7 @@ void main() {
         jsonEncode({
           'concept_id': 'hadith_nawawi_36',
           'title': 'Hadith Nawawi 36',
-          'body': '# The concept body',
+          'body': conceptBody,
         }),
         conceptStatus,
       );
@@ -145,6 +146,30 @@ void main() {
 
     expect(find.byKey(const ValueKey('ds-modal')), findsNothing);
     expect(find.text('This source is not available to view.'), findsOneWidget);
+  });
+
+  testWidgets('a concept longer than the render cap is truncated, and says so', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // A body past the render cap: the modal must not build all of it, and it
+    // must say that the preview stops short.
+    final longBody = 'x' * 25000;
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptBody: longBody),
+    );
+    await settle(tester);
+
+    await tester.tap(find.text('hadith nawawi 36'));
+    await settle(tester);
+
+    expect(find.byKey(const ValueKey('ds-modal')), findsOneWidget);
+    expect(
+      find.text(
+        'The preview is truncated — the document is longer than can be shown here.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a legacy document row does not go through okf-server', (

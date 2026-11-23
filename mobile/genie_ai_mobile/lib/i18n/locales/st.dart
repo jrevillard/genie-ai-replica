@@ -303,6 +303,8 @@ const Map<String, dynamic> stLocale = {
     "faq": "Dipotso tse Botsoang Hangata",
     "faqTranslationUnavailable":
         "Translation unavailable — showing the original English.",
+    "okfConceptTruncated":
+        "Kotlolo e baleha — buka ho feta ka pele ho bontsha.",
     "okfSourceUnavailable": "Mohloli ona ha o fumanehe ho shebella.",
     "documentOpenError": "Ho hlolehile ho bula tokomane",
     "tab": {

@@ -300,6 +300,8 @@ const Map<String, dynamic> ruLocale = {
     "faq": "Часто задаваемые вопросы",
     "faqTranslationUnavailable":
         "Перевод недоступен — показан оригинал на английском.",
+    "okfConceptTruncated":
+        "Предпросмотр обрезан — документ длиннее, чем можно показать здесь.",
     "okfSourceUnavailable": "Этот источник недоступен для просмотра.",
     "documentOpenError": "Не удалось открыть документ",
     "tab": {

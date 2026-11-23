@@ -43,7 +43,7 @@ final backendUrlProvider = Provider<String>((ref) {
 final okfConceptServiceProvider = Provider<OkfConceptService>((ref) {
   return OkfConceptService(
     client: ref.watch(authenticatedHttpClientProvider),
-    backendUrl: getConfig().backendUrl,
+    backendUrl: ref.watch(backendUrlProvider),
   );
 });
 

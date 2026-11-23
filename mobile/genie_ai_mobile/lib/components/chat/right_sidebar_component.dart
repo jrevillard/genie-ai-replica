@@ -48,6 +48,16 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   bool _faqTranslationFailed = false;
   String _currentLangCode = 'en';
 
+  /// The concepts whose open is in flight — their card shows the spinner and
+  /// a second tap on them is ignored.
+  final Set<String> _openingConcepts = <String>{};
+
+  /// The longest concept body the modal renders. A concept may carry up to
+  /// the deployment's ceiling (~250 000 characters) and flutter_markdown
+  /// builds a document eagerly: rendering all of it on a phone freezes the UI
+  /// thread. The preview says when it stops short.
+  static const int _maxRenderedConceptChars = 20000;
+
   @override
   void initState() {
     super.initState();
@@ -384,16 +394,22 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   Future<void> _openOkfConcept(Map<String, dynamic> doc) async {
     final OkfConceptRef? conceptRef = okfConceptRef(doc);
     if (conceptRef == null) {
+      if (!mounted) return;
       _showNotice(tr('sidebar.okfSourceUnavailable'));
       return;
     }
+    // One fetch per concept at a time: a second tap while the first is in
+    // flight would open a second modal on top of the first.
+    if (_openingConcepts.contains(conceptRef.conceptId)) return;
 
+    setState(() => _openingConcepts.add(conceptRef.conceptId));
     final service = ref.read(okfConceptServiceProvider);
     try {
       String repoId = conceptRef.repoId;
       if (!conceptRef.hasRepoId) {
         repoId = await service.resolveRepoId(conceptRef.conceptId) ?? '';
         if (repoId.isEmpty) {
+          if (!mounted) return;
           _showNotice(tr('sidebar.okfSourceUnavailable'));
           return;
         }
@@ -401,31 +417,61 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
 
       final concept = await service.fetchConcept(repoId, conceptRef.conceptId);
       if (concept == null) {
+        if (!mounted) return;
         _showNotice(tr('sidebar.okfSourceUnavailable'));
         return;
       }
       if (!mounted) return;
 
       final tokens = ThemeManager().tokens;
+      // The rendered body is bounded: flutter_markdown builds the whole
+      // document eagerly, and a concept may carry up to the deployment's
+      // ceiling (~250 000 characters) — rendering all of it on a phone
+      // freezes the UI thread. The preview says so when it truncates.
+      final bool truncated = concept.body.length > _maxRenderedConceptChars;
+      final String body = truncated
+          ? concept.body.substring(0, _maxRenderedConceptChars)
+          : concept.body;
       await DsModal.show<void>(
         context: context,
         title: concept.title,
         size: DsModalSize.lg,
-        content: MarkdownBody(
-          data: concept.body,
-          styleSheet: MarkdownStyleSheet(
-            p: TextStyle(
-              fontSize: tokens.textSm,
-              color: tokens.fg70,
-              height: 1.4,
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MarkdownBody(
+              data: body,
+              styleSheet: MarkdownStyleSheet(
+                p: TextStyle(
+                  fontSize: tokens.textSm,
+                  color: tokens.fg70,
+                  height: 1.4,
+                ),
+              ),
             ),
-          ),
+            if (truncated) ...[
+              const SizedBox(height: DsSpacing.sm),
+              Text(
+                tr('sidebar.okfConceptTruncated'),
+                style: TextStyle(
+                  fontSize: tokens.textXs,
+                  color: tokens.mutedSoft,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ],
         ),
       );
     } catch (e) {
       debugPrint("[SIDEBAR] Could not open the OKF concept: $e");
       if (!mounted) return;
       _showNotice(tr('sidebar.documentOpenError'));
+    } finally {
+      if (mounted) {
+        setState(() => _openingConcepts.remove(conceptRef.conceptId));
+      }
     }
   }
 
@@ -688,6 +734,13 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     final String id =
         _getDocValue(doc, ['id', '_id', 'document_id', 'fileId'])?.toString() ??
         "";
+    // A concept whose open is in flight shows the spinner in place of its
+    // icon — the sidebar's own idiom for "loading" (the FAQ does the same).
+    final String conceptId = isOkfConceptCitation(doc)
+        ? (okfConceptRef(doc)?.conceptId ?? '')
+        : '';
+    final bool isOpening =
+        conceptId.isNotEmpty && _openingConcepts.contains(conceptId);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: DsSpacing.md),
@@ -706,7 +759,17 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(_getDocumentIcon(doc), size: 20, color: tokens.accent),
+                  if (isOpening)
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: tokens.accent,
+                      ),
+                    )
+                  else
+                    Icon(_getDocumentIcon(doc), size: 20, color: tokens.accent),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

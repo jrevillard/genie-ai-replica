@@ -297,6 +297,7 @@ const Map<String, dynamic> thLocale = {
     "noDocuments": "ไม่มีเอกสารที่เกี่ยวข้อง",
     "faq": "คำถามที่พบบ่อย",
     "faqTranslationUnavailable": "ไม่สามารถแปลได้ — กำลังแสดงต้นฉบับภาษาอังกฤษ",
+    "okfConceptTruncated": "ตัวอย่างถูกตัด — เอกสารยาวกว่าที่จะแสดงได้ที่นี่",
     "okfSourceUnavailable": "แหล่งข้อมูลนี้ไม่สามารถดูได้",
     "documentOpenError": "ไม่สามารถเปิดเอกสารได้",
     "tab": {

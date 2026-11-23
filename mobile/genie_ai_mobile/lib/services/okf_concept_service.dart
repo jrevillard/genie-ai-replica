@@ -32,6 +32,11 @@ class OkfConceptService {
   final http.Client _client;
   final String _backendUrl;
 
+  /// The concept route is a READ on the caller's own scope; a request that
+  /// has not answered in this long is a failure, not a slow success. The
+  /// timeout keeps a hung upstream from leaving the sidebar waiting.
+  static const Duration _requestTimeout = Duration(seconds: 20);
+
   /// The concept's markdown and title.
   ///
   /// Null when the concept cannot be served (403/404/501 — the anti-enumeration
@@ -41,7 +46,7 @@ class OkfConceptService {
       '$_backendUrl/api/okf/repos/${Uri.encodeComponent(repoId)}'
       '/concepts/${Uri.encodeComponent(conceptId)}',
     );
-    final response = await _client.get(uri);
+    final response = await _client.get(uri).timeout(_requestTimeout);
     if (response.statusCode == 403 ||
         response.statusCode == 404 ||
         response.statusCode == 501) {
@@ -70,7 +75,7 @@ class OkfConceptService {
       '$_backendUrl/api/okf/concepts/resolve-repo'
       '?concept_id=${Uri.encodeComponent(conceptId)}',
     );
-    final response = await _client.get(uri);
+    final response = await _client.get(uri).timeout(_requestTimeout);
     if (response.statusCode == 404 || response.statusCode == 501) return null;
     if (response.statusCode != 200) {
       throw Exception(

@@ -96,6 +96,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   Object.keys(savedEnvVars).forEach((key) => {
     if (savedEnvVars[key] === undefined) {
       delete process.env[key];
@@ -117,6 +118,30 @@ function setEnv(key, value) {
 }
 
 describe('TranslationService', () => {
+  // A fresh instance per case — `translationBackend` and `gpuNodeHost` are
+  // read at module load, so changing env after the require proves nothing.
+  const serviceWithEnv = (env) => {
+    setEnv('TRANSLATION_BACKEND', env.backend);
+    setEnv('GPU_NODE_HOST', env.gpuNodeHost);
+    jest.isolateModules(() => {
+      translationService = require('../../services/translation-service');
+    });
+    translationService.initialized = false;
+    translationService.backend = null;
+    translationService.backendType = null;
+    return translationService;
+  };
+
+  // An endpoint of its own says "GPU API configured" even with no GPU node
+  // host — a deployment may route through a proxy that sets only this.
+  const gpuApi = (overrides = {}) => ({
+    endpointExplicit: true,
+    init: jest.fn().mockResolvedValue(undefined),
+    getLanguageCode: (l) => l,
+    translate: mockGpuTranslate,
+    ...overrides
+  });
+
   describe('constructor', () => {
     it('should create instance with correct defaults', () => {
       expect(translationService.backend).toBeNull();
@@ -179,29 +204,8 @@ describe('TranslationService', () => {
     // so. When no GPU API is configured the choice is legitimate and
     // TRANSLATION_BACKEND decides.
 
-    // A fresh instance per case — `translationBackend` and `gpuNodeHost` are
-    // read at module load, so changing env after the require proves nothing.
-    const serviceWithEnv = (env) => {
-      setEnv('TRANSLATION_BACKEND', env.backend);
-      setEnv('GPU_NODE_HOST', env.gpuNodeHost);
-      jest.isolateModules(() => {
-        translationService = require('../../services/translation-service');
-      });
-      translationService.initialized = false;
-      translationService.backend = null;
-      translationService.backendType = null;
-      return translationService;
-    };
-
-    // An endpoint of its own says "GPU API configured" even with no GPU node
-    // host — a deployment may route through a proxy that sets only this.
-    const gpuApi = (overrides = {}) => ({
-      endpointExplicit: true,
-      init: jest.fn().mockResolvedValue(undefined),
-      getLanguageCode: (l) => l,
-      translate: mockGpuTranslate,
-      ...overrides
-    });
+    // A fresh instance per case — the helpers above reload the module with
+    // the case's env.
 
     it.each(['cpu', 'gpu', 'auto', undefined])(
       'uses the GPU and ignores TRANSLATION_BACKEND=%s when a GPU API is configured',
@@ -252,18 +256,90 @@ describe('TranslationService', () => {
 
       expect(svc.backendType).toBe('cpu');
     });
+  });
 
-    it('still falls back to CPU in auto mode when no GPU API is configured', async () => {
-      // The one branch where CPU is a legitimate outcome rather than a silent
-      // substitution: nothing was configured to be mandatory.
-      const svc = serviceWithEnv({ backend: 'auto', gpuNodeHost: '' });
-      GpuTranslateBackend.mockImplementationOnce(() =>
-        gpuApi({ endpointExplicit: false, init: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) })
-      );
+  describe('auto mode GPU readiness window', () => {
+    // With the strict health gate a vLLM that is still loading answers its
+    // boot probe non-2xx. The `auto` branch therefore retries the probe with
+    // backoff inside a bounded readiness window before settling on CPU, so a
+    // GPU that becomes usable seconds after start-up is picked up — while a
+    // GPU that is genuinely absent still ends the boot on CPU at a bounded
+    // cost. The window lives only in this branch: the configured-GPU path
+    // refuses to start instead of retrying.
+    const serviceInAuto = () => serviceWithEnv({ backend: 'auto', gpuNodeHost: '' });
 
-      await svc.selectBackend();
+    it('selects the GPU when it becomes ready within the readiness window', async () => {
+      const svc = serviceInAuto();
+      const gpu = gpuApi({ endpointExplicit: false });
+      gpu.init.mockRejectedValueOnce(new Error('vLLM service unhealthy: status 503')).mockResolvedValueOnce(undefined);
+      GpuTranslateBackend.mockImplementationOnce(() => gpu);
+      jest.useFakeTimers();
+
+      const selection = svc.selectBackend();
+      await jest.advanceTimersByTimeAsync(30000);
+      await selection;
+
+      expect(svc.backendType).toBe('gpu');
+      expect(svc.backend).toBe(gpu);
+      // The failed boot probe was retried, not accepted as final.
+      expect(gpu.init).toHaveBeenCalledTimes(2);
+      expect(CpuTranslateBackend).not.toHaveBeenCalled();
+    });
+
+    it('falls back to CPU only after the readiness window has elapsed', async () => {
+      const svc = serviceInAuto();
+      const gpu = gpuApi({
+        endpointExplicit: false,
+        init: jest.fn().mockRejectedValue(new Error('vLLM service unreachable: ECONNREFUSED'))
+      });
+      GpuTranslateBackend.mockImplementationOnce(() => gpu);
+      jest.useFakeTimers();
+
+      const selection = svc.selectBackend();
+      // Inside the 30s window: the GPU probe is still being retried.
+      await jest.advanceTimersByTimeAsync(20000);
+      expect(gpu.init.mock.calls.length).toBeGreaterThan(1);
+      expect(CpuTranslateBackend).not.toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(120000);
+      await selection;
 
       expect(svc.backendType).toBe('cpu');
+      expect(svc.backend.translate).toBe(mockCpuTranslate);
+    });
+
+    it('settles on CPU by 30s so the boot stays inside the container healthcheck budget', async () => {
+      // Backend init runs before the server listens: every probing second is
+      // boot time against the compose healthcheck start_period (90s) and the
+      // chart startupProbe (~120s). A window that grew past that envelope
+      // would restart-loop the task on slow hosts — the bound is part of the
+      // contract.
+      const svc = serviceInAuto();
+      const gpu = gpuApi({
+        endpointExplicit: false,
+        init: jest.fn().mockRejectedValue(new Error('vLLM service unreachable: ECONNREFUSED'))
+      });
+      GpuTranslateBackend.mockImplementationOnce(() => gpu);
+      jest.useFakeTimers();
+
+      const selection = svc.selectBackend();
+      await jest.advanceTimersByTimeAsync(30000);
+      await selection;
+
+      expect(svc.backendType).toBe('cpu');
+    });
+
+    it('does not retry on the configured-GPU path — the refusal stays immediate', async () => {
+      // The readiness window is the `auto` branch's only. A configured GPU API
+      // is mandatory: no answer, no start — the supervisor restart is its retry.
+      const svc = serviceWithEnv({ backend: 'auto', gpuNodeHost: 'gpu-node.internal' });
+      const gpu = gpuApi({ init: jest.fn().mockRejectedValue(new Error('vLLM service health check timeout')) });
+      GpuTranslateBackend.mockImplementationOnce(() => gpu);
+
+      await expect(svc.selectBackend()).rejects.toThrow('health check timeout');
+
+      expect(gpu.init).toHaveBeenCalledTimes(1);
+      expect(CpuTranslateBackend).not.toHaveBeenCalled();
     });
   });
 
@@ -335,10 +411,11 @@ describe('TranslationService', () => {
   });
 
   describe('auto mode backend commitment', () => {
-    // `auto` probes once at startup and commits to whichever backend answers.
-    // A request that fails afterwards is reported, not rerouted: switching
-    // models mid-answer would serve a different, lower-quality translation of
-    // the same content with nothing in the output to say so.
+    // `auto` settles once at startup — after the bounded readiness window —
+    // and commits to whichever backend answered. A request that fails
+    // afterwards is reported, not rerouted: switching models mid-answer would
+    // serve a different, lower-quality translation of the same content with
+    // nothing in the output to say so.
     const withGpuBackend = () => {
       setEnv('TRANSLATION_BACKEND', 'auto');
       jest.isolateModules(() => {
@@ -379,8 +456,17 @@ describe('TranslationService', () => {
         init: jest.fn().mockRejectedValue(new Error('NLLB worker failed to start')),
         getLanguageCode: (l) => l
       }));
+      // The GPU probe is retried inside the readiness window before the CPU
+      // fallback even starts, so the timers must run for the CPU attempt to
+      // happen within the test. The expectation is attached before the timer
+      // run: the rejection fires while it advances, and a promise held with
+      // no handler would surface as an unhandled rejection.
+      jest.useFakeTimers();
+      const selection = translationService.selectBackend();
+      const expectation = expect(selection).rejects.toThrow('NLLB worker failed to start');
+      await jest.advanceTimersByTimeAsync(120000);
 
-      await expect(translationService.selectBackend()).rejects.toThrow('NLLB worker failed to start');
+      await expectation;
       expect(translationService.backend).toBeNull();
     });
   });

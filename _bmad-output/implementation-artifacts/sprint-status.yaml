@@ -72,7 +72,7 @@ development_status:
   epic-4: in-progress
   4-1-evaluation-harness-one-runway: done
   4-2-authorization-and-injection-scenario-suite: done
-  4-3-e01-behavior-preservation-a-vs-b: review
+  4-3-e01-behavior-preservation-a-vs-b: done
   4-4-thresholds-and-counter-metrics: backlog
   4-5-e02-the-agent-s-case-b-vs-c: backlog
   4-6-release-readiness-evidence-v09-v07b: backlog

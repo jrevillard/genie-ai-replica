@@ -375,12 +375,13 @@ nginx_image: nginx:1.28-alpine
 
 # Leave vllm_llm_model_id UNDEFINED for auto-discovery (recommended): the
 # services discover whatever model the LLM endpoint serves at /v1/models.
-# CAUTION: with the var undefined, the GPU overlay starts the vLLM
-# container on its OWN template default, ibm-granite/granite-3.3-2b-instruct
-# (docker-compose.gpu.yaml.j2) — a different, smaller model than the
-# previously shipped group_vars default (granite-4.1-8b). Set the var to
-# pin a name (it must match what the GPU actually serves, or every LLM
-# call 404s).
+# CAUTION: on the GPU NODE the var is MANDATORY (issue #2119) — the GPU
+# overlay (docker-compose.gpu.yaml.j2) renders it verbatim into
+# --model/--served-model-name with NO template default, and deploy-gpu.yml's
+# preflight assert fails the deploy before any node change when it is
+# missing. Set it there (group_vars/itu_rtx_gpu_api/vars.yml or
+# vars/rocm_gpu_nodes.yml) to a name the GPU actually serves, or every LLM
+# call 404s.
 # vllm_llm_model_id: ibm-granite/granite-4.1-8b
 vllm_translation_model_id: google/gemma-3-4b-it
 embedding_model_id: BAAI/bge-large-en-v1.5

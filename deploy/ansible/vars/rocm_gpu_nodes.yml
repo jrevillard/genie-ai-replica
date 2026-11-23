@@ -30,6 +30,14 @@ tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
 docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
 nginx_image: nginx:1.28-alpine
 
+# Served model ids — MANDATORY (issue #2119): the GPU overlay renders them
+# into --model / --served-model-name with NO template default and
+# deploy-gpu.yml's preflight asserts both before any node change. These are
+# the template's historical effective values, pinned so the ROCm node's
+# served models are explicit and a dropped value fails the preflight loudly.
+vllm_llm_model_id: ibm-granite/granite-3.3-2b-instruct
+vllm_translation_model_id: google/gemma-3-4b-it
+
 # Host-specific device group GIDs (distro-specific; verified in the
 # install tag against `getent group render video`)
 rocm_render_gid: 990

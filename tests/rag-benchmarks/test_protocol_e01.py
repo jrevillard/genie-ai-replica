@@ -19,7 +19,9 @@ are fixture rows (no deployment case content). Proven here:
 """
 
 import argparse
+import base64
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -434,25 +436,81 @@ def test_the_b_and_c_legs_read_the_same_label_scope():
     assert case["context"]["requested_labels"] == "Forestry"
 
 
+def test_the_b_driver_ships_the_coerced_label_scope(tmp_path):
+    """The B write boundary is the one that matters: the payload the driver
+    ships INTO the container must carry the coerced label list. Without it
+    the in-container driver splits a bare string into characters, the B leg
+    filters on characters, and the report publishes a scope difference that
+    does not exist."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1",))
+    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
+    for entry in entries:
+        if entry["id"] == "c1":
+            entry["context"] = {"requested_labels": "Forestry", "user_id": "u"}
+    set_path.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+
+    class _Transport:
+        """Decodes what the driver ships and answers with one ok row per
+        case — the seam the container side stands in for."""
+
+        def __init__(self):
+            self.shipped: list[dict] = []
+
+        def exec_cmd(self, container, cmd, timeout=600, pass_env=()):
+            quoted = re.findall(r"printf %s '([^']+)'", cmd)
+            if cmd.startswith("base64 -w0"):
+                rows = {
+                    case["id"]: {
+                        "case_id": case["id"],
+                        "status": "ok",
+                        "answer": "an answer",
+                        "abstained": False,
+                        "source_documents": [],
+                        "metadata": {},
+                        "wall_ms": 12.0,
+                    }
+                    for case in self.shipped
+                }
+                payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b"}})
+                return base64.b64encode(payload.encode("utf-8")).decode("ascii")
+            if "python3" in cmd and quoted:
+                self.shipped.extend(json.loads(base64.b64decode(quoted[0]).decode("utf-8"))["cases"])
+            return ""
+
+    transport = _Transport()
+    drivers.run_config_b(set_path, tmp_path / "out-b", transport=transport)
+    shipped = [case for case in transport.shipped if case["id"] == "c1"]
+    assert shipped, "the case never shipped to the container"
+    assert shipped[0]["context"]["requested_labels"] == ["Forestry"]
+
+
 def test_e01_keeps_an_author_key_and_drops_the_credential_names():
-    """The credential rule matches credential NAMES on word boundaries: an
-    `author` key is evidence, not a secret, and must survive."""
+    """The credential rule matches credential NAMES in every spelling: an
+    `author` key is evidence, not a secret, and must survive — while the
+    joined and camelCase auth spellings are credentials and must not."""
     from protocol.e01 import _is_credential_key
 
     assert _is_credential_key("author") is False
     assert _is_credential_key("authors") is False
+    assert _is_credential_key("authorName") is False
     assert _is_credential_key("auth") is True
     assert _is_credential_key("auth_token") is True
     assert _is_credential_key("authorization") is True
     assert _is_credential_key("session") is True
+    # The joined and camelCase spellings name a credential too.
+    assert _is_credential_key("authHeader") is True
+    assert _is_credential_key("authheader") is True
+    assert _is_credential_key("authValue") is True
 
     rows = _b_rows()
-    rows["c1"]["metadata"] = {"author": "Jane Doe", "auth": "LEAK"}
+    rows["c1"]["metadata"] = {"author": "Jane Doe", "auth": "LEAK", "authHeader": "Bearer SUPERSECRET"}
     report = _build(b_rows=rows)
     recorded = report["per_case"]["c1"]["b"]["metadata"]
     assert recorded["author"] == "Jane Doe"
     assert "auth" not in recorded
+    assert "authHeader" not in recorded
     assert "LEAK" not in json.dumps(report)
+    assert "SUPERSECRET" not in json.dumps(report)
 
 
 def test_the_shared_label_coercion_mirrors_the_server_rule():
@@ -467,12 +525,22 @@ def test_the_shared_label_coercion_mirrors_the_server_rule():
     assert as_label_list(["Timber", "Forestry"]) == ["Timber", "Forestry"]
     # An empty label is not a scope (the server drops it too).
     assert as_label_list(["Timber", "", None]) == ["Timber"]
+    # Every FALSY label is dropped (the server drops them all, not just the
+    # empty ones) — a "0" label is a scope the filter can never carry.
+    assert as_label_list(["Timber", 0]) == ["Timber"]
+    assert as_label_list(["Timber", False]) == ["Timber"]
+    # A whitespace-only label is KEPT (the wire is verbatim).
+    assert as_label_list(["Timber", " "]) == ["Timber", " "]
     # An empty value is no label at all.
     assert as_label_list("") == []
     assert as_label_list([]) == []
     assert as_label_list(None) == []
+    assert as_label_list(0) == []
     # Any other scalar is one label, stringified (the server's rule).
     assert as_label_list(5) == ["5"]
+    # The server takes a LIST as-is and treats every other shape as one
+    # scalar — a tuple is not a list there either.
+    assert as_label_list(("Timber", "Forestry")) == ["('Timber', 'Forestry')"]
 
 
 def test_e01_redacts_the_auth_and_session_keys():
@@ -525,20 +593,43 @@ def test_e01_names_the_cases_without_a_measured_effective_filter():
 
 def test_capture_a_seeds_the_bearer_clock_before_the_first_drive(tmp_path, monkeypatch):
     """The capture mirrors the anchor's bearer bootstrap: the in-run refresh
-    clock is seeded ONCE, and a refresh is forced only when no static bearer
-    was seeded. Without the seed the capture's first TTL check refreshes at
-    once and replaces a pre-minted service-account bearer — the A leg would
-    then answer under a different identity than the reference it is compared
-    against."""
+    clock is seeded ONCE, BEFORE the first drive, and a refresh is forced
+    only when no static bearer was seeded. Without the seed the capture's
+    first TTL check refreshes at once and replaces a pre-minted
+    service-account bearer — the A leg would then answer under a different
+    identity than the reference it is compared against."""
     import sys
+    import time
     import types
 
     fake_run_eval = types.ModuleType("run_eval")
     fake_run_eval._token_ts = 0.0
-    fake_run_eval.drive_query = lambda entry: (0.0, '{"response": "parsed"}', 200)
-    fake_run_eval._extract_answer = lambda body: "parsed"
     forced = []
-    fake_run_eval._maybe_refresh_token = lambda force=False: forced.append(force) or True
+    sequence = []
+    clock_at_drive = []
+
+    def _maybe_refresh_token(force=False):
+        """The anchor's own TTL rule: a non-forced refresh happens only when
+        the clock has aged past the TTL — which is exactly what an unseeded
+        clock looks like."""
+        if not force and time.time() - fake_run_eval._token_ts <= 240.0 - 30.0:
+            return False
+        forced.append(force)
+        sequence.append("refresh")
+        fake_run_eval._token_ts = time.time()
+        return True
+
+    def _drive_query(entry):
+        # The clock the capture seeded, as the FIRST drive sees it.
+        clock_at_drive.append(fake_run_eval._token_ts)
+        sequence.append("drive")
+        # The anchor's per-entry TTL check (run_eval's loop does this).
+        _maybe_refresh_token()
+        return (0.0, '{"response": "parsed"}', 200)
+
+    fake_run_eval.drive_query = _drive_query
+    fake_run_eval._extract_answer = lambda body: "parsed"
+    fake_run_eval._maybe_refresh_token = _maybe_refresh_token
     fake_run_eval._refresh_configured = lambda: True
     monkeypatch.setitem(sys.modules, "run_eval", fake_run_eval)
     monkeypatch.setenv("E2E_BEARER_TOKEN", "pre-minted")
@@ -546,17 +637,23 @@ def test_capture_a_seeds_the_bearer_clock_before_the_first_drive(tmp_path, monke
     set_path = _set_file(tmp_path, extra_answerable=("c1",))
     # The DEFAULT seam (no injected query) — the path that drives chatqna.
     drivers.run_config_a_capture(set_path, tmp_path / "out", corpus_fingerprint=CORPUS)
-    assert fake_run_eval._token_ts > 0.0, "the refresh clock was never seeded"
-    # No FORCED refresh: the pre-minted bearer survives (the per-entry TTL
-    # checks are the seam's own).
-    assert [f for f in forced if f] == [], "a pre-minted bearer must not be replaced"
+    assert clock_at_drive, "no case was driven"
+    # The clock was seeded BEFORE the first drive — not after the loop.
+    assert clock_at_drive[0] > 0.0, "the refresh clock was seeded after the first drive"
+    # No refresh at all: the pre-minted bearer survives (the TTL check sees
+    # a fresh clock and skips).
+    assert forced == [], "a pre-minted bearer must not be replaced"
 
     # With no static bearer, the anchor forces ONE refresh up front.
     fake_run_eval._token_ts = 0.0
     forced.clear()
+    sequence.clear()
+    clock_at_drive.clear()
     monkeypatch.delenv("E2E_BEARER_TOKEN")
     drivers.run_config_a_capture(set_path, tmp_path / "out2", corpus_fingerprint=CORPUS)
     assert [f for f in forced if f] == [True], "no static bearer means one forced refresh"
+    # The forced refresh happened BEFORE the first drive (the seed block).
+    assert sequence and sequence[0] == "refresh", "the forced refresh did not run before the drives"
 
 def test_e01_reports_all_five_dimensions_for_both_configs_with_named_surfaces():
     report = _build()
@@ -1628,7 +1725,8 @@ def test_e01_drops_a_credential_named_like_a_token_count():
 def test_e01_names_a_requested_label_that_never_became_a_filter():
     """The requested labels are checked against the filter that was applied —
     a requested label the filter never carried is the finding, not merely an
-    empty request."""
+    empty request. The request-side fact is named beside it: the request
+    carried "Timber", never the requested "Forestry"."""
     captured = _captured_rows()
     captured["c1"]["retrieval_scope"] = {
         "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
@@ -1638,8 +1736,9 @@ def test_e01_names_a_requested_label_that_never_became_a_filter():
     report = _build(captured_rows=captured)
     scope = report["uncontrolled_differences"]["retrieval_scope"]
     assert scope["A"]["cases_whose_requested_labels_never_became_an_effective_filter"] == ["c1"]
-    # The row MEASURED a filter — the sent labels are not the comparison.
-    assert scope["A"]["cases_whose_requested_labels_were_not_sent"] == []
+    # The request never carried the requested label — that is the CAUSE, and
+    # it is true whether or not the response measured a filter.
+    assert scope["A"]["cases_whose_requested_labels_were_not_sent"] == ["c1"]
 
 
 def test_e01_names_a_requested_label_the_filter_dropped_but_the_request_carried():
@@ -1681,6 +1780,33 @@ def test_e01_scope_match_is_null_when_the_comparison_is_partial():
     assert scope["n_scoped_cases"] == {"A": 2, "B": 1}
     assert scope["scope_matched"] is None
     assert scope["B"]["cases_without_a_recorded_scope"] == []
+
+
+def test_e01_scope_match_is_null_when_a_case_measured_no_filter():
+    """A case that recorded a scope but measured NO effective filter leaves
+    the comparison partial — the report publishes null, never a match it did
+    not measure (FR-27). The verdict must not read as a match over the cases
+    it compared, with an unmeasured case counted in."""
+    captured, rows = _scoped_rows("c1", ["Forestry"])
+    # c2 is scoped on A, measured no filter, and has no B counterpart.
+    captured["c2"] = {
+        "case_id": "c2",
+        "status": "ok",
+        "answer": "an answer",
+        "wall_ms": 10.0,
+        "retrieval_scope": {
+            "sent_labels": {"category_labels": ["Timber"], "service_labels": []},
+            "case_requested_labels": [],
+        },
+    }
+    report = _build(captured_rows=captured, b_rows=rows)
+    scope = report["uncontrolled_differences"]["retrieval_scope"]
+    assert scope["A"]["cases_without_a_measured_effective_filter"] == ["c2"]
+    # Every scoped case was compared and the scopes agree — but one case was
+    # never measured, so the verdict is null, not true.
+    assert scope["n_compared_cases"] == 1
+    assert scope["n_scoped_cases"] == {"A": 1, "B": 1}
+    assert scope["scope_matched"] is None
 
 
 def test_e01_scope_mismatch_over_a_partial_comparison_publishes_false():
@@ -1759,3 +1885,8 @@ def test_capture_a_times_the_seam_call_only(tmp_path, monkeypatch):
     )
     # c1 is the first timed case: two reads (start, end) around the seam.
     assert result["rows"]["c1"]["wall_ms"] == 250.0
+    # EVERY timed case measures the same two reads — a case after the first
+    # is not measured differently (a moved or extra read would show here).
+    timed = [row for row in result["rows"].values() if row.get("status") == "ok"]
+    assert len(timed) > 1, "the fixture timed a single case — the check would be vacuous"
+    assert {row["wall_ms"] for row in timed} == {250.0}

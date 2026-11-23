@@ -114,7 +114,7 @@ or with a stamp over another set or corpus, REFUSES the resume — atomic
 fingerprint.
 `protocol/run_protocol.py` gains `capture-a` and `e01`; `E01Refusal` maps to
 the typed refusal exit 1. `evaluator-instructions.md` gains the E01 judging
-section. `tests/rag-benchmarks/test_protocol_e01.py` — 74 tests, every matrix
+section. `tests/rag-benchmarks/test_protocol_e01.py` — 76 tests, every matrix
 row through fakes. CI: the protocol pytest line gains the new file.
 
 **Decisions:**
@@ -132,7 +132,7 @@ row through fakes. CI: the protocol pytest line gains the new file.
 **Verification (this session):** `pytest test_capture_baseline.py
 test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py
 test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py
-test_protocol_e01.py` → 253 passed; `cd eval && pytest -q` → 196 passed WITH
+test_protocol_e01.py` → 255 passed; `cd eval && pytest -q` → 196 passed WITH
 openpyxl installed, 186 passed + 1 skipped without it (the module-level skip drops
 the ten test functions of `test_enrich_xlsx_v2.py`) — and the eval suite is
 ORDER-FLAKY in `eval/test_fanout_parity.py` (pre-existing, recorded in story 4.1:
@@ -380,6 +380,24 @@ see. The chain is at f=2; the round below is the last of the F budget.
 | F58' | The wall-clock test did not pin the seam-only delta — the fake clock held its last tick, so a moved or extra read was invisible | nit | **Fixed**: the clock advances on every read |
 | F59' | The A-side scope lists were not exhaustive — a row with a scope but no measured filter appeared in NO list | important | **Fixed**: the row is named, and it counts into the partial verdict |
 | F60' | The shared coercion was not applied to the B/C write side — a legacy string label made the two legs disagree about the scope they applied | important | **Fixed**: the coercion runs at both write boundaries (the payload the B driver ships, and the C seam's payload) |
+
+**FIX-REVIEW (chain round 3, f=2) over the chain-round-2 corrections — 7
+findings (5 important, 2 nits), ALL fixed; the chain reached its F=3 budget
+without a clean round.** Two of the findings were defects in the code (a
+credential could reach the report; the request-side scope list under-reported
+its cause), the rest were coverage gaps — fixes the suite could not see. The
+corrections below are verified locally and are NOT re-reviewed: the chain is
+exhausted, so the MR stays a draft pending the orchestrator's ruling.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F61' | The `auth` credential marker matched a WORD boundary only — the joined and camelCase spellings (`authHeader`, `authheader`) carried a Bearer value into the report | important | **Fixed**: the marker matches in every spelling; the author-word exception (`author`, `authors`, `authorName`) still survives, and the value's absence is asserted |
+| F62' | The "requested labels were not sent" list was populated only when no effective filter was measured — on the normal path the CAUSE of a scope difference went unnamed | important | **Fixed**: the sent-label comparison runs for every scoped row; the two lists say the two different things (the cause, the outcome) |
+| F63' | The B write boundary was never exercised — the test asserted the helper in isolation, so dropping the coercion call in `run_config_b` left the suite green | important | **Fixed**: the test decodes the payload the driver SHIPS into the container and asserts the coerced list |
+| F64' | The verdict's "a case measured no effective filter" contribution was ungated — dropping it published a scope match over an unmeasured case | important | **Fixed**: a test pins `null` over an unmeasured case (the FR-27 rule) |
+| F65' | The bearer test recorded only the `force` flag — the non-forced TTL refresh (the defect F52' is about) and the ORDER of the bootstrap stayed invisible | important | **Fixed**: the fake mirrors the anchor's TTL rule and the test pins the order (the refresh precedes the first drive) and the untouched pre-minted bearer |
+| F66' | The wall-clock assertion covered only the first timed case | nit | **Fixed**: every timed case is asserted (the holding-clock mutation was verified to fail locally) |
+| F67' | The coercion kept a falsy non-string scalar (`0`, `False`) — a label the server drops, so the report compared a scope the filter can never carry | nit | **Fixed**: every falsy label is dropped, exactly like the server; a whitespace-only label is kept (the wire is verbatim) |
 
 ## Design Notes
 

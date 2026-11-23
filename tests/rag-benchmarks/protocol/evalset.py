@@ -173,16 +173,28 @@ def as_label_list(value) -> list[str]:
     The server's own rule (chatqna's ``core.label_contract``): a string is
     one label (the legacy shape) and an empty label is not a scope. A string
     split into characters would be a silent lie about the scope.
+
+    Mirrors the server EXACTLY: ``_as_label_list`` takes a LIST as-is and
+    treats every other truthy value as ONE scalar, then ``build_filter_labels``
+    drops the FALSY labels (``""``, ``None``, ``0``, ``False``) and stringifies
+    the rest. A whitespace-only label is KEPT (the wire is verbatim).
     """
     if not value:
         return []
-    if isinstance(value, str):
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, str):
         return [value]
-    if isinstance(value, (list, tuple)):
-        # An empty element is not a label (the server drops it too).
-        return [str(item) for item in value if item not in (None, "")]
-    # Any other scalar is one label, stringified (the server's rule).
-    return [str(value)]
+    else:
+        # Any other scalar is one label, stringified (the server's rule).
+        items = [value]
+    labels = []
+    for item in items:
+        # A falsy element is not a label (the server drops it too).
+        if not item:
+            continue
+        labels.append(item if isinstance(item, str) else str(item))
+    return labels
 
 
 def base_case_id(case_id: str) -> str:

@@ -53,6 +53,7 @@ without a second gate.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 from . import PROTOCOL_VERSION
@@ -158,9 +159,12 @@ CREDENTIAL_MARKERS = (
     + ("authorization", "session")
 )
 
-# "auth" matches on a WORD boundary: "author" and "authors" are evidence, not
-# credentials.
+# "auth" names a credential wherever it appears — including the JOINED and
+# camelCase spellings ("authHeader", "authheader") that a word-boundary match
+# alone would let through. The exception is the author-word: "author",
+# "authors" and their compounds are evidence, not credentials.
 _WORD_BOUNDARY_MARKERS = ("auth",)
+_AUTHOR_FIRST_WORDS = ("author", "authors", "authorship", "authored")
 
 MEASUREMENT_KEY_NAMES = frozenset(
     {
@@ -190,16 +194,32 @@ _TOKEN_COUNT_SUFFIXES = ("_tokens", "_token_count")
 _CREDENTIAL_QUALIFIERS = ("access", "refresh", "auth", "bearer", "api", "secret", "session", "id_token")
 
 
+def _key_words(key: str) -> list[str]:
+    """The key's words: the separators (snake, kebab, dot, slash, space) and
+    the camelCase humps. The RAW key is split — lowercasing first would
+    flatten the humps and hide the camelCase spelling."""
+    spaced = re.sub(r"[._\-/\s]+", " ", str(key))
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", spaced)
+    return [word for word in spaced.split() if word]
+
+
 def _is_credential_key(key) -> bool:
     """True when the key names a credential. The measurement names are the
     explicit exceptions — they are values the judge needs, not secrets."""
-    name = str(key).lower()
+    raw = str(key)
+    name = raw.lower()
     if name in MEASUREMENT_KEY_NAMES:
         return False
-    if any(marker in name for marker in _WORD_BOUNDARY_MARKERS):
-        parts = name.replace("-", "_").split("_")
-        if "auth" in parts:
-            return True
+    words = _key_words(raw)
+    first_word = words[0].lower() if words else name
+    if (
+        any(marker in name for marker in _WORD_BOUNDARY_MARKERS)
+        # "auth" is a credential marker in every spelling — the joined and
+        # camelCase ones too — unless the name's FIRST word is an author-word
+        # ("author", "authors"): an author is evidence, not a secret.
+        and first_word not in _AUTHOR_FIRST_WORDS
+    ):
+        return True
     if name.endswith(_TOKEN_COUNT_SUFFIXES):
         if any(qualifier in name for qualifier in _CREDENTIAL_QUALIFIERS):
             return True
@@ -762,15 +782,18 @@ def _retrieval_scope_record(captured_rows: dict, b_rows: dict) -> dict:
         sent_labels = _redact_deep(scope.get("sent_labels") or {})
         requested = as_label_list(scope.get("case_requested_labels"))
         sent[case_id] = sent_labels
+        # The request-side fact, independent of what came back: a requested
+        # label the query never SENT is the cause of a scope difference, and
+        # it is true whether or not the response carried a measured filter.
+        if any(label not in _sent_label_set(sent_labels) for label in requested):
+            not_sent.append(case_id)
         effective = _effective_filter_labels(row)
         if effective is None:
             # The response carried no effective filter (an error row, or a
             # capture that lost the field): nothing was measured, so nothing
-            # about the FILTER can be asserted — the requested labels are
-            # compared with the labels the query SENT instead.
+            # about the FILTER can be asserted — only the sent labels are
+            # comparable.
             without_effective.append(case_id)
-            if any(label not in _sent_label_set(sent_labels) for label in requested):
-                not_sent.append(case_id)
             continue
         # The effective filter is a list of label STRINGS — there is no
         # credential key in it to redact.

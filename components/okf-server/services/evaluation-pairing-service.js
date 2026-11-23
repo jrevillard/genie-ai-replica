@@ -171,12 +171,21 @@ function pair({
   // when the head vectors moved. A drift is not a block — the run is real
   // — but it is not comparable either.
   const keys = runKeys || {};
-  let comparable = true;
+  // A carrier that GREW is not a comparable measurement, whatever the
+  // hashes say: the suite scored a SMALLER world than the one measured, and
+  // the extra repositories were never evaluated. The hash comparison usually
+  // catches the same drift, but the tier must stand on its own — a run with
+  // no keys must not be stamped comparable over a different world.
+  let comparable = carrierGrew.length === 0;
   if (suiteContext.repo_set_hash && keys.repo_set_hash && suiteContext.repo_set_hash !== keys.repo_set_hash) {
     reasons.push('repo_set_drift');
     comparable = false;
   }
-  if (suiteContext.head_version_hash && keys.head_version_hash && suiteContext.head_version_hash !== keys.head_version_hash) {
+  if (
+    suiteContext.head_version_hash &&
+    keys.head_version_hash &&
+    suiteContext.head_version_hash !== keys.head_version_hash
+  ) {
     reasons.push('head_version_drift');
     comparable = false;
   }

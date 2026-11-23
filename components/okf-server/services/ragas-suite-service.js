@@ -49,6 +49,12 @@ const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
 // #2061 phase 3 (E-7): the pairing between a suite's binding and a run.
 const pairingService = require('./evaluation-pairing-service');
+// #2061 phase 3 (E-7): the code a SKIPPED question carries. It is NOT a
+// pipeline failure — the question was never attempted, because the
+// repository it was minted from left the carrier. It must therefore never
+// be retried, never be counted as an error, and never be answered: the
+// summary keeps it in its own bucket, so the error count stays honest.
+const SKIPPED_DEPENDENCY_NOT_IN_CARRIER = 'SKIPPED_DEPENDENCY_NOT_IN_CARRIER';
 // ONE rerank client (review !622 round 9, #78662): the private copy moved
 // to ./rerank-client verbatim — batching, pool, retry ladder and all.
 const { rerankTexts } = require('./rerank-client');
@@ -111,7 +117,9 @@ const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '2000
 // the same corpus do not share it by accident.
 const PASSAGE_KEY_CHARS = 120;
 function passageKey(text) {
-  const norm = String(text || '').replace(/\s+/g, ' ').trim();
+  const norm = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return norm ? norm.slice(0, PASSAGE_KEY_CHARS) : '';
 }
 
@@ -2084,6 +2092,13 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
           })),
           results,
           summary,
+          // #2061 phase 3 (E-7): a re-score measures EXACTLY what the source
+          // run measured — the answers were not regenerated, only re-judged —
+          // so the source's pairing and carrier travel with it. Without them
+          // this doc is a run in the history that says NOTHING about what it
+          // is comparable to, sitting beside runs that do.
+          pairing: (source.payload && source.payload.pairing) || null,
+          carrier: (source.payload && source.payload.carrier) || null,
           // The same coverage block the run path writes. Without it the
           // invalid-run banner's coverage branch can never fire for a
           // re-score — and a re-score that measured only part of the suite
@@ -2189,6 +2204,12 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
   await ensureCollection(db);
   const suite = await loadSuite(db, repoId, suiteKey);
   const metrics = normalizeMetrics(payload.metrics);
+  // #2061 phase 3 (E-7): the PAIRING gate answers the CALLER. A run that
+  // cannot serve what the suite was minted for is REFUSED HERE — a
+  // synchronous 409, before a run doc exists — instead of a run that starts,
+  // animates, and fails a moment later with the same reason.
+  const pairing = pairingFor(suite, repoId, opts);
+  if (pairing.refusal) throw pairing.refusal;
   const inflight = runInFlight.get(suiteKey);
   if (inflight) {
     const err = new Error('a run is already executing for this suite');
@@ -2291,6 +2312,60 @@ function normalizeMetrics(requested) {
   return metrics;
 }
 
+/**
+ * The PAIRING for a run — and the REFUSAL it produces when it cannot be
+ * measured at all.
+ *
+ * ONE helper, TWO callers. `beginRunSuite` asks it BEFORE the run is
+ * accepted, so a refused pairing answers the CALLER synchronously (409)
+ * instead of starting a run that animates and fails a moment later with the
+ * same reason; `runSuite` asks it again while the run executes, so the
+ * record and the gate cannot drift apart.
+ */
+function pairingFor(suite, repoId, opts = {}) {
+  const carrier = opts.carrier || null;
+  const payload = (suite && suite.payload) || {};
+  const suiteContext = payload.context || null;
+  const runContext = carrier && carrier.context ? carrier.context : null;
+  const pairingResult = pairingService.pair({
+    suiteContext,
+    suiteRepoId: repoId,
+    runContext,
+    runCarrier: carrier,
+    runKeys: opts.keys || null,
+    rows: payload.entries || [],
+    experiment: opts.experiment || null
+  });
+  return {
+    carrier,
+    suiteContext,
+    runContext,
+    pairingResult,
+    refusal: pairingRefusal(pairingResult, suiteContext, runContext)
+  };
+}
+
+/** The refusal a blocked pairing produces — or null when it is not blocked. */
+function pairingRefusal(pairingResult, suiteContext, runContext) {
+  if (!pairingResult || pairingResult.status !== 'blocked') return null;
+  const crossContext = pairingResult.reasons.includes('cross_context');
+  const err = new Error(
+    crossContext
+      ? `the benchmark suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
+          `(${suiteContext && suiteContext.version ? `version ${suiteContext.version}` : 'unknown version'}) ` +
+          `and this run serves a different one` +
+          `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
+          'A run may only serve the context it was minted for; a superadmin may record a deliberate ' +
+          'cross-context experiment, and its result is then rendered as NOT comparable.'
+      : `the benchmark suite was minted for ${((suiteContext && suiteContext.repos) || []).length} repository(ies) and this ` +
+          `run serves a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}).`
+  );
+  err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
+  err.status = 409;
+  err.pairing = pairingResult;
+  return err;
+}
+
 async function runSuite(repoId, suiteKey, opts = {}) {
   return withSpan('okf.ragas.run', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -2304,47 +2379,18 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // array rides the EXISTING `context.authorized_graph_names` field, so
     // chatqna and the retriever are UNCHANGED: the served pipeline is the
     // production one, measured over the carrier the context names.
-    const carrier = opts.carrier || null;
     // #2061 phase 3 (E-7): the PAIRING — the suite was minted for a context
     // (or not); this run serves the carrier (or not). The same tiers as the
     // routing suite: a cross-context run is refused unless a superadmin
     // recorded the experiment, and a suite minted for another context may
     // not be measured over this one.
-    const suiteContext = (suite.payload && suite.payload.context) || null;
-    const runContext = carrier && carrier.context ? carrier.context : null;
     const entries = suite.payload.entries;
-    const pairingResult = pairingService.pair({
-      suiteContext,
-      suiteRepoId: repoId,
-      runContext,
-      runCarrier: carrier,
-      runKeys: opts.keys || null,
-      rows: entries,
-      experiment: opts.experiment || null
-    });
-    if (pairingResult.status === 'blocked') {
-      const crossContext = pairingResult.reasons.includes('cross_context');
-      const err = new Error(
-        crossContext
-          ? `the benchmark suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
-              `(${suiteContext && suiteContext.version ? `version ${suiteContext.version}` : 'unknown version'}) ` +
-              `and this run serves a different one` +
-              `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
-              'A run may only serve the context it was minted for; a superadmin may record a deliberate ' +
-              'cross-context experiment, and its result is then rendered as NOT comparable.'
-          : `the benchmark suite was minted for ${(suiteContext.repos || []).length} repository(ies) and this ` +
-              `run serves a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}).`
-      );
-      err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
-      err.status = 409;
-      err.pairing = pairingResult;
-      throw err;
-    }
+    const { carrier, suiteContext, runContext, pairingResult, refusal } = pairingFor(suite, repoId, opts);
+    if (refusal) throw refusal;
     // The questions whose SOURCE repository left the carrier cannot be
     // scored over this corpus — they are skipped, counted, and never
     // silently dropped.
     const skippedEntryIndexes = new Set(pairingResult.skipped_rows.map((r) => r.index));
-    const runnableEntries = entries.filter((_, i) => !skippedEntryIndexes.has(i));
     const carrierGraphNames = carrier && carrier.graph_names ? carrier.graph_names : null;
     const graphNames = serveGraphNames(carrier, await graphNamesFor(db, repoIds));
     if (!graphNames.length) {
@@ -2362,7 +2408,11 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     }
     const results = [];
     let doneCount = 0;
-    const total = runnableEntries.length;
+    // The denominator is EVERY question in this run's scope — the skipped
+    // ones included. A skipped question is not attempted, but it IS part of
+    // what the run covers, and a denominator that left them out while the
+    // counter counted them would let the bar pass 100%.
+    const total = entries.length;
     await report(opts, { phase: 'retrieval', done: 0, total });
     let cursorIdx = 0;
     // TERMINAL answer-leg errors abort the run (David 2026-10-21: "do not
@@ -2420,7 +2470,7 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             abstention_reason: '',
             source_repo_id: e.source_repo_id || null,
             error: {
-              code: 'SKIPPED_DEPENDENCY_NOT_IN_CARRIER',
+              code: SKIPPED_DEPENDENCY_NOT_IN_CARRIER,
               status: null,
               message: 'not attempted — the repository this question was minted from is not in the carrier'
             }
@@ -2524,7 +2574,17 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // by now, and a sequential single-flight retry is the politest possible
     // shape. A row that fails again keeps its error and still counts against
     // validity — honesty is not traded away for completeness.
-    const erroredIdx = results.reduce((acc, r, i) => (r && r.error ? [...acc, i] : acc), []);
+    // #2061 phase 3 (E-7): a SKIPPED question is NOT an errored row. It
+    // did not die on a transient infra error — it was never attempted,
+    // because the repository it was minted from left the carrier. Retrying
+    // it would answer it over a corpus it was never minted against, which
+    // is the one thing the pairing exists to prevent; and it would replace
+    // the row's "not attempted" record with an answer, so the run doc would
+    // claim a row was skipped while showing it answered.
+    const erroredIdx = results.reduce(
+      (acc, r, i) => (r && r.error && r.error.code !== SKIPPED_DEPENDENCY_NOT_IN_CARRIER ? [...acc, i] : acc),
+      []
+    );
     if (erroredIdx.length && !abortErr && !userCancelledRun.has(opts.runKey)) {
       logger.info('ragas-suite.run_completeness_sweep', {
         repo_id: repoId,
@@ -3011,15 +3071,18 @@ function rowWasJudged(r) {
  * The population is the IN-SCOPE rows. An out-of-scope row is a control:
  * deliberately unanswerable, kept for contrast, "never counted as a failure,
  * a control and not a result" (the guide). It must therefore sit in NONE of
- * the four buckets, in NONE of the means, and in NONE of the coverage
+ * the five buckets, in NONE of the means, and in NONE of the coverage
  * denominators. Mixing the two populations is what made the panel's outcome
  * bar misreport which rows failed: n_errors and n_abstained counted
  * out-of-scope rows while n_evaluable and failing_count did not, and the
  * panel's client-side subtraction (failing_count − n_abstained) subtracted
  * a decline that was never judged in the first place.
  *
- * The four buckets now partition the in-scope rows exactly, each row in
+ * The five buckets now partition the in-scope rows exactly, each row in
  * exactly one:
+ *   skipped   — the question was NOT ATTEMPTED (its source repository left
+ *               the carrier); never judged; NOT an error — the pipeline never
+ *               failed, and it is never retried
  *   error     — the pipeline failed; no answer; never judged
  *   abstained — the answerer declined; NEVER judged (2026-10-27: an
  *               abstention is not an answer — the refusal is not submitted
@@ -3037,6 +3100,7 @@ function summarizeRun(suite, results, metrics) {
   const inScope = results.filter((r) => !(byId.get(r.id) || {}).oos);
   const nOos = results.length - inScope.length;
   let nErrors = 0;
+  let nSkipped = 0;
   let nAbstained = 0;
   // A decline was HISTORICALLY two states: arrived with no answer (never
   // judged — no score, out of the averages, coverage-reducing) or arrived
@@ -3061,6 +3125,14 @@ function summarizeRun(suite, results, metrics) {
     }
     const judged = rowWasJudged(r);
     if (r.error) {
+      // A question that was NOT ATTEMPTED is not a pipeline failure: it was
+      // skipped because the repository it was minted from left the carrier.
+      // It is its own bucket — "not measured", never a zero and never an
+      // error, because neither claim is true of it.
+      if (r.error.code === SKIPPED_DEPENDENCY_NOT_IN_CARRIER) {
+        nSkipped += 1;
+        continue;
+      }
       nErrors += 1;
       continue;
     }
@@ -3097,6 +3169,7 @@ function summarizeRun(suite, results, metrics) {
   return {
     n,
     n_errors: nErrors,
+    n_skipped: nSkipped,
     n_abstained: nAbstained,
     n_abstained_unjudged: nAbstainedUnjudged,
     n_evaluable: inScope.length,

@@ -1,6 +1,6 @@
 # #2061 — OKF Testing Lab: group-scoped evaluation (Phased epic)
 
-**Status:** IN PROGRESS (2026-11-22) — Phase 1 code complete and green; the phase lands as one MR, verified on the local build before merge. Phase 2 next.
+**Status:** IN PROGRESS (2026-11-23) — Phases 1, 2 and 3 code complete and green; each phase lands as its own MR, verified on the local build before merge. Phase 4 next.
 **Issue:** https://opensource.unicc.org/un/itu/genie-ai/-/issues/2061
 **Branch:** `feat/okf-testing-lab-scoped-eval`, off `origin/main` (`56d87e763`).
 **Worktree:** `.claude/worktrees/okf-lab-scoped-eval`.
@@ -13,7 +13,7 @@ and is verified before the next begins.
 |---|---|---|
 | 1 | E-3 pair-level reporting + F7 steal accounting + F6 knob unification + the blank-principal fix | CODE COMPLETE — verification green |
 | 2 | E-1 Evaluation Context object + E-2 carrier-faithful head testing + E-4 carrier substitution | CODE COMPLETE on `feat/okf-lab-eval-context` — E-1 + E-2 + E-4 (the serve carrier and the source attribution). E-4's remaining half (the suite-side binding and the generation pool) is E-7's, Phase 3 |
-| 3 | E-7 context-native generation + suite binding | pending |
+| 3 | E-7 context-native generation + suite binding | CODE COMPLETE on `feat/okf-lab-context-native` — the suite is minted FOR a context, the run is paired with it, and the boundary verdict is the evidence a scoped evaluation exists to produce. The Lab UI wave rides Phase 4 |
 | 4 | E-4 attribution metrics + E-5 evidence-grade run records | pending |
 | 5 | E-6 offline harness parity + the tenant-segment decision | pending |
 
@@ -430,7 +430,7 @@ work issue, all related to the epic:
 | Phase | Issue | Work | Status |
 |---|---|---|---|
 | 2 | **#2101** | E-1 + E-2 + E-4 | `status::in-progress` (MR !1043) |
-| 3 | **#2102** | E-7 — context-native generation + suite binding | `status::backlog` |
+| 3 | **#2102** | E-7 — context-native generation + suite binding | `status::in-progress` (branch `feat/okf-lab-context-native`) |
 | 4 | **#2103** | E-5 — evidence-grade run records + the attribution metrics | `status::backlog` |
 | 5 | **#2104** | E-6 + the tenant decision | `status::backlog` |
 
@@ -537,3 +537,79 @@ violations for the source branch only**. Measured, not assumed:
 approval on the license policy, it is Jérôme's to give — the MR author
 cannot approve their own MR (author-approval-prevention), which is the
 second half of the same documented rule.
+
+## Phase 3 — E-7: context-native generation + suite binding (2026-11-23, branch `feat/okf-lab-context-native`)
+
+**Status: code complete, verification green.** okf-server **2551 tests green** (49 new in
+the branch). The task-by-task table and the full review rounds live in the phase-3 artifact
+(`issue-2102-testing-lab-context-native-generation.md`); this is the epic-level summary.
+
+### What landed
+
+| Epic item | What it does | Where |
+|---|---|---|
+| **E-7** | The suite is MINTED FOR a context: the confusable rivals are the carrier's repositories, the abstention probes come from the EXCLUDED set, and every row carries `intended_carrier` (`in`/`out`) as PROVENANCE — which pool the row was minted from, never a subject label. The RAGAS pool is the carrier's (the caller's list REPLACES it, never widens it) and every question carries the repository it was minted from ("not measured" is null). A suite and a run are now **paired**: a bound suite may only be measured over the context it was minted for; a pool that no longer holds is refused; a row whose rival or source repository left the carrier is skipped WITH A REASON (never silently dropped); a carrier that grew is flagged. Comparability rests on TWO hashes — the serving set's and the head vectors' — never the context version alone, because the serving set refreshes on a timer and a re-built head moves the measurement without moving the graph. The new **boundary verdict** (`held` / `breached`) is the evidence a scoped evaluation exists to produce: did the group's scope hold? Suites minted before contexts existed are diagnostic, and a superadmin may bind one EXPLICITLY to the OPEN context — never automatically. And the Lab's chunk probe now **mirrors the retriever**: a claimed head skips the probe and the claimed graphs ARE the selection (`ROUTE_HEADS_SUPERSEDE`) — closing E-2's outstanding acceptance box, so the Lab stops measuring a leg production never runs. | `services/evaluation-pairing-service.js` (new), `services/evaluation-context-service.js`, `services/head-suite-service.js`, `services/ragas-suite-service.js`, `services/head-test-service.js`, `controllers/repository-controller.js`, `routes/repos-routes.js` |
+
+### What phase 3 does NOT do
+
+- **The Lab UI wave is phase 4** (E-5): the context picker, the binding badge and the
+  boundary readout ride the scoped viewer. Phase 3's API exposes everything that wave needs;
+  the phase's visible delta is the live build.
+- **The site page rides phase 4 too** — it documents the DIALOG, and the dialog has no
+  context picker yet. The operator-facing document for this phase is the CHANGELOG entry.
+  Phase 2 set the precedent: it shipped the whole Evaluation Context API with no site-doc
+  change, for the same reason.
+- **E-5 (the evidence-grade run records) and E-6 (the offline harness parity) are phases 4
+  and 5.**
+
+### The review rounds (2026-11-23)
+
+A `/security-review` and a `/code-review` (high) of the phase-3 diff, run TWICE — the
+second time over the first round's fixes. Every finding is accounted for — none is deferred
+or silently dropped.
+
+- **The superadmin rebind was unreachable.** The gate read `resolved.open_context`, a flag
+  no writer ever persisted, so every bind was refused with `409 REBIND_NOT_OPEN_CONTEXT` and
+  the `eval_context.suite_bind` audit row was structurally unreachable. The gate had been
+  tested against a document shape production can never produce, which is why the whole suite
+  was green over a dead feature. **FIXED:** openness is derived from the PERSISTED INPUTS
+  (the effective scope list and the group references), and the snapshot records the flag.
+  RED proof: 4 failures before the fix, green after.
+- **The 409 named repositories the caller may not traverse — FALSE POSITIVE, justified in
+  writing.** The ids it names are a strict subset of the suite's OWN stored snapshot
+  (`payload.context.repos`), which the same principal can already read — the suite is
+  read-scoped on the very repository the run route is admin-scoped on — and the suite payload
+  carried every competitor's NAME (`sibling_names`) before this phase. No new disclosure.
+- **The staleness refusal named repositories outside the caller's reach — FIXED** (it was
+  below the reporting threshold, and it was fixed anyway). The `EVAL_CONTEXT_STALE` refusal
+  now WITHHOLDS the names of repositories the caller may not traverse and reports the count;
+  the check itself still runs over the context's full frozen set, because narrowing first
+  would hide a stale repository from the gate.
+
+The second round (F5–F12 in the phase-3 artifact) found eight more, all FIXED or justified:
+
+- **The RAGAS completeness sweep re-answered a SKIPPED question** — the sweep retries every
+  row carrying an `error`, and a skipped row carries one, so the run doc claimed a row was
+  skipped while showing it answered and judged, over a corpus it was never minted against.
+  The skip now has its own code and the sweep excludes it.
+- **A skipped question was counted as an ERROR, and the progress denominator EXCLUDED the
+  skipped rows** — so the summary said the benchmark broke when a question had merely not
+  been measurable, and the progress bar could pass 100%. The buckets now partition the
+  in-scope rows exactly (`n_skipped` is its own bucket) and the denominator covers every
+  question in the run's scope.
+- **A grown carrier was stamped comparable** — `comparable` was computed from the two
+  hashes alone, and the unit test that claimed to cover the tier passed for the wrong reason
+  (its fixture used drifting hash keys). The tier now stands on its own and the fixture
+  uses MATCHING keys. RED proof: with the fix neutralised the test fails
+  `expect(out.comparable).toBe(false)`; restored, the phase-3 suites are 53/53 green.
+- **A refused pairing answered the operator a moment too late** — `beginRunSuite` had
+  already created the run doc and started the worker before the gate refused it. ONE helper
+  now answers the CALLER synchronously (a 409) before a run doc exists, and the gate is
+  asked again inside the run so the record and the gate cannot drift apart. The head suite
+  and the RAGAS suite share the shape.
+- **The head-suite summary did not say how many rows were skipped**, and **a re-scored
+  RAGAS run carried neither the pairing nor the carrier** — a re-score measures exactly what
+  the source measured, so the source's `pairing` and `carrier` travel with it.
+- **The out-set formula in the artifact named the wrong set** — the code always implemented
+  the intended semantics (`caller_traversable − context.resolved.repos`); only the formula
+  was wrong. Corrected in the artifact; the code is unchanged.

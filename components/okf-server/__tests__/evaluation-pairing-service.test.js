@@ -122,7 +122,11 @@ describe('#2061 phase 3 (E-7): the pairing between a suite and a run', () => {
       suiteRepoId: 'r-under',
       runContext: { id: 'ctx-1', version: 1 },
       runCarrier: { repo_ids: ['r-under', 'r-rival', 'r-new'] },
-      runKeys: { repo_set_hash: 'x', head_version_hash: 'y' }
+      // MATCHING keys: the tier under test is the GROWN carrier, so the
+      // hashes must not be what makes the run non-comparable — with
+      // drifting keys this assertion would pass for a different reason than
+      // the one it names, and the tier would never be exercised on its own.
+      runKeys: { repo_set_hash: 'hash-pool', head_version_hash: 'hash-heads' }
     });
     // The run PROCEEDS — the pool held. But the suite scored a smaller world
     // than the one measured, so it is flagged and NOT comparable.
@@ -182,10 +186,7 @@ describe('#2061 phase 3 (E-7): the pairing between a suite and a run', () => {
   });
 
   test('a row dependency is resolved by NAME against the snapshot', () => {
-    const deps = pairing.rowDependencies(
-      { cls: 'confusable', expected_repo: 'Rival' },
-      SNAPSHOT
-    );
+    const deps = pairing.rowDependencies({ cls: 'confusable', expected_repo: 'Rival' }, SNAPSHOT);
     expect(deps).toEqual(['r-rival']);
     // A row with no dependency (a positive, a near-miss, an abstention
     // probe) depends on nothing.

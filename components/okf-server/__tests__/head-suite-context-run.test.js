@@ -69,7 +69,12 @@ function llmResponse(obj) {
 /** A routing result: the under-test wins or does not. */
 function fakeResult(underTestWins, margin = 0.7, siblingCount = 1, claim = 'claimed') {
   return {
-    under_test: { head_score: 0.8, head_rank: underTestWins ? 1 : 2, head_claim: claim, head_claimed: claim === 'claimed' },
+    under_test: {
+      head_score: 0.8,
+      head_rank: underTestWins ? 1 : 2,
+      head_claim: claim,
+      head_claimed: claim === 'claimed'
+    },
     verdict: { under_test_wins_head: underTestWins, margin },
     siblings: Array.from({ length: siblingCount }, (_, i) => ({
       repo_id: `sib${i + 1}`,
@@ -206,7 +211,7 @@ describe('#2061 phase 3 (E-7): the RUN leg of the pairing', () => {
     expect(error.message).toContain('r-rival');
   });
 
-  it("a row whose rival left the carrier is SKIPPED with a reason, and is not run", async () => {
+  it('a row whose rival left the carrier is SKIPPED with a reason, and is not run', async () => {
     const suite = await seedBoundSuite({
       positive: [],
       negative: [

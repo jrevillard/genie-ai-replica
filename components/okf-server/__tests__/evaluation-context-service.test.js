@@ -247,6 +247,27 @@ describe('#2061 E-1: the context is a named, versioned, immutable object', () =>
     expect(writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'eval_context.refresh' }));
   });
 
+  test('the snapshot PERSISTS whether this context is the open one', async () => {
+    // The rebind gate asks "is this the OPEN context?". If that answer only
+    // exists in memory, the gate can never be satisfied by a STORED document
+    // — and the rebind, with its audit trail, is unreachable for every
+    // context that was ever created. The persisted snapshot must carry it.
+    seedServing([servingRow({ repo_id: 'r-a' })]);
+    const open = await evalCtx.createContext(
+      { name: 'open', scopes: [], principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    expect(open.resolved.open_context).toBe(true);
+    const restricted = await evalCtx.createContext(
+      { name: 'analysts', scopes: ['okf:t:r-a:read'], principal_refs: [] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    expect(restricted.resolved.open_context).toBe(false);
+    // A refresh keeps the answer, and carries it with the version bump.
+    const refreshed = await evalCtx.refreshContext(open._key, { actor: { user_id: 'admin-1' } });
+    expect(refreshed.resolved.open_context).toBe(true);
+  });
+
   test('a context with no name is REFUSED (an unnamed principal is not a context)', async () => {
     seedServing([servingRow({ repo_id: 'r-a' })]);
     await expect(evalCtx.createContext({ scopes: [] }, { actor: { user_id: 'admin-1' } })).rejects.toThrow(/name/i);
@@ -517,6 +538,41 @@ describe('#2061 E-1/E-2: a STALE carrier is refused (the frozen graph name is go
     const carrier = await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: true });
     expect(carrier.repo_ids).toEqual(['r-a']);
   });
+
+  test('a stale repository the caller may not traverse is WITHHELD from the refusal', async () => {
+    // The check still SEES it — the context's hash covers the full frozen
+    // set, so a stale restricted repository must still refuse the carrier —
+    // but the refusal must not hand the caller the identity, or the live
+    // graph name, of a repository outside their reach.
+    seedServing([servingRow({ repo_id: 'r-fence-a', acl: { restricted: true } })]);
+    const ctx = await evalCtx.createContext(
+      { name: 'analysts', principal_refs: ['g-fence-a'] },
+      { actor: { user_id: 'admin-1' } }
+    );
+    seedServing([servingRow({ repo_id: 'r-fence-a', acl: { restricted: true }, version: 2 })]);
+
+    let scoped = null;
+    try {
+      await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: false });
+    } catch (e) {
+      scoped = e;
+    }
+    expect(scoped).toBeTruthy();
+    expect(scoped.code).toBe('EVAL_CONTEXT_STALE');
+    expect(scoped.message).not.toContain('fence-a');
+    expect(scoped.message).not.toContain('OKF_fence-a_v2');
+    expect(scoped.message).toMatch(/1 further repository/i);
+
+    // A caller who MAY traverse it is told exactly what is stale.
+    let admin = null;
+    try {
+      await evalCtx.carrierFor(ctx._key, { okfScopes: [], isSuperAdmin: true });
+    } catch (e) {
+      admin = e;
+    }
+    expect(admin).toBeTruthy();
+    expect(admin.message).toContain('OKF_fence-a_v2');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -572,10 +628,7 @@ describe('#2061 phase 3 (E-7): the BINDING — the measured set, the excluded se
     routeQueries([
       [
         'lifecycle_state',
-        [
-          servingRow({ repo_id: 'r-public' }),
-          servingRow({ repo_id: 'r-a', acl: { restricted: true } })
-        ]
+        [servingRow({ repo_id: 'r-public' }), servingRow({ repo_id: 'r-a', acl: { restricted: true } })]
       ],
       [
         'head_version',

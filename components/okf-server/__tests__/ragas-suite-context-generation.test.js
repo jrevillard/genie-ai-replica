@@ -152,11 +152,7 @@ describe('#2061 phase 3 (E-7): the RAGAS suite is minted FOR a context', () => {
   it('every question carries the repository it was minted from', async () => {
     // A pool of BOTH repositories: the questions are told apart by the
     // corpus they were minted from — the stamp comes from the chunk metadata.
-    const { done } = await svc.beginSuiteGeneration(
-      'r-agri',
-      { repo_ids: ['r-legal'] },
-      { actor: { user_id: 'u1' } }
-    );
+    const { done } = await svc.beginSuiteGeneration('r-agri', { repo_ids: ['r-legal'] }, { actor: { user_id: 'u1' } });
     const suite = await done;
     const byQuery = Object.fromEntries(suite.payload.entries.map((e) => [e.query, e]));
     expect(byQuery['When should tomatoes be planted?'].source_repo_id).toBe('r-agri');

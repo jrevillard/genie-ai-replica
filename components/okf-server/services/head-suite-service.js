@@ -228,7 +228,18 @@ async function loadSiblingContext(db, underTestId, opts = {}) {
   return cursor.all();
 }
 
-function suitePrompt(repo, fm, siblings, nPositive, nNegative, topics, nNearMiss, nMeta = 3, nAbstention = 0, outSiblings = []) {
+function suitePrompt(
+  repo,
+  fm,
+  siblings,
+  nPositive,
+  nNegative,
+  topics,
+  nNearMiss,
+  nMeta = 3,
+  nAbstention = 0,
+  outSiblings = []
+) {
   const siblingText = siblings.length
     ? siblings.map((s) => `- "${s.name}"\n  ${String(s.text || '').slice(0, 400)}`).join('\n')
     : '(no other repository currently has a vectorized head)';
@@ -642,7 +653,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         const content = resp.data && resp.data.choices && resp.data.choices[0] && resp.data.choices[0].message;
         const parsed = parseJsonObject(content && content.content);
         const before =
-          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length +
+          llm.positive.length +
+          llm.negative.length +
+          llm.near_miss.length +
+          llm.meta.length +
+          llm.off_domain.length +
           llm.abstention.length;
         if (parsed) {
           llm.positive.push(...takeNew(parsed.positive, 'positive'));
@@ -654,7 +669,11 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           keywordsAdd(parsed.keywords);
         }
         const after =
-          llm.positive.length + llm.negative.length + llm.near_miss.length + llm.meta.length + llm.off_domain.length +
+          llm.positive.length +
+          llm.negative.length +
+          llm.near_miss.length +
+          llm.meta.length +
+          llm.off_domain.length +
           llm.abstention.length;
         if (after === before) {
           // No progress this call (LLM repeated/exhausted) — stop; the
@@ -903,7 +922,21 @@ async function bindSuite(repoId, suiteKey, contextId, opts = {}) {
       throw err;
     }
     const contextDoc = await evaluationContextService.getContext(contextId);
-    if (!contextDoc.resolved || contextDoc.resolved.open_context !== true) {
+    // Is this the OPEN context? The definition: it names NO scope and NO
+    // group, so it resolves to the deployment's default posture. The answer
+    // is read from the PERSISTED INPUTS - the effective scope list and the
+    // group references, the two fields the resolution is derived from - and
+    // never from a flag that only exists in memory: a gate that reads such a
+    // flag can never be satisfied by a stored document, and the rebind (with
+    // its audit trail) would be unreachable for every context ever created.
+    const resolvedBlock = contextDoc.resolved || null;
+    const isOpenContext =
+      !!resolvedBlock &&
+      Array.isArray(resolvedBlock.scopes) &&
+      resolvedBlock.scopes.length === 0 &&
+      Array.isArray(contextDoc.principal_refs) &&
+      contextDoc.principal_refs.length === 0;
+    if (!isOpenContext) {
       const err = new Error(
         `the evaluation context "${contextDoc.name}" is not the OPEN context, and a suite minted ` +
           'against the whole deployment can only honestly be bound to the OPEN context — a restricted ' +
@@ -1836,6 +1869,63 @@ async function probeSuiteQuery(repoId, suiteKey, payload = {}, opts = {}) {
 
 // ---------- public: run ----------
 
+/**
+ * The PAIRING for a run — and the REFUSAL it produces when it cannot be
+ * measured at all.
+ *
+ * ONE helper, TWO callers. `beginRunSuite` asks it BEFORE the run is
+ * accepted, so a refused pairing answers the CALLER synchronously (409)
+ * instead of starting a run that animates and fails a moment later with the
+ * same reason; `runSuite` asks it again while the run executes, so the
+ * record and the gate cannot drift apart. The refusal is built HERE, so both
+ * callers say the same thing.
+ */
+function pairingFor(suite, repoId, opts = {}) {
+  const carrier = opts.carrier || null;
+  const payload = (suite && suite.payload) || {};
+  const suiteContext = payload.context || null;
+  const runContext = carrier && carrier.context ? carrier.context : null;
+  const pairingResult = pairingService.pair({
+    suiteContext,
+    suiteRepoId: repoId,
+    runContext,
+    runCarrier: carrier,
+    runKeys: opts.keys || null,
+    rows: [...(payload.positive || []), ...(payload.negative || [])],
+    experiment: opts.experiment || null
+  });
+  return {
+    carrier,
+    suiteContext,
+    runContext,
+    pairingResult,
+    refusal: pairingRefusal(pairingResult, suiteContext, runContext)
+  };
+}
+
+/** The refusal a blocked pairing produces — or null when it is not blocked. */
+function pairingRefusal(pairingResult, suiteContext, runContext) {
+  if (!pairingResult || pairingResult.status !== 'blocked') return null;
+  const crossContext = pairingResult.reasons.includes('cross_context');
+  const err = new Error(
+    crossContext
+      ? `the suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
+          `(${suiteContext && suiteContext.version ? `version ${suiteContext.version}` : 'unknown version'}) ` +
+          `and this run measures over a different one` +
+          `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
+          'A run may only measure the context it was minted for; a superadmin may record a ' +
+          'deliberate cross-context experiment (allow_cross_context + a reason), and its result ' +
+          'is then rendered as NOT comparable.'
+      : `the suite was minted for ${((suiteContext && suiteContext.repos) || []).length} repository(ies) and this run ` +
+          `measures over a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}). ` +
+          'The run would score a corpus the suite was never minted against, so it is refused.'
+  );
+  err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
+  err.status = 409;
+  err.pairing = pairingResult;
+  return err;
+}
+
 async function runSuite(repoId, suiteKey, opts = {}) {
   return withSpan('okf.headsuite.run', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -1860,42 +1950,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // the evaluated principal traverses. The prefetched sibling list is the
     // race's universe, so it is the list that must be narrowed — narrowing it
     // later, after the prefetch, would race against the whole deployment.
-    const carrier = opts.carrier || null;
     // #2061 phase 3 (E-7): the PAIRING. The suite was minted for a context
     // (or not); this run measures over a carrier (or not). The pairing says
     // whether the two are about the same thing — and refuses when they are
     // not, rather than scoring a corpus the suite never saw.
-    const suiteContext = suite.payload.context || null;
-    const runContext = carrier && carrier.context ? carrier.context : null;
-    const pairingResult = pairingService.pair({
-      suiteContext,
-      suiteRepoId: repoId,
-      runContext,
-      runCarrier: carrier,
-      runKeys: opts.keys || null,
-      rows: [...(suite.payload.positive || []), ...(suite.payload.negative || [])],
-      experiment: opts.experiment || null
-    });
-    if (pairingResult.status === 'blocked') {
-      const crossContext = pairingResult.reasons.includes('cross_context');
-      const err = new Error(
-        crossContext
-          ? `the suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
-              `(${suiteContext && suiteContext.version ? `version ${suiteContext.version}` : 'unknown version'}) ` +
-              `and this run measures over a different one` +
-              `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
-              'A run may only measure the context it was minted for; a superadmin may record a ' +
-              'deliberate cross-context experiment (allow_cross_context + a reason), and its result ' +
-              'is then rendered as NOT comparable.'
-          : `the suite was minted for ${(suiteContext.repos || []).length} repository(ies) and this run ` +
-              `measures over a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}). ` +
-              'The run would score a corpus the suite was never minted against, so it is refused.'
-      );
-      err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
-      err.status = 409;
-      err.pairing = pairingResult;
-      throw err;
-    }
+    const { carrier, suiteContext, runContext, pairingResult, refusal } = pairingFor(suite, repoId, opts);
+    if (refusal) throw refusal;
     // The rows whose dependency left the carrier: they cannot be scored, so
     // they are skipped — counted, with a reason, never silently dropped.
     const skippedIndexes = new Set(pairingResult.skipped_rows.map((r) => r.index));
@@ -1912,8 +1972,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // set IS the scoring set and not merely one that happened to be in
     // force while the run went on.
     const knobs = routeKnobs();
-    const allRows = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
-    // The skipped rows are NOT run — and the coverage says so.
+    const allRows = [
+      ...suite.payload.positive.map((q) => ({ ...q })),
+      ...suite.payload.negative.map((q) => ({ ...q }))
+    ];
+    // The skipped rows are NOT run — the summary says how many, and the
+    // pairing block names each one and why.
     const all = allRows.filter((_, i) => !skippedIndexes.has(i));
     const skippedRows = pairingResult.skipped_rows.map((r) => ({
       query: (allRows[r.index] || {}).query || null,
@@ -2077,7 +2141,10 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       repo_id: repoId,
       repo_name: repo.name || null,
       siblings: prefetched.siblings || [],
-      knobs
+      knobs,
+      // The rows that were NOT run: a reader of the summary alone must be
+      // able to tell a two-row suite from a three-row suite that lost one.
+      skipped: skippedRows.length
     });
     // 1-8g-v: async runs hand the key in (the placeholder doc was saved at
     // begin); sync callers (tests) let it mint as before.
@@ -2220,6 +2287,13 @@ async function beginRunSuite(repoId, suiteKey, opts = {}) {
     err.status = 404;
     throw err;
   }
+  // #2061 phase 3 (E-7): the PAIRING gate answers the CALLER. A run that
+  // cannot measure what the suite was minted for is REFUSED HERE — a
+  // synchronous 409, before a run doc exists — instead of a run that starts,
+  // animates, and fails a moment later with the same reason in a place the
+  // operator has to go looking for.
+  const pairing = pairingFor(suite, repoId, opts);
+  if (pairing.refusal) throw pairing.refusal;
   const inflight = suiteRunInFlight.get(suiteKey);
   if (inflight) {
     const err = new Error('a run is already executing for this suite');
@@ -2686,6 +2760,9 @@ function summarizeRun(results, ctx = {}) {
 
   return {
     n_queries: results.length,
+    // The rows that were skipped — they were NOT run, and they are not in
+    // n_queries. "Not measured" is never a zero.
+    n_skipped: Number(ctx.skipped) || 0,
     n_errors: results.length - done.length,
     sibling_count: siblingCount,
     positive_total: positives.length,

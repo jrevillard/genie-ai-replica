@@ -22,7 +22,13 @@ names repositories the caller cannot read and the suite becomes a covert exfiltr
 
 ### The `out` set is the CONTEXT's intent, filtered by the caller's authority
 
-`out_set = (context.resolved.repos − carrier.repos) ∩ caller_traversable`
+`out_set = caller_traversable − context.resolved.repos`
+
+— what the caller MAY read that the context does NOT name. (Corrected 2026-11-23: the
+formula first written here was `(context.resolved.repos − carrier.repos) ∩ caller_traversable`,
+which names the wrong set — the repositories the caller may NOT traverse, a set that is
+EMPTY by construction, because the carrier is the frozen set narrowed to the caller. The
+code always implemented the intended semantics; only this formula was wrong. See F12.)
 
 - For a **superadmin** (the Lab's population): everything the group cannot see — the meaningful set.
 - For a **repo-scoped admin**: ∅ — they may not know the excluded repositories exist, and the
@@ -95,8 +101,9 @@ fixture, run against the running service, showing the boundary metric.
 
 ## Global constraints
 
-- **Scrub constraint (standing, every artifact):** no deployment-name mentions, no Muslim terms, no
-  shia/sunni example — in docs, MR descriptions, commit messages and code strings.
+- **Scrub constraint (standing, every artifact):** no deployment-name mentions and no
+  religious-affiliation terms or worked examples — in docs, MR descriptions, commit messages
+  and code strings.
 - **No `Co-Authored-By` and no Claude/Anthropic mention in commit messages** (grep before every
   commit, and after every push).
 - **Coverage must never decrease** (jest `--coverage`, compared with the baseline on `main`).
@@ -135,7 +142,9 @@ fixture, run against the running service, showing the boundary metric.
   A repo with no head contributes `repo_id:` — a missing head is a fact, not an absence.
 - `bindingFor(contextId, caller)` →
   `{ context: {id, version, hash}, carrier, out_set, repos, repo_set_hash, head_version_hash }`
-  where `out_set` is `(context.resolved.repos − carrier.repos) ∩ caller_traversable`.
+  where `out_set` is `caller_traversable − context.resolved.repos` — what the caller may
+  read that the context does NOT name (the excluded set the abstention probes are minted
+  from).
 
 **Consumes:** `carrierFor` (phase 2), `resolveGraphSet` (the caller's authority).
 
@@ -218,3 +227,166 @@ context is the permitted rebind target) and audits it.
 - `site/content/en/docs/knowledge-base/testing-lab.md` — the documented behaviour.
 - The epic artifact (`issue-2061-testing-lab-scoped-evaluation.md`) — the phase-3 delivery record.
 - This artifact — the checkboxes ticked as they land.
+
+---
+
+## Delivery record (2026-11-23)
+
+**Status: CODE COMPLETE, verification green.** okf-server **2551 tests green** (49 new in
+the branch: 11 pairing + 6 head-suite generation + 9 head-suite run + 4 bind + 4 RAGAS
+generation + 4 RAGAS run + 4 evaluation-context + 3 head-test supersede + 4 more).
+
+**The gates, measured on the branch.** okf-server `eslint .` → no issues; the component's
+own `prettier --check "**/*.js"` → clean (the eight phase-3 files were the only ones the
+gate saw, and they are formatted); the full suite → 2551 green, 0 failed; the component's
+coverage totals → statements **88.08%**, branches **75.40%**, functions **89.11%**,
+measured the same way as the base (no coverage decrease).
+
+| Task | What landed | Where |
+|---|---|---|
+| T1 | The binding primitive: `headVersionHash`, `headVersionsFor`, `narrowCarrier`, `carrierFor`, `bindingFor` | `services/evaluation-context-service.js` |
+| T2 | The head suite minted for a carrier: the rivals are the carrier's, the abstention probes come from the excluded set, `intended_carrier` on every row, the snapshot stored | `services/head-suite-service.js` |
+| T3 | The RAGAS suite minted for a carrier: the pool REPLACED (never widened), the source stamps per question | `services/ragas-suite-service.js` |
+| T4 | The pairing gate + the boundary metric | `services/evaluation-pairing-service.js` (new), `services/head-suite-service.js` |
+| T5 | The supersede modelling: the Lab's probe leg mirrors the retriever's | `services/head-test-service.js` |
+| T6 | The migration: unbound suites are diagnostic, the explicit superadmin rebind | `services/head-suite-service.js`, `controllers/repository-controller.js`, `routes/repos-routes.js` |
+| T7 | The wiring, the CHANGELOG, the artifacts | `controllers/repository-controller.js`, `CHANGELOG.md`, this artifact, the epic artifact |
+
+### The review round (2026-11-23) — every finding, and where it ended
+
+A `/security-review` of the full diff and a `/code-review` (high) of the full diff were run
+against the branch. Every finding ends as FIXED, FALSE-POSITIVE (justified in writing) or
+RISK-ACCEPTED — none is deferred or silently dropped.
+
+**F1 — "the 409 names the repositories the caller may not traverse" (HIGH, reported) —
+FALSE POSITIVE (justified), no code change.** The `missing_pool` list in the refusal
+(`head-suite-service.js:1891`, `ragas-suite-service.js:2336`) is computed as
+`suiteContext.repos − carrierIds` (`evaluation-pairing-service.js:147-148`), so every id it
+names is already in the suite's OWN stored snapshot `payload.context.repos`
+(`head-suite-service.js:834`, `ragas-suite-service.js:1452`) — and the suite document is
+read-scoped on the SAME repository the run route is admin-scoped on (`repos-routes.js:133`
+read vs `:135` admin). A caller who can trigger the refusal can already read every id the
+refusal names. Before this phase the same document already carried `sibling_names` — the
+NAME of every repository with a head — so the identity of the competitors was never private
+to the suite's readers. The finding adds no new disclosure.
+
+**F2 — "the superadmin rebind is unreachable: `resolved.open_context` is never persisted"
+(HIGH, reported) — FIXED.** `bindSuite` gated the rebind on
+`contextDoc.resolved.open_context === true` (`head-suite-service.js:906`), but
+`createContext` (`evaluation-context-service.js:358-369`) and `refreshContext` (`:453-467`)
+never wrote that field into the persisted `resolved` block — so the flag was always
+`undefined`, every bind was refused (`409 REBIND_NOT_OPEN_CONTEXT`), and the
+`eval_context.suite_bind` audit row was structurally unreachable. The unit test mocked a
+document shape production can never produce, which is why the whole suite was green over a
+dead feature. **FIXED:** the gate now derives openness from the PERSISTED INPUTS — the
+effective scope list and the group references, the two fields the resolution itself is
+derived from — so it is satisfied by every context that was ever created, and the snapshot
+additionally records `open_context`, so the stored document says what it resolved. RED
+proof: with the REAL persisted shape the rebind test failed with "not the OPEN context"
+(4 failures) before the fix and passes after; a new test asserts the persisted flag on
+create AND on refresh.
+
+**F3 — "the staleness refusal names a repository the caller may not traverse" (MEDIUM,
+below the reporting threshold, fixed anyway) — FIXED.** The `EVAL_CONTEXT_STALE` refusal
+enumerated the stale repositories over the context's FULL frozen set — before the caller's
+authority was applied — so a repo-scoped admin naming a context with a stale restricted
+repository learned that repository's NAME and the live graph name it now serves. The check
+must still see the full frozen set (narrowing first would hide a stale repository from the
+gate and let a run measure a set the context's hash does not describe), so the CALLER'S
+AUTHORITY is now resolved first and the refusal WITHHOLDS what is outside the caller's
+reach, reporting the count instead. A caller who may traverse the repository is told
+exactly what is stale, as before. RED proof: the new test failed with the restricted
+repository's name in the message before the fix.
+
+**F4 — "the excluded repositories' names reach the suite's readers" (LOW, considered) —
+FALSE POSITIVE (justified).** The abstention probes' free-text reason can name an excluded
+repository. That is the class the suite payload already had: `sibling_names` carried every
+repository-with-a-head's NAME before this phase, and the excluded set is by construction
+inside the minting caller's own authority (`bindingFor` filters it through
+`resolveGraphSet`'s ACL-filtered rows). A probe that would leak a repository the CALLER
+cannot read is therefore not minted at all — the rule the phase-3 design states and the
+code enforces.
+
+### The second review round (2026-11-23) — the findings the first round's fixes exposed
+
+The first round's fixes were themselves reviewed, and the round after that was read against
+the code as it stood. Every finding ends as FIXED or FALSE POSITIVE — none is deferred.
+F5–F7 were found by me while preparing the live proof and confirmed by the review; F8–F11
+came out of the review.
+
+**F5 — "the completeness sweep re-answered a SKIPPED question" (HIGH) — FIXED.** The RAGAS
+completeness sweep (`ragas-suite-service.js`) retries every row that carries an `error`, so
+that a transient judge failure does not silently shrink a benchmark. A SKIPPED row also
+carries an `error` — so the sweep re-asked it: the run doc then claimed a row was SKIPPED
+while showing it answered and judged (`answer_calls: 2`, `coverage 2/2`), and the question
+was answered over a corpus it was never minted against — the one thing the pairing exists
+to prevent. **FIXED:** the skip carries its own code (`SKIPPED_DEPENDENCY_NOT_IN_CARRIER`)
+and the sweep excludes it. RED proof: the new test asserts one answer for two questions
+and the debug dump showed two before the fix.
+
+**F6 — "a skipped question was counted as an ERROR" (MEDIUM) — FIXED.** "Not measured" was
+folded into the error bucket, so the summary said the benchmark BROKE when the truth was
+that one question could not be scored over this corpus. The five buckets now partition the
+in-scope rows exactly (skipped / error / abstained / failed / answered), and the summary
+carries `n_skipped`.
+
+**F7 — "the progress denominator excluded the skipped rows" (MEDIUM) — FIXED.** The
+retrieval phase's denominator was the RUNNABLE rows while the counter counted every row —
+so a run with a skipped row could push the progress bar past 100%. The denominator is now
+EVERY question in the run's scope.
+
+**F8 — "a grown carrier was stamped comparable" (MEDIUM) — FIXED.** `comparable` was
+computed from the two HASHES alone, so a run whose carrier had GREW past the suite's pool
+was still stamped comparable whenever the hashes happened to match — and the unit test
+that claimed to cover the tier passed for the WRONG reason: its fixture used DRIFTING
+hash keys, so the hash comparison, not the grown carrier, was what made the run
+non-comparable. **FIXED:** the tier stands on its own (`let comparable = carrierGrew.length
+=== 0;`) — a suite that scored a SMALLER world than the one measured is not a comparable
+measurement, whatever the hashes say — and the fixture now uses MATCHING keys, so the
+assertion exercises the tier it names. RED proof: with the fix neutralised the test fails
+`expect(out.comparable).toBe(false)` (Expected: false, Received: true); restored, the
+four phase-3 suites are 53/53 green.
+
+**F9 — "a refused pairing answered the operator a moment too late" (MEDIUM) — FIXED.** The
+pairing gate lived inside `runSuite`, but `beginRunSuite` had already created the run doc
+and started the worker — so a cross-context run answered 202 plus an animation and then
+failed a moment later with the reason in a document the operator has to go looking for.
+**FIXED:** ONE helper (`pairingFor` / `pairingRefusal`) is asked in BOTH places:
+`beginRunSuite` asks it BEFORE the inflight lock and before a run doc exists (a
+synchronous 409 — `CROSS_CONTEXT_BLOCKED` or `PAIRING_BLOCKED`), and `runSuite` asks it
+again while the run executes, so the record and the gate cannot drift apart. The refusal
+is built in ONE place, so both callers say the same thing. Applied to the head suite and
+the RAGAS suite alike.
+
+**F10 — "the head-suite summary did not say how many rows were skipped" (LOW) — FIXED.**
+F6 taught the RAGAS summary the `n_skipped` bucket; the head-suite summary did not learn
+it, so a reader of the summary alone could not tell a two-row suite from a three-row
+suite that lost one. The summary now carries `n_skipped`, and the pairing block names each
+skipped row and why.
+
+**F11 — "a re-scored RAGAS run carried neither the pairing nor the carrier" (MEDIUM) —
+FIXED.** A re-score re-judges the source run's answers — it measures EXACTLY what the
+source measured — but the re-scored doc carried no pairing and no carrier, so it sat in
+the run history saying NOTHING about what it is comparable to, beside runs that said
+everything. The source's `pairing` and `carrier` now travel with it.
+
+**F12 — "the out-set formula names the wrong set" (LOW) — FALSE POSITIVE in the code,
+CORRECTED in the artifact.** The formula written above (`(context.resolved.repos −
+carrier.repos) ∩ caller_traversable`) names the repositories the caller may NOT traverse
+— a set that is EMPTY by construction, because the carrier IS the frozen set narrowed to
+the caller. The code never implemented it: `bindingFor` computes
+`caller_traversable − context.resolved.repos`, which is the intended semantics ("what the
+caller may read but the context does not name"). The formula, not the code, was wrong; the
+formula above is corrected and the code is unchanged.
+
+### The T7 ruling — the site page rides phase 4 (2026-11-23)
+
+`site/content/en/docs/knowledge-base/testing-lab.md` documents the Lab DIALOG, and the
+dialog has no context picker: the phase-3 scope note puts the picker, the binding badge and
+the boundary readout in phase 4 (E-5's scoped viewer). A page that says "pick a context"
+would claim an affordance the code does not have — and phase 1's acceptance criterion 7
+("the Lab's docs no longer claim carrier-faithfulness the code lacks") is the rule that
+says so. Phase 2 set the precedent: it shipped the whole Evaluation Context API with NO
+site-doc change, for exactly this reason. So the phase-3 operator-facing document is the
+CHANGELOG entry, and the site page is rewritten in phase 4 together with the UI it
+describes.

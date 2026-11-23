@@ -83,11 +83,24 @@ beforeEach(() => {
   frontmatterService.vllmChatCompletions.mockResolvedValue(
     llmResponse({ positive: [{ query: 'positive query 0', reason: 'r' }], negative: [], keywords: [] })
   );
+  // The REAL persisted shape: `resolved` carries the EFFECTIVE scopes and the
+  // snapshot — the fields production writes. It does NOT carry a derived
+  // `open_context` flag, so a gate that reads one would refuse every context
+  // that was ever created.
   evaluationContextService.getContext.mockResolvedValue({
     _key: 'ctx-open',
     name: 'Open',
     version: 1,
-    resolved: { open_context: true }
+    scopes: [],
+    principal_refs: [],
+    resolved: {
+      scopes: [],
+      graph_names: ['OKF_ncd_v3'],
+      repos: [{ repo_id: 'me', name: 'NCD Information', graph_name: 'OKF_ncd_v3' }],
+      scope_mode: 'open',
+      resolved_at: '2026-11-23T00:00:00.000Z',
+      hash: 'openh'
+    }
   });
   evaluationContextService.bindingFor.mockResolvedValue(BINDING);
 });
@@ -125,11 +138,21 @@ describe('#2061 phase 3 (E-7): the explicit rebind', () => {
 
   it('REFUSES a target that is not the OPEN context', async () => {
     const suite = await seedUnboundSuite();
+    // A RESTRICTED context: it names a scope, so it is not the open context.
     evaluationContextService.getContext.mockResolvedValue({
       _key: 'ctx-restricted',
       name: 'Analysts',
       version: 2,
-      resolved: { open_context: false }
+      scopes: ['okf:t:r-other:read'],
+      principal_refs: [],
+      resolved: {
+        scopes: ['okf:t:r-other:read'],
+        graph_names: ['OKF_other_v1'],
+        repos: [{ repo_id: 'r-other', name: 'Other', graph_name: 'OKF_other_v1' }],
+        scope_mode: 'open',
+        resolved_at: '2026-11-23T00:00:00.000Z',
+        hash: 'restrictedh'
+      }
     });
     await expect(
       svc.bindSuite('me', suite._key, 'ctx-restricted', { actor: { user_id: 'admin-1' }, isSuperAdmin: true })

@@ -136,11 +136,12 @@ Widget chatBotUnderTest(
   GlobalKey<ChatBotComponentState>? key, {
   http.Client? httpClient,
   String? streamBaseUrl,
+  Function(List<dynamic>)? onRelatedDocumentsUpdate,
 }) => ChatBotComponent(
   key: key,
   userId: 'user-1',
   onRefreshSidebar: () {},
-  onRelatedDocumentsUpdate: (_) {},
+  onRelatedDocumentsUpdate: onRelatedDocumentsUpdate ?? (_) {},
   httpClient: httpClient,
   streamBaseUrl: streamBaseUrl,
 );
@@ -176,6 +177,7 @@ Future<void> pumpChatBot(
   bool settle = true,
   http.Client? httpClient,
   String? streamBaseUrl,
+  Function(List<dynamic>)? onRelatedDocumentsUpdate,
 }) async {
   final homeWith = buildHome ?? (chatbot) => Scaffold(body: chatbot);
   await tester.pumpWidget(
@@ -191,6 +193,7 @@ Future<void> pumpChatBot(
             chatKey,
             httpClient: httpClient,
             streamBaseUrl: streamBaseUrl,
+            onRelatedDocumentsUpdate: onRelatedDocumentsUpdate,
           ),
         ),
         supportedLocales: supportedLocales,

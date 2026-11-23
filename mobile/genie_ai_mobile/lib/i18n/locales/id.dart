@@ -300,6 +300,8 @@ const Map<String, dynamic> idLocale = {
     "faq": "Pertanyaan yang Sering Diajukan",
     "faqTranslationUnavailable":
         "Terjemahan tidak tersedia — versi aslinya dalam bahasa Inggris ditampilkan.",
+    "okfSourceUnavailable": "Sumber ini tidak tersedia untuk dilihat.",
+    "documentOpenError": "Gagal membuka dokumen",
     "tab": {
       "all": "Semua Obrolan",
       "folders": "Folder",

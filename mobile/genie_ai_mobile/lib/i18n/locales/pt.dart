@@ -303,6 +303,8 @@ const Map<String, dynamic> ptLocale = {
     "faq": "Perguntas Frequentes",
     "faqTranslationUnavailable":
         "Tradução indisponível — a versão original em inglês é exibida.",
+    "okfSourceUnavailable": "Esta fonte não está disponível para visualização.",
+    "documentOpenError": "Não foi possível abrir o documento",
     "tab": {
       "all": "Todos os Chats",
       "folders": "Pastas",

@@ -306,6 +306,8 @@ const Map<String, dynamic> enLocale = {
     "faq": "Frequently Asked Questions",
     "faqTranslationUnavailable":
         "Translation unavailable — showing the original English.",
+    "okfSourceUnavailable": "This source is not available to view.",
+    "documentOpenError": "Could not open the document",
     "tab": {
       "all": "All Chats",
       "folders": "Folders",

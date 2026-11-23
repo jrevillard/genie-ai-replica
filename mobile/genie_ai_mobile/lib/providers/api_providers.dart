@@ -6,6 +6,7 @@ import '../config/keycloak_config.dart';
 import '../services/auth/auth_interceptor.dart';
 import '../services/auth/auth_providers.dart';
 import '../services/auth/insecure_http_client.dart';
+import '../services/okf_concept_service.dart';
 
 final authenticatedApiProvider = Provider<ApiClient>((ref) {
   final config = getConfig();
@@ -35,6 +36,15 @@ final authenticatedHttpClientProvider = Provider<http.Client>((ref) {
 
 final backendUrlProvider = Provider<String>((ref) {
   return getConfig().backendUrl;
+});
+
+/// The OKF concept flows (okf-server) — how a concept citation opens,
+/// since an OKF concept has no document-repository file.
+final okfConceptServiceProvider = Provider<OkfConceptService>((ref) {
+  return OkfConceptService(
+    client: ref.watch(authenticatedHttpClientProvider),
+    backendUrl: getConfig().backendUrl,
+  );
 });
 
 final currentUserApiProvider = Provider<CurrentUserApi>((ref) {

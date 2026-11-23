@@ -15,8 +15,10 @@ import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
+import 'package:genie_ai_mobile/design_system/components/ds_modal.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
+import 'package:genie_ai_mobile/utils/okf_citation.dart';
 
 // --- CONDITIONAL IMPORT ---
 import 'package:genie_ai_mobile/components/chat/stub_file_utils.dart'
@@ -258,6 +260,11 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   }
 
   String _getFileFormat(Map<String, dynamic> doc) {
+    // An OKF concept is not a file: it has no extension and no size, so the
+    // extension fallback would render the first four characters of its name.
+    // The badge names the FAMILY instead — the same badge the web shows.
+    if (isOkfConceptCitation(doc)) return 'OKF';
+
     final type = _getDocValue(doc, ['fileType', 'mimeType', 'type', 'format']);
     if (type != null) {
       final s = type.toString();
@@ -319,6 +326,16 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       return;
     }
 
+    // An OKF concept is NOT a repository document: its markdown never becomes
+    // a doc-repo file (content-only chunking), so the `/api/files/<id>/view`
+    // URL is a 404 by construction. A concept citation opens through
+    // okf-server under the caller's own scope — the way the web frontend's
+    // translateSources branch does. Legacy document rows keep the path below.
+    if (isOkfConceptCitation(doc)) {
+      await _openOkfConcept(doc);
+      return;
+    }
+
     final String? fileId = _getDocValue(doc, [
       'id',
       '_id',
@@ -327,31 +344,13 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     ])?.toString();
 
     if (fileId == null) {
-      final tokens = ThemeManager().tokens;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: tokens.surface,
-          content: Text(
-            tr('sidebar.docIdNotFound'),
-            style: TextStyle(color: tokens.fg),
-          ),
-        ),
-      );
+      _showNotice(tr('sidebar.docIdNotFound'));
       return;
     }
 
     final String? token = widget.accessToken;
     if (token == null || token.isEmpty) {
-      final tokens = ThemeManager().tokens;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: tokens.surface,
-          content: Text(
-            tr('sidebar.authError'),
-            style: TextStyle(color: tokens.fg),
-          ),
-        ),
-      );
+      _showNotice(tr('sidebar.authError'));
       return;
     }
 
@@ -370,18 +369,75 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         if (!mounted) return;
-        final tokens = ThemeManager().tokens;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: tokens.surface,
-            content: Text(
-              tr('sidebar.launchError'),
-              style: TextStyle(color: tokens.fg),
-            ),
-          ),
-        );
+        _showNotice(tr('sidebar.launchError'));
       }
     }
+  }
+
+  /// Opens an OKF concept citation: the concept's markdown, rendered in a
+  /// modal. The concept resolves through okf-server (repo_id, concept_id) —
+  /// never through the document repository.
+  ///
+  /// A citation that lost its repo identity (a pre-CAP-1 saved row) resolves
+  /// it live; a concept that cannot be served degrades to an honest notice,
+  /// never a dead link.
+  Future<void> _openOkfConcept(Map<String, dynamic> doc) async {
+    final OkfConceptRef? conceptRef = okfConceptRef(doc);
+    if (conceptRef == null) {
+      _showNotice(tr('sidebar.okfSourceUnavailable'));
+      return;
+    }
+
+    final service = ref.read(okfConceptServiceProvider);
+    try {
+      String repoId = conceptRef.repoId;
+      if (!conceptRef.hasRepoId) {
+        repoId = await service.resolveRepoId(conceptRef.conceptId) ?? '';
+        if (repoId.isEmpty) {
+          _showNotice(tr('sidebar.okfSourceUnavailable'));
+          return;
+        }
+      }
+
+      final concept = await service.fetchConcept(repoId, conceptRef.conceptId);
+      if (concept == null) {
+        _showNotice(tr('sidebar.okfSourceUnavailable'));
+        return;
+      }
+      if (!mounted) return;
+
+      final tokens = ThemeManager().tokens;
+      await DsModal.show<void>(
+        context: context,
+        title: concept.title,
+        size: DsModalSize.lg,
+        content: MarkdownBody(
+          data: concept.body,
+          styleSheet: MarkdownStyleSheet(
+            p: TextStyle(
+              fontSize: tokens.textSm,
+              color: tokens.fg70,
+              height: 1.4,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint("[SIDEBAR] Could not open the OKF concept: $e");
+      if (!mounted) return;
+      _showNotice(tr('sidebar.documentOpenError'));
+    }
+  }
+
+  /// A one-line notice in the interface language.
+  void _showNotice(String message) {
+    final tokens = ThemeManager().tokens;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: tokens.surface,
+        content: Text(message, style: TextStyle(color: tokens.fg)),
+      ),
+    );
   }
 
   // ===========================================================================
@@ -729,46 +785,52 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          title: MarkdownBody(
-            data: item['question'] ?? '',
-            styleSheet: MarkdownStyleSheet(
-              p: TextStyle(
-                fontSize: tokens.textSm,
-                fontWeight: FontWeight.w600,
-                color: tokens.fg,
-              ),
-            ),
-          ),
-          iconColor: tokens.fg50,
-          collapsedIconColor: tokens.fg50,
-          backgroundColor: isDark ? tokens.fg30 : tokens.muted20,
-          childrenPadding: const EdgeInsets.fromLTRB(
-            DsSpacing.md,
-            0,
-            DsSpacing.md,
-            DsSpacing.md,
-          ),
-          children: [
-            MarkdownBody(
-              data: item['answer'] ?? '',
+        // The tile paints its ink on the nearest Material ancestor; the
+        // decorated card above is opaque, so without this Material the tile's
+        // ripple is invisible (and the framework flags the pair in debug).
+        child: Material(
+          type: MaterialType.transparency,
+          child: ExpansionTile(
+            title: MarkdownBody(
+              data: item['question'] ?? '',
               styleSheet: MarkdownStyleSheet(
                 p: TextStyle(
                   fontSize: tokens.textSm,
-                  color: tokens.fg70,
-                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.fg,
                 ),
               ),
-              onTapLink: (text, href, title) {
-                if (href != null) {
-                  launchUrl(
-                    Uri.parse(href),
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-              },
             ),
-          ],
+            iconColor: tokens.fg50,
+            collapsedIconColor: tokens.fg50,
+            backgroundColor: isDark ? tokens.fg30 : tokens.muted20,
+            childrenPadding: const EdgeInsets.fromLTRB(
+              DsSpacing.md,
+              0,
+              DsSpacing.md,
+              DsSpacing.md,
+            ),
+            children: [
+              MarkdownBody(
+                data: item['answer'] ?? '',
+                styleSheet: MarkdownStyleSheet(
+                  p: TextStyle(
+                    fontSize: tokens.textSm,
+                    color: tokens.fg70,
+                    height: 1.4,
+                  ),
+                ),
+                onTapLink: (text, href, title) {
+                  if (href != null) {
+                    launchUrl(
+                      Uri.parse(href),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

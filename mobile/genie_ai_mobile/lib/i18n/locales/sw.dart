@@ -301,6 +301,8 @@ const Map<String, dynamic> swLocale = {
     "faq": "Maswali Yanayoulizwa Mara kwa Mara",
     "faqTranslationUnavailable":
         "Tafsiri hazipatikani — asili ya Kiingereza inaonyeshwa.",
+    "okfSourceUnavailable": "Chanzo hiki hakipatiki kutazamwa.",
+    "documentOpenError": "Imeshindwa kufungua hati",
     "tab": {
       "all": "Gumzo Zote",
       "folders": "Folda",

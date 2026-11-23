@@ -305,6 +305,8 @@ const Map<String, dynamic> deLocale = {
     "faq": "Häufig gestellte Fragen",
     "faqTranslationUnavailable":
         "Übersetzung nicht verfügbar – das englische Original wird angezeigt.",
+    "okfSourceUnavailable": "Diese Quelle kann nicht angezeigt werden.",
+    "documentOpenError": "Dokument konnte nicht geöffnet werden",
     "tab": {
       "all": "Alle Chats",
       "folders": "Ordner",

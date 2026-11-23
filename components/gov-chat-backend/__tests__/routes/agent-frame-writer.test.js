@@ -18,6 +18,7 @@ delete process.env.STREAMING_TRANSLATION_ENABLED;
 
 const { Readable } = require('stream');
 const translationService = require('../../services/translation-service');
+const { createAgenticTranslationLeg } = require('../../services/translation/agentic-translation-leg');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
@@ -84,6 +85,15 @@ jest.mock('../../services/translation-service', () => ({
   init: jest.fn(),
   createMarkdownTranslator: jest.fn(),
   resolveLanguagePair: jest.fn()
+}));
+// The agentic translation leg — the post-stream whole-answer translator on
+// the non-relay terminal. The leg's own suite pins the leg's internals; this
+// suite pins the frame writer's contract (construction args, outcome
+// plumbing, the delivery frame + the persisted status).
+jest.mock('../../services/translation/agentic-translation-leg', () => ({
+  createAgenticTranslationLeg: jest.fn(),
+  translateWholeAnswerWithLeg: jest.requireActual('../../services/translation/agentic-translation-leg')
+    .translateWholeAnswerWithLeg
 }));
 jest.mock('../../services/session-service', () => ({
   getUserSessions: jest.fn(),
@@ -160,6 +170,27 @@ afterEach(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // The leg stub (a SKIP by default — the fail-closed shape): every
+  // non-relay translated request builds one at the terminal, so the suite
+  // owns a sane default; tests that exercise the translate/failed outcomes
+  // override it per leg.
+  createAgenticTranslationLeg.mockImplementation(() => ({
+    configError: 'AGENT_TRANSLATION_MAX_TOKENS',
+    translateFullAnswer: jest.fn().mockResolvedValue({
+      outcome: 'skipped',
+      translated: null,
+      accounting: {
+        backend: 'gpu-vllm',
+        decision: 'skip',
+        status: null,
+        outcome: 'skipped',
+        queryTranslationStatus: 'passthrough_english',
+        usage: null,
+        configError: 'AGENT_TRANSLATION_MAX_TOKENS',
+        mode: 'full-answer'
+      }
+    })
+  }));
   keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
     req.user = { iss_sub: 'http://localhost:8080/realms/genie#user-123', _key: 'user-123' };
     next();
@@ -474,6 +505,29 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     );
   });
 
+  it('the below-reserves warning is memoized — repeated calls log it once, not per call', () => {
+    // The misconfiguration is static for the process: one warning names the
+    // knob, and a per-request warn flood (once per streaming request and
+    // once per JSON turn) never reaches the log pipeline.
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '20000';
+    const { logger } = require('../mocks/shared-lib');
+    let freshContract;
+    jest.isolateModules(() => {
+      // A fresh module registry: the memo flag is module state, so the
+      // assertion owns a fresh one instead of depending on test order. The
+      // virtual shared-lib mock resolves to the suite's shared logger
+      // instance, so the count below reads the fresh module's warnings.
+      freshContract = require('../../services/agent-run-contract');
+    });
+    freshContract.resolveUpstreamTimeoutMs();
+    freshContract.resolveUpstreamTimeoutMs();
+    freshContract.resolveUpstreamTimeoutMs();
+    const warned = logger.warn.mock.calls.filter(
+      ([name]) => name === 'AgentRunContract.upstream_timeout_below_reserves'
+    ).length;
+    expect(warned).toBe(1);
+  });
+
   it('an under-sized configured timeout reads the absorbed default on the wire (deadline AND axios timeout)', async () => {
     setupAgentQuery();
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
@@ -574,6 +628,24 @@ describe('POST /api/queries/stream — pre-stream refusals (JSON, before any SSE
     expect(logger.warn).toHaveBeenCalledWith(
       'AgentRunContract.upstream_body_truncated',
       expect.objectContaining({ status: 503, bytes: expect.any(Number) })
+    );
+  });
+
+  it('a body stream that errors mid-read logs the loss before resolving empty', async () => {
+    // A refusal body that died mid-read resolves the same {text, parsed:null}
+    // shape as an empty one — without this log, "lane full" and "answer lost
+    // in transit" are indistinguishable for an operator debugging a 429.
+    const { EventEmitter } = require('stream');
+    const { logger } = require('../mocks/shared-lib');
+    const { readUpstreamBody } = require('../../services/agent-run-contract');
+    const body = new EventEmitter();
+    const pending = readUpstreamBody(body, 429);
+    body.emit('error', new Error('connection reset mid-body'));
+
+    await expect(pending).resolves.toEqual({ text: '', parsed: null });
+    expect(logger.error).toHaveBeenCalledWith(
+      'AgentRunContract.upstream_body_stream_error',
+      expect.objectContaining({ status: 429, error: 'connection reset mid-body' })
     );
   });
 
@@ -1131,6 +1203,174 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     const frames = parseSSEEvents(response.text);
     const verdict = frames.find((f) => f.type === 'agent_verdict');
     expect(verdict.translation_mode).toBe('none');
+  });
+
+  it('streaming translation OFF: the post-stream translation runs through the agentic leg', async () => {
+    // The leg owns the non-relay whole-answer translation (GPU-only,
+    // residual-budget bounded): constructed at the terminal with the
+    // TERMINAL usage record — the one place it exists — and its V05 status
+    // rides the persisted metadata while the translation frame carries the
+    // delivered text.
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    createAgenticTranslationLeg.mockImplementation(() => ({
+      configError: null,
+      translateFullAnswer: jest.fn().mockResolvedValue({
+        outcome: 'translated',
+        translated: 'Bonjour le monde.',
+        accounting: {
+          backend: 'gpu-vllm',
+          decision: 'translate',
+          status: null,
+          outcome: 'translated',
+          queryTranslationStatus: 'translated',
+          usage: { prompt_tokens: 20, completion_tokens: 10, estimated: false },
+          configError: null,
+          mode: 'full-answer'
+        }
+      })
+    }));
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'DE' }
+    });
+
+    // The leg is constructed with the routing decision, the terminal usage
+    // record and the requested language.
+    expect(createAgenticTranslationLeg).toHaveBeenCalledWith(
+      expect.objectContaining({ routingDecision: 'agentic', runUsage: USAGE_RECORD, targetLanguage: 'de' })
+    );
+    const frames = parseSSEEvents(response.text);
+    expect(frames.find((f) => f.type === 'translation').content).toBe('Bonjour le monde.');
+    const done = frames[frames.length - 1];
+    expect(done.type).toBe('done');
+    // The streaming done always carries the flag: false = no failed
+    // translation (V05).
+    expect(done.translationFailed).toBe(false);
+    // The V05 status lands on the persisted metadata.
+    expect(queryService.finalizeStreamQuery.mock.calls[0][3]).toEqual(
+      expect.objectContaining({ query_translation_status: 'translated' })
+    );
+  });
+
+  it('a failed leg translation reports translationFailed on done; the English answer stands', async () => {
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    createAgenticTranslationLeg.mockImplementation(() => ({
+      configError: null,
+      translateFullAnswer: jest.fn().mockResolvedValue({
+        outcome: 'failed',
+        translated: null,
+        accounting: {
+          backend: 'gpu-vllm',
+          decision: 'translate',
+          status: null,
+          outcome: 'failed',
+          queryTranslationStatus: 'fallback_timeout',
+          usage: { prompt_tokens: 6, completion_tokens: 6, estimated: true },
+          configError: null,
+          mode: 'full-answer'
+        }
+      })
+    }));
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'DE' }
+    });
+
+    const frames = parseSSEEvents(response.text);
+    expect(frames.filter((f) => f.type === 'translation')).toEqual([]);
+    const done = frames[frames.length - 1];
+    expect(done.type).toBe('done');
+    expect(done.translationFailed).toBe(true);
+    expect(queryService.finalizeStreamQuery.mock.calls[0][3]).toEqual(
+      expect.objectContaining({ query_translation_status: 'fallback_timeout' })
+    );
+  });
+
+  it('a skipped leg translation (a missing knob) keeps the English answer, never latched', async () => {
+    // The default beforeEach leg stub IS the skip: the REQUIRED knobs are
+    // unread/unset, the translation cannot be bounded, so it never starts —
+    // V05: a skip is not a failure.
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'DE' }
+    });
+
+    const frames = parseSSEEvents(response.text);
+    expect(frames.filter((f) => f.type === 'translation')).toEqual([]);
+    const done = frames[frames.length - 1];
+    expect(done.type).toBe('done');
+    expect(done.translationFailed).toBe(false);
+    expect(queryService.finalizeStreamQuery.mock.calls[0][3]).toEqual(
+      expect.objectContaining({ query_translation_status: 'passthrough_english' })
+    );
+  });
+
+  it('streaming translation ON: the relay owns the units — the leg is never built', async () => {
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    setupAgentQuery();
+    translationService.init.mockResolvedValue(undefined);
+    translationService.translateMarkdown.mockResolvedValue('bon');
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('text_message_content', { text: 'Hello world. ' }, { seq: 0 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 1 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'DE' }
+    });
+
+    // The relay handled the whole answer: no post-stream translation, no
+    // leg construction (the units run mid-stream, before any usage record
+    // the residual plan could read).
+    expect(createAgenticTranslationLeg).not.toHaveBeenCalled();
   });
 });
 

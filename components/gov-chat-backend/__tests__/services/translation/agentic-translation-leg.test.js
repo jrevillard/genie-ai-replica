@@ -64,7 +64,10 @@ jest.mock('unist-util-visit', () => ({ visit: mockMiniMarkdown.visit }), { virtu
 
 const http = require('http');
 const { logger } = require('../../../shared-lib');
-const { createAgenticTranslationLeg } = require('../../../services/translation/agentic-translation-leg');
+const {
+  createAgenticTranslationLeg,
+  translateWholeAnswerWithLeg
+} = require('../../../services/translation/agentic-translation-leg');
 const { SKIP_STATUSES } = require('../../../services/agent-residual-budget');
 
 describe('agentic translation leg (story 2.10)', () => {
@@ -746,6 +749,75 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(r.accounting.decision).toBe('translate');
       expect(r.accounting.usage).toBeNull();
       expect(chatCalls(calls)).toHaveLength(0);
+    });
+  });
+
+  describe('translateWholeAnswerWithLeg — the whole-answer delivery mapping', () => {
+    // The mapping both post-stream consumers share: one home for the
+    // outcome→delivery contract (mirrors whole-answer.js's {text, failed}
+    // shape plus the V05 status the callers persist).
+    const makeStubLeg = (result) => ({ translateFullAnswer: jest.fn().mockResolvedValue(result) });
+
+    it('a translated outcome delivers the text, never latched', async () => {
+      const leg = makeStubLeg({
+        outcome: 'translated',
+        translated: 'Bonjour le monde.',
+        accounting: { outcome: 'translated', queryTranslationStatus: 'translated', configError: null }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello world.', remainingMs: 5000 });
+      expect(r.text).toBe('Bonjour le monde.');
+      expect(r.failed).toBe(false);
+      expect(r.queryTranslationStatus).toBe('translated');
+      expect(r.accounting).toEqual(expect.objectContaining({ outcome: 'translated' }));
+      expect(leg.translateFullAnswer).toHaveBeenCalledWith({
+        text: 'Hello world.',
+        remainingMs: 5000,
+        signal: undefined
+      });
+    });
+
+    it('a failed outcome latches and delivers nothing', async () => {
+      const leg = makeStubLeg({
+        outcome: 'failed',
+        translated: null,
+        accounting: { outcome: 'failed', queryTranslationStatus: 'fallback_timeout', configError: null }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.failed).toBe(true);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('fallback_timeout');
+    });
+
+    it('a skipped outcome keeps the English answer, never latched (a skip is not a failure)', async () => {
+      const leg = makeStubLeg({
+        outcome: 'skipped',
+        translated: null,
+        accounting: {
+          outcome: 'skipped',
+          queryTranslationStatus: 'passthrough_english',
+          configError: 'AGENT_TRANSLATION_MAX_TOKENS'
+        }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.failed).toBe(false);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('passthrough_english');
+    });
+
+    it('a cancelled outcome keeps the English answer, never latched', async () => {
+      const leg = makeStubLeg({
+        outcome: 'cancelled',
+        translated: null,
+        accounting: { outcome: 'cancelled', queryTranslationStatus: 'fallback_error', configError: null }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, {
+        text: 'Hello',
+        remainingMs: 100,
+        signal: new AbortController().signal
+      });
+      expect(r.failed).toBe(false);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('fallback_error');
     });
   });
 });

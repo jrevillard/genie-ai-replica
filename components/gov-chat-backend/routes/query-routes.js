@@ -392,7 +392,16 @@ module.exports = (queryService) => {
                 queryId,
                 fullResponseText,
                 Date.now() - streamStartTime,
-                interruptedMetadata(capturedMetadata)
+                interruptedMetadata(capturedMetadata),
+                // The options object rides only when the skip is set (the
+                // legacy terminal's same arity rule). No metadata frame
+                // arrived: the save cannot name the session's routed
+                // graphs, and persisting the derived empty set would RESET
+                // a stickiness the session already earned — the sticky set
+                // is left untouched instead. A captured metadata frame
+                // carries the real set and persists (empty-set resets stay
+                // honest for answers chatqna actually routed).
+                ...(capturedMetadata ? [] : [{ skipRoutedGraphs: true }])
               )
               .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }
@@ -635,6 +644,7 @@ module.exports = (queryService) => {
       translator = null,
       skipPostStreamTranslation = false,
       alreadyFailedTranslation = false,
+      translateFullAnswer = null,
       skipRoutedGraphs = false
     } = {}
   ) {
@@ -653,22 +663,48 @@ module.exports = (queryService) => {
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
     // A translation was asked for and the answer was not already delivered in
-    // the target language: the whole answer is translated here. The translator
-    // is the one the request resolved — the languages cannot change between
-    // the start of a request and the end of its answer. The translate →
-    // empty-check → catch core is the shared whole-answer helper; the frame
-    // write and the logging stay here (delivery-mode specific).
+    // the target language: the whole answer is translated here. On the
+    // agentic non-relay terminal the AGENTIC LEG executes it (the caller
+    // passes `translateFullAnswer` — GPU-only, residual-budget bounded); the
+    // legacy terminal keeps the request-resolved translator. The translate →
+    // empty-check → catch core is the shared whole-answer helper (legacy) /
+    // the leg's outcome mapping (agentic); the frame write and the logging
+    // stay here (delivery-mode specific).
     const translationExpected = wantsTranslation(targetLanguage);
     if (!skipPostStreamTranslation && translationExpected && fullResponseText) {
-      const result = await translateWholeAnswer(translator, fullResponseText);
+      let result;
+      try {
+        result = translateFullAnswer
+          ? await translateFullAnswer(fullResponseText)
+          : await translateWholeAnswer(translator, fullResponseText);
+      } catch (error) {
+        // The translation core is fail-soft; a rejection past it (a leg
+        // defect — its own contract resolves every outcome) is still never a
+        // dropped answer: the English text stands and the failure travels
+        // on `done`.
+        result = { text: null, failed: true, error };
+      }
+      if (translateFullAnswer && result.accounting) {
+        // The leg's accounting is the observable record of WHY the answer is
+        // in its language, and the V05 status rides the persisted metadata
+        // (the metadata FRAME is already written — the client reads the
+        // delivery from the translation frame itself).
+        logger.info('QueryService.agentic_translation_accounting', { queryId, accounting: result.accounting });
+        metadata.query_translation_status = result.queryTranslationStatus;
+      }
       if (result.failed) {
-        if (result.error) {
+        const reason = result.error
+          ? result.error.message
+          : result.accounting
+            ? `${result.accounting.outcome} (${result.queryTranslationStatus})`
+            : null;
+        if (reason) {
           // Not an `error` frame. The client treats that as terminal and stops
           // reading, and reports the whole system as down — neither is true when
           // only the translator failed and the answer is complete in English.
           // The outcome travels on `done` instead, where the client already
           // expects the stream to end.
-          logger.warn('QueryService.stream_translation_failed', { queryId, error: result.error.message });
+          logger.warn('QueryService.stream_translation_failed', { queryId, error: reason });
         } else {
           // The model returned nothing. The answer the client already has is
           // the English one; writing an empty translation frame would replace
@@ -679,9 +715,10 @@ module.exports = (queryService) => {
           );
         }
         translationFailed = true;
-      } else if (!res.writableEnded && !res.destroyed) {
+      } else if (result.text && !res.writableEnded && !res.destroyed) {
         // The client may have gone while the translation ran: a frame
-        // written to a response that is over is an error nobody reads.
+        // written to a response that is over is an error nobody reads. (A
+        // skip delivers no translation frame — the English answer stays.)
         res.write(`data: ${JSON.stringify({ type: 'translation', content: result.text })}\n\n`);
       }
     }
@@ -825,30 +862,22 @@ module.exports = (queryService) => {
       const queryData = { ...req.body, userId };
       const targetLanguage = requestedTargetLanguage(queryData);
       // Story 2.4b — the guarded agentic branch decides the language
-      // resolution: the agentic JSON path translates the WHOLE ANSWER here,
-      // post-run (the request-resolved translator rides into createQuery),
-      // while the legacy path only checks the language (chatqna translates
-      // the answer server-side). The routing helper is the ONLY way this
-      // second entry is exposed (AD-9) — the flag-off resolution and the
-      // flag-off createQuery call stay byte-identical.
-      const agenticEntry = isAgentPathEnabled();
-      let refusal;
-      let translator = null;
-      if (agenticEntry) {
-        ({ refusal, translator } = await resolveRequestLanguage(targetLanguage));
-      } else {
-        // The answer of this path is translated by the chatqna service, so
-        // the backend only checks the language — a translator built here
-        // would be one the path never uses.
-        refusal = await refuseUnsupportedLanguage(targetLanguage);
-      }
+      // resolution. BOTH entries only check the language here (an
+      // unsupported one is refused): the agentic JSON path translates the
+      // WHOLE ANSWER post-run through the agentic translation leg (see
+      // runAgentJsonTurn), and the legacy path's answer is translated by the
+      // chatqna service server-side — a request-resolved translator would be
+      // one neither path uses. The routing helper is the ONLY way the agentic
+      // entry is exposed (AD-9).
+      const refusal = await refuseUnsupportedLanguage(targetLanguage);
       if (refusal) {
         return res.status(400).json(refusal);
       }
+      const agenticEntry = isAgentPathEnabled();
       logger.info(`Creating query for user ${userId}`);
       // ONE call: the options exist only on the agentic entry (undefined = no
       // options — the flag-off call reads exactly as before).
-      const options = agenticEntry ? { targetLanguage, translator } : undefined;
+      const options = agenticEntry ? { targetLanguage } : undefined;
       const query = await queryService.createQuery(queryData, { authorization: req.headers.authorization }, options);
       res.status(201).json(query);
     } catch (error) {

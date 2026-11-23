@@ -658,4 +658,32 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
   };
 }
 
-module.exports = { createAgenticTranslationLeg, loadMarkdownLibs };
+/**
+ * The whole-answer delivery one post-stream caller consumes — ONE home for
+ * the outcome→delivery mapping both agentic consumers share (the frame
+ * writer's non-relay terminal and the non-streaming JSON consumer). The
+ * shape mirrors whole-answer.js's `{text, failed}` so the delivery-mode call
+ * sites read the same fields either way, plus the V05 status and the
+ * accounting block the callers persist/log.
+ *
+ * The V05 latch rides `outcome` only: a `failed` translation is the
+ * attempted-and-failed case (`translationFailed` true); `skipped` and
+ * `cancelled` leave the English answer standing, never latched — a skip is
+ * not a failure.
+ *
+ * @param {Object} leg - A leg createAgenticTranslationLeg returned.
+ * @param {Object} params - `{text, remainingMs, signal}` — passed through to
+ *   `translateFullAnswer` verbatim.
+ * @returns {Promise<{text: string|null, failed: boolean, queryTranslationStatus: string, accounting: Object}>}
+ */
+async function translateWholeAnswerWithLeg(leg, { text, remainingMs, signal }) {
+  const result = await leg.translateFullAnswer({ text, remainingMs, signal });
+  return {
+    text: result.outcome === 'translated' ? result.translated : null,
+    failed: result.outcome === 'failed',
+    queryTranslationStatus: result.accounting.queryTranslationStatus,
+    accounting: result.accounting
+  };
+}
+
+module.exports = { createAgenticTranslationLeg, translateWholeAnswerWithLeg, loadMarkdownLibs };

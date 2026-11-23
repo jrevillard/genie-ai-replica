@@ -21,14 +21,21 @@ const { actorFrom } = require('./actor-from');
  * realm role OR a wildcard admin scope. A repo-scoped admin is NOT
  * superadmin here — a context may name ANY repository, so writing one is a
  * deployment-wide power.
+ *
+ * The PREDICATE is exported so the run leg asks the same question in the
+ * same place: the cross-context experiment is a deployment-wide power too.
  */
-function requireSuperadmin(req, res, next) {
-  if (req.okfIsSuperAdmin) return next();
+function isSuperadminCaller(req) {
+  if (req.okfIsSuperAdmin) return true;
   const wildcardAdmin = (Array.isArray(req.okfScopes) ? req.okfScopes : []).some((s) => {
     const p = parseOkfScope(s);
     return !!p && p.repo === '*' && LEVEL_SATISFIES.admin(p.level);
   });
-  if (wildcardAdmin) return next();
+  return wildcardAdmin;
+}
+
+function requireSuperadmin(req, res, next) {
+  if (isSuperadminCaller(req)) return next();
   return res.status(403).json({
     error: 'FORBIDDEN_SCOPE',
     message:
@@ -72,4 +79,4 @@ async function refreshContext(req, res, next) {
   }
 }
 
-module.exports = { requireSuperadmin, createContext, listContexts, getContext, refreshContext };
+module.exports = { requireSuperadmin, isSuperadminCaller, createContext, listContexts, getContext, refreshContext };

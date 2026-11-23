@@ -47,6 +47,8 @@ const frontmatterService = require('./frontmatter-service');
 const modelCache = require('./vllm-model-cache');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
+// #2061 phase 3 (E-7): the pairing between a suite's binding and a run.
+const pairingService = require('./evaluation-pairing-service');
 // ONE rerank client (review !622 round 9, #78662): the private copy moved
 // to ./rerank-client verbatim — batching, pool, retry ladder and all.
 const { rerankTexts } = require('./rerank-client');
@@ -101,6 +103,17 @@ const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RE
 const maxCorpusChunks = () => Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
 const CONTEXT_CHARS = 2000; // per-context cap stored on run rows (xlsx uses answer_first_200 anyway)
 const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '200000', 10);
+
+// #2061 phase 3 (E-7) — the passage key. A corpus document and the passage
+// a question cites are the same text, so the leading characters identify the
+// chunk. The whitespace is normalised because a passage may be re-wrapped on
+// its way through the sidecar; the length is short enough that two chunks of
+// the same corpus do not share it by accident.
+const PASSAGE_KEY_CHARS = 120;
+function passageKey(text) {
+  const norm = String(text || '').replace(/\s+/g, ' ').trim();
+  return norm ? norm.slice(0, PASSAGE_KEY_CHARS) : '';
+}
 
 // The DECLARED serve posture, recorded on every run doc so the record is
 // self-attributing: a mass-abstention run carries the configuration it ran
@@ -1095,7 +1108,29 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   genInFlight.assertFree(repoId, {
     message: 'a benchmark-suite generation is already running for this repository'
   });
-  const repoIds = normalizeRepoIds(repoId, payload.repo_ids);
+  // #2061 phase 3 (E-7): the POOL is the carrier's when the suite is minted
+  // FOR a context — the caller's `repo_ids` are REPLACED, not merged with
+  // it. A caller may not widen the corpus beyond what the context names.
+  const binding = opts.binding || null;
+  let repoIds;
+  if (binding) {
+    const measured = binding.repos || (binding.carrier && binding.carrier.repos) || [];
+    repoIds = measured.map((r) => r.repo_id);
+    if (!repoIds.includes(repoId)) {
+      const named = measured.map((r) => r.name || r.repo_id);
+      const err = new Error(
+        `the repository under test "${repoId}" is not in the evaluation context ` +
+          `"${(binding.context && binding.context.name) || 'the context'}"` +
+          `${binding.context && binding.context.version ? ` (version ${binding.context.version})` : ''}, ` +
+          `which measures: ${named.length ? named.join(', ') : 'nothing'}.`
+      );
+      err.code = 'UNDER_TEST_OUT_OF_CARRIER';
+      err.status = 409;
+      throw err;
+    }
+  } else {
+    repoIds = normalizeRepoIds(repoId, payload.repo_ids);
+  }
   for (const rid of repoIds) {
     await repositoryService.getById(rid, { authz: opts.authz }); // 404 now, not mid-poll
   }
@@ -1235,7 +1270,12 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
     await ensureCollection(db);
-    const repoIds = payload.repo_ids || [repoId];
+    // #2061 phase 3 (E-7): a suite minted FOR a context draws its corpus
+    // from the carrier — the caller's list never widens it.
+    const binding = opts.binding || null;
+    const repoIds = binding
+      ? (binding.repos || (binding.carrier && binding.carrier.repos) || []).map((r) => r.repo_id)
+      : payload.repo_ids || [repoId];
     const { docs, coverage } = await buildCorpusDocuments(db, repoIds);
     if (!docs.length) {
       const err = new Error(
@@ -1327,28 +1367,57 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       throw err;
     }
     const now = new Date().toISOString();
-    const entries = samples.slice(0, MAX_ENTRIES).map((s, i) => ({
-      id: `new-${i + 1}`,
-      query: String(s.user_input || '').trim(),
-      reference_answer: String(s.reference || ''),
-      // Reference passages stored WHOLE (capped at CONTEXT_CHARS, the run
-      // leg's per-context cap — a published chunk fits intact). The old
-      // 500-char slice cut them mid-table and often kept the WRONG section
-      // of the concept for the question it grounded: entity-recall then
-      // compared the wrong section's entities against correctly-retrieved
-      // chunks (2026-10-19: every entity-recall row of a 20-question suite
-      // failed at 0.10–0.50 with context_recall at 1.0).
-      reference_passages: (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
+    // #2061 phase 3 (E-7): the SOURCE-REPOSITORY STAMP. The corpus documents
+    // carry their chunk metadata (repo_id, graph, chunk_key); the sidecar
+    // answers with the passages the questions were minted from, so the
+    // passage is matched back to the document it came from. A question whose
+    // passage is not in the corpus is NOT stamped — "not measured" is null,
+    // never a guess.
+    const sourceByPassage = new Map();
+    for (const d of docs) {
+      const key = passageKey(d.page_content);
+      if (key && !sourceByPassage.has(key)) {
+        sourceByPassage.set(key, d.metadata || {});
+      }
+    }
+    const entries = samples.slice(0, MAX_ENTRIES).map((s, i) => {
+      const passages = (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
         String(c).slice(0, CONTEXT_CHARS)
-      ),
-      source_doc: '',
-      language: '',
-      difficulty: [s.query_style, s.query_length].filter(Boolean).join('/') || '',
-      persona: s.persona_name || '',
-      synthesizer: s.synthesizer_name || '',
-      oos: false,
-      source: 'llm'
-    }));
+      );
+      // The FIRST passage that matches a corpus document names the source.
+      let meta = null;
+      for (const p of passages) {
+        const hit = sourceByPassage.get(passageKey(p));
+        if (hit) {
+          meta = hit;
+          break;
+        }
+      }
+      return {
+        id: `new-${i + 1}`,
+        query: String(s.user_input || '').trim(),
+        reference_answer: String(s.reference || ''),
+        // Reference passages stored WHOLE (capped at CONTEXT_CHARS, the run
+        // leg's per-context cap — a published chunk fits intact). The old
+        // 500-char slice cut them mid-table and often kept the WRONG section
+        // of the concept for the question it grounded: entity-recall then
+        // compared the wrong section's entities against correctly-retrieved
+        // chunks (2026-10-19: every entity-recall row of a 20-question suite
+        // failed at 0.10–0.50 with context_recall at 1.0).
+        reference_passages: passages,
+        source_doc: '',
+        // The stamp — the corpus the question was minted from.
+        source_repo_id: meta && meta.repo_id ? meta.repo_id : null,
+        source_graph: meta && meta.graph ? meta.graph : null,
+        source_chunk_key: meta && meta.chunk_key ? meta.chunk_key : null,
+        language: '',
+        difficulty: [s.query_style, s.query_length].filter(Boolean).join('/') || '',
+        persona: s.persona_name || '',
+        synthesizer: s.synthesizer_name || '',
+        oos: false,
+        source: 'llm'
+      };
+    });
     const repos = await Promise.all(repoIds.map((rid) => repositoryService.getById(rid, { authz: opts.authz })));
     const suiteDoc = {
       _key: opts.suiteKey,
@@ -1370,6 +1439,22 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null },
         judge: modelConfigService.judgeFidelity(effectiveJudge),
         repos: repos.map((r) => ({ id: r.repo_id || r._key, name: r.name })),
+        // #2061 phase 3 (E-7): the CONTEXT SNAPSHOT this suite was minted
+        // for — the snapshot, never a reference alone. Absent on a suite
+        // minted without a context.
+        ...(binding
+          ? {
+              context: {
+                id: binding.context.id,
+                name: binding.context.name,
+                version: binding.context.version,
+                hash: binding.context.hash || null,
+                repos: binding.repos,
+                repo_set_hash: binding.repo_set_hash,
+                head_version_hash: binding.head_version_hash
+              }
+            }
+          : {}),
         dimensions: {
           testset_size: entries.length,
           requested_size: payload.testset_size,
@@ -2220,6 +2305,46 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // chatqna and the retriever are UNCHANGED: the served pipeline is the
     // production one, measured over the carrier the context names.
     const carrier = opts.carrier || null;
+    // #2061 phase 3 (E-7): the PAIRING — the suite was minted for a context
+    // (or not); this run serves the carrier (or not). The same tiers as the
+    // routing suite: a cross-context run is refused unless a superadmin
+    // recorded the experiment, and a suite minted for another context may
+    // not be measured over this one.
+    const suiteContext = (suite.payload && suite.payload.context) || null;
+    const runContext = carrier && carrier.context ? carrier.context : null;
+    const entries = suite.payload.entries;
+    const pairingResult = pairingService.pair({
+      suiteContext,
+      suiteRepoId: repoId,
+      runContext,
+      runCarrier: carrier,
+      runKeys: opts.keys || null,
+      rows: entries,
+      experiment: opts.experiment || null
+    });
+    if (pairingResult.status === 'blocked') {
+      const crossContext = pairingResult.reasons.includes('cross_context');
+      const err = new Error(
+        crossContext
+          ? `the benchmark suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
+              `(${suiteContext && suiteContext.version ? `version ${suiteContext.version}` : 'unknown version'}) ` +
+              `and this run serves a different one` +
+              `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
+              'A run may only serve the context it was minted for; a superadmin may record a deliberate ' +
+              'cross-context experiment, and its result is then rendered as NOT comparable.'
+          : `the benchmark suite was minted for ${(suiteContext.repos || []).length} repository(ies) and this ` +
+              `run serves a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}).`
+      );
+      err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
+      err.status = 409;
+      err.pairing = pairingResult;
+      throw err;
+    }
+    // The questions whose SOURCE repository left the carrier cannot be
+    // scored over this corpus — they are skipped, counted, and never
+    // silently dropped.
+    const skippedEntryIndexes = new Set(pairingResult.skipped_rows.map((r) => r.index));
+    const runnableEntries = entries.filter((_, i) => !skippedEntryIndexes.has(i));
     const carrierGraphNames = carrier && carrier.graph_names ? carrier.graph_names : null;
     const graphNames = serveGraphNames(carrier, await graphNamesFor(db, repoIds));
     if (!graphNames.length) {
@@ -2235,10 +2360,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       err.status = 409;
       throw err;
     }
-    const entries = suite.payload.entries;
     const results = [];
     let doneCount = 0;
-    const total = entries.length;
+    const total = runnableEntries.length;
     await report(opts, { phase: 'retrieval', done: 0, total });
     let cursorIdx = 0;
     // TERMINAL answer-leg errors abort the run (David 2026-10-21: "do not
@@ -2280,6 +2404,31 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         const i = cursorIdx++;
         if (i >= entries.length) return;
         const e = entries[i];
+        // #2061 phase 3 (E-7): a question whose SOURCE repository left the
+        // carrier cannot be scored over this corpus. It is skipped — with a
+        // reason — and never silently dropped.
+        if (skippedEntryIndexes.has(i)) {
+          results[i] = {
+            id: e.id,
+            query: e.query,
+            contexts: [],
+            context_keys: [],
+            candidate_keys: [],
+            candidates: [],
+            answer: '',
+            abstained: false,
+            abstention_reason: '',
+            source_repo_id: e.source_repo_id || null,
+            error: {
+              code: 'SKIPPED_DEPENDENCY_NOT_IN_CARRIER',
+              status: null,
+              message: 'not attempted — the repository this question was minted from is not in the carrier'
+            }
+          };
+          doneCount += 1;
+          await report(opts, { phase: 'retrieval', done: doneCount, total });
+          continue;
+        }
         try {
           if (serveMode) {
             // SERVE: the question goes through the citizen's own pipeline.
@@ -2731,6 +2880,27 @@ async function runSuite(repoId, suiteKey, opts = {}) {
               graph_names: carrier.graph_names || []
             }
           : null,
+        // #2061 phase 3 (E-7): the PAIRING — the suite's binding, this
+        // run's context, and whether the two are about the same thing.
+        pairing: {
+          status: pairingResult.status,
+          comparable: pairingResult.comparable,
+          reasons: pairingResult.reasons,
+          missing_pool: pairingResult.missing_pool,
+          carrier_grew: pairingResult.carrier_grew,
+          skipped_rows: pairingResult.skipped_rows.map((r) => ({
+            id: r.id,
+            query: (entries[r.index] || {}).query || null,
+            reason: r.reason,
+            dependencies: r.dependencies
+          })),
+          suite_context_id: suiteContext ? suiteContext.id : null,
+          suite_context_version: suiteContext ? suiteContext.version : null,
+          run_context_id: runContext ? runContext.id : null,
+          repo_set_hash: (opts.keys && opts.keys.repo_set_hash) || null,
+          head_version_hash: (opts.keys && opts.keys.head_version_hash) || null,
+          experiment: opts.experiment || null
+        },
         source_attribution: sourceAttribution,
         // How much of the suite the judge actually measured — a partial
         // average is not a benchmark result (sidecar review F2). The

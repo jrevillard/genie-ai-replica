@@ -63,6 +63,12 @@ const normText = norm; // legacy name at the collapse-order call sites
 const frontmatterService = require('./frontmatter-service');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
+// #2061 phase 3 (E-7): the pairing between a suite's binding and a run —
+// the drift tiers, the cross-context block and the skip-with-reason rule.
+const pairingService = require('./evaluation-pairing-service');
+// …and the Evaluation Context itself: the rebind reads the stored context
+// (the OPEN-context check) and the binding (the snapshot to stamp).
+const evaluationContextService = require('./evaluation-context-service');
 // ONE rerank client (review !622 round 9, #78662): the private copy is
 // gone — batching, the pool, the shared retry ladder and the abort-retryable
 // rule all come from ./rerank-client now.
@@ -853,6 +859,96 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       off_domain_topics: randomTopics
     });
     return suiteDoc;
+  });
+}
+
+/**
+ * #2061 phase 3 (E-7): the EXPLICIT rebind.
+ *
+ * A suite minted before contexts existed carries no binding, and it is
+ * NEVER bound automatically — that would claim the suite was minted for a
+ * context nobody chose. A superadmin may bind it explicitly, and the only
+ * honest target is the OPEN context: the deployment's default posture,
+ * which is what such a suite was actually minted against.
+ *
+ * The rows keep their provenance: they were minted from the deployment's
+ * pool, and a rebind does not re-mint them.
+ *
+ * @param {string} repoId
+ * @param {string} suiteKey
+ * @param {string} contextId - the context to bind to (must resolve as OPEN)
+ * @param {object} opts - {authz, actor, okfScopes, isSuperAdmin}
+ */
+async function bindSuite(repoId, suiteKey, contextId, opts = {}) {
+  return withSpan('okf.headsuite.bind', async (span) => {
+    span.setAttribute('okf.repo_id', repoId);
+    span.setAttribute('okf.suite_key', suiteKey);
+    await repositoryService.getById(repoId, { authz: opts.authz });
+    const db = await dbService.getConnection();
+    await ensureCollection(db);
+    const suite = await loadSuiteDoc(db, repoId, suiteKey);
+    if (suite.repo_id !== repoId) {
+      const err = new Error(`suite ${suiteKey} not found for repo ${repoId}`);
+      err.code = 'SUITE_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    if (suite.payload && suite.payload.context) {
+      const err = new Error(
+        `this suite is already bound to the evaluation context "${suite.payload.context.name}" ` +
+          `(${suite.payload.context.version}) — it is not rebound`
+      );
+      err.code = 'SUITE_ALREADY_BOUND';
+      err.status = 409;
+      throw err;
+    }
+    const contextDoc = await evaluationContextService.getContext(contextId);
+    if (!contextDoc.resolved || contextDoc.resolved.open_context !== true) {
+      const err = new Error(
+        `the evaluation context "${contextDoc.name}" is not the OPEN context, and a suite minted ` +
+          'against the whole deployment can only honestly be bound to the OPEN context — a restricted ' +
+          'context would claim the suite was minted for a scope it was never minted for'
+      );
+      err.code = 'REBIND_NOT_OPEN_CONTEXT';
+      err.status = 409;
+      throw err;
+    }
+    const binding = await evaluationContextService.bindingFor(contextId, {
+      okfScopes: opts.okfScopes,
+      isSuperAdmin: opts.isSuperAdmin
+    });
+    const measured = binding.repos || [];
+    if (measured.length && !measured.some((r) => r.repo_id === repoId)) {
+      const err = new Error(
+        `the repository under test "${repoId}" is not in the evaluation context "${contextDoc.name}" — ` +
+          'bind it to a context that names this repository'
+      );
+      err.code = 'UNDER_TEST_OUT_OF_CARRIER';
+      err.status = 409;
+      throw err;
+    }
+    const updated = {
+      ...suite,
+      payload: {
+        ...suite.payload,
+        context: {
+          id: binding.context.id,
+          name: binding.context.name,
+          version: binding.context.version,
+          hash: binding.context.hash || null,
+          repos: binding.repos,
+          repo_set_hash: binding.repo_set_hash,
+          head_version_hash: binding.head_version_hash
+        },
+        // The rebind is recorded on the suite itself — a reader can see that
+        // the binding was made LATER, by hand, and not at mint time.
+        bound_at: new Date().toISOString(),
+        bound_by: (opts.actor && opts.actor.user_id) || 'system'
+      }
+    };
+    await db.collection(HEAD_TEST_RUNS_COLLECTION).replace(suiteKey, updated);
+    logger.info('head-suite.bound', { repo_id: repoId, suite_key: suiteKey, context_id: contextId });
+    return updated;
   });
 }
 
@@ -1765,6 +1861,44 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // race's universe, so it is the list that must be narrowed — narrowing it
     // later, after the prefetch, would race against the whole deployment.
     const carrier = opts.carrier || null;
+    // #2061 phase 3 (E-7): the PAIRING. The suite was minted for a context
+    // (or not); this run measures over a carrier (or not). The pairing says
+    // whether the two are about the same thing — and refuses when they are
+    // not, rather than scoring a corpus the suite never saw.
+    const suiteContext = suite.payload.context || null;
+    const runContext = carrier && carrier.context ? carrier.context : null;
+    const pairingResult = pairingService.pair({
+      suiteContext,
+      suiteRepoId: repoId,
+      runContext,
+      runCarrier: carrier,
+      runKeys: opts.keys || null,
+      rows: [...(suite.payload.positive || []), ...(suite.payload.negative || [])],
+      experiment: opts.experiment || null
+    });
+    if (pairingResult.status === 'blocked') {
+      const crossContext = pairingResult.reasons.includes('cross_context');
+      const err = new Error(
+        crossContext
+          ? `the suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
+              `(${suiteContext && suiteContext.version ? `version ${suiteContext.version}` : 'unknown version'}) ` +
+              `and this run measures over a different one` +
+              `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
+              'A run may only measure the context it was minted for; a superadmin may record a ' +
+              'deliberate cross-context experiment (allow_cross_context + a reason), and its result ' +
+              'is then rendered as NOT comparable.'
+          : `the suite was minted for ${(suiteContext.repos || []).length} repository(ies) and this run ` +
+              `measures over a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}). ` +
+              'The run would score a corpus the suite was never minted against, so it is refused.'
+      );
+      err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
+      err.status = 409;
+      err.pairing = pairingResult;
+      throw err;
+    }
+    // The rows whose dependency left the carrier: they cannot be scored, so
+    // they are skipped — counted, with a reason, never silently dropped.
+    const skippedIndexes = new Set(pairingResult.skipped_rows.map((r) => r.index));
     const prefetched = {
       underTest: repo,
       siblings: await headTestService.loadSiblings(db, repoId, { repoIds: carrier && carrier.repo_ids })
@@ -1778,7 +1912,14 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // set IS the scoring set and not merely one that happened to be in
     // force while the run went on.
     const knobs = routeKnobs();
-    const all = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
+    const allRows = [...suite.payload.positive.map((q) => ({ ...q })), ...suite.payload.negative.map((q) => ({ ...q }))];
+    // The skipped rows are NOT run — and the coverage says so.
+    const all = allRows.filter((_, i) => !skippedIndexes.has(i));
+    const skippedRows = pairingResult.skipped_rows.map((r) => ({
+      query: (allRows[r.index] || {}).query || null,
+      reason: r.reason,
+      dependencies: r.dependencies
+    }));
     // 1-8g-x (David: "the UI should show a progress bar for the run"): the
     // worker reports {phase, done, total} through opts.reportProgress — the
     // async caller (beginRunSuite) throttles it into the placeholder doc so
@@ -1818,6 +1959,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             cls: q.cls || null,
             source: q.source || 'llm',
             expected_repo: q.expected_repo || null,
+            // #2061 phase 3 (E-7): the provenance stamp rides the RESULT, so
+            // the boundary rows can be counted apart from the routing rows.
+            intended_carrier: q.intended_carrier || null,
             head_score: r.under_test.head_score,
             head_rank: r.under_test.head_rank,
             forbidden_cosine: r.under_test.forbidden_cosine !== undefined ? r.under_test.forbidden_cosine : null,
@@ -1852,6 +1996,9 @@ async function runSuite(repoId, suiteKey, opts = {}) {
             cls: q.cls || null,
             source: q.source || 'llm',
             expected_repo: q.expected_repo || null,
+            // #2061 phase 3 (E-7): the provenance stamp rides the RESULT, so
+            // the boundary rows can be counted apart from the routing rows.
+            intended_carrier: q.intended_carrier || null,
             error: e.message
           };
         }
@@ -1978,6 +2125,29 @@ async function runSuite(repoId, suiteKey, opts = {}) {
               graph_names: carrier.graph_names || []
             }
           : null,
+        // #2061 phase 3 (E-7): the PAIRING — the suite's binding, this
+        // run's context, and whether the two are about the same thing. The
+        // status names the tier: 'ok' (paired), 'unbound' (a suite minted
+        // before contexts existed — diagnostic), 'experiment' (a recorded
+        // superadmin cross-context run — not comparable).
+        pairing: {
+          status: pairingResult.status,
+          comparable: pairingResult.comparable,
+          reasons: pairingResult.reasons,
+          missing_pool: pairingResult.missing_pool,
+          carrier_grew: pairingResult.carrier_grew,
+          skipped_rows: skippedRows,
+          suite_context_id: suiteContext ? suiteContext.id : null,
+          suite_context_version: suiteContext ? suiteContext.version : null,
+          run_context_id: runContext ? runContext.id : null,
+          // The TWO comparison keys — never the context version alone: the
+          // serving set refreshes on the 30s TTL and a re-built head moves
+          // the measurement without moving the graph.
+          repo_set_hash: (opts.keys && opts.keys.repo_set_hash) || null,
+          head_version_hash: (opts.keys && opts.keys.head_version_hash) || null,
+          // The recorded experiment, when there was one.
+          experiment: opts.experiment || null
+        },
         // The effective thresholds this run was scored under (#2061 phase 1b).
         knobs,
         // ... and whether those thresholds make the verdict stand for
@@ -2442,6 +2612,13 @@ function summarizeRun(results, ctx = {}) {
   const done = results.filter((r) => !r.error);
   const positives = done.filter((r) => r.kind === 'positive');
   const negatives = done.filter((r) => r.kind !== 'positive');
+  // #2061 phase 3 (E-7): the BOUNDARY rows — minted from the excluded pool.
+  // They assert an ABSTENTION ("the repository under test must not claim
+  // this"), not a routing preference, so they are counted apart from the
+  // routing negatives: a scope breach must never flatter (or ruin) the
+  // routing pass rate.
+  const boundaryRows = done.filter((r) => r.intended_carrier === 'out');
+  const routingNegatives = negatives.filter((r) => r.intended_carrier !== 'out');
   // The UNIVERSE the score was measured over: every head that competed,
   // not the truncated display list. `loadSiblings` returns every
   // repository with a head and the race ranks all of them; the per-row
@@ -2457,11 +2634,18 @@ function summarizeRun(results, ctx = {}) {
   const posPassed = positives.filter((r) => r.under_test_wins_head).length;
   // Gate-era negatives are evaluatable solo; legacy (head_claimed null)
   // only with siblings.
-  const negEvaluatable = negatives.filter((r) => r.head_claimed !== null || (r.sibling_count || 0) > 0);
+  const negEvaluatable = routingNegatives.filter((r) => r.head_claimed !== null || (r.sibling_count || 0) > 0);
   // The under-test did NOT claim the query. The gate held (or, for legacy
   // rows, the under-test did not win the rank).
   const underTestSilent = (r) => (r.head_claimed !== null ? r.head_claimed === false : !r.under_test_wins_head);
   const negPassed = negEvaluatable.filter(underTestSilent).length;
+  // #2061 phase 3 (E-7): the BOUNDARY verdict. A boundary row is HELD when
+  // the repository under test did NOT claim it — the evaluated scope held.
+  // It is BREACHED when it did: the group saw content it must not. This is
+  // the evidence phase 2 did not have.
+  const boundaryEvaluable = boundaryRows.filter((r) => r.head_claimed !== null || (r.sibling_count || 0) > 0);
+  const boundaryHeld = boundaryEvaluable.filter(underTestSilent).length;
+  const boundaryBreached = boundaryEvaluable.length - boundaryHeld;
   // ... and a repository OTHER than the one it was meant for claimed it
   // anyway. The negative still "passes" for the under-test (its gate
   // behaved), but the answer was served by the wrong repository — a
@@ -2507,10 +2691,24 @@ function summarizeRun(results, ctx = {}) {
     positive_total: positives.length,
     positive_passed: posPassed,
     positive_pass_rate: positives.length ? posPassed / positives.length : null,
-    negative_total: negatives.length,
+    // The routing negatives — the boundary rows are counted in their own
+    // bucket below, so the classes add up to the rows that were run.
+    negative_total: routingNegatives.length,
     negative_evaluatable: negEvaluatable.length,
     negative_passed: negPassed,
     negative_pass_rate: negEvaluatable.length ? negPassed / negEvaluatable.length : null,
+    // #2061 phase 3 (E-7): the BOUNDARY verdict — the evidence a scoped
+    // evaluation exists to produce. Nulls when there was no boundary row:
+    // the boundary was NOT MEASURED, which is not the same claim as "it
+    // held".
+    boundary: boundaryRows.length
+      ? {
+          total: boundaryRows.length,
+          evaluatable: boundaryEvaluable.length,
+          held: boundaryHeld,
+          breached: boundaryBreached
+        }
+      : null,
     pass_rate: evaluatable ? (posPassed + negPassed) / evaluatable : null,
     avg_margin: margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : null,
     // The denominator of the average above — a mean without it is the
@@ -3502,6 +3700,7 @@ async function getRecommendJob(repoId, jobKey) {
 module.exports = {
   generateSuite,
   beginSuiteGeneration,
+  bindSuite,
   suiteGenerationInFlight,
   suiteGenerationFailed,
   addQueries,

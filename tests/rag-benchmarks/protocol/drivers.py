@@ -362,10 +362,16 @@ def run_config_a_capture(
     the capture ran under; it is STAMPED into the rows file together with the
     assessment-set digest, and the E01 join refuses a capture whose stamp
     does not match the manifests (a capture over another set or corpus never
-    joins). Rows merge into ``config-a.captured.json`` atomically after EVERY
-    case; resume re-runs ONLY the missing case ids (in strict turn order for
-    multi-turn cases). A per-case failure is a recorded row and the run
-    CONTINUES — one broken case never loses the set.
+    joins). The stamp lands on disk BEFORE the first query, so even a
+    converged resume leaves a stamped file. A prior rows file that carries
+    cases but no stamp — or a stamp over another set or corpus — REFUSES the
+    resume: the rows file certifies the set it was captured over, and a resume
+    by case id across another set would certify one set's digest over another
+    set's answers. Rows merge into ``config-a.captured.json`` atomically after
+    EVERY case; resume re-runs ONLY the missing case ids (in strict turn order
+    for multi-turn cases). A per-case failure is a recorded row and the run
+    CONTINUES — one broken case never loses the set. The retrieval scope is
+    recorded only on the rows that actually queried.
 
     The set's SECURITY cases are not queried: config A is the legacy fixed
     RAG — no authorization executor, no steerable agent — so they are
@@ -395,8 +401,16 @@ def run_config_a_capture(
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set
-    # A's answers. The prior file's stamp must match — otherwise refuse.
+    # A's answers. A prior file that carries cases MUST carry the matching
+    # stamp — an unstamped prior file (an older capture, a hand-edited file)
+    # has no provenance to resume under, so it refuses too.
     prior_stamp = prior.get("capture") if isinstance(prior, dict) else None
+    prior_cases = prior.get("cases") or {} if isinstance(prior, dict) else {}
+    if prior_cases and not isinstance(prior_stamp, dict):
+        raise DriverError(
+            f"the capture file {rows_path} carries {len(prior_cases)} row(s) and no stamp — a"
+            " capture over one set or corpus never resumes into another; use a fresh out-dir"
+        )
     if isinstance(prior_stamp, dict):
         for field in ("assessment_set_sha256", "corpus_fingerprint"):
             if prior_stamp.get(field) != stamp[field]:
@@ -410,10 +424,11 @@ def run_config_a_capture(
     skips = security_skip_rows(cases)
     pending = _pending_in_order(cases, done)
 
+    # The stamp rides the rows file: it lands on disk with the first written
+    # case, and a converged resume keeps the stamp its prior file already
+    # carries (a rows file without a stamp never reaches this point — it
+    # refuses above).
     prior = _merge_rows(prior, {"cases": {}, "capture": stamp})
-    # The stamp lands on disk BEFORE the first query: a converged resume (no
-    # pending case) must leave a stamped file, not a bare rows file.
-    write_json(rows_path, prior, ensure_ascii=False)
 
     seam = query or _default_a_query
     for entry in pending:

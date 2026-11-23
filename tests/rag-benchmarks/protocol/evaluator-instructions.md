@@ -215,8 +215,9 @@ manifest records it).
 - **The label scopes are different constructs — read the scope, never assume
   it.** Config A's queries carry the entry's category/service labels; config
   B's lane filters on the case context's `requested_labels`. The report
-  records the labels the A capture sent and names the cases whose
-  `requested_labels` never reached the A query: for those cases, a retrieval
-  or grounding difference reflects the SCOPE, not the pipeline. The
-  uncontrolled-differences section states the difference; it never claims the
-  legs retrieved the same scope.
+  records the labels the A capture sent, names the cases whose
+  `requested_labels` never reached the A query, and names the cases that
+  never queried at all (a failed or skipped capture carries no scope): for
+  those cases, a retrieval or grounding difference reflects the SCOPE, not
+  the pipeline. The uncontrolled-differences section states the difference; it
+  never claims the legs retrieved the same scope.

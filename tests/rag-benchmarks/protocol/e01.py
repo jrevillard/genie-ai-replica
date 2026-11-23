@@ -34,9 +34,13 @@ The report's contract:
   building: corpus/set lineage mismatch between the legs, a config-C
   manifest on the B leg (C belongs to E02), a missing leg artifact, a
   lineage-mismatched ledger.
-* **No credentials anywhere in the report** (the manifest's credential markers
-  applied at every depth over every per-case row — the manifest's own
-  redaction is top-level only, and the report records whole rows).
+* **No credentials anywhere in the report.** The report applies its OWN
+  credential rule (:func:`_is_credential_key`) at every depth on every path it
+  writes — the per-case rows, the M-5 values, the M-1 aggregate and the
+  recorded label scopes. The rule is deliberately narrower than the manifest's
+  (which drops every marker-named key): the report keeps the measurement names
+  the judge needs (``chunk_key``, the token counts) and drops the credential
+  names explicitly.
 * **No judging in code**: M-2/M-3 verdicts belong to the judge layer under
   the versioned evaluator instructions; the report carries the judgment
   inputs (answers, abstention facts, sources), never verdicts.
@@ -451,7 +455,9 @@ def _build_m1(anchor_report: dict, b_rows: dict) -> tuple[dict, dict]:
     aggregate = dict(anchor_report.get("aggregate") or {})
     aggregate["n_missed_traces"] = anchor_report.get("n_missed_traces", 0)
     aggregate["n_unmapped_chunk_keys"] = anchor_report.get("n_unmapped_chunk_keys", 0)
-    a = _surface_record(surface=A_M1_SURFACE, available=True, values=aggregate)
+    # The anchor's aggregate is a RECORDED value like any other — the report
+    # writes it through the same redaction as every other path.
+    a = _surface_record(surface=A_M1_SURFACE, available=True, values=_redact_deep(aggregate))
     ok = _ok_rows(b_rows)
     with_sources = sum(1 for row in ok if row.get("source_documents"))
     b = _surface_record(
@@ -647,11 +653,15 @@ def _retrieval_scope_record(captured_rows: dict) -> dict:
     names the difference instead of implying a scope match (FR-27)."""
     sent: dict = {}
     differing: list = []
+    never_queried: list = []
     for case_id, row in sorted(captured_rows.items()):
         scope = row.get("retrieval_scope") if isinstance(row, dict) else None
-        if not isinstance(scope, dict):
+        if not isinstance(row, dict) or row.get("status") != "ok" or not isinstance(scope, dict):
+            # A row that never queried (failed, skipped) carries no scope — it
+            # is named as never-queried instead of vanishing from the record.
+            never_queried.append(case_id)
             continue
-        sent_labels = scope.get("sent_labels") or {}
+        sent_labels = _redact_deep(scope.get("sent_labels") or {})
         requested = scope.get("case_requested_labels") or []
         sent[case_id] = sent_labels
         if requested and not (sent_labels.get("category_labels") or sent_labels.get("service_labels")):
@@ -660,6 +670,7 @@ def _retrieval_scope_record(captured_rows: dict) -> dict:
         "A": {
             "labels_sent_per_case": sent,
             "cases_whose_requested_labels_never_reached_the_A_query": differing,
+            "cases_that_never_queried": never_queried,
         },
         "B": {
             "labels_source": "the case context's requested_labels (the B rows carry no scope field)",

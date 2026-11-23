@@ -530,6 +530,8 @@ def test_e01_uncontrolled_differences_identified_from_recorded_evidence():
         "category_labels": [],
         "service_labels": [],
     }
+    # The rows that never queried are named apart (they carry no scope).
+    assert diff["retrieval_scope"]["A"]["cases_that_never_queried"] == ["c2", "c3"]
     # Without a seed the fact records as not recorded — never invented.
     unseeded = _build(reference=reference, gated=gated)
     assert unseeded["uncontrolled_differences"]["execution_conditions"]["seed"]["value"] is None
@@ -1163,3 +1165,88 @@ def test_capture_a_refuses_to_resume_into_another_set(tmp_path):
     with pytest.raises(Exception) as failed:
         drivers.run_config_a_capture(set_b, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
     assert "another" in str(failed.value)
+
+
+def test_capture_a_refuses_to_resume_into_another_corpus(tmp_path):
+    """The corpus half of the resume refusal is a refusal too."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+    seam, _ = _seam({"c1": "a1", "c2": "a2"})
+    drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    with pytest.raises(Exception) as failed:
+        drivers.run_config_a_capture(
+            set_path, tmp_path / "out", query=seam, corpus_fingerprint="9" * 64
+        )
+    assert "corpus" in str(failed.value)
+
+
+def test_capture_a_refuses_to_resume_into_an_unstamped_rows_file(tmp_path):
+    """A rows file that carries cases but no stamp has no provenance to resume
+    under — the resume refuses instead of certifying a new set's digest over
+    the old set's answers."""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    set_a = _set_file(tmp_path / "a", extra_answerable=("c1", "c2"))
+    set_b = _set_file(tmp_path / "b", extra_answerable=("c1", "c2", "c3"))
+    seam, _ = _seam({"c1": "a1", "c2": "a2", "c3": "a3"})
+    drivers.run_config_a_capture(set_a, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    # Strip the stamp: the rows stay, the provenance does not.
+    rows_path = tmp_path / "out" / "config-a.captured.json"
+    data = json.loads(rows_path.read_text(encoding="utf-8"))
+    data.pop("capture")
+    rows_path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(Exception) as failed:
+        drivers.run_config_a_capture(set_b, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
+    assert "stamp" in str(failed.value)
+
+
+def test_capture_a_keeps_the_stamp_on_a_converged_resume(tmp_path):
+    """A converged resume over a stamped rows file keeps that stamp on disk —
+    the E01 join needs it to accept the capture."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+    seam, calls = _seam({"c1": "a1", "c2": "a2"})
+    first = drivers.run_config_a_capture(
+        set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS
+    )
+    assert calls
+    converged, converged_calls = _seam({})
+    result = drivers.run_config_a_capture(
+        set_path, tmp_path / "out", query=converged, corpus_fingerprint=CORPUS
+    )
+    assert converged_calls == []
+    on_disk = json.loads((tmp_path / "out" / "config-a.captured.json").read_text(encoding="utf-8"))
+    assert on_disk["capture"] == first["capture"]
+    assert result["capture"]["corpus_fingerprint"] == CORPUS
+
+
+def test_capture_a_records_the_scope_only_on_the_rows_that_queried(tmp_path):
+    """The scope is what the A leg QUERIED under — a failed row queried
+    nothing and records no scope."""
+    set_path = _set_file(tmp_path, extra_answerable=("c1", "c2"))
+
+    def seam(entry):
+        if entry["id"] == "c2":
+            raise OSError("transport down")
+        return {"http_status": 200, "body": json.dumps({"metadata": {}}), "answer": "an answer"}
+
+    result = drivers.run_config_a_capture(
+        set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS
+    )
+    assert "retrieval_scope" in result["rows"]["c1"]
+    assert "retrieval_scope" not in result["rows"]["c2"]
+
+
+def test_e01_redacts_the_m1_aggregate_and_the_recorded_scopes():
+    """Every path the report writes goes through the redaction — the M-1
+    aggregate and the recorded label scopes included."""
+    anchor = _anchor_report()
+    anchor["aggregate"]["api_key"] = "LEAK"
+    captured = _captured_rows()
+    captured["c1"]["retrieval_scope"] = {
+        "sent_labels": {"category_labels": [], "service_labels": [], "client_secret": "LEAK"},
+        "case_requested_labels": [],
+    }
+    report = _build(anchor_report=anchor, captured_rows=captured)
+    assert "api_key" not in report["dimensions"]["M-1"]["A"]["values"]
+    scope = report["uncontrolled_differences"]["retrieval_scope"]["A"]["labels_sent_per_case"]["c1"]
+    assert "client_secret" not in scope["service_labels"]
+    assert "LEAK" not in json.dumps(report)

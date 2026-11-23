@@ -64,7 +64,11 @@ jest.mock('unist-util-visit', () => ({ visit: mockMiniMarkdown.visit }), { virtu
 
 const http = require('http');
 const { logger } = require('../../../shared-lib');
-const { createAgenticTranslationLeg } = require('../../../services/translation/agentic-translation-leg');
+const {
+  createAgenticTranslationLeg,
+  createWholeAnswerTranslator,
+  translateWholeAnswerWithLeg
+} = require('../../../services/translation/agentic-translation-leg');
 const { SKIP_STATUSES } = require('../../../services/agent-residual-budget');
 
 describe('agentic translation leg (story 2.10)', () => {
@@ -746,6 +750,150 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(r.accounting.decision).toBe('translate');
       expect(r.accounting.usage).toBeNull();
       expect(chatCalls(calls)).toHaveLength(0);
+    });
+  });
+
+  describe('translateWholeAnswerWithLeg — the whole-answer delivery mapping', () => {
+    // The mapping both post-stream consumers share: one home for the
+    // outcome→delivery contract (mirrors whole-answer.js's {text, failed}
+    // shape plus the V05 status the callers persist).
+    const makeStubLeg = (result) => ({ translateFullAnswer: jest.fn().mockResolvedValue(result) });
+
+    it('a translated outcome delivers the text, never latched', async () => {
+      const leg = makeStubLeg({
+        outcome: 'translated',
+        translated: 'Bonjour le monde.',
+        accounting: { outcome: 'translated', queryTranslationStatus: 'translated', configError: null }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello world.', remainingMs: 5000 });
+      expect(r.text).toBe('Bonjour le monde.');
+      expect(r.failed).toBe(false);
+      expect(r.queryTranslationStatus).toBe('translated');
+      expect(r.accounting).toEqual(expect.objectContaining({ outcome: 'translated' }));
+      expect(leg.translateFullAnswer).toHaveBeenCalledWith({
+        text: 'Hello world.',
+        remainingMs: 5000,
+        signal: undefined
+      });
+    });
+
+    it('a failed outcome latches and delivers nothing', async () => {
+      const leg = makeStubLeg({
+        outcome: 'failed',
+        translated: null,
+        accounting: { outcome: 'failed', queryTranslationStatus: 'fallback_timeout', configError: null }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.failed).toBe(true);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('fallback_timeout');
+    });
+
+    it('a skipped outcome keeps the English answer, never latched (a skip is not a failure)', async () => {
+      const leg = makeStubLeg({
+        outcome: 'skipped',
+        translated: null,
+        accounting: {
+          outcome: 'skipped',
+          queryTranslationStatus: 'passthrough_english',
+          configError: 'AGENT_TRANSLATION_MAX_TOKENS'
+        }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.failed).toBe(false);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('passthrough_english');
+    });
+
+    it('a cancelled outcome keeps the English answer, never latched', async () => {
+      const leg = makeStubLeg({
+        outcome: 'cancelled',
+        translated: null,
+        accounting: { outcome: 'cancelled', queryTranslationStatus: 'fallback_error', configError: null }
+      });
+      const r = await translateWholeAnswerWithLeg(leg, {
+        text: 'Hello',
+        remainingMs: 100,
+        signal: new AbortController().signal
+      });
+      expect(r.failed).toBe(false);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('fallback_error');
+    });
+
+    it('a leg rejecting past its resolve-every-outcome contract is fail-soft, never raises', async () => {
+      // whole-answer.js's same contract, leg side: the helper is the ONE
+      // fail-soft home — the consumers carry no guard of their own, so a
+      // rejecting leg (a defect) must resolve the fallback delivery (English
+      // stands, latched, V05 status) and never propagate.
+      const leg = { translateFullAnswer: jest.fn().mockRejectedValue(new Error('leg exploded')) };
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.failed).toBe(true);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('fallback_error');
+      expect(r.error).toBeInstanceOf(Error);
+      expect(r.accounting).toEqual(
+        expect.objectContaining({ outcome: 'failed', queryTranslationStatus: 'fallback_error' })
+      );
+    });
+
+    it('a leg resolving a non-object outcome maps onto the failed fallback, never raises', async () => {
+      // The contract resolves an outcome object; a null/primitive resolve is
+      // the same defect class as a rejection — the consumers carry no guard
+      // of their own, so the helper absorbs it.
+      const leg = { translateFullAnswer: jest.fn().mockResolvedValue(undefined) };
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.failed).toBe(true);
+      expect(r.text).toBeNull();
+      expect(r.queryTranslationStatus).toBe('fallback_error');
+      expect(r.accounting).toEqual(
+        expect.objectContaining({ outcome: 'failed', queryTranslationStatus: 'fallback_error' })
+      );
+    });
+
+    it('a leg resolving without an accounting block still delivers a classifiable status', async () => {
+      // The mapping never derefs a missing block: the fallback status keeps
+      // the persisted metadata in the V05 vocabulary.
+      const leg = {
+        translateFullAnswer: jest.fn().mockResolvedValue({ outcome: 'translated', translated: 'Bonjour' })
+      };
+      const r = await translateWholeAnswerWithLeg(leg, { text: 'Hello', remainingMs: 100 });
+      expect(r.text).toBe('Bonjour');
+      expect(r.failed).toBe(false);
+      expect(r.queryTranslationStatus).toBe('fallback_error');
+    });
+  });
+
+  describe('createWholeAnswerTranslator — the construction stanza both consumers share', () => {
+    it('builds the request-local closure and translates through it (unconfigured GPU: the skip survives)', async () => {
+      delete process.env.GPU_NODE_HOST;
+      delete process.env.VLLM_TRANSLATION_ENDPOINT;
+      const translate = createWholeAnswerTranslator({
+        runUsage: { prompt_tokens: 10, completion_tokens: 5, model_calls: 1, aux_model_calls: 0 },
+        targetLanguage: 'fr',
+        deadlineStartMs: Date.now(),
+        timeoutMs: 60000
+      });
+      expect(typeof translate).toBe('function');
+      const r = await translate('Hello world.');
+      // The leg ran (routing decision accepted, plan consumed the runUsage)
+      // and the GPU-only selection skipped: no endpoint named.
+      expect(r.failed).toBe(false);
+      expect(r.queryTranslationStatus).toBe('passthrough_english');
+      expect(r.accounting.configError).toBe('gpu_not_configured');
+    });
+
+    it('the deadline math: a deadline already spent plans a deadline_spent skip', async () => {
+      const timeoutMs = 5000;
+      const translate = createWholeAnswerTranslator({
+        runUsage: { prompt_tokens: 10, completion_tokens: 5, model_calls: 1, aux_model_calls: 0 },
+        targetLanguage: 'fr',
+        deadlineStartMs: Date.now() - timeoutMs,
+        timeoutMs
+      });
+      const r = await translate('Hello world.');
+      expect(r.failed).toBe(false);
+      expect(r.accounting.status).toBe('deadline_spent');
     });
   });
 });

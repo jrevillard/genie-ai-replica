@@ -17,15 +17,16 @@ const {
   agentHttpsAgent
 } = require('./agent-run-contract');
 const { wantsTranslation } = require('./translation/language-request');
-const { translateWholeAnswer } = require('./translation/whole-answer');
+const { createWholeAnswerTranslator } = require('./translation/agentic-translation-leg');
 
 // Story 2.4b — the non-streaming JSON consumer of the agent-service seam.
 // The streaming entry (agent-frame-writer.js) projects the seam onto client
 // frames; THIS module aggregates the same stream into the legacy JSON result
 // one `POST /api/queries` request returns: posture resolution → CallerContext
 // → POST /v1/runs → seam aggregation (text / verdict / usage record) →
-// whole-answer translation (the `handleStreamDone` non-relay branch's
-// semantics) → the assembled metadata + the V05-derived abstention overlay.
+// whole-answer translation through the agentic translation leg (GPU-only,
+// residual-budget bounded — the terminal usage record exists here) → the
+// assembled metadata + the V05-derived abstention overlay.
 //
 // Insufficiency is NOT an error here: a verdict-bearing run that required the
 // insufficiency response answers the SUCCESS contract (201, the
@@ -132,7 +133,6 @@ const RUN_REFUSALS = {
  * @param {Object|null} params.headers - `{authorization}` for the agent leg
  *   and the posture resolution.
  * @param {string} params.targetLanguage - The normalized requested language.
- * @param {Object|null} params.translator - The request-resolved translator.
  * @param {number} params.turnStartTime - The turn's start timestamp (ms) —
  *   AFTER the doc mint, so the persisted responseTime means the same thing
  *   as the legacy branch's worker-leg time.
@@ -145,15 +145,7 @@ const RUN_REFUSALS = {
  * @throws {AgentJsonTurnError} Every other genuine failure, typed with the
  *   status + body the route answers.
  */
-async function runAgentJsonTurn({
-  queryService,
-  queryData,
-  queryId,
-  headers,
-  targetLanguage,
-  translator,
-  turnStartTime
-}) {
+async function runAgentJsonTurn({ queryService, queryData, queryId, headers, targetLanguage, turnStartTime }) {
   // The EFFECTIVE timeout — resolved once, so the deadline derivation and the
   // wire-level timeout (and the wall-clock bound below) all read the SAME
   // value: an under-sized configuration is absorbed at this one point, never
@@ -395,6 +387,10 @@ async function runAgentJsonTurn({
     buffer = lines.pop() || '';
 
     for (const line of lines) {
+      // The run already failed (run_error): the terminal state is latched,
+      // and lines behind it in the SAME chunk are dead input — the frame
+      // writer's onSeamEvent guard is this loop's break.
+      if (failure) break;
       const trimmed = line.trim();
       if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
@@ -457,31 +453,39 @@ async function runAgentJsonTurn({
     });
   }
 
-  // ── whole-answer translation: the `handleStreamDone` non-relay branch's
-  // semantics (post-run, request-resolved translator, fail-soft — the shared
-  // whole-answer core). The agent always answers English (the run body's
-  // `language` is the preparation hint, not an answer-language request); a
-  // translator that is missing or fails never drops the answer — the English
-  // text stands and the failure travels as the additive latch.
+  // ── whole-answer translation: the AGENTIC LEG owns it (story 2.10) —
+  // GPU-only keyed on the routing decision (never the CPU model, never a
+  // probe fallback), bounded by the run's residual budget and the remaining
+  // end-to-end deadline, fail-closed on the REQUIRED knobs. The TERMINAL
+  // usage record is what the residual plan reads — post-run is the one
+  // place it exists, which is why this entry translates HERE and not
+  // mid-run (the streaming relay's units run before any record exists and
+  // stay on the request-resolved translator — see the frame writer). The
+  // agent always answers English (the run body's `language` is the
+  // preparation hint, not an answer-language request); a skipped or failed
+  // translation never drops the answer — the English text stands, and only
+  // an ATTEMPTED-and-failed translation latches `translationFailed` (V05).
   let deliveredText = fullResponseText;
   let translationFailed = false;
+  let translationStatus = null;
   if (wantsTranslation(targetLanguage) && fullResponseText) {
-    const result = await translateWholeAnswer(translator, fullResponseText);
-    if (result.failed) {
-      if (result.error) {
-        logger.warn('AgentJsonResult.translation_failed', { queryId, error: result.error.message });
-      } else {
-        // The model returned nothing — replacing the answer with nothing is
-        // not a translation. The English original stands.
-        logger.warn('AgentJsonResult.translation_empty', {
-          queryId,
-          targetLanguage,
-          answerLen: fullResponseText.length
-        });
-      }
+    // The bound translator: construction, deadline clock and fail-soft
+    // delivery are the leg module's one home (the helper never raises).
+    const translateFullAnswer = createWholeAnswerTranslator({
+      runUsage: usageRecord,
+      targetLanguage,
+      deadlineStartMs: turnStartTime,
+      timeoutMs: effectiveTimeoutMs,
+      signal: controller.signal
+    });
+    const legResult = await translateFullAnswer(fullResponseText);
+    logger.info('AgentJsonResult.agentic_translation_accounting', { queryId, accounting: legResult.accounting });
+    translationStatus = legResult.queryTranslationStatus;
+    if (legResult.failed) {
+      logger.warn('AgentJsonResult.translation_failed', { queryId, status: legResult.queryTranslationStatus });
       translationFailed = true;
-    } else {
-      deliveredText = result.text;
+    } else if (legResult.text) {
+      deliveredText = legResult.text;
     }
   }
 
@@ -494,6 +498,11 @@ async function runAgentJsonTurn({
     assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome: 'answered' }),
     capturedVerdict
   );
+  // The leg's V05 status rides the persisted metadata (presence-keyed, like
+  // the legacy passthrough: absent when no translation was asked for).
+  if (translationStatus) {
+    metadata.query_translation_status = translationStatus;
+  }
 
   const result = {
     response: deliveredText,

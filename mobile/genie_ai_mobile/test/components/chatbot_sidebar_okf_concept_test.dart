@@ -138,6 +138,15 @@ void main() {
     expect(find.byKey(const ValueKey('ds-modal')), findsOneWidget);
     expect(find.text('Hadith Nawawi 36'), findsOneWidget);
     expect(find.text('The concept body'), findsOneWidget);
+
+    // A body that fits whole is NOT truncated: the notice must not show.
+    // Without this, a preview that always claims to be truncated passes.
+    expect(
+      find.text(
+        'The preview is truncated — the document is longer than can be shown here.',
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('a concept row without a repo id resolves the repo first', (
@@ -284,6 +293,30 @@ void main() {
       ),
     );
     expect(rendered.data.length, lessThanOrEqualTo(20000));
+  });
+
+  testWidgets('a body whose trailing surrogate is dropped says so', (
+    tester,
+  ) async {
+    final requests = <Uri>[];
+    // The body ends with a LONE high surrogate (a half emoji): the preview
+    // drops that code unit so the rendered text stays well-formed, so a body
+    // character WAS dropped — the notice must say so.
+    final body = '${'x' * 600}\uD800';
+    await tester.pumpWidget(
+      sidebar([conceptRow()], requests: requests, conceptBody: body),
+    );
+    await pumpFrames(tester, frames: 5);
+
+    await tapCitation(tester, 'hadith nawawi 36');
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.text(
+        'The preview is truncated — the document is longer than can be shown here.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a second tap while the concept loads opens no second modal', (

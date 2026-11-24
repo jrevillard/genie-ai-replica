@@ -1,0 +1,52 @@
+{
+ "uploads": {
+  "doc-restricted-e01": "1795534397591_95baf9e6",
+  "doc-shared-e01": "1795534398055_4ecc807a",
+  "doc-wide-e01": "1795534398520_e68eb718",
+  "doc-revoked-e01": "1795534398923_f1756973",
+  "doc-forestry-e01": "1795534399299_d0fa01a8",
+  "doc-catalogue-e01": "1795534400323_753b4ec9",
+  "doc-servicerequest-e01": "1795534400782_7b426ef0"
+ },
+ "restricted_ingests": [
+  {
+   "file": "e01-sec-doc-restricted-e01.md",
+   "http": "200"
+  },
+  {
+   "file": "e01-sec-doc-shared-e01.md",
+   "http": "429"
+  },
+  {
+   "file": "e01-sec-doc-wide-e01.md",
+   "http": "429"
+  },
+  {
+   "file": "e01-sec-doc-revoked-e01.md",
+   "http": "429"
+  },
+  {
+   "file": "e01-sec-doc-forestry-e01.md",
+   "http": "429"
+  }
+ ],
+ "legacy_ingests": [
+  {
+   "file": "doc-catalogue-e01",
+   "http": "429"
+  },
+  {
+   "file": "doc-servicerequest-e01",
+   "http": "429"
+  }
+ ],
+ "serial_outcomes": {
+  "doc-restricted-e01": "Ingested (verified; a duplicate submission raced the initial 200 \u2014 final chunk count 3, the contract count, proves no double-ingest)",
+  "doc-shared-e01": "Ingested (serial pass 1)",
+  "doc-wide-e01": "Ingested (serial pass 2)",
+  "doc-revoked-e01": "Ingested (serial pass 2)",
+  "doc-forestry-e01": "Ingested (serial pass 2, 5 chunks, chunk_labels patched to ['Natural Resources'] post-ingest)",
+  "doc-catalogue-e01": "Ingested (serial pass 2, legacy graph)",
+  "doc-servicerequest-e01": "Ingested (serial pass 2, legacy graph)"
+ }
+}

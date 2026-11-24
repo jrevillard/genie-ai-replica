@@ -412,7 +412,7 @@ def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch
         async def run(self, history, context, source_language=None, target_language=None, user_context=""):
             assert history == [{"role": "user", "content": "q"}]
             assert context.user_id == "eval-config-b"
-            assert context.authorized_graph_names == ()
+            assert context.authorized_graph_names == ("GRAPH",)
             return FakeResult()
 
     class ExplodingPipeline:
@@ -682,7 +682,7 @@ def test_config_c_answered_case_carries_answer_and_usage_record(tmp_path):
     sent = transport.requests[0]["payload"]
     assert sent["question"] == "What?"
     assert sent["context"]["user_id"]
-    assert sent["context"]["authorized_graph_names"] == []
+    assert sent["context"]["authorized_graph_names"] == ["GRAPH"]
     assert sent["deadline_ms"] > 0
 
 

@@ -55,15 +55,25 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
-from harness import exec_in_container, write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
+# These imports sit below the sys.path insert on purpose: the eval
+# toolchain's exec/JSON-IO seam and the protocol's own digest module are
+# resolved only after the eval dir is importable (and the relative
+# protocol siblings carry no import cycle).
+from harness import (
+    exec_in_container,
+    write_json,
+)
 
-from .evalset import (  # noqa: E402 — the shared turn expansion and surface model (no import cycle)
+from .evalset import (
     as_label_list,
     coverage_census,
     evaluation_surface,
     turn_entries,
 )
-from .manifest import sha256_file, sha256_json  # noqa: E402 — the protocol's own digests (no import cycle)
+from .manifest import (
+    sha256_file,
+    sha256_json,
+)
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -888,14 +898,19 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
     The context fields come from the case's ``context`` block (the same shape
     config B's driver reads); the defaults give a public-access eval caller
     over the legacy graph — a restricted case declares its own narrower set.
+    The legacy graph's name rides ``EVAL_DEFAULT_GRAPH`` (the venue's corpus
+    graph; GRAPH on the campaign venue) — a case that declares NO graph set
+    is that public-access caller, never an empty (refused) set.
     """
     raw = case.get("context") or {}
+    default_graph = os.environ.get("EVAL_DEFAULT_GRAPH", "GRAPH")
+    graphs = list(raw.get("authorized_graph_names") or []) or [default_graph]
     return {
         "question": case["query"],
         "deadline_ms": deadline_ms,
         "context": {
             "user_id": str(raw.get("user_id") or "eval-config-c"),
-            "authorized_graph_names": list(raw.get("authorized_graph_names") or []),
+            "authorized_graph_names": graphs,
             # The repo→graph mapping the CallerContext contract carries — the
             # OKF read scope. A malformed entry is dropped (the context block
             # is free-form at the schema level); an entry naming a graph

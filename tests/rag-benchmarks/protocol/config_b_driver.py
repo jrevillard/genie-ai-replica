@@ -75,16 +75,27 @@ def atomic_write_json(path: str, obj) -> None:
     os.replace(tmp, path)
 
 
+def default_graph() -> str:
+    """The public-access caller's graph — the legacy graph the case's
+    silence means (the restricted and security cases declare their own
+    sets and never read this default). The venue's legacy graph name rides
+    the eval env (the same GRAPH the corpus fingerprint collects)."""
+    return os.environ.get("EVAL_DEFAULT_GRAPH", "GRAPH")
+
+
 def build_context(case: dict):
     """The case's trusted caller context (the shape ``RunRequestBody.context``
     carries on the C seam — the same fields, so B and C run under the same
-    authorization shape)."""
+    authorization shape). A case that declares NO graph set is a
+    public-access caller over the default graph — the capability refuses an
+    empty set, so the silence means the default, never nothing."""
     from capabilities.contract import CallerContext
 
     raw = case.get("context") or {}
+    graphs = tuple(raw.get("authorized_graph_names") or ()) or (default_graph(),)
     return CallerContext(
         user_id=str(raw.get("user_id") or "eval-config-b"),
-        authorized_graph_names=tuple(raw.get("authorized_graph_names") or ()),
+        authorized_graph_names=graphs,
         # The repo→graph mapping the contract carries — the OKF read scope
         # (dicts coerce into the pydantic AuthorizedRepo; a mapping naming a
         # graph outside the authorized set fails the model's own validator).

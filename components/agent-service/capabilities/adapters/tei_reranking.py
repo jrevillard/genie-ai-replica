@@ -3,7 +3,9 @@
 """The TEI reranking and evidence-selection adapter (V02 §4.13, §4.14).
 
 Ports the recorded reranking stage: the TEI ``/rerank`` call (recorded shape,
-timeouts, no Authorization header, no retry), the five selection strategies
+timeouts, no retry — the recorded no-Authorization call stays the shape for
+an internal TEI; a configured deployment credential rides a bearer header,
+the V08-venue fix), the five selection strategies
 (``slice`` deployed; ``threshold``, ``slice_threshold``, ``knee_threshold``,
 ``adaptive``), the failure-mode mapping (one behavior per failure mode), and
 the confidence-time score calibration. The selected passages keep the

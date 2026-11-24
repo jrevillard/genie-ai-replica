@@ -53,9 +53,12 @@ import time
 AGENT_SERVICE_HOME = os.environ.get("AGENT_SERVICE_HOME", "/app")
 
 # The resolved-env keys the driver records in ``resolved`` — the noagent /
-# port knobs (NOT the credentials; the recorder redacts by name elsewhere,
-# and these keys are configuration, never secrets).
-RESOLVED_ENV_PREFIXES = ("AGENT_", "NOAGENT_", "RERANKER_", "EMBEDDING_", "VLLM_")
+# port knobs plus the eval knobs (EVAL_DEFAULT_GRAPH: the two legs'
+# graph agreement must be visible in the snapshot). The prefix list DOES
+# capture credential-named keys (VLLM_API_KEY rides VLLM_): the harness
+# redacts credential-named keys at the rows-file write (the protocol's
+# redaction rule) — this snapshot is never trusted secret-free.
+RESOLVED_ENV_PREFIXES = ("AGENT_", "NOAGENT_", "RERANKER_", "EMBEDDING_", "VLLM_", "EVAL_")
 
 _ERROR_PREVIEW_CHARS = 300
 

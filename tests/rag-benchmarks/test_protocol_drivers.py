@@ -236,12 +236,13 @@ class FakeBTransport:
     row — the run must continue anyway; a shipped per-turn entry's ``turn``
     index rides the row like the real driver writes it)."""
 
-    def __init__(self, failure_ids=()):
+    def __init__(self, failure_ids=(), resolved_env=None):
         self.cmds: list[str] = []
         self.failure_ids = set(failure_ids)
         self.shipped_driver: bytes | None = None
         self.cases_seen: list[list[str]] = []
         self.shipped_cases: list[dict] = []
+        self.resolved_env = resolved_env or {"AGENT_X": "1"}
 
     def exec_cmd(self, container, cmd, timeout=600, pass_env=()):
         self.cmds.append(cmd)
@@ -270,7 +271,7 @@ class FakeBTransport:
             for case_id, turn in turn_by_id.items():
                 if case_id in rows and turn is not None:
                     rows[case_id]["turn"] = turn
-            payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b", "env": {"AGENT_X": "1"}}})
+            payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b", "env": self.resolved_env}})
             return base64.b64encode(payload.encode("utf-8")).decode("ascii")
         quoted = re.findall(r"printf %s '([^']+)'", cmd)
         if "python3" in cmd:
@@ -382,6 +383,41 @@ def test_config_b_ships_the_driver_and_consumes_rows(tmp_path):
     assert written["cases"]["c2"]["status"] == "ok"
 
 
+def test_config_b_redacts_credential_named_keys_at_the_rows_write(tmp_path):
+    """The container's resolved snapshot rides verbatim, but the rows file
+    is the committed artifact: a credential-named key captured by the
+    prefix list (VLLM_API_KEY rode VLLM_ into the #2167 campaign's
+    committed copy) is redacted at the write boundary — dropped, not
+    stored — while configuration keys survive."""
+    set_path = _b_set(tmp_path, ("c1",))
+    transport = FakeBTransport(resolved_env={"AGENT_X": "1", "VLLM_API_KEY": "raw-venue-key"})
+    result = drivers.run_config_b(set_path, tmp_path / "out", transport=transport)
+    assert result["resolved"]["env"]["AGENT_X"] == "1"
+    assert "VLLM_API_KEY" not in result["resolved"]["env"]
+    written = json.loads((tmp_path / "out" / "config-b.rows.json").read_text(encoding="utf-8"))
+    assert "VLLM_API_KEY" not in written["resolved"]["env"]
+    assert written["resolved"]["env"]["AGENT_X"] == "1"
+
+
+def test_config_b_resume_redacts_a_legacy_rows_snapshot_at_load(tmp_path):
+    """A rows file written by the pre-redaction code carries the raw
+    snapshot; the resume redacts it at load so the legacy key never
+    survives into the re-written artifact."""
+    set_path = _b_set(tmp_path, ("c1", "c2"))
+    out = tmp_path / "out"
+    out.mkdir()
+    legacy = {
+        "cases": {"c1": {"case_id": "c1", "status": "ok", "answer": "a", "abstained": False}},
+        "resolved": {"model_id": "granite-4.1-8b", "env": {"VLLM_API_KEY": "raw-venue-key"}},
+    }
+    (out / "config-b.rows.json").write_text(json.dumps(legacy), encoding="utf-8")
+    transport = FakeBTransport()
+    drivers.run_config_b(set_path, out, transport=transport)
+    written = json.loads((out / "config-b.rows.json").read_text(encoding="utf-8"))
+    assert "VLLM_API_KEY" not in written["resolved"]["env"]
+    assert written["cases"]["c2"]["status"] == "ok"
+
+
 def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch):
     """The in-container driver's helpers are importable WITHOUT the
     agent-service tree, and against a fake pipeline they prove the row
@@ -390,6 +426,8 @@ def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch
     (``build_context``) touches the component tree — pydantic is in the test
     env; ``noagent`` itself stays unimported (the driver's own docstring
     contract)."""
+    # The graph fallback reads the ambient env — pin the default shape.
+    monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
     import asyncio
     import importlib.util
 
@@ -669,7 +707,8 @@ def _answered_events():
     ]
 
 
-def test_config_c_answered_case_carries_answer_and_usage_record(tmp_path):
+def test_config_c_answered_case_carries_answer_and_usage_record(tmp_path, monkeypatch):
+    monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
     case = {"id": "q1", "query": "What?", "case_class": "answerable"}
     transport = FakeCTransport(FakeRunStream(events=_answered_events()))
     row = drivers.run_one_case_c(case, base_url="http://agent:8000", transport=transport)

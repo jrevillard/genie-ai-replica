@@ -74,6 +74,7 @@ from .manifest import (
     sha256_file,
     sha256_json,
 )
+from .redaction import redact_deep
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -759,6 +760,11 @@ def run_config_b(
 
     cases = _load_entries(set_path)
     prior = _read_rows_file(rows_path)
+    # The resumed prior is redacted at load: a legacy rows file written by
+    # the pre-redaction code may still carry the raw snapshot (see the
+    # write-boundary redaction below).
+    if isinstance(prior.get("resolved"), dict):
+        prior["resolved"] = redact_deep(prior["resolved"])
     done = set(prior.get("cases") or {})
     pending = _pending_in_order(cases, done)
 
@@ -788,6 +794,14 @@ def run_config_b(
         )
         rows_b64 = transport.exec_cmd(container, f"base64 -w0 {CONTAINER_TMP}/rows.json", timeout=60).strip()
         new_rows = json.loads(base64.b64decode(rows_b64).decode("utf-8"))
+        # The driver's resolved snapshot rides verbatim and the rows file is
+        # the committed artifact: credential-named keys (VLLM_API_KEY rode
+        # the VLLM_ prefix into the #2167 campaign's committed copy) are
+        # redacted HERE, at the write boundary, by the protocol's own rule —
+        # before any merge or write. The resumed prior is redacted at load
+        # for the same reason (a legacy file written by the old code).
+        if isinstance(new_rows.get("resolved"), dict):
+            new_rows["resolved"] = redact_deep(new_rows["resolved"])
         resolved = new_rows.get("resolved") or resolved
         prior = _merge_rows(prior, new_rows)
         write_json(rows_path, prior, ensure_ascii=False)

@@ -99,7 +99,7 @@ from protocol.drivers import (  # noqa: E402
 from protocol.coexistence import CoexistenceRefusal, build_coexistence_report  # noqa: E402
 from protocol.e01 import E01Refusal, build_e01_report  # noqa: E402
 from protocol.e02 import E02Refusal, build_e02_report  # noqa: E402
-from protocol.evalset import SetValidationError, coverage_census, load_set  # noqa: E402
+from protocol.evalset import SetValidationError, load_set  # noqa: E402
 from protocol.findings import build_findings_report, report_digest  # noqa: E402
 from protocol.gate import GateRefusal, check_gated_run  # noqa: E402
 from protocol.manifest import (  # noqa: E402

@@ -1,0 +1,3014 @@
+{
+  "per_query": [
+    {
+      "id": "e01-ans-purpose",
+      "query": "What is the test document created for?",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "12705421992542582898",
+        "9482722474953544510"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "1441489693832382079",
+        "18248005600295776544",
+        "9482722474953544510",
+        "4445957285870398295",
+        "1792222312416746468",
+        "5571167925755531815",
+        "10875184957258016303"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "bfe753906261fb51",
+        "2c694fc2dda29b04"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "d4972e995658bf95",
+        "c8bdc3090be190a2",
+        "2c694fc2dda29b04",
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25",
+        "f9de2f99e419d176",
+        "78b10342a7bddf73"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "preview": "This document, named test-document.md, is a markdown test file created for end-to-end (E2E",
+          "match_status": "resolved",
+          "passage_id": "e01-ans-purpose-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-ans-items",
+      "query": "Which three items does Section 1 of the Test Document list?",
+      "trace_found": true,
+      "gold": [
+        "1441489693832382079"
+      ],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951",
+        "9836336135299250997",
+        "1792222312416746468",
+        "18248005600295776544",
+        "12705421992542582898",
+        "7811967199525903308",
+        "10875184957258016303",
+        "5571167925755531815",
+        "4445957285870398295"
+      ],
+      "gold_hashes": [
+        "d4972e995658bf95"
+      ],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "95fff8c2c7f98d25",
+        "c8bdc3090be190a2",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "78b10342a7bddf73",
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "1441489693832382079",
+          "content_hash": "d4972e995658bf95",
+          "preview": "The second chunk, located under Section 1 of the Test Document, lists three items: 'Item o",
+          "match_status": "resolved",
+          "passage_id": "e01-ans-items-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-ans-formatting",
+      "query": "What text formatting does Section 2 of the Test Document demonstrate?",
+      "trace_found": true,
+      "gold": [
+        "9482722474953544510"
+      ],
+      "selected": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951",
+        "12705421992542582898",
+        "9836336135299250997",
+        "18248005600295776544",
+        "7811967199525903308",
+        "10875184957258016303",
+        "5571167925755531815",
+        "1792222312416746468",
+        "4445957285870398295"
+      ],
+      "gold_hashes": [
+        "2c694fc2dda29b04"
+      ],
+      "selected_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "78b10342a7bddf73",
+        "f9de2f99e419d176",
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "9482722474953544510",
+          "content_hash": "2c694fc2dda29b04",
+          "preview": "The third chunk, found in Section 2 of the Test Document, contains a paragraph with italic",
+          "match_status": "resolved",
+          "passage_id": "e01-ans-formatting-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-cite-items",
+      "query": "In which section of the Test Document do the items 'Item one', 'Item two' and 'Item three' appear?",
+      "trace_found": true,
+      "gold": [
+        "1441489693832382079"
+      ],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951",
+        "9836336135299250997",
+        "18248005600295776544",
+        "1792222312416746468",
+        "7811967199525903308",
+        "10875184957258016303",
+        "12705421992542582898",
+        "5571167925755531815",
+        "4445957285870398295"
+      ],
+      "gold_hashes": [
+        "d4972e995658bf95"
+      ],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25",
+        "cd1f0a84b17f77f8",
+        "78b10342a7bddf73",
+        "bfe753906261fb51",
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "1441489693832382079",
+          "content_hash": "d4972e995658bf95",
+          "preview": "The second chunk, located under Section 1 of the Test Document, lists three items: 'Item o",
+          "match_status": "resolved",
+          "passage_id": "e01-cite-items-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-lang-es",
+      "query": "¿Para qué se creó el documento de prueba?",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "12705421992542582898",
+        "9482722474953544510"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "12705421992542582898",
+        "18248005600295776544",
+        "9836336135299250997",
+        "7811967199525903308",
+        "1441489693832382079",
+        "1792222312416746468",
+        "9482722474953544510",
+        "10875184957258016303",
+        "4445957285870398295",
+        "5571167925755531815"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "bfe753906261fb51",
+        "2c694fc2dda29b04"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "bfe753906261fb51",
+        "c8bdc3090be190a2",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "d4972e995658bf95",
+        "95fff8c2c7f98d25",
+        "2c694fc2dda29b04",
+        "78b10342a7bddf73",
+        "6c2155bb25263cc0",
+        "f9de2f99e419d176"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "preview": "This document, named test-document.md, is a markdown test file created for end-to-end (E2E",
+          "match_status": "resolved",
+          "passage_id": "e01-lang-es-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01-lang-zh",
+      "query": "测试文档是为了什么创建的？",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "12705421992542582898",
+        "9482722474953544510"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "12705421992542582898",
+        "18248005600295776544",
+        "9836336135299250997",
+        "7811967199525903308",
+        "1441489693832382079",
+        "1792222312416746468",
+        "9482722474953544510",
+        "4445957285870398295",
+        "10875184957258016303",
+        "5571167925755531815"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "bfe753906261fb51",
+        "2c694fc2dda29b04"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "bfe753906261fb51",
+        "c8bdc3090be190a2",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "d4972e995658bf95",
+        "95fff8c2c7f98d25",
+        "2c694fc2dda29b04",
+        "6c2155bb25263cc0",
+        "78b10342a7bddf73",
+        "f9de2f99e419d176"
+      ],
+      "expected_chunks": [
+        {
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "preview": "This document, named test-document.md, is a markdown test file created for end-to-end (E2E",
+          "match_status": "resolved",
+          "passage_id": "e01-lang-zh-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-dredging-decision",
+      "query": "How long does the municipality take to decide a dredging permit?",
+      "trace_found": true,
+      "gold": [
+        "10875184957258016303"
+      ],
+      "selected": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "6183821602939505951",
+        "5571167925755531815",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "78b10342a7bddf73"
+      ],
+      "selected_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "103b8dd5dbbdabcb",
+        "f9de2f99e419d176",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Dredging permits are decided within thirty days of a complete application",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-dredging-decision-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-cite-dredging-fee",
+      "query": "When was the fee schedule for dredging permits last revised?",
+      "trace_found": true,
+      "gold": [
+        "10875184957258016303"
+      ],
+      "selected": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "10875184957258016303",
+        "1792222312416746468",
+        "18248005600295776544",
+        "7811967199525903308",
+        "12705421992542582898",
+        "9836336135299250997",
+        "6183821602939505951",
+        "4445957285870398295",
+        "5571167925755531815",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "78b10342a7bddf73"
+      ],
+      "selected_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "78b10342a7bddf73",
+        "95fff8c2c7f98d25",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "103b8dd5dbbdabcb",
+        "6c2155bb25263cc0",
+        "f9de2f99e419d176",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the fee schedule for dredging permits was last revised in 2025",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-cite-dredging-fee-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-building-permit",
+      "query": "What does a building permit application require, and how long does its decision take?",
+      "trace_found": true,
+      "gold": [
+        "10875184957258016303"
+      ],
+      "selected": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "10875184957258016303",
+        "1792222312416746468",
+        "18248005600295776544",
+        "4445957285870398295",
+        "7811967199525903308",
+        "6183821602939505951",
+        "9836336135299250997",
+        "12705421992542582898",
+        "5571167925755531815",
+        "9482722474953544510",
+        "1441489693832382079"
+      ],
+      "gold_hashes": [
+        "78b10342a7bddf73"
+      ],
+      "selected_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "78b10342a7bddf73",
+        "95fff8c2c7f98d25",
+        "c8bdc3090be190a2",
+        "6c2155bb25263cc0",
+        "cd1f0a84b17f77f8",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "bfe753906261fb51",
+        "f9de2f99e419d176",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Building permits require the site plan annex and are decided within sixty days",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-building-permit-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-citizen-desk",
+      "query": "Where is the citizen desk and which filings does it handle?",
+      "trace_found": true,
+      "gold": [
+        "5571167925755531815"
+      ],
+      "selected": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "7811967199525903308",
+        "6183821602939505951",
+        "1792222312416746468",
+        "9836336135299250997",
+        "1441489693832382079",
+        "12705421992542582898",
+        "10875184957258016303",
+        "18248005600295776544",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "f9de2f99e419d176"
+      ],
+      "selected_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "cd1f0a84b17f77f8",
+        "103b8dd5dbbdabcb",
+        "95fff8c2c7f98d25",
+        "9bcde1035127e341",
+        "d4972e995658bf95",
+        "bfe753906261fb51",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the citizen desk on the ground floor handles new registrations",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-citizen-desk-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-business-desk",
+      "query": "Which desk handles commercial filings?",
+      "trace_found": true,
+      "gold": [
+        "5571167925755531815"
+      ],
+      "selected": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "6183821602939505951",
+        "9836336135299250997",
+        "1441489693832382079",
+        "7811967199525903308",
+        "9482722474953544510",
+        "18248005600295776544",
+        "1792222312416746468",
+        "12705421992542582898",
+        "10875184957258016303"
+      ],
+      "gold_hashes": [
+        "f9de2f99e419d176"
+      ],
+      "selected_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "d4972e995658bf95",
+        "cd1f0a84b17f77f8",
+        "2c694fc2dda29b04",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "78b10342a7bddf73"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the business desk on the first floor handles commercial filings",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-business-desk-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-desk-hours",
+      "query": "Where are the registration desks' opening hours published?",
+      "trace_found": true,
+      "gold": [
+        "5571167925755531815"
+      ],
+      "selected": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "1792222312416746468",
+        "10875184957258016303",
+        "1441489693832382079",
+        "9836336135299250997",
+        "7811967199525903308",
+        "6183821602939505951",
+        "18248005600295776544",
+        "12705421992542582898",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "f9de2f99e419d176"
+      ],
+      "selected_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25",
+        "78b10342a7bddf73",
+        "d4972e995658bf95",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "103b8dd5dbbdabcb",
+        "c8bdc3090be190a2",
+        "bfe753906261fb51",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "both publish their opening hours in the yearly service calendar",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-desk-hours-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-es-dredging",
+      "query": "¿En qué plazo se resuelve un permiso de dragado?",
+      "trace_found": true,
+      "gold": [
+        "10875184957258016303"
+      ],
+      "selected": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468",
+        "12705421992542582898",
+        "7811967199525903308",
+        "6183821602939505951",
+        "4445957285870398295",
+        "9836336135299250997",
+        "1441489693832382079",
+        "5571167925755531815",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "78b10342a7bddf73"
+      ],
+      "selected_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "103b8dd5dbbdabcb",
+        "6c2155bb25263cc0",
+        "9bcde1035127e341",
+        "d4972e995658bf95",
+        "f9de2f99e419d176",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Dredging permits are decided within thirty days of a complete application",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-es-dredging-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-fr-citizen-desk",
+      "query": "Où se trouve le guichet des citoyens et quels dépôts traite-t-il ?",
+      "trace_found": true,
+      "gold": [
+        "5571167925755531815"
+      ],
+      "selected": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "7811967199525903308",
+        "1792222312416746468",
+        "18248005600295776544",
+        "12705421992542582898",
+        "1441489693832382079",
+        "6183821602939505951",
+        "10875184957258016303",
+        "9836336135299250997",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "f9de2f99e419d176"
+      ],
+      "selected_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "cd1f0a84b17f77f8",
+        "95fff8c2c7f98d25",
+        "c8bdc3090be190a2",
+        "bfe753906261fb51",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "78b10342a7bddf73",
+        "9bcde1035127e341",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the citizen desk on the ground floor handles new registrations",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-fr-citizen-desk-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-permit-deadlines",
+      "query": "Which decision deadlines does the catalogue state for permits?",
+      "trace_found": true,
+      "gold": [
+        "10875184957258016303",
+        "10875184957258016303"
+      ],
+      "selected": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "5571167925755531815",
+        "1792222312416746468",
+        "7811967199525903308",
+        "9836336135299250997",
+        "4445957285870398295",
+        "12705421992542582898",
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "78b10342a7bddf73",
+        "78b10342a7bddf73"
+      ],
+      "selected_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "f9de2f99e419d176",
+        "95fff8c2c7f98d25",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Dredging permits are decided within thirty days of a complete application",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-permit-deadlines-p0"
+        },
+        {
+          "preview": "Building permits require the site plan annex and are decided within sixty days",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-permit-deadlines-p1"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 2,
+      "passages_retrieved": 2
+    },
+    {
+      "id": "e01g-ans-desk-directory",
+      "query": "Which registration desks does the catalogue list, and where is each one?",
+      "trace_found": true,
+      "gold": [
+        "5571167925755531815",
+        "5571167925755531815"
+      ],
+      "selected": [
+        "5571167925755531815",
+        "10875184957258016303",
+        "18248005600295776544"
+      ],
+      "candidates": [
+        "5571167925755531815",
+        "1441489693832382079",
+        "4445957285870398295",
+        "7811967199525903308",
+        "10875184957258016303",
+        "1792222312416746468",
+        "18248005600295776544",
+        "9836336135299250997",
+        "12705421992542582898",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "f9de2f99e419d176",
+        "f9de2f99e419d176"
+      ],
+      "selected_hashes": [
+        "f9de2f99e419d176",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2"
+      ],
+      "candidate_hashes": [
+        "f9de2f99e419d176",
+        "d4972e995658bf95",
+        "6c2155bb25263cc0",
+        "cd1f0a84b17f77f8",
+        "78b10342a7bddf73",
+        "95fff8c2c7f98d25",
+        "c8bdc3090be190a2",
+        "9bcde1035127e341",
+        "bfe753906261fb51",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the citizen desk on the ground floor handles new registrations",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-desk-directory-p0"
+        },
+        {
+          "preview": "the business desk on the first floor handles commercial filings",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-desk-directory-p1"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 2,
+      "passages_retrieved": 2
+    },
+    {
+      "id": "e01g-lang-es-desk-hours",
+      "query": "¿Dónde se publican los horarios de los mostradores de registro?",
+      "trace_found": true,
+      "gold": [
+        "5571167925755531815"
+      ],
+      "selected": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "10875184957258016303"
+      ],
+      "candidates": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "1792222312416746468",
+        "10875184957258016303",
+        "1441489693832382079",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "18248005600295776544",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "f9de2f99e419d176"
+      ],
+      "selected_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "78b10342a7bddf73"
+      ],
+      "candidate_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25",
+        "78b10342a7bddf73",
+        "d4972e995658bf95",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "both publish their opening hours in the yearly service calendar",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-es-desk-hours-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-fr-building-permit",
+      "query": "Que faut-il joindre à une demande de permis de construire ?",
+      "trace_found": true,
+      "gold": [
+        "10875184957258016303"
+      ],
+      "selected": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "10875184957258016303",
+        "1792222312416746468",
+        "18248005600295776544",
+        "4445957285870398295",
+        "12705421992542582898",
+        "9836336135299250997",
+        "1441489693832382079",
+        "6183821602939505951",
+        "7811967199525903308",
+        "9482722474953544510",
+        "5571167925755531815"
+      ],
+      "gold_hashes": [
+        "78b10342a7bddf73"
+      ],
+      "selected_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "78b10342a7bddf73",
+        "95fff8c2c7f98d25",
+        "c8bdc3090be190a2",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "cd1f0a84b17f77f8",
+        "2c694fc2dda29b04",
+        "f9de2f99e419d176"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Building permits require the site plan annex and are decided within sixty days",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-fr-building-permit-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-paraphrase-citizen-desk",
+      "query": "On which floor do citizens go to submit a first-time registration?",
+      "trace_found": true,
+      "gold": [
+        "5571167925755531815"
+      ],
+      "selected": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "1441489693832382079"
+      ],
+      "candidates": [
+        "5571167925755531815",
+        "4445957285870398295",
+        "6183821602939505951",
+        "9836336135299250997",
+        "7811967199525903308",
+        "1441489693832382079",
+        "1792222312416746468",
+        "12705421992542582898",
+        "9482722474953544510",
+        "10875184957258016303",
+        "18248005600295776544"
+      ],
+      "gold_hashes": [
+        "f9de2f99e419d176"
+      ],
+      "selected_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "d4972e995658bf95"
+      ],
+      "candidate_hashes": [
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "d4972e995658bf95",
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "2c694fc2dda29b04",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the citizen desk on the ground floor handles new registrations",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "5571167925755531815",
+          "content_hash": "f9de2f99e419d176",
+          "match_status": "resolved",
+          "passage_id": "e01g-paraphrase-citizen-desk-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-paraphrase-dredging-window",
+      "query": "How many days does the municipality have to decide a complete dredging application?",
+      "trace_found": true,
+      "gold": [
+        "10875184957258016303"
+      ],
+      "selected": [
+        "10875184957258016303",
+        "18248005600295776544",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "10875184957258016303",
+        "1792222312416746468",
+        "18248005600295776544",
+        "4445957285870398295",
+        "7811967199525903308",
+        "12705421992542582898",
+        "9836336135299250997",
+        "6183821602939505951",
+        "5571167925755531815",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "78b10342a7bddf73"
+      ],
+      "selected_hashes": [
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "78b10342a7bddf73",
+        "95fff8c2c7f98d25",
+        "c8bdc3090be190a2",
+        "6c2155bb25263cc0",
+        "cd1f0a84b17f77f8",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "103b8dd5dbbdabcb",
+        "f9de2f99e419d176",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Dredging permits are decided within thirty days of a complete application",
+          "source_doc": "e01-sec-doc-catalogue-e01.md",
+          "chunk_key": "10875184957258016303",
+          "content_hash": "78b10342a7bddf73",
+          "match_status": "resolved",
+          "passage_id": "e01g-paraphrase-dredging-window-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-sr0871-status",
+      "query": "What is the status of service request SR-2026-0871?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "12705421992542582898",
+        "4445957285870398295"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "10875184957258016303",
+        "18248005600295776544",
+        "5571167925755531815",
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "6c2155bb25263cc0"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "f9de2f99e419d176",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0871 is under review by the permits office",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr0871-status-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-sr0871-date",
+      "query": "When did service request SR-2026-0871 move to under review?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "18248005600295776544",
+        "9836336135299250997",
+        "7811967199525903308",
+        "1441489693832382079",
+        "10875184957258016303",
+        "5571167925755531815",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "c8bdc3090be190a2",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "d4972e995658bf95",
+        "78b10342a7bddf73",
+        "f9de2f99e419d176",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "its status changed from received to under review on 3 November 2026",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr0871-date-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-sr0852-completed",
+      "query": "Was service request SR-2026-0852 completed?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "10875184957258016303",
+        "18248005600295776544",
+        "7811967199525903308",
+        "9836336135299250997",
+        "5571167925755531815",
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "f9de2f99e419d176",
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0852 was completed on 28 October 2026",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr0852-completed-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-sr0852-notice",
+      "query": "How was the applicant of service request SR-2026-0852 informed of the completion?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "18248005600295776544",
+        "10875184957258016303",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "9482722474953544510",
+        "1441489693832382079",
+        "5571167925755531815",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "c8bdc3090be190a2",
+        "78b10342a7bddf73",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "f9de2f99e419d176",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the completion notice was mailed to the applicant",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr0852-notice-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-sr0903-waiting",
+      "query": "What is service request SR-2026-0903 waiting for?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "18248005600295776544",
+        "5571167925755531815",
+        "6183821602939505951",
+        "10875184957258016303",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "f9de2f99e419d176",
+        "103b8dd5dbbdabcb",
+        "78b10342a7bddf73",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0903 waits for the applicant's site-access consent and cannot be scheduled before it arrives",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr0903-waiting-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-followup-method",
+      "query": "How do applicants follow up on a service request?",
+      "trace_found": true,
+      "gold": [
+        "4445957285870398295"
+      ],
+      "selected": [
+        "4445957285870398295",
+        "1792222312416746468",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "4445957285870398295",
+        "1792222312416746468",
+        "12705421992542582898",
+        "9836336135299250997",
+        "18248005600295776544",
+        "7811967199525903308",
+        "5571167925755531815",
+        "1441489693832382079",
+        "10875184957258016303",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "6c2155bb25263cc0"
+      ],
+      "selected_hashes": [
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "f9de2f99e419d176",
+        "d4972e995658bf95",
+        "78b10342a7bddf73",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Applicants follow up on a service request by quoting the request number at the citizen desk",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "4445957285870398295",
+          "content_hash": "6c2155bb25263cc0",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-followup-method-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-desk-acceleration",
+      "query": "Can the citizen desk speed up a review that is still in progress?",
+      "trace_found": true,
+      "gold": [
+        "4445957285870398295"
+      ],
+      "selected": [
+        "4445957285870398295",
+        "5571167925755531815",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "4445957285870398295",
+        "5571167925755531815",
+        "1792222312416746468",
+        "9836336135299250997",
+        "18248005600295776544",
+        "7811967199525903308",
+        "10875184957258016303",
+        "12705421992542582898",
+        "1441489693832382079",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "6c2155bb25263cc0"
+      ],
+      "selected_hashes": [
+        "6c2155bb25263cc0",
+        "f9de2f99e419d176",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "6c2155bb25263cc0",
+        "f9de2f99e419d176",
+        "95fff8c2c7f98d25",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "78b10342a7bddf73",
+        "bfe753906261fb51",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "the desk reads the same status bulletin published here and cannot accelerate a review that is still in progress",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "4445957285870398295",
+          "content_hash": "6c2155bb25263cc0",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-desk-acceleration-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-es-sr0852",
+      "query": "¿Cuándo se completó la solicitud de servicio SR-2026-0852?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "12705421992542582898",
+        "5571167925755531815"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "12705421992542582898",
+        "18248005600295776544",
+        "4445957285870398295",
+        "10875184957258016303",
+        "7811967199525903308",
+        "9836336135299250997",
+        "5571167925755531815",
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "f9de2f99e419d176"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "c8bdc3090be190a2",
+        "6c2155bb25263cc0",
+        "78b10342a7bddf73",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "f9de2f99e419d176",
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0852 was completed on 28 October 2026",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-es-sr0852-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-zh-sr0903",
+      "query": "服务请求 SR-2026-0903 正在等待什么？",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "18248005600295776544",
+        "5571167925755531815",
+        "6183821602939505951",
+        "10875184957258016303",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "f9de2f99e419d176",
+        "103b8dd5dbbdabcb",
+        "78b10342a7bddf73",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0903 waits for the applicant's site-access consent and cannot be scheduled before it arrives",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-zh-sr0903-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-cite-followup-doc",
+      "query": "Which document explains how to follow up on a service request?",
+      "trace_found": true,
+      "gold": [
+        "4445957285870398295"
+      ],
+      "selected": [
+        "4445957285870398295",
+        "12705421992542582898",
+        "1792222312416746468"
+      ],
+      "candidates": [
+        "4445957285870398295",
+        "1792222312416746468",
+        "12705421992542582898",
+        "9836336135299250997",
+        "6183821602939505951",
+        "7811967199525903308",
+        "1441489693832382079",
+        "18248005600295776544",
+        "10875184957258016303",
+        "5571167925755531815",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "6c2155bb25263cc0"
+      ],
+      "selected_hashes": [
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "95fff8c2c7f98d25"
+      ],
+      "candidate_hashes": [
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "103b8dd5dbbdabcb",
+        "cd1f0a84b17f77f8",
+        "d4972e995658bf95",
+        "c8bdc3090be190a2",
+        "78b10342a7bddf73",
+        "f9de2f99e419d176",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Applicants follow up on a service request by quoting the request number at the citizen desk",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "4445957285870398295",
+          "content_hash": "6c2155bb25263cc0",
+          "match_status": "resolved",
+          "passage_id": "e01g-cite-followup-doc-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-sr0871-office-paraphrase",
+      "query": "Which office is currently reviewing service request SR-2026-0871?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "9836336135299250997",
+        "7811967199525903308",
+        "5571167925755531815",
+        "18248005600295776544",
+        "10875184957258016303",
+        "6183821602939505951",
+        "1441489693832382079",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "f9de2f99e419d176",
+        "c8bdc3090be190a2",
+        "78b10342a7bddf73",
+        "103b8dd5dbbdabcb",
+        "d4972e995658bf95",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0871 is under review by the permits office",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr0871-office-paraphrase-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-paraphrase-sr-followup",
+      "query": "Where must an applicant quote the request number to follow up?",
+      "trace_found": true,
+      "gold": [
+        "4445957285870398295"
+      ],
+      "selected": [
+        "4445957285870398295",
+        "18248005600295776544",
+        "12705421992542582898"
+      ],
+      "candidates": [
+        "4445957285870398295",
+        "18248005600295776544",
+        "1792222312416746468",
+        "12705421992542582898",
+        "9836336135299250997",
+        "7811967199525903308",
+        "1441489693832382079",
+        "6183821602939505951",
+        "10875184957258016303",
+        "9482722474953544510",
+        "5571167925755531815"
+      ],
+      "gold_hashes": [
+        "6c2155bb25263cc0"
+      ],
+      "selected_hashes": [
+        "6c2155bb25263cc0",
+        "c8bdc3090be190a2",
+        "bfe753906261fb51"
+      ],
+      "candidate_hashes": [
+        "6c2155bb25263cc0",
+        "c8bdc3090be190a2",
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "78b10342a7bddf73",
+        "2c694fc2dda29b04",
+        "f9de2f99e419d176"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Applicants follow up on a service request by quoting the request number at the citizen desk",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "4445957285870398295",
+          "content_hash": "6c2155bb25263cc0",
+          "match_status": "resolved",
+          "passage_id": "e01g-paraphrase-sr-followup-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-fr-sr0871",
+      "query": "Quel est l'état de la demande de service SR-2026-0871 ?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "12705421992542582898",
+        "4445957285870398295"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "7811967199525903308",
+        "9836336135299250997",
+        "10875184957258016303",
+        "18248005600295776544",
+        "5571167925755531815",
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "6c2155bb25263cc0"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "9bcde1035127e341",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "f9de2f99e419d176",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0871 is under review by the permits office",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-fr-sr0871-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-sr-open-requests",
+      "query": "Which service requests does the November bulletin list as not yet completed?",
+      "trace_found": true,
+      "gold": [
+        "1792222312416746468",
+        "1792222312416746468"
+      ],
+      "selected": [
+        "1792222312416746468",
+        "12705421992542582898",
+        "4445957285870398295"
+      ],
+      "candidates": [
+        "1792222312416746468",
+        "4445957285870398295",
+        "12705421992542582898",
+        "9836336135299250997",
+        "18248005600295776544",
+        "10875184957258016303",
+        "7811967199525903308",
+        "5571167925755531815",
+        "1441489693832382079",
+        "6183821602939505951",
+        "9482722474953544510"
+      ],
+      "gold_hashes": [
+        "95fff8c2c7f98d25",
+        "95fff8c2c7f98d25"
+      ],
+      "selected_hashes": [
+        "95fff8c2c7f98d25",
+        "bfe753906261fb51",
+        "6c2155bb25263cc0"
+      ],
+      "candidate_hashes": [
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0",
+        "bfe753906261fb51",
+        "9bcde1035127e341",
+        "c8bdc3090be190a2",
+        "78b10342a7bddf73",
+        "cd1f0a84b17f77f8",
+        "f9de2f99e419d176",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Service request SR-2026-0871 is under review by the permits office",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr-open-requests-p0"
+        },
+        {
+          "preview": "Service request SR-2026-0903 waits for the applicant's site-access consent and cannot be scheduled before it arrives",
+          "source_doc": "e01-sec-doc-servicerequest-e01.md",
+          "chunk_key": "1792222312416746468",
+          "content_hash": "95fff8c2c7f98d25",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-sr-open-requests-p1"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 2,
+      "passages_retrieved": 2
+    },
+    {
+      "id": "e01g-ans-doc-format",
+      "query": "In which markup format is the E2E test file written?",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "9482722474953544510",
+        "1441489693832382079"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "9482722474953544510",
+        "9836336135299250997",
+        "7811967199525903308",
+        "12705421992542582898",
+        "1441489693832382079",
+        "18248005600295776544",
+        "5571167925755531815",
+        "4445957285870398295",
+        "1792222312416746468",
+        "10875184957258016303"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04",
+        "9bcde1035127e341",
+        "cd1f0a84b17f77f8",
+        "bfe753906261fb51",
+        "d4972e995658bf95",
+        "c8bdc3090be190a2",
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "95fff8c2c7f98d25",
+        "78b10342a7bddf73"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "This is a **markdown** test file for E2E upload validation.",
+          "source_doc": "test-document.md",
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-doc-format-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-ans-item-count",
+      "query": "How many items does Section 1 of the test document list?",
+      "trace_found": true,
+      "gold": [
+        "1441489693832382079"
+      ],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951",
+        "9836336135299250997",
+        "4445957285870398295",
+        "10875184957258016303",
+        "18248005600295776544",
+        "7811967199525903308",
+        "12705421992542582898",
+        "1792222312416746468",
+        "5571167925755531815"
+      ],
+      "gold_hashes": [
+        "d4972e995658bf95"
+      ],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "6c2155bb25263cc0",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "bfe753906261fb51",
+        "95fff8c2c7f98d25",
+        "f9de2f99e419d176"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "- Item one\n- Item two\n- Item three",
+          "source_doc": "test-document.md",
+          "chunk_key": "1441489693832382079",
+          "content_hash": "d4972e995658bf95",
+          "match_status": "resolved",
+          "passage_id": "e01g-ans-item-count-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-paraphrase-format-section",
+      "query": "Which section of the test document shows italic and bold text?",
+      "trace_found": true,
+      "gold": [
+        "9482722474953544510"
+      ],
+      "selected": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "9482722474953544510",
+        "1441489693832382079",
+        "6183821602939505951",
+        "9836336135299250997",
+        "12705421992542582898",
+        "18248005600295776544",
+        "7811967199525903308",
+        "10875184957258016303",
+        "5571167925755531815",
+        "1792222312416746468",
+        "4445957285870398295"
+      ],
+      "gold_hashes": [
+        "2c694fc2dda29b04"
+      ],
+      "selected_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "2c694fc2dda29b04",
+        "d4972e995658bf95",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "bfe753906261fb51",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "78b10342a7bddf73",
+        "f9de2f99e419d176",
+        "95fff8c2c7f98d25",
+        "6c2155bb25263cc0"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "Some paragraph text with *italic* and **bold** formatting.",
+          "source_doc": "test-document.md",
+          "chunk_key": "9482722474953544510",
+          "content_hash": "2c694fc2dda29b04",
+          "match_status": "resolved",
+          "passage_id": "e01g-paraphrase-format-section-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-es-items",
+      "query": "¿Cuántos elementos enumera la Sección 1 del documento de prueba?",
+      "trace_found": true,
+      "gold": [
+        "1441489693832382079"
+      ],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951",
+        "9836336135299250997",
+        "4445957285870398295",
+        "10875184957258016303",
+        "18248005600295776544",
+        "7811967199525903308",
+        "12705421992542582898",
+        "1792222312416746468",
+        "5571167925755531815"
+      ],
+      "gold_hashes": [
+        "d4972e995658bf95"
+      ],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "6c2155bb25263cc0",
+        "78b10342a7bddf73",
+        "c8bdc3090be190a2",
+        "cd1f0a84b17f77f8",
+        "bfe753906261fb51",
+        "95fff8c2c7f98d25",
+        "f9de2f99e419d176"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "- Item one\n- Item two\n- Item three",
+          "source_doc": "test-document.md",
+          "chunk_key": "1441489693832382079",
+          "content_hash": "d4972e995658bf95",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-es-items-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-lang-zh-doc-format",
+      "query": "端到端测试文件是用什么标记格式编写的？",
+      "trace_found": true,
+      "gold": [
+        "6183821602939505951"
+      ],
+      "selected": [
+        "6183821602939505951",
+        "9482722474953544510",
+        "1441489693832382079"
+      ],
+      "candidates": [
+        "6183821602939505951",
+        "9482722474953544510",
+        "18248005600295776544",
+        "9836336135299250997",
+        "12705421992542582898",
+        "7811967199525903308",
+        "1441489693832382079",
+        "5571167925755531815",
+        "4445957285870398295",
+        "10875184957258016303",
+        "1792222312416746468"
+      ],
+      "gold_hashes": [
+        "103b8dd5dbbdabcb"
+      ],
+      "selected_hashes": [
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04",
+        "d4972e995658bf95"
+      ],
+      "candidate_hashes": [
+        "103b8dd5dbbdabcb",
+        "2c694fc2dda29b04",
+        "c8bdc3090be190a2",
+        "9bcde1035127e341",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "d4972e995658bf95",
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "78b10342a7bddf73",
+        "95fff8c2c7f98d25"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "This is a **markdown** test file for E2E upload validation.",
+          "source_doc": "test-document.md",
+          "chunk_key": "6183821602939505951",
+          "content_hash": "103b8dd5dbbdabcb",
+          "match_status": "resolved",
+          "passage_id": "e01g-lang-zh-doc-format-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    },
+    {
+      "id": "e01g-paraphrase-item-count",
+      "query": "Does the test document's Section 1 contain exactly three entries?",
+      "trace_found": true,
+      "gold": [
+        "1441489693832382079"
+      ],
+      "selected": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "6183821602939505951"
+      ],
+      "candidates": [
+        "1441489693832382079",
+        "9482722474953544510",
+        "18248005600295776544",
+        "6183821602939505951",
+        "9836336135299250997",
+        "12705421992542582898",
+        "7811967199525903308",
+        "1792222312416746468",
+        "5571167925755531815",
+        "4445957285870398295",
+        "10875184957258016303"
+      ],
+      "gold_hashes": [
+        "d4972e995658bf95"
+      ],
+      "selected_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "103b8dd5dbbdabcb"
+      ],
+      "candidate_hashes": [
+        "d4972e995658bf95",
+        "2c694fc2dda29b04",
+        "c8bdc3090be190a2",
+        "103b8dd5dbbdabcb",
+        "9bcde1035127e341",
+        "bfe753906261fb51",
+        "cd1f0a84b17f77f8",
+        "95fff8c2c7f98d25",
+        "f9de2f99e419d176",
+        "6c2155bb25263cc0",
+        "78b10342a7bddf73"
+      ],
+      "expected_chunks": [
+        {
+          "preview": "- Item one\n- Item two\n- Item three",
+          "source_doc": "test-document.md",
+          "chunk_key": "1441489693832382079",
+          "content_hash": "d4972e995658bf95",
+          "match_status": "resolved",
+          "passage_id": "e01g-paraphrase-item-count-p0"
+        }
+      ],
+      "adaptive_breakdown": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "complete_recall": 1.0,
+      "noise": 0.6666666666666667,
+      "retrieval_recall": 1.0,
+      "recall_at_1": 1.0,
+      "ndcg_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "ndcg_at_5": 1.0,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 1.0,
+      "passage_recall": 1.0,
+      "n_passages": 1,
+      "passages_retrieved": 1
+    }
+  ],
+  "aggregate": {
+    "n": 40,
+    "recall": 1.0,
+    "precision": 0.3333333333333333,
+    "complete_recall": 1.0,
+    "noise": 0.6666666666666667,
+    "retrieval_recall": 1.0,
+    "recall_at_1": 1.0,
+    "ndcg_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "ndcg_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "ndcg_at_5": 1.0,
+    "recall_at_10": 1.0,
+    "ndcg_at_10": 1.0,
+    "passage_recall": 1.0,
+    "total_passages": 43,
+    "retrieved_passages": 43,
+    "n_evaluable": 40,
+    "n_empty_gold": 0,
+    "n_unresolved_gold": 0
+  },
+  "n_missed_traces": 0,
+  "n_unmapped_chunk_keys": 0,
+  "n_http_errors": 0,
+  "skipped_entries": []
+}

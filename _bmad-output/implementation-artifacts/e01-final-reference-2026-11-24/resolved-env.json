@@ -1,0 +1,20 @@
+{
+ "LLM_MODEL": "ibm-granite/granite-4.1-8b",
+ "RERANKER_TOP_N": "3",
+ "RERANKING_STRATEGY": "slice",
+ "RERANKING_THRESHOLD": "0.75",
+ "RETRIEVER_ARANGO_DISTANCE_THRESHOLD": "1",
+ "RETRIEVER_ARANGO_FETCH_K": "30",
+ "RETRIEVER_ARANGO_K": "20",
+ "RETRIEVER_ARANGO_LAMBDA_MULT": "0.5",
+ "RETRIEVER_ARANGO_SCORE_THRESHOLD": "0.2",
+ "RETRIEVER_ARANGO_SEARCH_START": "chunk",
+ "RETRIEVER_ARANGO_TRAVERSAL_ENABLED": "true",
+ "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH": "2",
+ "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED": "5",
+ "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD": "0.7",
+ "VLLM_LLM_ENDPOINT": "https://ai.assembly.govstack.global:444/llm",
+ "VLLM_TRANSLATION_ENDPOINT": "https://ai.assembly.govstack.global:444/translation",
+ "VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it",
+ "model_ids_note": "the venue /v1/models requires a bearer; the model id rides LLM_MODEL here (read live from the chatqna pod 2026-11-24, issue #2162 run)"
+}

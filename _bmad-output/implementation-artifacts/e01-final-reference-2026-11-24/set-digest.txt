@@ -1,0 +1,1 @@
+cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812  /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2162/_bmad-output/implementation-artifacts/e01-final-reference-2026-11-24/assessment-set.json

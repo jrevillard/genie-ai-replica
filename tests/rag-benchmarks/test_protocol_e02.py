@@ -859,3 +859,84 @@ def test_e02_counts_a_budget_exhausted_cancelled_row_as_a_limit_hit():
     failure_class = report["gains"]["per_class"]["failure"]
     assert failure_class["C"]["n_limit_hit"] == 1
     assert failure_class["C"]["n_cancelled"] == 0
+
+
+def test_e02_fails_closed_on_a_leg_referential_scope_spelling():
+    """A scope that names a leg WITHOUT the word "config" ("the B leg only",
+    "scoped to C", "the A reference's metrics") names a configuration this
+    harness does not parse: the bound is applied to NO leg — a leg-referential
+    scope that slipped through would gate BOTH legs on a comparison the scope
+    explicitly excluded."""
+    for scope in (
+        "the B leg only — chunk-level bounds",
+        "scoped to C — the doc-level surface",
+        "the A reference's chunk anchor metrics",
+    ):
+        thresholds = _thresholds(scope=scope)
+        report = _report(thresholds=thresholds)
+        for leg in ("B", "C"):
+            threshold = report["dimensions"]["M-1"][leg]["threshold"]
+            assert threshold["status"] == "uninterpretable", scope
+            assert threshold["bounds"][0]["outcome"] == "uninterpretable"
+
+
+def test_e02_keeps_a_prose_scope_surface_neutral():
+    """Ordinary prose without any configuration mention stays surface-neutral:
+    the fail-closed detection is case-sensitive on the letter tokens, so the
+    English article \"a\" does not block an honestly-neutral scope."""
+    thresholds = _thresholds(
+        scope="the doc-level answer surface, measured with a per-case count",
+        metrics={"n_rows_with_source_documents": {"operator": ">=", "threshold": 1}},
+    )
+    report = _report(thresholds=thresholds)
+    for leg in ("B", "C"):
+        assert report["dimensions"]["M-1"][leg]["threshold"]["status"] == "applied"
+
+
+def test_e02_cost_absence_names_the_records_it_did_find():
+    """Rows carrying usage records with no cost counters are a DIFFERENT
+    absence from rows carrying no usage record: the reason must not
+    contradict the report's own per_case rows."""
+    c_rows = _c_rows()
+    c_rows["c1"] = dict(c_rows["c1"], usage_record={"outcome": "completed"})
+    c_rows["c2"] = dict(c_rows["c2"], usage_record={"outcome": "completed"})
+    report = _report(c_rows=c_rows)
+    surface = report["dimensions"]["M-5"]["C"]
+    assert surface["available"] is False
+    assert "none of the cost vocabulary's counters" in surface["not_available_reason"]
+    assert surface["not_available_reason"].startswith("the rows carry usage records")
+
+
+def test_e02_resolved_env_does_not_claim_identical_over_unrecorded_maps():
+    """Two empty committed maps are two UNRECORDED envs — never an identical
+    pair."""
+    b_manifest, c_manifest = _legs()
+    b_manifest["configuration"]["B"]["resolved_env"] = {}
+    c_manifest["configuration"]["C"]["resolved_env"] = {}
+    report = build_e02_report(
+        b_manifest=b_manifest,
+        c_manifest=c_manifest,
+        b_rows=_b_rows(),
+        c_rows=_c_rows(),
+        entries=_entries(),
+        set_sha256=SET_SHA,
+        created_utc=CREATED,
+    )
+    assert report["uncontrolled_differences"]["resolved_env"]["state"] == "not_recorded"
+
+
+def test_e02_reads_the_resource_record_limit_marker_on_the_b_leg():
+    """The B census reads the limit marker on BOTH shapes the counter-metrics
+    vocabulary reads — a row carrying only a budget-exhausted usage outcome is
+    a limit hit in the census and a limit hit in CM-3: one row, one name."""
+    b_rows = _b_rows()
+    b_rows["c1"] = dict(
+        b_rows["c1"],
+        abstained=False,
+        abstention_reason=None,
+        metadata={"usage": {"model_calls": 1, "outcome": "budget_exhausted"}},
+    )
+    report = _report(b_rows=b_rows)
+    multi_hop = report["gains"]["per_class"]["multi_hop"]
+    assert multi_hop["B"]["n_limit_hit"] == 1
+    assert multi_hop["B"]["n_answered"] == 0

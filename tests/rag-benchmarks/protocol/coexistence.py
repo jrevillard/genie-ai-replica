@@ -456,16 +456,30 @@ def _agent_load_summary(agent_load: dict) -> dict:
     outcome tally can never reveal a request that vanished (queued by the
     lane, run died) — the silent failure the saturation rule exists to catch.
     """
-    outcomes = agent_load.get("outcomes") or {}
+    outcomes = agent_load.get("outcomes")
     if not isinstance(outcomes, dict):
-        raise CoexistenceRefusal("invalid_measurement", "the agentic load's outcomes are not a mapping")
+        raise CoexistenceRefusal(
+            "invalid_measurement",
+            "the agentic load's outcomes are not a mapping — a tally nobody can read is not a"
+            " measurement",
+        )
     # One numeric tally, read once: a boolean outcome value is not a request,
-    # and every count derived from the tally must agree with it.
-    numeric_outcomes = {
-        name: count
-        for name, count in outcomes.items()
-        if isinstance(count, int) and not isinstance(count, bool)
-    }
+    # and every count derived from the tally must agree with it. A count that
+    # is neither a number nor a bool is a MIS-TYPED entry — dropping it would
+    # fabricate vanished requests (a breach nobody measured), so the record is
+    # refused instead.
+    numeric_outcomes = {}
+    for name, count in outcomes.items():
+        if isinstance(count, bool):
+            continue
+        if not isinstance(count, int):
+            raise CoexistenceRefusal(
+                "invalid_measurement",
+                f"the agentic load's outcome count for {name!r} is {type(count).__name__}, not an"
+                " integer — dropping it would fabricate a vanished request, so the record is"
+                " refused",
+            )
+        numeric_outcomes[name] = count
     n_terminal = sum(numeric_outcomes.values())
     n_requests = agent_load.get("requests")
     requests_recorded = isinstance(n_requests, int) and not isinstance(n_requests, bool)
@@ -514,7 +528,18 @@ def _agent_load_summary(agent_load: dict) -> dict:
         "requests_recorded_independently": requests_recorded,
         "outcomes": outcomes,
         "n_admission_refusals": n_refusals,
-        "admission_refusal_rate": (n_refusals / n_requests) if n_requests else None,
+        "admission_refusal_rate": (
+            (n_refusals / n_requests)
+            if n_requests and requests_recorded
+            else None
+        ),
+        "admission_refusal_rate_note": (
+            None
+            if requests_recorded
+            else "the rate is not published: the record carries no independent request count, so a"
+            " rate over the terminal tally would present a denominator the record says were never"
+            " counted"
+        ),
         "n_without_terminal_outcome": n_without_terminal,
         "every_request_reached_a_terminal_outcome": n_without_terminal == 0,
         "saturation_check_available": saturation_checked,

@@ -71,7 +71,8 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 S4 exits when checks 1–5 are green with their evidence recorded. Today:
 
 - check 3 (V06) and check 4 (V08) are recorded;
-- check 1 and check 2 are OPEN on the same single predecessor — the signed thresholds artifact, which needs M-2..M-5 agreed (the operator's decision);
-- check 5 is OPEN on the live comparison and on the agreed legacy limits (M-4).
+- check 1 (E01) is OPEN on one predecessor — the signed thresholds artifact, which needs M-2..M-5 agreed (the operator's decision);
+- check 2 (E02) is OPEN on THREE distinct predecessors: the same signed thresholds artifact, the multi-hop/ambiguous assessment set (the gains the PRD §4.1 note describes are otherwise not measurable), and the #2145 gold annotations (a C verdict must not be composed while 10 of the set's answerable cases carry no gold);
+- check 5 (coexistence) is OPEN on the live comparison and on the operator's limits artifact — the absolute legacy limits (M-4 is absent; error/availability have no dimension of their own) AND the regression tolerance between the two phases.
 
 The S4 exit is therefore **blocked on operator decisions, not on missing machinery**: the machinery (the E01 layer, the E02 layer, the coexistence criterion, the threshold registry) is delivered and green, and every gate that is still closed says which artifact is missing and who owns it. Nothing here is absorbed silently.

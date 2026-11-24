@@ -234,6 +234,20 @@ Global review round 2 (on 58c0672f0, after the clean FIX-REVIEW): 3 important, 6
 | 8 | boolean outcome values counted as requests in the coexistence load tally | nit | applied — the numeric readers reject bool, mirroring the rest of the module |
 | 9 | the M-4 latency surface's counts did not reconcile (an answered row with a missing wall_ms appeared in neither count) | nit | applied — `n_answered_rows_missing_wall_ms` makes the population visible |
 
+Global review round 3 (on a31fd48c4, after the clean FIX-REVIEW): 1 important, 8 nit. All applied:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | the scope rule still failed open for leg-referential spellings WITHOUT the word "config" ("the B leg only", "scoped to C", "the A reference's metrics" were read as surface-neutral and gated BOTH legs) | important | applied — a scope is surface-neutral ONLY when it names no configuration at all: any standalone uppercase A/B/C token (case-sensitive on purpose, so the English article "a" does not block honest prose) or the bare word "config" outside the canonical spelling names a configuration the harness does not parse → UNINTERPRETABLE, applied to no leg |
+| 2 | the resolved-env state could claim "identical" over the build-time-redacted maps, and over two empty maps | nit | applied — "identical" means identical over the recorded keys (the note says credential-named keys are not comparable); two empty maps are "not_recorded" |
+| 3 | a mis-typed outcome tally count (a float or a string) was silently dropped, fabricating vanished requests | nit | applied — a non-integer non-bool tally count is a typed refusal (`invalid_measurement`), never a fabricated breach; a non-mapping outcomes value too |
+| 4 | the promotion-decision evidence record claimed "verbatim" but was width-truncated mid-word | nit | applied — re-captured unwrapped, the header says so |
+| 5 | the B census read the limit marker on the abstention-reason shape only; CM-3 reads the resource-record marker for both shapes | nit | applied — the B census reads BOTH shapes, pinned by a test |
+| 6 | `cmd_e02` died with a traceback on a missing/unreadable `--set` file | nit | applied — OSError is caught beside SetValidationError → a typed refusal |
+| 7 | the M-5 absence reason claimed "no usage_record" when the rows carried records with no cost counters | nit | applied — the two absences are distinguished, so the reason cannot contradict the report's own per_case rows |
+| 8 | the admission-refusal rate divided by the terminal tally when the request count was unrecorded | nit | applied — the rate is not published over an unmeasured denominator; a note says why |
+| 9 | the S4 exit-condition summary absorbed two of check 2's three opens | nit | applied — the exit condition names all of them (the thresholds artifact, the multi-hop/ambiguous set, #2145) |
+
 FIX-REVIEW f=0 (chain 2, the diff 58c0672f0..484066a29, fresh context): all 9 round-2 fixes VERIFIED-FIXED, the merge clean (no branch protocol code touched by conflict resolution), the evidence records truthful, the suites green — and 2 new defects, NOT CLEAN. Both applied:
 
 | # | Finding | Verdict | Disposition |

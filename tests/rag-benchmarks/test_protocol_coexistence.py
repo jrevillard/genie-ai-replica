@@ -446,3 +446,35 @@ def test_coexistence_rejects_boolean_outcome_and_usage_values():
     assert totals["model_calls"]["sum"] == 0.0
     assert totals["model_calls"]["n_rows"] == 0
     assert totals["prompt_tokens"]["sum"] == 10.0
+
+
+def test_coexistence_refuses_a_mistyped_tally_count():
+    """A count that is neither an integer nor a bool is a MIS-TYPED entry:
+    dropping it would fabricate vanished requests (a breach nobody measured),
+    so the record is refused instead."""
+    load = _agent_load()
+    load["outcomes"] = {"answered": 3.0, "admission_refused": 1}
+    with pytest.raises(CoexistenceRefusal) as failed:
+        _report(control=_control(), loaded=_control(), agent_load=load)
+    assert failed.value.reason == "invalid_measurement"
+
+
+def test_coexistence_refuses_a_non_mapping_outcomes_value():
+    load = _agent_load()
+    load["outcomes"] = []
+    with pytest.raises(CoexistenceRefusal) as failed:
+        _report(control=_control(), loaded=_control(), agent_load=load)
+    assert failed.value.reason == "invalid_measurement"
+
+
+def test_coexistence_publishes_no_refusal_rate_over_an_unmeasured_denominator():
+    """A rate over the terminal tally, presented as a rate over requests the
+    record says were never counted, is a fabricated denominator: it stays
+    unpublished."""
+    load = _agent_load()
+    load.pop("requests")
+    report = _report(control=_control(), loaded=_control(), agent_load=load)
+    load_summary = report["agentic_load"]
+    assert load_summary["requests_recorded_independently"] is False
+    assert load_summary["admission_refusal_rate"] is None
+    assert "never" in (load_summary["admission_refusal_rate_note"] or "")

@@ -687,7 +687,7 @@ def cmd_e02(args: argparse.Namespace) -> int:
     entries = []
     try:
         _, entries = load_set(args.set_path, kind="assessment")
-    except SetValidationError as failed:
+    except (SetValidationError, OSError) as failed:
         print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
         return 1
     set_sha256 = sha256_file(args.set_path)

@@ -135,6 +135,12 @@ VERDICT_UNASSESSABLE = "unassessable"
 # applied one would compare two different surfaces and call it a breach).
 _SCOPE_CONFIG = re.compile(r"config(?:uration)?[\s._-]*([abc])\b", re.IGNORECASE)
 _SCOPE_CONFIG_WORD = re.compile(r"config", re.IGNORECASE)
+# A STANDALONE UPPERCASE A/B/C token is a configuration mention too ("the B
+# leg only", "scoped to C", "the A reference's metrics") — one this harness
+# does not parse. The match is case-SENSITIVE on purpose: a lowercase "a" is
+# the English article, and failing closed on ordinary prose would block every
+# honestly-neutral scope.
+_SCOPE_LETTER_TOKEN = re.compile(r"\b[ABC]\b")
 _SCOPE_AMBIGUOUS = "ambiguous"
 
 
@@ -583,6 +589,17 @@ def _cost_surface(records: list[dict], n_rows: int, surface: str, absence_reason
                 "n_rows_without_usage_record": n_rows - len(records),
             },
         )
+    if records:
+        # The rows DO carry usage records — they carry no COST COUNTERS. The
+        # absence reason must not contradict the report's own per_case rows.
+        return _surface_record(
+            surface=surface,
+            available=False,
+            not_available_reason=(
+                "the rows carry usage records but none of the cost vocabulary's counters — the"
+                " recorded absence is not a zero"
+            ),
+        )
     return _surface_record(surface=surface, available=False, not_available_reason=absence_reason)
 
 
@@ -755,7 +772,13 @@ def _scope_configuration(scope):
     named = {match.group(1).upper() for match in _SCOPE_CONFIG.finditer(scope)}
     if named:
         return named
-    if _SCOPE_CONFIG_WORD.search(scope):
+    # ANY other configuration mention — the bare word "config", or a
+    # standalone uppercase A/B/C token ("the B leg only", "scoped to C") —
+    # names a configuration in a spelling this harness does not parse: the
+    # bound names NO leg. A scope is surface-neutral ONLY when it names no
+    # configuration at all: a leg-referential scope that slipped through
+    # would gate BOTH legs on a comparison the scope explicitly excluded.
+    if _SCOPE_CONFIG_WORD.search(scope) or _SCOPE_LETTER_TOKEN.search(scope):
         return _SCOPE_AMBIGUOUS
     return None
 
@@ -933,11 +956,14 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
         if config == "B":
             # The terminal states are read in the counter-metrics vocabulary's
             # order — the limit marker first, then the failure — so the report
-            # never calls the same row two different things. And an abstention
-            # is NOT an answer: the fixed pipeline refused to answer, and
-            # counting it as one inflates its coverage and can deny the agent
-            # a measured gain.
-            if row.get("abstention_reason") == LIMIT_MARKER_B:
+            # never calls the same row two different things. The limit marker
+            # is read on BOTH shapes the vocabulary reads (the abstention
+            # reason and the resource record), and an abstention is NOT an
+            # answer: the fixed pipeline refused to answer, and counting it as
+            # one inflates its coverage and can deny the agent a measured gain.
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            usage = metadata.get("usage") if isinstance(metadata.get("usage"), dict) else {}
+            if row.get("abstention_reason") == LIMIT_MARKER_B or usage.get("outcome") == LIMIT_MARKER_C:
                 stats["n_limit_hit"] += 1
                 continue
             if row.get("status") == "failure":
@@ -1127,11 +1153,23 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
 
     b_side = _side(b_configuration, "B")
     c_side = _side(c_configuration, "C")
+    b_committed = b_side["resolved_env_committed"]
+    c_committed = c_side["resolved_env_committed"]
     differing_env = sorted(
         key
-        for key in set(b_side["resolved_env_committed"]) | set(c_side["resolved_env_committed"])
-        if b_side["resolved_env_committed"].get(key) != c_side["resolved_env_committed"].get(key)
+        for key in set(b_committed) | set(c_committed)
+        if b_committed.get(key) != c_committed.get(key)
     )
+    # The state is honest about what the evidence carries: the manifests'
+    # committed maps are the BUILD-TIME redacted snapshots (credential-named
+    # keys were dropped before the manifest was written), so a difference that
+    # lived only in a credential-named key is not comparable — "identical"
+    # means "identical over the recorded keys", and two empty maps are two
+    # UNRECORDED envs, never an identical pair.
+    if not b_committed and not c_committed:
+        env_state = "not_recorded"
+    else:
+        env_state = "identical" if not differing_env else "different"
     return {
         "intentional_difference": pairs_mod.PAIR_CONDITIONS[E02_PAIR]["intentional_difference"],
         "orchestration": {
@@ -1159,10 +1197,12 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
             "B": b_side["resolved_env"],
             "C": c_side["resolved_env"],
             "differing_keys": differing_env,
-            "state": "identical" if not differing_env else "different",
+            "state": env_state,
             "note": (
-                "the resolved env is recorded from the two runs' own snapshots; a key that differs"
-                " is an uncontrolled difference the reader must weigh"
+                "the resolved env is recorded from the two runs' own snapshots, which the manifest"
+                " redacted at build time: credential-named keys are not comparable, so 'identical'"
+                " means identical over the recorded keys, and two empty maps are two unrecorded"
+                " envs. A key that differs is an uncontrolled difference the reader must weigh"
             ),
         },
         "execution_conditions": {

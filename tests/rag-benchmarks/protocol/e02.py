@@ -527,10 +527,19 @@ def _latency_surface(rows: dict, config: str, surface: str) -> dict:
             available=False,
             not_available_reason="no answered row carries wall_ms",
         )
+    n_answered = len(_b_ok_rows(rows)) if config == "B" else len(_c_answered_rows(rows))
     return _surface_record(
         surface=surface,
         available=True,
-        values={**_latency_stats(walls), "n_excluded_non_answered_rows": excluded},
+        values={
+            **_latency_stats(walls),
+            "n_excluded_non_answered_rows": excluded,
+            # The counts must reconcile: an answered row whose wall_ms is
+            # missing or not a number appears in neither count above, and a
+            # reader comparing n + excluded against the leg's row count would
+            # conclude rows vanished.
+            "n_answered_rows_missing_wall_ms": n_answered - len(walls),
+        },
     )
 
 
@@ -560,39 +569,78 @@ def _aggregate_cost(usage_records: list[dict]) -> dict:
     return {**{counter: value for counter, value in sorted(totals.items())}, "n_rows_contributing": n_contributing}
 
 
-def _b_m5(b_rows: dict) -> dict:
-    records = []
-    for row in _b_ok_rows(b_rows):
-        metadata = row.get("metadata")
-        if isinstance(metadata, dict) and isinstance(metadata.get("usage"), dict):
-            records.append(metadata["usage"])
+def _aggregate_cost(usage_records: list[dict]) -> dict:
+    """The run's cost surface: the counters of the cost vocabulary, summed
+    over EVERY row that carries a usage record, with the number of
+    contributing rows named.
+
+    The shape is the SAME on both legs (the same counter names, the same
+    aggregation) so a signed bound compares like with like — and it is the
+    RUN's cost: a cancelled or failed run's tokens are the run's spend, and
+    leaving them out would read a cheaper run than the one that happened.
+    """
+    totals: dict = {}
+    n_contributing = 0
+    for record in usage_records:
+        if not isinstance(record, dict):
+            continue
+        contributed = False
+        for counter in COST_COUNTERS:
+            value = record.get(counter)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                totals[counter] = totals.get(counter, 0.0) + float(value)
+                contributed = True
+        if contributed:
+            n_contributing += 1
+    if not totals:
+        return {}
+    return {**{counter: value for counter, value in sorted(totals.items())}, "n_rows_contributing": n_contributing}
+
+
+def _cost_surface(records: list[dict], n_rows: int, surface: str, absence_reason: str) -> dict:
     aggregated = _aggregate_cost(records)
     if aggregated:
-        return _surface_record(surface=B_M5_SURFACE, available=True, values=aggregated)
-    return _surface_record(
-        surface=B_M5_SURFACE,
-        available=False,
-        not_available_reason=(
-            "the B rows carry no resource record (metadata.usage) — the recorded absence is not a zero"
-        ),
+        return _surface_record(
+            surface=surface,
+            available=True,
+            values={
+                **aggregated,
+                "n_rows_with_usage_record": len(records),
+                "n_rows_without_usage_record": n_rows - len(records),
+            },
+        )
+    return _surface_record(surface=surface, available=False, not_available_reason=absence_reason)
+
+
+def _b_m5(b_rows: dict) -> dict:
+    """The B cost surface reads EVERY row that carries a usage record — not
+    only the ok rows: a failed row's spend is the run's spend."""
+    records = []
+    for row in b_rows.values():
+        metadata = row.get("metadata") if isinstance(row, dict) else None
+        if isinstance(metadata, dict) and isinstance(metadata.get("usage"), dict):
+            records.append(metadata["usage"])
+    return _cost_surface(
+        records,
+        sum(1 for row in b_rows.values() if isinstance(row, dict)),
+        B_M5_SURFACE,
+        "the B rows carry no resource record (metadata.usage) — the recorded absence is not a zero",
     )
 
 
 def _c_m5(c_rows: dict) -> dict:
+    """The C cost surface reads EVERY row that carries a usage record — not
+    only the answered rows: a cancelled run's tokens are the run's spend."""
     records = []
-    for row in _c_answered_rows(c_rows):
-        usage = row.get("usage_record")
+    for row in c_rows.values():
+        usage = row.get("usage_record") if isinstance(row, dict) else None
         if isinstance(usage, dict):
             records.append(usage)
-    aggregated = _aggregate_cost(records)
-    if aggregated:
-        return _surface_record(surface=C_M5_SURFACE, available=True, values=aggregated)
-    return _surface_record(
-        surface=C_M5_SURFACE,
-        available=False,
-        not_available_reason=(
-            "the C rows carry no usage_record — the recorded absence is not a zero"
-        ),
+    return _cost_surface(
+        records,
+        sum(1 for row in c_rows.values() if isinstance(row, dict)),
+        C_M5_SURFACE,
+        "the C rows carry no usage_record — the recorded absence is not a zero",
     )
 
 
@@ -719,17 +767,21 @@ def _lookup_metric(values: dict, metric: str | None):
 
 
 def _scope_configuration(scope):
-    """The configuration a signed scope names — None when it names none.
+    """The configurations a signed scope names — None when it names none.
 
-    ``_SCOPE_AMBIGUOUS`` means the scope mentions a configuration in a
-    spelling this harness cannot parse (or names more than one): the bound
-    names NO leg, and no leg may apply it."""
+    A scope that names a set of configurations applies to those legs (a bound
+    scoped to "config B and config C" is scoped to THIS pair's two legs — the
+    E02 comparison IS the B-vs-C pair). ``_SCOPE_AMBIGUOUS`` means the scope
+    mentions a configuration in a spelling this harness cannot parse, or
+    names a configuration outside the harness's vocabulary: the bound names
+    NO leg, and no leg may apply it (an unapplied bound blocks; a wrongly
+    applied one would compare two different surfaces)."""
     if not isinstance(scope, str):
         return None
     named = {match.group(1).upper() for match in _SCOPE_CONFIG.finditer(scope)}
-    if len(named) == 1:
-        return next(iter(named))
-    if named or _SCOPE_CONFIG_WORD.search(scope):
+    if named:
+        return named
+    if _SCOPE_CONFIG_WORD.search(scope):
         return _SCOPE_AMBIGUOUS
     return None
 
@@ -779,12 +831,12 @@ def _apply_threshold(thresholds: dict | None, code: str, surface: dict, config: 
     bounds = []
     for record in records:
         measured = _lookup_metric(values, record["metric"])
-        named_configuration = _scope_configuration(scope)
+        named_configurations = _scope_configuration(scope)
         if record["metric"] is None:
             outcome = THRESHOLD_UNINTERPRETABLE
             comparison = None
             reason = "the signed bound names no metric — it cannot be looked up on any surface"
-        elif named_configuration == _SCOPE_AMBIGUOUS:
+        elif named_configurations == _SCOPE_AMBIGUOUS:
             outcome = THRESHOLD_UNINTERPRETABLE
             comparison = None
             reason = (
@@ -792,13 +844,13 @@ def _apply_threshold(thresholds: dict | None, code: str, surface: dict, config: 
                 " cannot parse — the bound names no leg and is not applied (an unapplied bound"
                 " blocks; a wrongly applied one would compare two different surfaces)"
             )
-        elif named_configuration is not None and named_configuration != config:
+        elif named_configurations is not None and config not in named_configurations:
             outcome = THRESHOLD_NOT_APPLICABLE
             comparison = None
             reason = (
-                f"the signed scope ({scope}) names configuration {named_configuration}, not this"
-                f" leg's configuration ({config}) — the bound is scoped elsewhere and does not"
-                " transfer"
+                f"the signed scope ({scope}) names configuration"
+                f" {', '.join(sorted(named_configurations))}, not this leg's configuration"
+                f" ({config}) — the bound is scoped elsewhere and does not transfer"
             )
         elif record["operator"] is None:
             outcome = THRESHOLD_UNINTERPRETABLE
@@ -905,18 +957,21 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
             continue
         stats["n_rows"] += 1
         if config == "B":
+            # The terminal states are read in the counter-metrics vocabulary's
+            # order — the limit marker first, then the failure — so the report
+            # never calls the same row two different things. And an abstention
+            # is NOT an answer: the fixed pipeline refused to answer, and
+            # counting it as one inflates its coverage and can deny the agent
+            # a measured gain.
+            if row.get("abstention_reason") == LIMIT_MARKER_B:
+                stats["n_limit_hit"] += 1
+                continue
             if row.get("status") == "failure":
                 stats["n_failed"] += 1
                 continue
-            if row.get("abstention_reason") == LIMIT_MARKER_B:
-                # The row's own terminal state is a LIMIT HIT, not an answer —
-                # the counter-metrics vocabulary says so (answered=False,
-                # hit_kind="limit"), and counting it as answered would inflate
-                # the fixed pipeline's coverage and invert the verdict.
-                stats["n_limit_hit"] += 1
-                continue
-            if row.get("abstained") is True:
+            if row.get("abstained") is True or row.get("abstention_reason"):
                 stats["n_abstained"] += 1
+                continue
             if row.get("status") == "ok":
                 stats["n_answered"] += 1
             continue
@@ -971,6 +1026,15 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
     set_classes: dict[str, set[str]] = {}
     for case_id, name in class_of.items():
         set_classes.setdefault(name, set()).add(case_id)
+
+    # The rows the census EXCLUDES — a row whose base case id is in no
+    # assessment-set entry is nobody's class. The exclusion is symmetric
+    # across the legs, and it is named: a comparison that silently shrank is
+    # a comparison a reader cannot weigh.
+    excluded_rows = {
+        "B": sorted(cid for cid in b_rows if base_case_id(cid) not in class_of),
+        "C": sorted(cid for cid in c_rows if base_case_id(cid) not in class_of),
+    }
 
     per_class = {}
     for name in sorted(set_classes):
@@ -1034,6 +1098,11 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
         "per_class": per_class,
         "not_covered": not_covered,
         "census_source": "the assessment set's entries (the cases the legs ran against)",
+        "excluded_rows": excluded_rows,
+        "excluded_rows_note": (
+            "these rows' base case id is in no assessment-set entry — they are recorded verbatim"
+            " in per_case but belong to no query class, so they are in no per-class census"
+        ),
     }
 
 
@@ -1070,6 +1139,11 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
             "config": config,
             "model_ids": redact_deep(configuration.get("model_ids") or {}),
             "prompt_digests": redact_deep(configuration.get("prompt_digests") or {}),
+            # The env as the manifest COMMITTED it (the manifest redacts its
+            # own snapshot at build time) — the comparison runs on THIS map,
+            # never on the display view below: comparing lossy redacted views
+            # would claim an equality the redaction manufactured.
+            "resolved_env_committed": configuration.get("resolved_env") or {},
             "resolved_env": redact_deep(configuration.get("resolved_env") or {}),
         }
 
@@ -1077,8 +1151,8 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
     c_side = _side(c_configuration, "C")
     differing_env = sorted(
         key
-        for key in set(b_side["resolved_env"]) | set(c_side["resolved_env"])
-        if b_side["resolved_env"].get(key) != c_side["resolved_env"].get(key)
+        for key in set(b_side["resolved_env_committed"]) | set(c_side["resolved_env_committed"])
+        if b_side["resolved_env_committed"].get(key) != c_side["resolved_env_committed"].get(key)
     )
     return {
         "intentional_difference": pairs_mod.PAIR_CONDITIONS[E02_PAIR]["intentional_difference"],

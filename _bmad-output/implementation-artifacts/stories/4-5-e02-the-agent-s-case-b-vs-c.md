@@ -218,6 +218,20 @@ FIX-REVIEW round 1 (f=0, the correction diff only, fresh context): 12 of 19 veri
 | N1 | `_aggregate_cost` computed a per-counter `n_rows` it never published (the docstring promised it) | nit | applied — the aggregated surface publishes `n_rows_contributing` |
 | N2 | e01 imported `CREDENTIAL_MARKERS`/`MEASUREMENT_KEY_NAMES` it no longer used after the move to `redaction.py` | nit | applied — the dead imports are gone |
 
+Global review round 2 (on 58c0672f0, after the clean FIX-REVIEW): 3 important, 6 nit. All applied:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | a config-B ABSTENTION counted as ANSWERED in the gains census (no `continue` after the abstention check), inflating the fixed pipeline's coverage and able to deny the agent a measured gain | important | applied — an abstention (or any non-empty abstention reason) is counted as an abstention and nothing else; the honest coverage test pins it |
+| 2 | the differing-env comparison ran over the REDACTED maps, so equality could be claimed from a lossy view | important | applied — the comparison runs on the manifests' COMMITTED env maps (already top-level redacted at build time); redaction is display-only |
+| 3 | the M-5 cost surfaces aggregated only answered/ok rows — a cancelled run's tokens are run cost | important | applied — both legs aggregate EVERY row carrying a usage record, naming the with/without split |
+| 4 | the gains census silently excluded rows whose base id matched no set entry | nit | applied — `excluded_rows` (per leg, with ids) is in the gains record; the two deferred-work entries are marked resolved in this MR |
+| 5 | the gains census and counter_metrics ordered the B terminal states differently | nit | applied — the census reads the states in the counter-metrics vocabulary's order |
+| 6 | `protocol/redaction.py` was missing from the CLAUDE.md layout tree | nit | applied |
+| 7 | a scope naming BOTH E02 legs ("config B and config C") resolved to ambiguous and could never apply | nit | applied — the scope parse returns the NAMED SET: a scope naming the pair's own legs applies to them; an unparseable mention still names no leg |
+| 8 | boolean outcome values counted as requests in the coexistence load tally | nit | applied — the numeric readers reject bool, mirroring the rest of the module |
+| 9 | the M-4 latency surface's counts did not reconcile (an answered row with a missing wall_ms appeared in neither count) | nit | applied — `n_answered_rows_missing_wall_ms` makes the population visible |
+
 ## Design Notes
 
 **Why the live E02 legs are refused, and what that does NOT mean.** The partial-order gate (story 4.1) refuses a gated B/C run until a SIGNED thresholds artifact exists, and story 4.4's `promotion_decision` produces that artifact only when every measured dimension (M-1..M-5) carries an agreed value. The operator's 2026-11-23 signature covers M-1 alone; M-2..M-5 stay explicitly absent. So the gate keeps refusing — and that refusal is the protocol working as designed (PRD §8: "an absent threshold blocks promotion rather than defaulting"), not a defect to route around. The live outcome of this story is therefore: the machinery ships, the refusal is recorded verbatim, and the live measurement waits on an operator decision nobody but the operator can make.

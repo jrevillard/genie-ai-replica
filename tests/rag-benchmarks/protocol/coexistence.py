@@ -459,7 +459,11 @@ def _agent_load_summary(agent_load: dict) -> dict:
     outcomes = agent_load.get("outcomes") or {}
     if not isinstance(outcomes, dict):
         raise CoexistenceRefusal("invalid_measurement", "the agentic load's outcomes are not a mapping")
-    n_terminal = sum(int(count) for count in outcomes.values() if isinstance(count, int))
+    n_terminal = sum(
+        int(count)
+        for count in outcomes.values()
+        if isinstance(count, int) and not isinstance(count, bool)
+    )
     n_requests = agent_load.get("requests")
     requests_recorded = isinstance(n_requests, int) and not isinstance(n_requests, bool)
     if not requests_recorded:
@@ -493,7 +497,9 @@ def _agent_load_summary(agent_load: dict) -> dict:
             "n_rows": sum(
                 1
                 for record in usage_records
-                if isinstance(record, dict) and isinstance(record.get(counter), (int, float))
+                if isinstance(record, dict)
+                and isinstance(record.get(counter), (int, float))
+                and not isinstance(record.get(counter), bool)
             ),
         }
         for counter in COST_COUNTERS

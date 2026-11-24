@@ -57,6 +57,8 @@ tests/rag-benchmarks/
 │   ├── e02.py                 # The E02 B-vs-C comparison report (story 4.5)
 │   ├── coexistence.py         # The coexistence criterion — legacy non-regression
 │   │                          #   under concurrent agentic load (story 4.5)
+│   ├── redaction.py           # The depth-aware credential rule the reports write
+│   │                          #   through (one home, shared with e01)
 │   ├── evaluator-instructions.md  # The versioned judge instructions (digested by every run)
 │   ├── sets/                  # The sample sets (CI fixtures, not deployment content)
 │   └── run_protocol.py        # The CLI: validate-set / reference / assess / check-reuse /

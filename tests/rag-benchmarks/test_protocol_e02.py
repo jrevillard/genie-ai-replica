@@ -245,7 +245,11 @@ def test_e02_report_records_the_gains_per_query_class():
     per_class = report["gains"]["per_class"]
     assert "multi_hop" in per_class
     assert per_class["multi_hop"]["n_cases_in_set"] == 1
+    # c1: both legs answer it, so the class delta is 0 — the unanswerable
+    # class carries the abstention delta (B abstains, C answers).
     assert per_class["multi_hop"]["delta"]["answered"] == 0
+    assert per_class["unanswerable"]["delta"]["answered"] == 1
+    assert report["gains"]["excluded_rows"] == {"B": [], "C": []}
     assert per_class["multi_hop"]["B"]["latency"]["median"] == 100.0
     assert per_class["multi_hop"]["C"]["latency"]["median"] == 400.0
     assert per_class["multi_hop"]["delta"]["median_latency_ms"] == 300.0
@@ -348,12 +352,49 @@ def test_e02_report_publishes_the_same_cost_shape_on_both_legs():
     report = _report()
     b_values = report["dimensions"]["M-5"]["B"]["values"]
     c_values = report["dimensions"]["M-5"]["C"]["values"]
-    assert set(b_values) == set(c_values) == {"model_calls", "prompt_tokens", "n_rows_contributing"}
+    assert set(b_values) == set(c_values) == {
+        "model_calls",
+        "prompt_tokens",
+        "n_rows_contributing",
+        "n_rows_with_usage_record",
+        "n_rows_without_usage_record",
+    }
     # The RUN's cost, not one case's spend.
     assert b_values["model_calls"] == 1
     assert c_values["model_calls"] == 5
     assert b_values["n_rows_contributing"] == 1
     assert c_values["n_rows_contributing"] == 2
+    assert b_values["n_rows_with_usage_record"] == 1
+    assert b_values["n_rows_without_usage_record"] == 2
+    assert c_values["n_rows_with_usage_record"] == 2
+    assert c_values["n_rows_without_usage_record"] == 1
+
+
+def test_e02_cost_surface_counts_a_cancelled_run_spend():
+    """A cancelled run's tokens are the run's spend: the cost surface reads
+    every row that carries a usage record, not only the answered ones."""
+    c_rows = _c_rows()
+    c_rows["c3"] = dict(
+        c_rows["c3"],
+        outcome="cancelled",
+        usage_record={"model_calls": 2, "prompt_tokens": 20},
+    )
+    report = _report(c_rows=c_rows)
+    values = report["dimensions"]["M-5"]["C"]["values"]
+    assert values["model_calls"] == 7
+    assert values["n_rows_with_usage_record"] == 3
+
+
+def test_e02_does_not_count_an_abstention_as_an_answer():
+    """An abstention is not an answer: counting it as one inflates the fixed
+    pipeline's coverage and can deny the agent a measured gain."""
+    b_rows = _b_rows()
+    report = _report(b_rows=b_rows)
+    unanswerable = report["gains"]["per_class"]["unanswerable"]
+    assert unanswerable["B"]["n_abstained"] == 1
+    assert unanswerable["B"]["n_answered"] == 0
+    # The honest coverage: B answered 1 (c1), C answered 2 (c1, c2).
+    assert report["verdict"]["coverage"] == {"B_answered": 1, "C_answered": 2, "delta": 1}
 
 
 def test_e02_report_compares_the_two_legs_on_the_shared_metrics():
@@ -391,9 +432,11 @@ def test_e02_verdict_is_not_supported_when_the_agent_breaks_a_bound():
 
 
 def test_e02_verdict_is_not_supported_when_the_agent_covers_less():
+    b_rows = _b_rows()
+    b_rows["c2"] = dict(b_rows["c2"], abstained=False, abstention_reason=None, answer="answered")
     c_rows = _c_rows()
     c_rows["c2"] = dict(c_rows["c2"], outcome="admission_refused")
-    report = _report(c_rows=c_rows)
+    report = _report(b_rows=b_rows, c_rows=c_rows)
     assert report["verdict"]["coverage"]["delta"] == -1
     assert report["verdict"]["state"] == "not_supported"
 

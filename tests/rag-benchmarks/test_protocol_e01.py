@@ -1369,9 +1369,20 @@ def test_capture_a_stamps_the_set_digest_and_the_corpus(tmp_path):
     assert coverage["by_surface"]["restricted_access"] == 1
     assert coverage["retrieval_cases_without_gold"] == []
     # The stamp also identifies the ANCHOR's input — which of the set's cases
-    # the chunk-level surface scores. A change to the surface model moves it.
+    # the chunk-level surface scores. A change to the surface model moves it:
+    # the digest must be sensitive to WHICH cases are on the retrieval surface.
     projection = result["capture"]["anchor_projection_sha256"]
     assert re.fullmatch(r"[0-9a-f]{64}", projection)
+    entries = json.loads(Path(set_path).read_text(encoding="utf-8"))["entries"]
+    for case in entries:
+        if case["id"] == "_cite":
+            case["expected_chunks"] = [{"chunk_key": "_cite-chunk-2", "content_hash": "b2c3d4e5f6071829"}]
+    changed = tmp_path / "changed-set.json"
+    changed.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    other = drivers.run_config_a_capture(
+        changed, tmp_path / "out-changed", query=seam, corpus_fingerprint=CORPUS
+    )
+    assert other["capture"]["anchor_projection_sha256"] != projection
     written = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
     assert written["capture"] == result["capture"]
     # Without a corpus fingerprint the capture refuses — the stamp is mandatory.

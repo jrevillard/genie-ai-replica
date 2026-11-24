@@ -192,6 +192,52 @@ def _default_a_runner(gold: Path, out: Path, seed: int, env_extra: dict | None =
     return capture_baseline._run_anchor_eval(gold, out, seed, env_extra)
 
 
+def anchor_projection(cases: list[dict]) -> list[dict]:
+    """The anchor's INPUT: the set's retrieval-surface cases.
+
+    One function, so the projection the anchor runs on and the projection the
+    capture stamps are the same projection — and its digest (see
+    :func:`anchor_projection_sha256`) identifies the anchor's input in the
+    artifacts. A change to the surface model moves that digest; it never
+    moves silently.
+    """
+    return [case for case in cases if evaluation_surface(case) == "retrieval"]
+
+
+def anchor_projection_sha256(cases: list[dict]) -> str:
+    """The digest of the anchor's input — the projection's identity.
+
+    The set's own digest identifies the set; this identifies WHICH of its
+    cases the chunk-level surface scores. Both are recorded, so an artifact
+    says what it measured, not only what it was built from.
+    """
+    from .manifest import sha256_json
+
+    return sha256_json(anchor_projection(cases))
+
+
+def _gold_without_identity(cases: list[dict]) -> list[str]:
+    """The retrieval cases whose gold carries no matchable identity.
+
+    The anchor matches a gold chunk on its content hash (the protocol's
+    identity) or its chunk key; an entry with neither matches against
+    nothing, and the case would drop out of the aggregate silently.
+    """
+    shapeless: list[str] = []
+    for case in cases:
+        for index, chunk in enumerate(case.get("expected_chunks") or []):
+            if not isinstance(chunk, dict):
+                shapeless.append(f"{case.get('id')}#{index}")
+                continue
+            content_hash = chunk.get("content_hash")
+            chunk_key = chunk.get("chunk_key")
+            has_hash = isinstance(content_hash, str) and bool(content_hash.strip())
+            has_key = isinstance(chunk_key, str) and bool(chunk_key.strip())
+            if not has_hash and not has_key:
+                shapeless.append(f"{case.get('id')}#{index}")
+    return shapeless
+
+
 def run_config_a(
     set_path: str | Path,
     out_dir: str | Path,
@@ -239,9 +285,7 @@ def run_config_a(
             " against gold, so an unannotated case would score vacuously (recall 1.0 by"
             " construction) and count as measured while carrying no expectation"
         )
-    anchor_cases = [
-        case for case in cases if evaluation_surface(case) == "retrieval"
-    ]
+    anchor_cases = anchor_projection(cases)
     unanchorable = [
         str(case.get("id"))
         for case in anchor_cases
@@ -253,6 +297,13 @@ def run_config_a(
             f" ({', '.join(unanchorable)}) — a multi-turn case's queries are its turns (the"
             " capture's rows) and a case without a query has nothing to drive, so such a case"
             " is measured by nothing"
+        )
+    shapeless = _gold_without_identity(anchor_cases)
+    if shapeless:
+        raise DriverError(
+            "the config-A anchor refuses a gold entry with no identity"
+            f" ({', '.join(shapeless)}) — the anchor matches a gold chunk on its content hash"
+            " (or its chunk key), so an entry with neither is matched against nothing"
         )
     gold_path = out_dir / "config-a.gold.json"
     write_json(
@@ -286,10 +337,12 @@ def run_config_a(
         rows_path,
         {
             "cases": skip_rows,
-            # What the run covered: the census per evaluation surface. The
-            # anchor report carries rows for the retrieval surface only, so
-            # this is where the reader learns why.
+            # What the run covered: the census per evaluation surface, and the
+            # identity of the anchor's input. The anchor report carries rows
+            # for the retrieval surface only, so this is where the reader
+            # learns why.
             "coverage": census,
+            "anchor_projection_sha256": anchor_projection_sha256(cases),
         },
         ensure_ascii=False,
     )
@@ -523,6 +576,9 @@ def run_config_a_capture(
         # artifact that says which cases run on which surface, so the census
         # rides the stamp rather than being reconstructed by every reader.
         "coverage": coverage_census(cases),
+        # The identity of the ANCHOR's input — which of the set's cases the
+        # chunk-level surface scores. A change to the surface model moves it.
+        "anchor_projection_sha256": anchor_projection_sha256(cases),
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set

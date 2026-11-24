@@ -292,7 +292,8 @@ def cmd_reference(args: argparse.Namespace) -> int:
     _print_findings_summary(report)
     census = coverage_census(entries)
     print(
-        f"reference run: coverage {census['n_evaluable']}/{census['n_cases']} case(s) evaluable — "
+        f"reference run: coverage {census['n_cases_with_a_resolved_surface']}/"
+        f"{census['n_set_cases']} case(s) with a resolved surface — "
         + ", ".join(f"{surface} {count}" for surface, count in census["by_surface"].items())
     )
     print(f"reference run: report {result['report_path']}")
@@ -478,7 +479,8 @@ def cmd_capture_a(args: argparse.Namespace) -> int:
     census = stamp.get("coverage") or {}
     if census:
         print(
-            f"capture coverage: {census['n_evaluable']}/{census['n_cases']} case(s) evaluable — "
+            f"capture coverage: {census['n_cases_with_a_resolved_surface']}/"
+            f"{census['n_set_cases']} case(s) with a resolved surface — "
             + ", ".join(f"{surface} {count}" for surface, count in census["by_surface"].items())
         )
     return 0

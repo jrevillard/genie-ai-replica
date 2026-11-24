@@ -273,10 +273,11 @@ def evaluation_surface(case: dict) -> str:
       judges them from the retrieved document ids, never from passages.
     * ``outcome`` — the case's class asserts an outcome (abstention, typed
       failure, cancellation): judged from the recorded outcome.
-    * ``restricted_access`` — the case's sources live in a restricted graph
-      and config A has no authorization executor, so its passages are
-      unreachable on the A leg; the B/C legs judge it on the document-level
-      surface.
+    * ``restricted_access`` — the case's sources live in a restricted graph:
+      config A has no authorization surface (it is the legacy fixed RAG), so
+      the case is an authorization case and is measured on the B/C legs'
+      document-level surface — its passages live in a graph that is not part
+      of the corpus the chunk-level surface scores.
     * ``retrieval`` — a retrieval-class case with public access and no
       security scenario: the chunk-level surface, the only one that consumes
       ``expected_chunks``.
@@ -296,10 +297,16 @@ def evaluation_surface(case: dict) -> str:
 def coverage_census(entries: list[dict]) -> dict:
     """What the set covers, per evaluation surface.
 
-    ``n_evaluable`` counts the cases whose surface is RESOLVED: a retrieval
-    case without gold has no resolved surface (it is measured by nothing),
-    every other case is resolved by construction. For a valid set
-    ``n_evaluable == n_cases`` — the invariant the validator enforces.
+    A SET-level statement, not a run-level one: ``n_set_cases`` counts the
+    set's CASES (a multi-turn case is one case; its turns are rows), and
+    ``n_cases_with_a_resolved_surface`` counts the cases whose surface is
+    RESOLVED — a retrieval case without gold has no resolved surface (it is
+    measured by nothing), every other case is resolved by construction. It
+    says NOTHING about how many cases a run answered: the rows file carries
+    that (answered / skipped), and the two numbers must not be read as one.
+
+    For a set the anchor can measure, every case has a resolved surface — the
+    invariant the anchor driver enforces.
     """
     by_surface = {surface: 0 for surface in SURFACES}
     unresolved: list[str] = []
@@ -312,8 +319,8 @@ def coverage_census(entries: list[dict]) -> dict:
             unresolved.append(str(case.get("id")))
     n_cases = sum(by_surface.values())
     return {
-        "n_cases": n_cases,
-        "n_evaluable": n_cases - len(unresolved),
+        "n_set_cases": n_cases,
+        "n_cases_with_a_resolved_surface": n_cases - len(unresolved),
         "by_surface": by_surface,
         "retrieval_cases_without_gold": unresolved,
     }

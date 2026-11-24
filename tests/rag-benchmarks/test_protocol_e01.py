@@ -1361,12 +1361,17 @@ def test_capture_a_stamps_the_set_digest_and_the_corpus(tmp_path):
     # surface — every case has a resolved surface, so the arbitration's basis
     # is stated instead of inferred from a gold count.
     coverage = result["capture"]["coverage"]
-    assert coverage["n_evaluable"] == coverage["n_cases"]
+    assert coverage["n_cases_with_a_resolved_surface"] == coverage["n_set_cases"]
     assert coverage["by_surface"]["retrieval"] == 5
     assert coverage["by_surface"]["outcome"] == 3
     assert coverage["by_surface"]["security"] == 7
     assert coverage["by_surface"]["restricted_access"] == 1
     assert coverage["retrieval_cases_without_gold"] == []
+    # The stamp also identifies the ANCHOR's input — which of the set's cases
+    # the chunk-level surface scores. A change to the surface model moves it.
+    assert result["capture"]["anchor_projection_sha256"] == drivers.anchor_projection_sha256(
+        json.loads(Path(set_path).read_text(encoding="utf-8"))["entries"]
+    )
     written = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
     assert written["capture"] == result["capture"]
     # Without a corpus fingerprint the capture refuses — the stamp is mandatory.
@@ -2039,8 +2044,8 @@ def test_e01_report_carries_the_coverage_census_the_capture_stamped():
     many cases carry a resolved surface and on which surface each class is
     measured. A capture that carries no census is recorded absent."""
     census = {
-        "n_cases": 16,
-        "n_evaluable": 16,
+        "n_set_cases": 16,
+        "n_cases_with_a_resolved_surface": 16,
         "by_surface": {"retrieval": 6, "outcome": 3, "security": 7, "restricted_access": 0},
         "retrieval_cases_without_gold": [],
     }

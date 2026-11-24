@@ -383,14 +383,14 @@ def test_coverage_census_counts_every_case_on_its_surface(assessment_data):
     """The census is the set's coverage statement: every case lands on exactly
     one surface, and a valid set has a resolved surface for all of them."""
     census = es.coverage_census(assessment_data["entries"])
-    assert census["n_cases"] == 16
-    assert census["n_evaluable"] == census["n_cases"]
+    assert census["n_set_cases"] == 16
+    assert census["n_cases_with_a_resolved_surface"] == census["n_set_cases"]
     assert census["retrieval_cases_without_gold"] == []
     assert census["by_surface"]["retrieval"] == 4
     assert census["by_surface"]["restricted_access"] == 2
     assert census["by_surface"]["outcome"] == 3
     assert census["by_surface"]["security"] == 7
-    assert sum(census["by_surface"].values()) == census["n_cases"]
+    assert sum(census["by_surface"].values()) == census["n_set_cases"]
 
 
 def test_coverage_census_names_a_retrieval_case_without_gold(assessment_data):
@@ -402,4 +402,4 @@ def test_coverage_census_names_a_retrieval_case_without_gold(assessment_data):
             case["expected_chunks"] = []
     census = es.coverage_census(data["entries"])
     assert census["retrieval_cases_without_gold"] == ["sample-ans-pub-1"]
-    assert census["n_evaluable"] == census["n_cases"] - 1
+    assert census["n_cases_with_a_resolved_surface"] == census["n_set_cases"] - 1

@@ -109,6 +109,46 @@ def test_config_a_refuses_a_retrieval_case_the_anchor_cannot_drive_as_one_query(
     assert "sample-ans-pub-1" in str(failed.value)
 
 
+def test_config_a_refuses_a_gold_entry_with_no_identity(tmp_path):
+    """The anchor matches a gold chunk on its content hash (or its chunk key).
+    An entry with neither matches against nothing, and the case would drop out
+    of the aggregate without a word."""
+    set_path = _a_set_file(tmp_path)
+    data = json.loads(set_path.read_text(encoding="utf-8"))
+    for case in data["entries"]:
+        if case["id"] == "sample-ans-pub-1":
+            case["expected_chunks"] = [{"preview": "the quarterly service report is submitted…"}]
+    set_path.write_text(json.dumps(data), encoding="utf-8")
+
+    def runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
+        raise AssertionError("the anchor must not run on an unmeasurable set")
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner)
+    assert "no identity" in str(failed.value)
+    assert "sample-ans-pub-1#0" in str(failed.value)
+
+
+def test_config_a_records_the_identity_of_the_anchor_input(tmp_path):
+    """The set's digest identifies the set; the projection's digest identifies
+    WHICH of its cases the chunk-level surface scores. Both are recorded, so
+    an artifact says what it measured."""
+    set_path = _a_set_file(tmp_path)
+    data = json.loads(set_path.read_text(encoding="utf-8"))
+
+    def runner(gold, out, seed, env_extra=None):
+        out.write_text(json.dumps({"aggregate": {}, "n_missed_traces": 0}), encoding="utf-8")
+        return {"aggregate": {}, "n_missed_traces": 0}
+
+    result = drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner)
+    rows = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
+    assert rows["anchor_projection_sha256"] == drivers.anchor_projection_sha256(data["entries"])
+    assert rows["coverage"]["n_set_cases"] == 16
+    # The projection IS the retrieval surface — the anchor's rows and the
+    # census's retrieval count agree.
+    assert len(drivers.anchor_projection(data["entries"])) == rows["coverage"]["by_surface"]["retrieval"]
+
+
 def test_config_a_fail_fasts_on_missed_traces(tmp_path):
     """The anchor's existing behavior, reused: a reference with missed traces
     is a zero baseline in disguise."""

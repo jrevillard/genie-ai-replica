@@ -273,7 +273,7 @@ document ids — never from passages.
 | `retrieval` | answerable / citation_check / representative_language, public access, no security scenario | the config-A anchor (chunk-level gold) |
 | `outcome` | unanswerable / failure / cancellation | the recorded outcome (abstention, typed failure, cancellation) |
 | `security` | any case with a `security_scenario` | the verdict layer, on the pair's B/C legs |
-| `restricted_access` | retrieval-class cases whose sources live in a restricted graph | the B/C document-level surface (config A has no authorization executor, so their passages are unreachable there) |
+| `restricted_access` | retrieval-class cases whose sources live in a restricted graph | the B/C document-level surface (config A has no authorization surface, so such a case is an authorization case, never a chunk-level one there) |
 
 Consequences — they are the protocol's, not conventions:
 
@@ -285,13 +285,20 @@ Consequences — they are the protocol's, not conventions:
   expectation. The anchor driver REFUSES such a set.
 - The anchor is fed the retrieval cases only (`config-a.gold.json`, derived
   from the set), so its report carries rows for the cases it can score.
+  Re-running the reference in an out-dir that holds a report produced from the
+  previous (whole-set) gold is REFUSED by the anchor's own resume validation
+  (`EXIT 2: prefilled ids not in current gold`) — use a fresh out-dir (the
+  run artifacts are dated per run) or `EVAL_FRESH=1`.
 - The **coverage census** (`protocol/evalset.py::coverage_census`) states what
-  the set covers: the case count per surface and how many cases carry a
-  RESOLVED surface (`n_evaluable`). The capture stamps it; the E01 report
-  carries it in `counts.coverage`. Read it before reading a gold count: a
-  flat "n_empty_gold" says nothing about coverage — the same number counted
-  3 outcome cases and 7 security cases, none of which the chunk surface
-  measures.
+  the set covers: the case count per surface and how many of the set's cases
+  carry a RESOLVED surface (`n_cases_with_a_resolved_surface` over
+  `n_set_cases`). It is a SET-level statement: it says nothing about how many
+  cases a run answered (the rows file carries that). The capture stamps it
+  (with the anchor input's digest, `anchor_projection_sha256`); the E01
+  report carries it in `counts.coverage`. Read it before reading a gold
+  count: a flat "n_empty_gold" says nothing about coverage — the same number
+  counted 3 outcome cases and 7 security cases, none of which the chunk
+  surface measures.
 
 ## Adaptive reranker — the parameter surface (methodology)
 

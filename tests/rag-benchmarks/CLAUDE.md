@@ -274,6 +274,7 @@ document ids — never from passages.
 | `outcome` | unanswerable / failure / cancellation | the recorded outcome (abstention, typed failure, cancellation) |
 | `security` | any case with a `security_scenario` | the verdict layer, on the pair's B/C legs |
 | `restricted_access` | retrieval-class cases whose sources live in a restricted graph | the B/C document-level surface (config A has no authorization surface, so such a case is an authorization case, never a chunk-level one there) |
+| `unknown` | a case whose `case_class` is outside the composition vocabulary | nothing — the census counts it so it stays VISIBLE instead of vanishing from the counts |
 
 Consequences — they are the protocol's, not conventions:
 

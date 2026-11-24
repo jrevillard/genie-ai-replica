@@ -35,7 +35,7 @@ Ports the recorded retrieval stages of the query path (V02 §4.1–4.8):
   whole enrichment with an ERROR log and never breaks the leg.
 
 Graph traversal, multi-graph fan-out and the routing gate are recorded in
-V02 §4.9–4.11 but are NOT part of this port (story 1.6's frozen enumeration
+V02 §4.9–4.11 but are NOT part of this port (the frozen enumeration
 stops at the stages above).
 """
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only probe of the deployed OPEA query path (story 1.1, V02).
+"""Read-only probe of the deployed OPEA query path (V02).
 
 The probe answers one question: "what does the running stack ACTUALLY do on
 the query path?". It therefore reads the deployed configuration from the

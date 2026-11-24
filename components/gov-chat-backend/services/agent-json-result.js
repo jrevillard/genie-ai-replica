@@ -19,7 +19,7 @@ const {
 const { wantsTranslation } = require('./translation/language-request');
 const { createWholeAnswerTranslator } = require('./translation/agentic-translation-leg');
 
-// Story 2.4b — the non-streaming JSON consumer of the agent-service seam.
+// The non-streaming JSON consumer of the agent-service seam.
 // The streaming entry (agent-frame-writer.js) projects the seam onto client
 // frames; THIS module aggregates the same stream into the legacy JSON result
 // one `POST /api/queries` request returns: posture resolution → CallerContext
@@ -59,7 +59,7 @@ class AgentJsonTurnError extends Error {
 
 /**
  * The V05-derived abstention overlay — a small pure function over the
- * verdict, so a later story that surfaces abstention on the streaming path
+ * verdict, so a later change that surfaces abstention on the streaming path
  * reuses this mapping instead of inventing a second one (the verdict frame
  * carries `insufficient_evidence` verbatim; the JSON metadata carries the
  * V05 vocabulary):
@@ -72,7 +72,7 @@ class AgentJsonTurnError extends Error {
  *     Inspector renders unknown codes generically);
  *   - NO verdict (or a decision field that never reported a boolean
  *     `required`) → the JSON entry restores `abstained: null` ("decision
- *     never reported") over the assembled `false` base (story 3.2's
+ *     never reported") over the assembled `false` base (the
  *     streaming normalization — this entry's V05 vocabulary is stricter:
  *     without a reported decision, `false` would claim one).
  *
@@ -153,7 +153,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   const effectiveTimeoutMs = resolveUpstreamTimeoutMs();
   const controller = new AbortController();
   const bearer = headers?.authorization || null;
-  // Story 2.11 — the attribution state: the run-start block persisted AT
+  // The attribution state: the run-start block persisted AT
   // START (the same writes the streaming consumer makes) through the shared
   // writer pair (agent-run-contract.js — one home for the fire-and-forget
   // discipline and the one-honest-outcome latch: a deadline fire's
@@ -176,7 +176,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // than the legacy carrier: any resolver problem except a 401 (the request
   // itself is invalid — it propagates) builds an empty CallerContext, whose
   // search_knowledge raises AuthorizationError — the run ends in the
-  // insufficiency answer, the epic's own fail-closed direction for degraded
+  // insufficiency answer, the fail-closed direction for degraded
   // retrieval. (The legacy carrier's degrade instead keeps the
   // byte-identical legacy-corpus payload — same trigger, intended
   // different outcome.)
@@ -251,7 +251,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   deadline = setTimeout(() => {
     deadline = null;
     logger.warn('AgentJsonResult.upstream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
-    // The BFF-attributed deadline is an honest terminal fact (story 2.11).
+    // The BFF-attributed deadline is an honest terminal fact.
     // Latched: the abort's stream teardown must not overwrite it. The
     // pre-200 refusals (a slow 429/503 body under the armed deadline) wrote
     // nothing and still don't — the run never started.
@@ -312,7 +312,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       switch (event.kind) {
         case 'run_started': {
           // Run lifecycle is seam-internal; the payload IS the run-start
-          // handshake (story 2.11, AD-11): persisted AT START, fire-and-
+          // handshake: persisted AT START, fire-and-
           // forget — a run that later fails keeps its versions (the tail
           // that would write them never runs on a throw). captureRunStart
           // is the ONE shape home (the streaming consumer shares it).
@@ -346,7 +346,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
               ? event.payload.message
               : 'the agent run failed';
           failure = new AgentJsonTurnError(502, { error: 'AGENT_RUN_ERROR', message });
-          // The agent's own verdict lands on the doc (story 2.11): the
+          // The agent's own verdict lands on the doc: the
           // shared mapping — the usage record's outcome when it already
           // arrived, else the event's code verbatim (the post-failure
           // frames are ignored below, so the record is not consulted
@@ -409,7 +409,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       error: 'AGENT_SERVICE_UNAVAILABLE',
       message: error.message
     });
-    // The upstream died before the final metadata (story 2.11): the doc
+    // The upstream died before the final metadata: the doc
     // keeps its versions and reads `interrupted`. Latched — a deadline
     // fire's `timed_out` is never overwritten by the abort's teardown.
     persistRunOutcome('interrupted');
@@ -453,7 +453,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
     });
   }
 
-  // ── whole-answer translation: the AGENTIC LEG owns it (story 2.10) —
+  // ── whole-answer translation: the AGENTIC LEG owns it —
   // GPU-only keyed on the routing decision (never the CPU model, never a
   // probe fallback), bounded by the run's residual budget and the remaining
   // end-to-end deadline, fail-closed on the REQUIRED knobs. The TERMINAL
@@ -490,10 +490,10 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   }
 
   // The assembled metadata — the same home the streaming terminal uses —
-  // plus THIS story's own derivation: the V05 abstention vocabulary, mapped
+  // plus this module's own derivation: the V05 abstention vocabulary, mapped
   // from the verdict (no verdict → `abstained` stays null). The assembled
-  // block merges the run-start record + the `answered` outcome (story
-  // 2.11) — createQuery's tail writes it, completing the start write.
+  // block merges the run-start record + the `answered` outcome —
+  // createQuery's tail writes it, completing the start write.
   const metadata = applyAbstentionOverlay(
     assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome: 'answered' }),
     capturedVerdict

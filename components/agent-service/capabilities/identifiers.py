@@ -1,8 +1,8 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The charset guards on caller-supplied identifiers (story 1.7).
+"""The charset guards on caller-supplied identifiers.
 
-AD-3 requires that an identifier coming from a caller passes a charset guard
+An identifier coming from a caller must pass a charset guard
 before it is used; the V04 map (§2.4) records that no such guard exists
 anywhere in the tree today — the only one guards graph names inside the OPEA
 retriever, a module the agentic path does not use. The guard lives here, in

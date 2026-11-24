@@ -493,7 +493,7 @@ async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
 /**
  * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
  * when given, rides a metadata frame before the done frame. `options`
- * passes through to `sseBody`'s agentic extension (story 2.9): `activity`
+ * passes through to `sseBody`'s agentic extension: `activity`
  * frames interleaved with the chunks, an `agent_verdict` frame before the
  * metadata frame. The interception sits at the network layer (page.route),
  * so the app's own fetch + SSE parsing path runs — only the bytes on the

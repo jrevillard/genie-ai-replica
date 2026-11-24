@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The fixed generation stage — one call to the LLM endpoint (story 1.9).
+"""The fixed generation stage — one call to the LLM endpoint.
 
 The recorded payload (deployed chatqna request-level defaults,
 ``genieai_chatqna.py:4890-4906``): ``temperature=0.01``, ``top_p=0.95``,

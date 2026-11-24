@@ -1,4 +1,4 @@
-// Story 2.9 — the SSE contract's regression coverage: the extended
+// The SSE contract's regression coverage: the extended
 // envelope (the five legacy event types + the additive agent_activity /
 // agent_verdict frames, helpers/stream-route.js) rendered by the CURRENT
 // client. The activity line is landed, so this file now pins
@@ -21,7 +21,7 @@ const {
 } = require('../helpers/chatbot');
 
 // The verdict projection payloads mirror the BFF's wire shape
-// (services/agent-frame-writer.js, story 2.4): the frame carries
+// (services/agent-frame-writer.js): the frame carries
 // {type, version: 1, ...projection} — mockChatStream adds the frame keys.
 const GROUNDED_VERDICT = { grounding_status: 'grounded', is_grounded: true, translation_mode: 'none' };
 const UNGROUNDED_VERDICT = {

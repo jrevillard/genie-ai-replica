@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for protocol/thresholds.py (+ the thresholds CLI wiring).
 
-Every registry/promotion row of the story's matrix through fixtures — temp
+Every registry/promotion row of the module's matrix through fixtures — temp
 registries, fake reference manifests, no live venue:
 
 * the shipped registry loads, reports every measured dimension (M-1..M-5) as

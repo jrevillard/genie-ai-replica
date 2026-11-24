@@ -165,7 +165,7 @@ class AgentLoop:
     emitter: EventEmitter
     system_prompt: str
     verifier: VerificationPipeline | None = None
-    # The run's execution-version record (FR-17), built by the request
+    # The run's execution-version record, built by the request
     # orchestrator at assembly. ``None`` keeps the probe-shaped
     # ``{"question"}`` payload — the handshake key is additive.
     execution_versions: dict | None = None
@@ -342,7 +342,7 @@ class AgentLoop:
             # success shapes contribute their citations, error envelopes
             # record the attempt (the ledger classifies both itself).
             self.verifier.record_tool_result(request.name, result_payload)
-            # The taint scan (AD-13): retrieved content is data, never
+            # The taint scan: retrieved content is data, never
             # instructions. An instruction pattern in a retrieved text is a
             # recorded finding — ledger, verdict payload and usage record —
             # and the content STILL passes as data: the same payload feeds

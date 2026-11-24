@@ -42,7 +42,7 @@ const GPU_RANGES = {
   // the Strix Halo profile pins both to the spike-measured pair)
   VLLM_LLM_MODEL_ID: { type: 'string', optional: true },
   VLLM_TRANSLATION_MODEL_ID: { type: 'string', optional: true },
-  // Tool-call parser served by the vLLM container (#2052): must match the
+  // Tool-call parser served by the vLLM container: must match the
   // served model family (granite4 = Granite 4.x default; granite = 3.x) —
   // free-form string, vLLM ships parsers for many model families
   VLLM_TOOL_CALL_PARSER: { type: 'string', optional: true },

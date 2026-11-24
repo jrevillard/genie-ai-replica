@@ -2,7 +2,7 @@
 
 require('../setup-env');
 
-// The residual-budget contract (story 2.3): pure math, no mocks — the
+// The residual-budget contract: pure math, no mocks — the
 // module under test touches no network, clock or environment.
 const { SKIP_STATUSES, computeResidual, planTranslation } = require('../../services/agent-residual-budget');
 

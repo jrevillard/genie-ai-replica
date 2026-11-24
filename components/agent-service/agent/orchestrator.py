@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The request orchestrator — the per-request owner of the governed run (AD-6).
+"""The request orchestrator — the per-request owner of the governed run.
 
 One instance of this class answers one HTTP run request end to end:
 
@@ -115,10 +115,10 @@ class OrchestratorConfig:
     required by the contract, sourced here). ``system_prompt`` is the
     deployed two-tier override (``AGENT_RUN_SYSTEM_PROMPT``), defaulting to
     the governed production prompt (:data:`agent.prompt.PRODUCTION_SYSTEM_PROMPT`
-    — grounded-or-insufficient, cite-only-served-evidence, AD-13
+    — grounded-or-insufficient, cite-only-served-evidence,
     data-never-instructions). ``verdict_policy`` is the citation
     verification release policy (``AGENT_VERDICT_POLICY``, default
-    ``verdict-marked`` — iteration 1 implements only that value; an
+    ``verdict-marked`` — implements only that value; an
     unusable value refuses the config load naming the knob). There is no
     policy value that disables verification — the pipeline runs on every
     governed run. ``judge_timeout_ms`` (``AGENT_VERDICT_JUDGE_TIMEOUT_MS``)
@@ -237,7 +237,7 @@ class RunUsageRecord:
     FIRST search query's preparation status (the initial query's, in the
     contract's preparation vocabulary; ``None`` when no query was prepared);
     ``injection_findings`` — how many injection attempts the run's taint
-    scan recorded (AD-13: an attempt is a counted finding, the content
+    scan recorded (an attempt is a counted finding, the content
     still passed as data).
     """
 
@@ -374,9 +374,9 @@ class RequestOrchestrator:
         monitor = RunBudgetMonitor(self._config.budget_for(request.deadline_ms))
         token = CancellationToken()
         emitter = EventEmitter(run_id=run_id, sink=sink)
-        # The execution-version record (FR-17) is built at run assembly,
+        # The execution-version record is built at run assembly,
         # BEFORE the loop — it rides the run_started event, which is what
-        # the BFF persists into the queries doc AT START (AD-11: cancelled,
+        # the BFF persists into the queries doc AT START (cancelled,
         # timed-out and crashed runs keep their versions exactly because the
         # record is on the START event, not the terminal one). The build is
         # fail-soft by contract: an unresolvable model id degrades to the
@@ -446,7 +446,7 @@ class RequestOrchestrator:
         return record(result.outcome, error=result.error)
 
     async def _execution_versions(self) -> dict:
-        """The FR-17 record, fail-soft end to end: an unresolvable model id
+        """The record, fail-soft end to end: an unresolvable model id
         (the endpoint unreachable at assembly) degrades to the unresolved
         entry with a truncated note and the run proceeds — the record build
         itself can never fail a run."""

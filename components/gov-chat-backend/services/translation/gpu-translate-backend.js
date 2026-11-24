@@ -20,7 +20,7 @@ const DEFAULT_HEALTH_TIMEOUT_MS = 30000;
 
 // Per-request budget for a chat completion. The deployed 30s timeout: the
 // legacy call sites pass no options, so they keep exactly this value. The
-// agentic leg (story 2.10) overrides it per call with the remaining
+// agentic leg overrides it per call with the remaining
 // end-to-end deadline.
 const DEFAULT_CALL_TIMEOUT_MS = 30000;
 
@@ -497,7 +497,7 @@ class GpuTranslateBackend {
    * usage. The transport internals of `callVllmService`; the string-only
    * wrapper below keeps the legacy callers' resolved shape untouched.
    * @param {Object} requestBody - Request body
-   * @param {Object} [options] - Additive per-call options (story 2.10); null
+   * @param {Object} [options] - Additive per-call options; null
    *   and undefined are both "no options".
    * @param {number} [options.timeoutMs] - Per-call timeout; default 30s (the
    *   deployed value). A non-finite value is treated as not provided — Node's
@@ -536,7 +536,7 @@ class GpuTranslateBackend {
         timeout: callTimeoutMs // 30 second timeout (the legacy default; overridable per call)
       };
 
-      // Abort wiring (story 2.10). An abort destroys the in-flight request;
+      // Abort wiring. An abort destroys the in-flight request;
       // the listener never outlives the settlement. Without a signal nothing
       // here changes for the legacy callers.
       let onAbort = null;
@@ -628,10 +628,10 @@ class GpuTranslateBackend {
   }
 
   /**
-   * The usage-returning twin of `translate` (story 2.10 — the agentic leg).
+   * The usage-returning twin of `translate` (the agentic leg).
    *
    * The legacy `translate` resolves strings only and its 30s timeout is
-   * private; the residual-budget contract (AD-6/AD-14) needs usage returned
+   * private; the residual-budget contract needs usage returned
    * or estimated, a timeout bounded by the remaining deadline, and a
    * disconnect that destroys the in-flight request. This entry point wraps
    * the same internals (same prompt, same truncation rejection, same empty

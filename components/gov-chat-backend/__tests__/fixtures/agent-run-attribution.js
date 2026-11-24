@@ -1,6 +1,6 @@
 'use strict';
 
-// Story 2.11 — the FR-17 execution-version record the agent service emits
+// The execution-version record the agent service emits
 // on the `run_started` seam event (ids and fingerprints only — never
 // credentials, never a prompt body, never question/answer text). ONE
 // fixture home for every suite that pins the run-start handshake: a

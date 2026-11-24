@@ -1,6 +1,6 @@
 'use strict';
 
-// Story 2.4b — the non-streaming JSON path's I/O matrix as executable
+// The non-streaming JSON path's I/O matrix as executable
 // checks. AGENT_ENABLED=1 is set BEFORE any module loads (the routing helper
 // reads it once at module load), so every test here exercises the AGENTIC
 // branch of POST /api/queries through the REAL endpoint: the route wiring,
@@ -70,7 +70,7 @@ jest.mock('../../services/translation-service', () => ({
   resolveLanguagePair: jest.fn()
 }));
 // The agentic translation leg — the JSON consumer's bound whole-answer
-// translator (story 2.10's leg wired in place of the request-resolved one).
+// translator (the leg wired in place of the request-resolved one).
 // The leg's own suite pins the leg's internals (including its fail-soft
 // never-raises delivery); this suite pins the consumer's contract:
 // construction args, outcome plumbing, V05 status persistence.
@@ -176,8 +176,8 @@ function answeredRunStream({ verdict = GROUNDED_VERDICT, answer = 'Hello world.'
 
 let collections;
 
-// The attribution writes go through the server-side AQL merge (story 2.11 —
-// the real arangojs aql template binds the patch as the query's second bind
+// The attribution writes go through the server-side AQL merge (the real
+// arangojs aql template binds the patch as the query's second bind
 // var); the wholesale tail update stays on the collection mock.
 const attributionPatch = (callIndex = 0) => {
   const arg = queryService.db.query.mock.calls[callIndex][0];
@@ -265,7 +265,7 @@ describe('POST /api/queries — the agentic success contract', () => {
     // The legacy top-level shape {queryId, response, metadata, responseTime}
     // — toEqual pins the exact key set, so the only additive key ever
     // allowed beside them is translationFailed (asserted by its own test).
-    // Story 2.11: the agent_run block gains started_at/outcome/finished_at
+    // The agent_run block gains started_at/outcome/finished_at
     // (the completed run-start + outcome write); execution_versions is
     // ABSENT here — this fixture's run_started payload carries none (an
     // older agent service; the block degrades to run_id + started_at).
@@ -337,7 +337,7 @@ describe('POST /api/queries — the agentic success contract', () => {
     // carries no graph_name by contract): the sticky set is left UNTOUCHED —
     // no `okfRoutedGraphs` key on the payload, never a false reset. (The
     // LAST update is the tail; the first is the run-start attribution
-    // write, story 2.11.)
+    // write.)
     const tailCall = collections.update.mock.calls[collections.update.mock.calls.length - 1];
     expect(tailCall[1]).not.toHaveProperty('okfRoutedGraphs');
     expect(analytics.recordQuery).toHaveBeenCalledTimes(1);
@@ -349,7 +349,7 @@ describe('POST /api/queries — the agentic success contract', () => {
     await postQuery();
 
     // The doc was minted first; the id that completes it is the minted one —
-    // both attribution writes included (story 2.11: the run-start write and
+    // both attribution writes included (the run-start write and
     // the tail).
     expect(collections.save).toHaveBeenCalledTimes(1);
     expect(collections.update).toHaveBeenCalledWith('q1', expect.anything());
@@ -541,10 +541,10 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     expect(response.status).toBe(502);
     expect(response.body).toEqual({ error: 'AGENT_RUN_ERROR', message: 'token budget exhausted' });
     // The doc was minted but never finalized: the ONLY write is the honest
-    // outcome patch (story 2.11 — the agent's own verdict, verbatim) — no
+    // outcome patch (the agent's own verdict, verbatim) — no
     // answer, no analytics; the trailing usage record is ignored.
     expect(collections.save).toHaveBeenCalledTimes(1);
-    // The ONE write is the server-side outcome patch (story 2.11) — the
+    // The ONE write is the server-side outcome patch — the
     // tail update never runs, no analytics.
     expect(collections.update).not.toHaveBeenCalled();
     expect(queryService.db.query).toHaveBeenCalledTimes(1);
@@ -694,7 +694,7 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
 
     expect(response.status).toBe(504);
     expect(response.body.error).toBe('AGENT_SERVICE_UNAVAILABLE');
-    // Story 2.11 — the ONE honest outcome is the deadline's: the abort's
+    // The ONE honest outcome is the deadline's: the abort's
     // stream teardown reports interrupted, but the deadline fired first and
     // the latch keeps the fact that actually ended the run (the write is
     // the server-side patch — the tail update never runs).
@@ -763,7 +763,7 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       message: 'Agent service unavailable or timed out'
     });
     // The truncated text never became a complete answer — the doc keeps the
-    // deadline's honest outcome only (story 2.11, the server-side patch).
+    // deadline's honest outcome only (the server-side patch).
     expect(collections.update).not.toHaveBeenCalled();
     expect(attributionPatch()).toEqual({ outcome: 'timed_out', finished_at: expect.any(String) });
   });
@@ -795,7 +795,7 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
       requested_labels: []
     });
     expect(response.status).toBe(201);
-    // Story 2.11: TWO writes — the run-start attribution patch (server-side
+    // TWO writes — the run-start attribution patch (server-side
     // merge), then the tail update that completes the doc.
     expect(queryService.db.query).toHaveBeenCalledTimes(1);
     expect(attributionPatch()).toEqual({
@@ -1033,7 +1033,7 @@ describe('POST /api/queries — the agentic language refusal (same map, same bod
   });
 });
 
-// ── story 2.11 — execution attribution on the JSON entry ────────────────────
+// ── execution attribution on the JSON entry ────────────────────────────────
 describe('POST /api/queries — story 2.11, the run-start handshake', () => {
   it('persists the run-start block AT START, and the success metadata completes it with the outcome', async () => {
     axios.post.mockResolvedValue({

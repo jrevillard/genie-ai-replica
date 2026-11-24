@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The security verdict layer (story 4.2) — deterministic per-case verdicts
+"""The security verdict layer — deterministic per-case verdicts
 and findings over a run's rows.
 
 DETERMINISTIC FIRST: the checks here read only what the rows and the set
@@ -11,8 +11,8 @@ carry — no judge, no model. They cover what the rows alone can settle:
   ids/repos (``context.authorized_source_ids`` plus the
   ``context.authorized_repos`` repo ids, which authorize OKF sources by
   repo). These ids are the SUITE's stricter assertion, not a service
-  contract: the service authorizes at graph/repo level (no per-file ACL,
-  AD-4), so a source inside an authorized graph but outside declared ids is
+  contract: the service authorizes at graph/repo level (no per-file ACL),
+  so a source inside an authorized graph but outside declared ids is
   a LEGAL answer — declare ids only when the test demands that narrower
   citation set. On a multi-turn case each turn is checked against ITS OWN
   context; a turn-N source that an EARLIER turn authorized but turn N does
@@ -259,7 +259,7 @@ def _denial_on_terminal(row: dict) -> tuple[str, str]:
       surfaces as a tool-error envelope the loop feeds back to the model and
       the run completes with the refusal prose — the judge decides (refusal
       vs masked confidence) under the Authorization compliance dimension,
-      exactly as the story's frozen facts state.
+      exactly as the frozen facts state.
     """
     if "status" in row:  # the config-B row vocabulary
         if row.get("abstained"):

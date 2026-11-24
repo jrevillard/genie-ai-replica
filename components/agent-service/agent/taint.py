@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The taint discipline's detection half (AD-13): retrieved content is data,
+"""The taint discipline's detection half: retrieved content is data,
 never instructions.
 
 One explicit, mechanical scan over a dispatched tool result's TEXT fields —

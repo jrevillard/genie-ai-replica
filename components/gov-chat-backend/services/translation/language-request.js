@@ -59,7 +59,7 @@ function wantsTranslation(targetLanguage) {
 
 /**
  * Whether unit-by-unit streaming translation is enabled for this deployment
- * (issue #829, `STREAMING_TRANSLATION_ENABLED`). One home for the flag's
+ * (`STREAMING_TRANSLATION_ENABLED`). One home for the flag's
  * vocabulary: a future value or config-object move updates this parse and
  * both consuming paths (legacy relay, agentic frame writer) with it.
  *

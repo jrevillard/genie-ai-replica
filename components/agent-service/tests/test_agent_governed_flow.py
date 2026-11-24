@@ -6,8 +6,8 @@ Mutation-sensitive pins: a run whose ledger holds no successful retrieval
 delivers the STANDARD insufficiency message (the model's drafted text is
 discarded — it never rides the stream); a run with ANY degraded retrieval
 delivers the same response with the degradation reason, even when valid
-citations exist and the scripted judge would call it grounded (FR-12:
-degraded beats grounded); retrieval that happened but yielded no valid
+citations exist and the scripted judge would call it grounded
+(degraded beats grounded); retrieval that happened but yielded no valid
 citation stays the ungrounded path (claims without support, marked) — NOT
 an insufficiency; the verdict lands after the last text event and before
 the terminal in every case, and the event order on the seam is unchanged.

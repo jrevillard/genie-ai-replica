@@ -211,7 +211,7 @@ class ChatHistoryService {
               // translateSources reads), so a restored conversation's sidebar
               // re-resolves the concept through the existing conventions
               // instead of building a dead /api/files/<concept_id>/download
-              // URL (ADR agentic-003). Legacy document rows carry none of the
+              // URL. Legacy document rows carry none of the
               // identity keys.
               const okfIdentity =
                 doc.source === 'okf-concept'
@@ -390,7 +390,7 @@ class ChatHistoryService {
               // snapshot rows carry them (addMessage), and without this
               // projection a restored conversation's sidebar could not tell a
               // concept row from a document row (it would build the dead
-              // /api/files/<concept_id>/download URL — ADR agentic-003).
+              // /api/files/<concept_id>/download URL).
               // Absent (null) on legacy rows.
               source: doc.source || null,
               concept_id: doc.concept_id || null,

@@ -28,7 +28,7 @@ Two checks, one pipeline, in a fixed order:
   capability ran degraded — partial availability, a fallback strategy), an
   insufficiency outcome, an error envelope, or an unprepared-query answer.
   When NO successful retrieval is recorded, or ANY retrieval ran degraded,
-  the response is an insufficiency response (FR-12): the loop replaces the
+  the response is an insufficiency response: the loop replaces the
   drafted answer text with :data:`INSUFFICIENCY_RESPONSE` and the verdict
   carries ``insufficient_evidence: {required: true, reasons: [...]}`` —
   decided by the ledger's state at finalize, never by the model's own
@@ -39,7 +39,7 @@ Two checks, one pipeline, in a fixed order:
   NOT an insufficiency — it stays the ``ungrounded`` claims-without-support
   path below.
 
-* **Injection findings (AD-13).** The ledger also records the taint scan's
+* **Injection findings.** The ledger also records the taint scan's
   findings (:mod:`agent.taint` — an instruction pattern in retrieved
   content is an attempt, recorded, with the content still passing as
   data); the verdict payload projects them under ``findings``.
@@ -91,7 +91,7 @@ VERDICT_UNGROUNDED = "ungrounded"
 VERDICT_UNVERIFIED = "unverified"
 
 POLICY_VERDICT_MARKED = "verdict-marked"
-# Iteration 1 ships verdict-marked only. The other enum members
+# The deployment ships verdict-marked only. The other enum members
 # (verdict-silent, hold-until-verified) are named by the architecture but
 # are NOT implemented: a deployment asking for one is refused at the config
 # load, naming the knob — silently degrading to another policy would lie
@@ -112,7 +112,7 @@ JUDGE_OUTCOME_TIMEOUT = "timeout"
 JUDGE_OUTCOME_BUDGET_EXHAUSTED = "budget_exhausted"
 JUDGE_OUTCOME_ERROR = "error"
 
-# The standard explicit insufficiency response (FR-12/FR-13): the delivered
+# The standard explicit insufficiency response: the delivered
 # answer when the ledger's state at finalize requires insufficiency — the
 # model's drafted text is discarded and replaced by this constant. The
 # message is the source-language (English) text; display-language
@@ -161,7 +161,7 @@ class RetrievalLedger:
     * ``degradation_count`` — the dispatches whose result reported
       ``degraded_availability`` (partial availability, a fallback
       strategy): any one of them makes the response an insufficiency
-      response, never a confident answer (FR-12), citations notwithstanding;
+      response, never a confident answer, citations notwithstanding;
     * ``findings`` — the taint scan's injection attempts
       (:mod:`agent.taint`), recorded, content untouched.
     """
@@ -340,7 +340,7 @@ class GroundingJudge:
             logger.info("grounding judge skipped: %s", spent)
             return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
         messages = judge_messages(answer_text, citations)
-        # The judge's run-path span (story 2.11): the outcome attribute is
+        # The judge's run-path span: the outcome attribute is
         # read OFF the result after the decision ladder — the span never
         # interleaves with the branch logic, and a new early-return path
         # cannot forget the attribute.
@@ -420,7 +420,7 @@ class Verdict:
     the clients that predate the tri-state), ``marking.required`` is derived
     from the policy and the status, and the payload dict is what the BFF
     projects — verbatim onto the metadata fields, the citation set onto
-    ``source_documents`` (projected through the shared FR-13 module, so the
+    ``source_documents`` (projected through the shared module, so the
     delivered entries carry exactly the fields the frontend citation
     mapping reads).
 
@@ -543,7 +543,7 @@ class VerificationPipeline:
         judge latency). ``required`` is true when NO retrieval grew the
         citable entries (the answer can claim nothing served) OR any
         retrieval ran degraded (a degraded run never delivers a confident
-        answer — FR-12, even with valid citations). The reasons name the
+        answer — even with valid citations). The reasons name the
         mechanical facts; they are never the model's words.
         """
         reasons: list[str] = []
@@ -579,7 +579,7 @@ class VerificationPipeline:
             )
 
     async def _finalize(self, answer_text: str) -> Verdict:
-        # The finalize's run-path span (story 2.11): the verification stage
+        # The finalize's run-path span: the verification stage
         # of the trace waterfall. The decision body is UNCHANGED
         # (`_finalize_decision`, the pre-diff ladder); the span reads the
         # tri-state status off the verdict it returns — the telemetry never
@@ -591,7 +591,7 @@ class VerificationPipeline:
 
     async def _finalize_decision(self, answer_text: str) -> Verdict:
         # The insufficiency decision runs FIRST — before the judge, before
-        # the grounded claim is surfaced (FR-12: degraded beats grounded).
+        # the grounded claim is surfaced (degraded beats grounded).
         # The judge is skipped on this path: the answer it would evaluate is
         # not the delivered answer. (An empty ledger necessarily lands here:
         # entries can only grow through a dispatch that would have counted

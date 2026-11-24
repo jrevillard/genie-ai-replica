@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""Config B — the fixed no-agent pipeline (story 1.9).
+"""Config B — the fixed no-agent pipeline.
 
 One single-pass call: preparation → retrieval/reranking/selection (the
 ``search_knowledge`` capability) → context/prompt construction → one fixed
@@ -12,7 +12,7 @@ no executor and no loop either.
 Modules:
 
 * :mod:`config`   — the frozen env-knob surface (deployed names, deployed defaults).
-* :mod:`lane`     — the admission lane (the AD-6 flock slot-pool idiom).
+* :mod:`lane`     — the admission lane (the flock slot-pool idiom).
 * :mod:`generation` — the fixed generation client (recorded payload, discovery).
 * :mod:`prompt`   — the ported prompt surface (system default, user template,
   document rendering, abstention injection, history truncation).
@@ -20,5 +20,5 @@ Modules:
 
 The pipeline calls the capability DIRECTLY — never the executor: config A
 has no executor, and the capability's own authorized-set check already
-guards the call (the story's recorded decision).
+guards the call (the recorded decision).
 """

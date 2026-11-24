@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The preparation entry: the recorded §5.1 order, the failure-class matrix.
 
-Every row of the story's I/O & Edge-Case Matrix lands here, against a REAL
+Every row of the failure-class matrix lands here, against a REAL
 langdetect (seeded for determinism — production stays unseeded) and the
 REAL vendored registry; the translation endpoint is faked at the transport
 seam. The three failure classes are asserted DISTINCT: the refusal RAISES,

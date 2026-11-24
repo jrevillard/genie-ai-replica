@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The ported prompt surface (story 1.9).
+"""The ported prompt surface.
 
 The prompt-byte contract is enforced against the DEPLOYED module directly
 (`test_prompt_strings_match_the_deployed_source` — the source-inspection

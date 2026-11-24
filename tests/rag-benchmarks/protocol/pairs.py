@@ -1,13 +1,13 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The E01/E02 pair-conditions manifest (story 4.1 — recorded, checkable).
+"""The E01/E02 pair-conditions manifest (recorded, checkable).
 
-The epic's pairs are recorded artifacts, not folklore:
+The pairs are recorded artifacts, not folklore:
 
 * **E01 (A vs B)** — corpus, evaluation set, execution conditions and model
   services are HELD FIXED; the retrieval backend is the recorded INTENTIONAL
   DIFFERENCE (A is the legacy OPEA retrieval path, B is the OPEA-free port —
-  the backend is the variable under test, AD-10).
+  the backend is the variable under test).
 * **E02 (B vs C)** — retrieval backend, preparation and admission policy are
   HELD FIXED (B and C go through the same orchestrator admission lane, the
   same budgets and the same query preparation); orchestration is the recorded

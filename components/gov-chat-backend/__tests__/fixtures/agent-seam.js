@@ -1,6 +1,6 @@
 'use strict';
 
-// Story 2.4 / 2.4b — shared agent-seam fixtures, ONE home for the two
+// Shared agent-seam fixtures, ONE home for the two
 // consumers' suites (agent-frame-writer.test.js — the streaming entry — and
 // agent-json-result.test.js — the non-streaming JSON entry). The run-shaped
 // stream script is NOT shared: the frame-writer suite pins the frame order

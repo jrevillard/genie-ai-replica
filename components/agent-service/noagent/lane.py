@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The admission lane — the flock slot-pool idiom (AD-6; story 1.9).
+"""The admission lane — the flock slot-pool idiom.
 
 Ported from the dataprep ingest-lane
 (``genieai_dataprep_microservice.py:118-147``): N slot files derived from one
@@ -15,10 +15,10 @@ close releases the kernel lock on every exit path — return, exception and
 cancellation alike (the handle is closed in ``finally``; a cancelled task's
 ``finally`` runs during unwinding).
 
-The iteration-1 deployment contract runs agent-service at exactly one
+The deployment contract runs agent-service at exactly one
 replica (flag-gated 0/1), so this intra-container pool IS the global bound;
 scaling beyond one replica requires an explicitly shared coordination
-mechanism (deferred per AD-6). ``fcntl`` is POSIX-only: on a checkout
+mechanism (deferred). ``fcntl`` is POSIX-only: on a checkout
 without it (Windows dev) the pool degrades to uncounted slots — the dev
 host runs no serving traffic.
 """

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""Evaluation-set schema + composition validator (FR-24, story 4.1).
+"""Evaluation-set schema + composition validator.
 
 A set file extends the existing gold schema
 (``eval/gold_dataset.example.json``: ``id``, ``query``, ``categoryLabels``,
@@ -8,10 +8,10 @@ A set file extends the existing gold schema
 with the protocol fields every case carries:
 
 * ``case_class`` — one of the composition classes (below);
-* ``access_scenario`` — ``public`` or ``restricted`` (the access axis FR-24
-  makes explicit);
+* ``access_scenario`` — ``public`` or ``restricted`` (the access axis the
+  schema makes explicit);
 * ``provenance`` — the SET the case was authored for: ``assessment`` or
-  ``tuning``. This is the separation mechanism (FR-24): a case copied from a
+  ``tuning``. This is the separation mechanism: a case copied from a
   tuning set into an assessment file keeps its ``provenance`` and is refused —
   the check reads the case's own provenance field, never the directory it
   happens to sit in;
@@ -20,7 +20,7 @@ with the protocol fields every case carries:
   true}`` for a citation check). Free-form; the driver layer reads it;
 * ``script`` — optional ``latin`` / ``non-latin`` override; when absent the
   validator derives the script from the query text's Unicode blocks;
-* ``security_scenario`` — optional security vocabulary (story 4.2): one of
+* ``security_scenario`` — optional security vocabulary: one of
   the four authorization conditions (``restricted_repo``, ``cross_user_id``,
   ``narrowed_scope``, ``permission_change``) or either injection vector
   (``injection_document``, ``injection_tool_output``). An ASSESSMENT set must
@@ -56,7 +56,7 @@ from pathlib import Path
 
 PROVENANCES = ("assessment", "tuning")
 
-# The composition classes an ASSESSMENT set must carry (FR-24).
+# The composition classes an ASSESSMENT set must carry.
 COMPOSITION_CLASSES = (
     "answerable",
     "unanswerable",
@@ -85,7 +85,7 @@ DEFAULT_COMPOSITION_MINIMUMS = {
 DEFAULT_ACCESS_MINIMUMS = {"public": 1, "restricted": 1}
 
 # The security vocabulary a case's optional ``security_scenario`` field draws
-# from (story 4.2, FR-25): the four authorization conditions, then the two
+# from: the four authorization conditions, then the two
 # injection vectors. Security scenarios execute only on configs B and C (the
 # surfaces with an authorization executor and a steerable agent); a config-A
 # reference run records them as skipped rows.
@@ -356,7 +356,7 @@ def _validate_composition(
                 f" ({access_counts.get(scenario, 0)} present, {minimum} required)"
             )
 
-    # The security floor (story 4.2): each of the four authorization
+    # The security floor: each of the four authorization
     # conditions and both injection vectors present and countable — a set
     # missing one fails naming it.
     for scenario, minimum in security_minimums.items():
@@ -418,7 +418,7 @@ def validate_set(data: dict, kind: str | None = None) -> list[str]:
     if set_provenance == "assessment":
         _validate_composition(entries, set_provenance, meta.get("minimums"), errors)
     if set_provenance:
-        # The separation (FR-24), by provenance — ONE call site for both
+        # The separation, by provenance — ONE call site for both
         # provenances: the mismatch is a schema-level offense, never a
         # composition one, and no composition refactor can lose the check.
         _validate_separation(entries, set_provenance, errors)

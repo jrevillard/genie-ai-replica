@@ -1,11 +1,11 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The threshold registry and the promotion decision (story 4.4).
+"""The threshold registry and the promotion decision.
 
 The registry (``thresholds.yaml``, beside this module) is the SINGLE home of
-the threshold decision (PRD OQ-5): one entry per measured dimension
+the threshold decision: one entry per measured dimension
 (M-1..M-5), each either an agreed value or an EXPLICIT absence with its
-reason. This module is the machinery that enforces PRD §8:
+reason. This module is the machinery that enforces it:
 
 * **absence blocks promotion.** A dimension without an agreed value is never
   reported as satisfied, never substituted with a default, never counted as a
@@ -44,7 +44,7 @@ THRESHOLD_REGISTRY_ARTIFACT = "evaluation-threshold-registry"
 THRESHOLD_REPORT_VERSION = "1.0.0"
 THRESHOLD_REPORT_ARTIFACT = "threshold-registry-report"
 
-# The measured dimensions the registry carries an entry for — the epic's
+# The measured dimensions the registry carries an entry for — the
 # enumeration, reused from the E01 report so the two surfaces name the same
 # dimensions. One entry per dimension: never a missing entry, never an
 # implicit default.

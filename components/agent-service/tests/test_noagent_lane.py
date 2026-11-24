@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The admission lane: the flock slot-pool port (story 1.9).
+"""The admission lane: the flock slot-pool port.
 
 Mutation-sensitive pins: every claim opens its OWN slot file (slot 0 keeps
 the base name, slot i lives at ``<base>.i`` — the dataprep idiom), busy is
@@ -211,7 +211,7 @@ def test_from_config_wires_the_env_values(lane_dir):
 def test_separate_instances_over_one_config_share_one_pool(lane_dir):
     """The pool is the slot FILES, not the instance: the run surface's lane
     and the no-agent pipeline's lane are separate shells over the same
-    config, and one holding every slot saturates the other (story 2.3 —
+    config, and one holding every slot saturates the other (
     the same-lane contract is satisfied by the shared files, with the
     pipeline's acquire untouched)."""
     from noagent.config import NoAgentConfig

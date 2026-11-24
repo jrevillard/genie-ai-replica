@@ -1,15 +1,15 @@
 'use strict';
 
-// The residual-budget contract the BFF's translation leg plans against
-// (AD-6/AD-14): the run's usage record is the shared state between the
+// The residual-budget contract the BFF's translation leg plans against:
+// the run's usage record is the shared state between the
 // agent service and the BFF, and translation may start a call only within
 // what the run left unspent of the deployment's allowance.
 //
 // The contract is PURE: it computes a decision from the inputs and never
 // touches the network, the clock or the environment. The wiring that
-// fetches the usage record and executes the decision is story 2.10 — the
-// legacy translation path keeps its deployed behavior untouched (the V05
-// contract freezes it).
+// fetches the usage record and executes the decision sits outside this
+// module — the legacy translation path keeps its deployed behavior
+// untouched (the V05 contract freezes it).
 //
 // The one rule that outranks everything else: translation NEVER exceeds
 // the allowance. When the run's usage is unavailable (the record is
@@ -20,7 +20,7 @@
 // would be a guess wearing the budget's clothes.
 
 // The skip-status vocabulary — the recorded statuses a caller sees on the
-// skip decision. Named and frozen: one home, so a wiring site (story 2.10)
+// skip decision. Named and frozen: one home, so a wiring site
 // compares against the constant and a typo surfaces at import.
 const SKIP_STATUSES = Object.freeze({
   USAGE_UNAVAILABLE: 'usage_unavailable',

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The ``source_documents`` projection (FR-13): one envelope, two consumers.
+"""The ``source_documents`` projection: one envelope, two consumers.
 
 Mutation-sensitive pins: the legacy and OKF envelope variants carry exactly
 the fields the frontend citation mapping reads (``translateSources`` —

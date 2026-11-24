@@ -1,13 +1,13 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The partial-order gate (story 4.1 — A-only first, then thresholds, then B/C).
+"""The partial-order gate (A-only first, then thresholds, then B/C).
 
 The measurement order is the protocol's load-bearing invariant:
 
 1. A-only reference runs — ALWAYS allowed, never gated (this module is not
    even invoked for config A);
-2. thresholds signed against the measured reference (story 4.4 signs; this
-   module verifies only);
+2. thresholds signed against the measured reference (the threshold
+   registry signs; this module verifies only);
 3. the first gated B/C assessment run.
 
 A gated B/C run requires, for the SAME corpus fingerprint and assessment-set
@@ -28,8 +28,8 @@ The refusal is typed (:class:`GateRefusal`) with a machine-readable ``reason``:
   different manifest, corpus or set.
 
 The gate verifies presence, integrity and lineage. It never reads the
-thresholds' numbers and never invents defaults — the numbers are story 4.4's
-decision.
+thresholds' numbers and never invents defaults — the numbers are the
+threshold registry's decision.
 """
 
 from __future__ import annotations
@@ -77,10 +77,11 @@ def thresholds_file(
     thresholds: dict,
     signed: bool = True,
 ) -> dict:
-    """Assemble one thresholds record (the consumer contract story 4.4 signs).
+    """Assemble one thresholds record (the consumer contract the threshold
+    registry signs).
 
     The harness never authors thresholds content — ``thresholds`` is passed in
-    verbatim by the signing story. ``signed=False`` produces the unsigned
+    verbatim by the signing step. ``signed=False`` produces the unsigned
     shape the gate refuses.
     """
     return {

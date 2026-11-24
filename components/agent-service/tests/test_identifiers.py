@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The charset guards on caller-supplied identifiers (story 1.7).
+"""The charset guards on caller-supplied identifiers.
 
 Every guard refuses with ``AuthorizationError`` before any resolution: a
 malformed identifier and an unauthorized one are indistinguishable from the

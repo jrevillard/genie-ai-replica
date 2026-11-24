@@ -14,7 +14,7 @@ import '../helpers/pump_frames.dart';
 import '../helpers/test_app.dart';
 import '../helpers/theme_helper.dart';
 
-/// The sidebar's OKF-concept routing (issue #2069): a citation row that
+/// The sidebar's OKF-concept routing: a citation row that
 /// carries the okf-concept identity resolves through okf-server (the concept
 /// route), never through the document-repository `/api/files/<id>/view` URL
 /// — which 404s by construction for a concept (content-only chunking).

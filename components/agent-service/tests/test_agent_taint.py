@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The taint discipline (AD-13): retrieved content is data, never instructions.
+"""The taint discipline: retrieved content is data, never instructions.
 
 Mutation-sensitive pins: every declared instruction marker fires on its
 pattern (case-insensitively) and none fires on ordinary prose; the scan

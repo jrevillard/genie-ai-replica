@@ -1,13 +1,13 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The execution-version record (FR-17) — what the run-start handshake carries.
+"""The execution-version record — what the run-start handshake carries.
 
 One run is attributable to four versions: the IMPLEMENTATION that served it,
 the MODEL it called, the PROMPT it was governed by and the CONFIGURATION it
 was bounded by. :func:`build_execution_version_record` assembles that record
 from an :class:`~agent.orchestrator.OrchestratorConfig` and the resolved
 model identity; the orchestrator emits it on the ``run_started`` seam event
-and the BFF persists it into the ``queries`` doc AT START (AD-11) — so a
+and the BFF persists it into the ``queries`` doc AT START — so a
 cancelled, timed-out or crashed run keeps its versions the same way a
 completed one does.
 
@@ -109,7 +109,7 @@ def build_execution_version_record(
     model_source: str = MODEL_SOURCE_UNRESOLVED,
     model_note: str | None = None,
 ) -> dict:
-    """Assemble the FR-17 record: implementation, model, prompt, configuration.
+    """Assemble the record: implementation, model, prompt, configuration.
 
     ``config`` is the run's resolved :class:`~agent.orchestrator.OrchestratorConfig`
     (its ``system_prompt`` decides the prompt axis: the shipped template

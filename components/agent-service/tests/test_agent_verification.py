@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The citation verification pipeline (AD-7): the ledger, the mechanical
+"""The citation verification pipeline: the ledger, the mechanical
 reference validity, the budgeted grounding judge, the tri-state verdict.
 
 Mutation-sensitive pins: the ledger cites only successful tool results (an
@@ -400,7 +400,7 @@ def test_the_payload_is_the_projection_contract_verbatim():
         "source_documents",
         "marking",
     }
-    # Story 2.5's additive fields: the insufficiency decision is explicit
+    # The additive fields: the insufficiency decision is explicit
     # (required false on a normal run, empty findings, and the delivered
     # citations projected onto the frontend envelope).
     assert payload["insufficient_evidence"] == {"required": False, "reasons": []}

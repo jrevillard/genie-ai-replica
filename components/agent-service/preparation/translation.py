@@ -6,8 +6,8 @@ Ported from the deployed translation seam (``genieai_chatqna.py``: the
 payload builders :632-708, the seam :711-795, the window discovery :821-828,
 the /tokenize counter :2378-2444, the prompt builders :3994-4082 and
 :4385-4444; the window/model cache is the port of
-``genie-ai-overlay/core/model_cache.py``, reimplemented — clean-slate per
-AD-10, no shared library with the overlay).
+``genie-ai-overlay/core/model_cache.py``, reimplemented — clean-slate,
+no shared library with the overlay).
 
 The behavior is frozen to the V02 record (§5.3 bounds, §5.4 failure
 classes):

@@ -2,7 +2,7 @@
 
 require('../setup-env');
 
-// Story 2.4 — the seam dialect's one parser: one SSE data line of the
+// The seam dialect's one parser: one SSE data line of the
 // agent-service run stream → a tagged result. The parser discipline mirrors
 // query-service.parseChatQnASSELine (discriminator, defaults, `__proto__`
 // exclusion); the envelope contract (`run_id`/`seq`/`kind` required) is

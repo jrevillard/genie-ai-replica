@@ -99,7 +99,7 @@ def test_an_unset_max_translation_chars_caps_nothing():
 def test_set_to_empty_and_garbage_numeric_envs_fall_back_to_defaults():
     """Set-to-empty (compose's default injection) and non-numeric values
     fall back to the code default instead of crash-looping the wiring
-    (deployed _env_int semantics — issue #1091's crash class)."""
+    (deployed _env_int semantics)."""
     env = {
         "TRANSLATION_SERVICE_TIMEOUT": "",
         "MAX_TRANSLATION_CHARS": "   ",

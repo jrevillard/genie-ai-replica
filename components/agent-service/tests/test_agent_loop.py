@@ -622,7 +622,7 @@ def test_spent_evidence_refuses_the_next_tool_dispatch():
 
 
 # ---------------------------------------------------------------------
-# The split finalize (story 2.5 review): the judge never delays first chunk
+# The split finalize: the judge never delays first chunk
 # ---------------------------------------------------------------------
 
 

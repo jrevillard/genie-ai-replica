@@ -4965,9 +4965,9 @@ chart:lint:
       --set opea.gpu.mode=in-cluster
       --set opea.models.llm.modelId=ibm-granite/granite-3.3-2b-instruct
       > /tmp/rendered-incluster-granite3.yaml
-    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='granite4', a"
-    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-override.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster-override.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='hermes', a"
-    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-granite3.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster-granite3.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--tool-call-parser' not in a and '--enable-auto-tool-choice' not in a, a"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--tool-call-parser' in a and a[a.index('--tool-call-parser')+1]=='granite4' and '--enable-auto-tool-choice' in a, 'unexpected vllm args in /tmp/rendered-incluster.yaml ' + str(a)"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-override.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster-override.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--tool-call-parser' in a and a[a.index('--tool-call-parser')+1]=='hermes' and '--enable-auto-tool-choice' in a, 'unexpected vllm args in /tmp/rendered-incluster-override.yaml ' + str(a)"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-granite3.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster-granite3.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--tool-call-parser' not in a and '--enable-auto-tool-choice' not in a, 'unexpected tool-call flags in /tmp/rendered-incluster-granite3.yaml ' + str(a)"
     # The image-tag RULES (issue #2000's naming refactor): one version, one
     # variant, one pin. Four renders, one assertion set — the version for
     # every GENIE.AI image, the variant on the three model-serving images
@@ -5012,13 +5012,13 @@ chart:lint:
       curl -fsSL
       https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
       | tar -xz -C /usr/local/bin kubeconform
-    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml /tmp/rendered-incluster-override.yaml /tmp/rendered-incluster-granite3.yaml
     # values.yaml goes through the same duplicate-key check as the renders:
     # Helm resolves a repeated key last-wins BEFORE anything downstream sees
     # it, so a `services.<svc>.env` declared twice renders identically whether
     # one copy or two are present — and an operator editing the copy Helm
     # ignores gets no error anywhere.
-    - python3 /tmp/strict-yaml.py charts/genieai-umbrella/values.yaml /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+    - python3 /tmp/strict-yaml.py charts/genieai-umbrella/values.yaml /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml /tmp/rendered-incluster-override.yaml /tmp/rendered-incluster-granite3.yaml
     # NetworkPolicy cross-check: the chart renders an ingress and an egress
     # side for every component, in different templates, edited
     # independently. A flow declared on one side and absent from the other

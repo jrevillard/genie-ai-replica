@@ -702,16 +702,18 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       // documented parser (`granite`) also needs a chat template this
       // stack cannot reference — the flags must never appear here (the
       // file's own comment carries the reasoning and the by-hand remedy
-      // for a Granite 4.x override). Checked on the resolved command,
-      // both compose shapes (folded string / list): joined, then
-      // substring-matched, so an equals-form token cannot slip past
-      // element equality.
-      const services = JSON.parse(gpuNvidia.stdout).services;
-      const command = Array.isArray(services['vllm-llm'].command)
-        ? services['vllm-llm'].command.join(' ')
-        : String(services['vllm-llm'].command);
-      expect(command).not.toContain('--tool-call-parser');
-      expect(command).not.toContain('--enable-auto-tool-choice');
+      // for a Granite 4.x override). Checked on the resolved command in
+      // BOTH vendor shapes (the file renders under the rocm-models
+      // profile too, so a vendor-conditional pin row cannot hide from
+      // this guard), joined then substring-matched so an equals-form
+      // token cannot slip past element equality.
+      const commandOf = (s) => (Array.isArray(s.command) ? s.command.join(' ') : String(s.command));
+      const renders = [JSON.parse(gpuNvidia.stdout).services, JSON.parse(gpu.stdout).services];
+      for (const services of renders) {
+        const command = commandOf(services['vllm-llm']);
+        expect(command).not.toContain('tool-call-parser');
+        expect(command).not.toContain('--enable-auto-tool-choice');
+      }
     });
 
     test('the NVIDIA GPU-node render keeps its historical published ports', () => {

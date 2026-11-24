@@ -79,4 +79,45 @@ async function refreshContext(req, res, next) {
   }
 }
 
-module.exports = { requireSuperadmin, isSuperadminCaller, createContext, listContexts, getContext, refreshContext };
+/**
+ * #2061 phase 4 (E-5) — the composer's PREVIEW.
+ *
+ * The resolution a create WOULD freeze, without writing anything: a context
+ * is immutable and has no delete route, so the operator must see the union
+ * before it commits. The same `resolveContext` the create calls — the
+ * preview and the created context cannot disagree.
+ */
+async function previewContext(req, res, next) {
+  try {
+    res.status(200).json(await evalCtxService.previewContext(req.body || {}));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * #2061 phase 4 (E-5) — the composer's SOURCE: the deployment's groups,
+ * each with the grants it carries and the members it holds.
+ *
+ * Superadmin-gated for the same reason the write surface is: a group is a
+ * deployment-wide principal, and its membership is not a per-repo fact.
+ */
+async function listGroups(req, res, next) {
+  try {
+    const q = req.query && typeof req.query.q === 'string' ? req.query.q : '';
+    res.status(200).json({ items: await evalCtxService.listGroups(q) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  requireSuperadmin,
+  isSuperadminCaller,
+  createContext,
+  listContexts,
+  getContext,
+  refreshContext,
+  previewContext,
+  listGroups
+};

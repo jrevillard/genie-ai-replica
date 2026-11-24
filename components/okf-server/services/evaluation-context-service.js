@@ -293,10 +293,12 @@ async function resolveContext(input = {}) {
   });
 }
 
-/** The input shape: a name is required; scopes and group refs are lists. */
-function validateInput(payload = {}) {
+/** The input shape: a name is required; scopes and group refs are lists.
+ *  `requireName: false` is the PREVIEW's shape — an operator composes the
+ *  memberships BEFORE naming the thing they are composing. */
+function validateInput(payload = {}, { requireName = true } = {}) {
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-  if (!name) {
+  if (!name && requireName) {
     throw new EvalContextError('VALIDATION_ERROR', 'an evaluation context needs a name', 400);
   }
   if (name.length > 80) {
@@ -397,6 +399,93 @@ async function createContext(payload = {}, opts = {}) {
     }
   });
   return doc;
+}
+
+/**
+ * PREVIEW a composition: the resolution the create WOULD freeze, without
+ * writing anything.
+ *
+ * WHY it exists: a context is IMMUTABLE and there is no DELETE route — a
+ * membership an operator got wrong would be a permanent, undeletable
+ * document. So the composer must be able to SEE the union (the scopes it
+ * would hold, the repositories it would reach, the warnings) BEFORE it
+ * commits to a name. The resolution is the SAME `resolveContext` the create
+ * calls, so the preview and the created context cannot disagree.
+ */
+async function previewContext(payload = {}) {
+  const input = validateInput(payload, { requireName: false });
+  const resolved = await resolveContext(input);
+  return {
+    name: input.name,
+    scopes: input.scopes,
+    principal_refs: input.principal_refs,
+    resolved: {
+      scopes: resolved.scopes,
+      graph_names: resolved.graph_names,
+      repos: resolved.repos,
+      scope_mode: resolved.scope_mode,
+      resolved_at: resolved.resolved_at,
+      hash: resolved.hash,
+      open_context: resolved.open_context
+    },
+    warnings: resolved.warnings,
+    unreadable: resolved.unreadable,
+    invalid: resolved.invalid
+  };
+}
+
+/**
+ * The deployment's GROUPS, each with the GRANTS it carries and the MEMBERS
+ * it holds — the composer's source of truth.
+ *
+ * A membership is a group; the group carries realm roles whose names are
+ * scope strings; the union of those is the principal the context resolves.
+ * The composer shows the operator exactly that: which grants a membership
+ * brings, and whose view it is. `privileged` says the membership carries
+ * `tools-admin` — the union would then be a superadmin union, which the
+ * resolution honours, so the composer must not hide it.
+ */
+async function listGroups(term = '') {
+  const groups = await keycloakAccess.searchGroups(term, 100);
+  const out = [];
+  for (const g of groups || []) {
+    const grants = [];
+    let privileged = false;
+    let roles = [];
+    try {
+      roles = await keycloakAccess.groupRealmRoles(g.id);
+    } catch (err) {
+      logger.warn('eval_context.group_grants_unreadable', { group: g.name, error: err.message });
+    }
+    for (const role of roles || []) {
+      const name = role && role.name;
+      if (!name) continue;
+      if (name === SUPERADMIN_REALM_ROLE) {
+        privileged = true;
+        continue;
+      }
+      // Only GRAMMAR-VALID scopes count: a typo level grants nothing,
+      // exactly as it would in a token.
+      if (parseOkfScope(name)) grants.push(name);
+    }
+    let members = [];
+    try {
+      const raw = await keycloakAccess.groupMembers(g.id);
+      members = (raw || []).map((u) => u.username).filter(Boolean);
+    } catch (err) {
+      // A group whose members cannot be read is still a membership an
+      // operator may compose — it is the GRANTS that decide what it reaches.
+      logger.warn('eval_context.group_members_unreadable', { group: g.name, error: err.message });
+    }
+    out.push({
+      id: g.id,
+      name: g.name,
+      grants: grants.sort(),
+      privileged,
+      members: members.sort()
+    });
+  }
+  return out;
 }
 
 /** READ one context. */
@@ -735,6 +824,8 @@ module.exports = {
   repoSetHash,
   headVersionHash,
   createContext,
+  previewContext,
+  listGroups,
   getContext,
   listContexts,
   refreshContext,

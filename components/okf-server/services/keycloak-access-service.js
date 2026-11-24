@@ -247,6 +247,28 @@ async function findGroupByName(name) {
   return groups.find((g) => g.name === name) || null;
 }
 
+/**
+ * The MEMBERS of a group — the "who does this membership stand for" surface
+ * the evaluation-context composer shows an operator.
+ *
+ * ENCODED: the group id reaches this path from a caller-supplied principal
+ * reference, exactly like `groupRealmRoles` above — unencoded, a reference
+ * like `../users` escapes the `/groups/{id}` segment.
+ *
+ * The username and the id only: the composer needs to name the people a
+ * membership stands for, and the email is not that.
+ */
+async function groupMembers(groupId) {
+  const members = await jsonOrThrow(
+    await adminApi('GET', `/groups/${encodeURIComponent(groupId)}/members?max=200`),
+    'group members'
+  );
+  return (Array.isArray(members) ? members : []).map((u) => ({
+    id: u.id,
+    username: u.username || null
+  }));
+}
+
 /** Create the group if missing; return its representation. */
 async function ensureGroup(name) {
   const existing = await findGroupByName(name);
@@ -320,6 +342,7 @@ module.exports = {
   usersWithAttribute,
   ensureRole,
   groupRealmRoles,
+  groupMembers,
   ensureGroup,
   findGroupByName,
   setGroupRole,

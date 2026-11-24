@@ -380,6 +380,11 @@ router.use('/model-configs', require('./model-config-routes'));
 const evalContextController = require('../controllers/evaluation-context-controller');
 router.post('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.createContext);
 router.get('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.listContexts);
+// #2061 phase 4 (E-5) — the composer's two reads. THE LITERAL ROUTES COME
+// FIRST: `/eval-contexts/groups` would otherwise be parsed as
+// `/eval-contexts/:id` and answered with a context-not-found.
+router.get('/eval-contexts/groups', evalContextController.requireSuperadmin, evalContextController.listGroups);
+router.post('/eval-contexts/preview', evalContextController.requireSuperadmin, evalContextController.previewContext);
 router.get('/eval-contexts/:id', evalContextController.requireSuperadmin, evalContextController.getContext);
 router.post(
   '/eval-contexts/:id/refresh',

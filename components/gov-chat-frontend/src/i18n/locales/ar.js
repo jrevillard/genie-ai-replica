@@ -3245,7 +3245,40 @@ export default {
         head: 'الرأس',
         test: 'اختبار',
         suites: 'المجموعات والتحليلات',
-        ragas: 'اختبارات RAGAS المرجعية'
+        ragas: 'اختبارات RAGAS المرجعية',
+        contexts: 'سياقات التقييم'
+      },
+      contexts: {
+        catalogue: 'سياقات التقييم',
+        catalogueHint:
+          'السياق هو فاعل مُسمّى: مجموعة من عضويات المجموعات، تُحل مرة واحدة ثم تُثبَّت. المجموعة المُولَّدة لسياق ما تُقاس على ذلك السياق، لا على كامل النشر.',
+        empty: 'لا يوجد سياق تقييم بعد. أنشئ واحدًا أدناه — إنه النطاق الذي يُقاس عليه التقييم النطاقي.',
+        version: 'v{n}',
+        open: 'سياق مفتوح',
+        memberships: '{n} عضوية',
+        repos: '{n} مستودع',
+        hash: 'المجموعة {h}',
+        refresh: 'تحديث',
+        compose: 'أنشئ سياقًا',
+        name: 'الاسم',
+        namePlaceholder: 'مثال: قراء الوزارة أ',
+        addMembership: 'أضف عضوية (مجموعة)',
+        groupPlaceholder: 'ابحث في مجموعات النطاق…',
+        groupSearch: 'ابحث في المجموعات…',
+        noGroups: 'لا توجد مجموعة مطابقة',
+        remove: 'إزالة {n}',
+        grants: '{n} صلاحية',
+        members: '{n} عضو',
+        noMemberships: 'لا عضوية بعد — بدون عضويات يُحلّ السياق إلى كامل النشر (السياق المفتوح).',
+        preview: 'اعرض ما يصل إليه',
+        previewRepos: 'يصل إلى',
+        unreadable: 'تعذّرت قراءة العضويات التالية: {list}',
+        create: 'أنشئ السياق',
+        created: 'أُنشئ السياق وثُبِّت.',
+        refreshed: 'أُعيد حلّ السياق.',
+        pickerLabel: 'سياق التقييم',
+        pickerNone: 'بدون سياق — كامل النشر',
+        reposShort: 'مستودع'
       },
       head: {
         dim: 'الأبعاد',
@@ -3427,7 +3460,13 @@ export default {
         deleteConfirmBody: 'يؤدي هذا إلى حذف المجموعة وسجل تشغيلها نهائيًا. لا يمكن التراجع.',
         deleteConfirm: 'حذف المجموعة',
         deleteCancel: 'إلغاء',
-        unnamedFallback: 'مجموعة بدون اسم'
+        unnamedFallback: 'مجموعة بدون اسم',
+        bindingOpen: 'مُولَّد لكامل النشر — لا يوجد سياق تقييم',
+        binding: 'يُقاس على «{name}» (v{version} · {repos} مستودع)',
+        boundary: 'حدود النطاق',
+        boundaryHeld: '{held} محفوظة',
+        boundaryBreached: '{n} مخترقة',
+        boundaryNotMeasured: 'حدود النطاق: لم تُقَس'
       },
       error: {
         explain: 'فشل الشرح',
@@ -3850,6 +3889,9 @@ export default {
       },
       results: {
         title: 'نتائج الاختبار المرجعي',
+        attributionBy: 'أجاب',
+        attributionOutside: 'استناد خارج الناقل: {pct}%',
+        attributionNoCarrier: 'الاستناد خارج الناقل: غير قابل للقياس دون سياق تقييم',
         failing: '{n} فاشلة',
         advisorHint:
           '{n} أسئلة تقل عن حدود مقاييسها. شغّل المرشد لإسناد كل إخفاق إلى مرحلة في خط المعالجة والحصول على إجراءات ملموسة.',

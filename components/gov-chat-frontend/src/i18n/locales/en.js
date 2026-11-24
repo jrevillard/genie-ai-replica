@@ -1835,7 +1835,40 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'RAGAS Benchmarks'
+        ragas: 'RAGAS Benchmarks',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'A context is a named principal: a set of group memberships, resolved once and frozen. A suite minted for a context is measured over that context — never over the whole deployment.',
+        empty: 'No evaluation context yet. Compose one below — it is the scope a scoped evaluation is measured over.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Add a membership (a group)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        noMemberships: 'No membership yet — with none, the context resolves to the deployment (the open context).',
+        preview: 'Preview what this reaches',
+        previewRepos: 'Reaches',
+        unreadable: 'These memberships could not be read: {list}',
+        create: 'Create the context',
+        created: 'The context was created and frozen.',
+        refreshed: 'The context was re-resolved.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'No context — the whole deployment',
+        reposShort: 'repos'
       },
       head: {
         dim: 'Dimensions',
@@ -2018,7 +2051,13 @@ export default {
         deleteConfirmBody: 'This permanently removes the suite and its run history. This cannot be undone.',
         deleteConfirm: 'Delete suite',
         deleteCancel: 'Cancel',
-        unnamedFallback: 'unnamed suite'
+        unnamedFallback: 'unnamed suite',
+        bindingOpen: 'Minted for the deployment — no evaluation context',
+        binding: 'Measured over “{name}” (v{version} · {repos} repositories)',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryNotMeasured: 'Scope boundary: not measured'
       },
       error: {
         explain: 'Explain failed',
@@ -2455,6 +2494,9 @@ export default {
       },
       results: {
         title: 'Benchmark results',
+        attributionBy: 'Answered by',
+        attributionOutside: 'Grounded outside the carrier: {pct}%',
+        attributionNoCarrier: 'Grounding outside the carrier: not measurable without an evaluation context',
         failing: '{n} failing',
         advisorHint:
           '{n} questions are below their metric thresholds. Run the advisor to attribute each failure to a pipeline stage and get concrete actions.',

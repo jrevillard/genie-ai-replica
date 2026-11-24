@@ -145,6 +145,16 @@
         />
       </div>
       <div class="okf-ragas__actions">
+        <!-- #2061 phase 4 (E-5): the Evaluation Context this benchmark is
+             minted FOR. Without it the questions are written against the
+             whole deployment and the run measures the deployment, not a
+             principal's scope. -->
+        <EvalContextPicker
+          v-if="canUseContexts"
+          v-model="contextId"
+          input-id="okf-ragas-context"
+          :disabled="generateBusy"
+        />
         <DsButton
           v-if="!readOnly"
           variant="primary"
@@ -434,6 +444,17 @@
         <DsButton v-if="!readOnly" variant="secondary" small :disabled="explainBusy" @click="onExplain">
           {{ translate('okf.ragas.explain.button', 'Explain failures') }}
         </DsButton>
+      </div>
+
+      <!-- #2061 E-5: the evidence line — the binding (which principal this
+           measures) and, once a run lands, the attribution the carrier
+           enabled (which repository answered; how often outside the carrier). -->
+      <div class="okf-ragas__evidence">
+        <span class="okf-ragas__binding">{{ suiteBindingLabel }}</span>
+        <span v-if="runAttribution" class="okf-ragas__attribution">
+          {{ translate('okf.ragas.results.attributionBy', 'Answered by') }}: {{ attributionByLabel }} ·
+          {{ attributionOutsideLabel }}
+        </span>
       </div>
 
       <!-- advisor hint — rows are failing and no advisor output is on screen;
@@ -901,6 +922,9 @@ import DsProgress from '../../ds/Progress.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import RagasGuideDialog from './RagasGuideDialog.vue';
+// #2061 phase 4 (E-5): the Evaluation Context picker — which principal a
+// benchmark is minted FOR and measured over.
+import EvalContextPicker from './EvalContextPicker.vue';
 import translateMixin from '../../../mixins/translateMixin';
 import { translateLabError } from '../../../services/okfRepoOps';
 import { useChartTheme } from '@/composables/useChartTheme';
@@ -950,7 +974,16 @@ const METRIC_NOTE_FALLBACKS = {
 
 export default {
   name: 'OkfRagasPanel',
-  components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip, DsDialog, RagasGuideDialog },
+  components: {
+    DsButton,
+    DsPill,
+    DsSpinner,
+    DsProgress,
+    DsInfoTip,
+    DsDialog,
+    RagasGuideDialog,
+    EvalContextPicker
+  },
   mixins: [translateMixin],
   props: {
     repo: { type: Object, default: null },
@@ -978,6 +1011,10 @@ export default {
       pollSignal: { aborted: false },
       showHelp: false,
       showGuide: false,
+      // #2061 phase 4 (E-5): the Evaluation Context this benchmark is
+      // minted FOR. Empty = the OPEN context (the deployment's default
+      // posture) — the pre-contexts behaviour, kept as the default.
+      contextId: '',
       repoChoices: [],
       selectedRepoIds: [],
       genSize: 20,
@@ -1039,6 +1076,19 @@ export default {
     };
   },
   computed: {
+    /**
+     * The tools-admin realm role — the SAME role the context API's
+     * superadmin gate enforces server-side. A context may name ANY
+     * repository, so its catalogue is a deployment-wide fact: a curator
+     * without the role never sees the picker (and the server would refuse
+     * the read anyway).
+     */
+    canUseContexts() {
+      const getters = (this.$store && this.$store.getters) || {};
+      const user = getters.currentUser || null;
+      const roles = (user && user.roles) || [];
+      return roles.includes('tools-admin');
+    },
     /** DsDialog emits the action KEY (RepoEditor's piiBulkAsk discipline). */
     runDeleteActions() {
       return [
@@ -1198,6 +1248,57 @@ export default {
     },
     runRows() {
       return (this.runDoc && this.runDoc.payload && this.runDoc.payload.results) || [];
+    },
+    /**
+     * #2061 phase 4 (E-5, #2103): the BINDING — which principal this suite
+     * was minted for. The engine froze the snapshot on the suite doc
+     * (payload.context) at generation; the badge just states it. Reuses the
+     * Lab's binding keys so the two surfaces cannot drift apart.
+     */
+    suiteBindingLabel() {
+      const ctx = this.suite && this.suite.payload && this.suite.payload.context;
+      if (!ctx) {
+        return this.translate('okf.testingLab.suites.bindingOpen', 'Minted for the deployment — no evaluation context');
+      }
+      const repos =
+        (ctx.repos && ctx.repos.length) || (ctx.resolved && ctx.resolved.repos ? ctx.resolved.repos.length : 0);
+      return this.translate(
+        'okf.testingLab.suites.binding',
+        'Measured over “{name}” (v{version} · {repos} repositories)'
+      )
+        .replace('{name}', ctx.name || ctx.id)
+        .replace('{version}', String(ctx.version || 1))
+        .replace('{repos}', String(repos));
+    },
+    /** The run's attribution roll-up (E-4): which repo answered, how often
+     *  grounded outside the carrier. Null until a run carries it. */
+    runAttribution() {
+      const a = this.runDoc && this.runDoc.payload && this.runDoc.payload.source_attribution;
+      return a && typeof a === 'object' ? a : null;
+    },
+    attributionByLabel() {
+      const h = (this.runAttribution && this.runAttribution.repo_histogram) || {};
+      const parts = Object.entries(h)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([k, n]) => `${k} ×${n}`);
+      return parts.join(' · ');
+    },
+    attributionOutsideLabel() {
+      const rate = this.runAttribution ? this.runAttribution.wrong_source_rate : null;
+      // Null is NOT zero: without a carrier there is nothing to be wrong
+      // against (E-4's rule) — say that instead of faking a clean 0%.
+      if (rate === null || rate === undefined) {
+        return this.translate(
+          'okf.ragas.results.attributionNoCarrier',
+          'Grounding outside the carrier: not measurable without an evaluation context'
+        );
+      }
+      const pct = Math.round(Number(rate) * 100);
+      return this.translate('okf.ragas.results.attributionOutside', 'Grounded outside the carrier: {pct}%').replace(
+        '{pct}',
+        String(pct)
+      );
     },
     aggregateRows() {
       const summary = (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary) || {};
@@ -2129,7 +2230,10 @@ export default {
             // override). The generation's model and the run's judge are
             // separate operations with separate picks (David, 2026-10-25).
             judge_config_key: this.genConfigKey || undefined,
-            judge_model: this.genConfigKey ? this.genModel || undefined : undefined
+            judge_model: this.genConfigKey ? this.genModel || undefined : undefined,
+            // #2061 phase 4 (E-5): the Evaluation Context this benchmark is
+            // minted FOR. Absent → the OPEN context (the deployment).
+            context_id: this.contextId || undefined
           },
           signal: this.pollSignal,
           onStarted: (suiteKey) => {
@@ -2271,6 +2375,13 @@ export default {
         this.probeBusy = '';
       }
     },
+    /** #2061 phase 4 (E-5): the context id a run must name — the suite's
+     *  OWN binding (a benchmark minted for a context may only be measured
+     *  over THAT context). */
+    suiteContextIdFor(suite) {
+      const ctx = suite && ((suite.payload && suite.payload.context) || suite.context);
+      return (ctx && ctx.id) || '';
+    },
     async onRun() {
       this.error = '';
       this.runBusy = true;
@@ -2281,6 +2392,10 @@ export default {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
           metrics: this.selectedMetrics,
+          // #2061 phase 4 (E-5): the context the run measures over — the
+          // suite's OWN binding. A benchmark minted for a context may only
+          // be measured over THAT context.
+          contextId: this.suiteContextIdFor(this.suite),
           // 8-7: explicit judge pick ('' fields simply omit the override)
           judge_config_key: this.judgeConfigKey || undefined,
           judge_model: this.judgeConfigKey ? this.judgeModel || undefined : undefined,

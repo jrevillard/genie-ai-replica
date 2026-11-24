@@ -719,7 +719,9 @@ it('1-8c: batch advice — Explain failures renders add-all chips and saves them
   await rerun.trigger('click');
   await w.vm.$nextTick();
   expect(dispatch).toHaveBeenCalledWith('okf/headRebuild', { repoId: 'r-1' });
-  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteRun', { repoId: 'r-1', suiteKey: 's1' });
+  // Phase 4 (#2061): the run dispatch always names the context it runs —
+  // '' is the open context (the whole deployment).
+  expect(dispatch).toHaveBeenCalledWith('okf/headSuiteRun', { repoId: 'r-1', suiteKey: 's1', contextId: '' });
 });
 
 it('1-8g-v: an async run (202 + poll) adopts the run doc when the poll lands it', async () => {

@@ -3306,7 +3306,42 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Ditekanyo tsa RAGAS'
+        ragas: 'Ditekanyo tsa RAGAS',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'Tikollo ke moemeli ea nang le lebitso: sehlopha sa bomamelistene ba sehlopha, se rarollwang hang ebe se a tsoka. Suite e entsoeng bakeng sa tikollo e lekanya holim’a tikollo eo — eseng holim’a tsamaiso eohle.',
+        empty:
+          'Ha ho ea tikollo ea tlhatlhobo hajoale. Etsa e le nngoe ka tlase — ke eona moeli eo tlhatlhobo ea moeli e lekang ho eona.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Eketsa bomamelistene (sehlopha)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        noMemberships:
+          'Ha ho bomamelistene hajoale — ntle le eona, tikollo e rarolla ho tsamaiso eohle (tikollo ea buloang).',
+        preview: 'Bonahatsa pele hore e fihla kae',
+        previewRepos: 'Reaches',
+        unreadable: 'Bomamelistene tsena ha boa ka ho baloa: {list}',
+        create: 'Create the context',
+        created: 'Tikollo e entsoe e be e tsokile.',
+        refreshed: 'Tikollo e rarollotsoe hape.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'Ha ho tikollo — tsamaiso eohle',
+        reposShort: 'repos'
       },
       head: {
         dim: 'Dimensions',
@@ -3493,7 +3528,13 @@ export default {
         deleteConfirmBody: 'Sena se tlosa suite le histori ea eona ea litšamaiso ka ho sa feleng. Ha se ka etsolloa.',
         deleteConfirm: 'Tlosa li-suite',
         deleteCancel: 'Khutlisa',
-        unnamedFallback: 'li-suite tse se nang bitso'
+        unnamedFallback: 'li-suite tse se nang bitso',
+        bindingOpen: 'E entsoe bakeng sa tsamaiso — ntle le tikollo ea tlhatlhobo',
+        binding: 'E lekantsoe holim’a “{name}” (v{version} · lipolokelo {repos})',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryNotMeasured: 'Moeli oa wigo: o sa lekantsoa'
       },
       error: {
         explain: 'Tlhaloso e hlolehile',
@@ -3927,6 +3968,9 @@ export default {
       },
       results: {
         title: 'Litseo tsa tekanyo',
+        attributionBy: 'E arabetsoe ke',
+        attributionOutside: 'E thehiloeng ka ntle ea carrier: {pct}%',
+        attributionNoCarrier: 'Thehiso ea ka ntle ea carrier: e sa lekane ho ea nyolla ntle le tikollo ea tlhatlhobo',
         failing: '{n} li hlolehile',
         advisorHint:
           'Lipotso {n} li ka tlase ho meelo ea tsona ea metriki. Matha moeletsi ho beha ho hloleha ho mohala oa pipeline le ho fumana liketso tse sebetsang.',

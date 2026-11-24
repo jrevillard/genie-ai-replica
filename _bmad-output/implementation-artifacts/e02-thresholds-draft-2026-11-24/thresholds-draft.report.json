@@ -2,18 +2,18 @@
   "artifact": "threshold-registry-report",
   "version": "1.0.0",
   "protocol_version": "1.0.0",
-  "created_utc": "2026-11-24T17:35:22+00:00",
+  "created_utc": "2026-11-24T17:43:46+00:00",
   "honest_evidence": "Threshold registry honest evidence: this record states which measured dimensions carry an agreed threshold and which carry an EXPLICIT absence. An absent dimension is never reported as satisfied and never defaulted to a value — it blocks promotion, because a default would silently manufacture a pass. The agreed values are bound to the measured reference they were agreed against (PRD §8).",
   "registry": {
     "artifact": "evaluation-threshold-registry",
     "version": "1.0.0",
-    "sha256": "683f940012bac6ccdabdd5e33d86fbcc0c8578d849735fc12de7edd04aa0b8aa"
+    "sha256": "64873aa22174617ef7d3bf2780573b1227c8235a98d58c46b0a142782a76b18e"
   },
   "sign_off": {
     "owner": "jrevillard (ITU)",
     "signed": false,
     "agreed_on": "2026-11-23",
-    "signed_on": "2026-11-24",
+    "signed_on": null,
     "note": "The signature covers the retrieval-quality thresholds (M-1) only: the other dimensions ship as explicitly absent, with their reason, and they keep blocking the promotion until their own thresholds are agreed."
   },
   "promotion": "blocked",
@@ -133,5 +133,5 @@
   },
   "derived_thresholds": null,
   "derived_thresholds_sha256": null,
-  "digest": "7430a58e26ac2a9b22c799ca92416608319f8b5d2693f88a4b2049b7b1a63a24"
+  "digest": "d5ac56d3c9235d28f3f69e59faac9a374f8cb8d8bfce3899cf96c15dd92af632"
 }

@@ -154,7 +154,17 @@ def judge_call(row: dict, entry: dict) -> dict:
 
 # The mechanical M-3 verdict rules (evaluator instructions, abstention rules):
 # the LLM only classified the SIGNAL; the script applies (class × signal).
+M3_SIGNALS = ("substantive_answer", "refusal_prose", "empty")
+
+
 def m3_verdict(case_class: str, signal: str) -> tuple[str, str]:
+    if signal not in M3_SIGNALS:
+        # An unknown signal is a malformed judge reply: flagged, never
+        # silently treated as an answered row.
+        return "unclassified_signal", (
+            f"the judge reply carried the unknown prose signal {signal!r} — "
+            "recorded as an error on the row, never read as substantive or refused"
+        )
     if signal == "empty":
         return "abstained_empty", "the answer carries no text — the abstention signal is the empty answer"
     if case_class == "unanswerable":
@@ -215,7 +225,6 @@ def main() -> int:
                 "verdict": m3,
                 "reason": m3_reason,
             },
-            "m2_judge_reason_raw": verdict.get("m2_reason", ""),
             "judge_usage": verdict.get("judge_usage", {}),
         }
         results.append(record)

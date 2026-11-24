@@ -4,8 +4,18 @@ The PROPOSAL package for the consolidated M-1..M-5 signature. Everything
 here is a draft for the operator's decision — nothing is signed, no bound
 enters the shipped registry, and the derived artifact carries
 `signed: false`. Phase 2 (the orchestrator's) carries the package to the
-operator for ONE consolidated signature; at the signature the same artifact
-moves to `signed: true` and the partial-order gate opens.
+operator for ONE consolidated signature. **The signature lands in a
+registry; the artifact is then RE-DERIVED**: at signature time the signed
+registry is re-run through `run_protocol.py thresholds --reference-manifest …`,
+which derives the signed artifact through `derive_thresholds_artifact` — the
+protocol's own shape (`value`/`dimension`/`surface`/`rationale`/
+`agreement_date` per dimension + `sign_off` + `registry_sha256`). The
+committed `thresholds-draft.artifact.json` is the unsigned consumer-contract
+shape kept as REFUSAL EVIDENCE only — never a file to flip `signed` on: the
+gate verifies the flag and the lineage, not the blob's internal shape, so a
+flag-flipped copy of it would open the gate on an artifact the protocol's
+own derivation would never emit. The signature act is a registry edit plus
+a re-derivation, nothing else.
 
 ## Basis
 
@@ -86,7 +96,7 @@ floor pattern).
 ### Observations the judged pass surfaced (recorded, not scored)
 
 1. **Injection-fixture content reaches non-security answers on config A.**
-   `e01-ans-restricted-contents` and `e01-fail-saturation` recount the
+   `e01g-ans-restricted-contents` and `e01-fail-saturation` recount the
    injection fixtures' hostile content (the "instruction-override" /
    "Dredging authorised" markers — the fixtures live in `GRAPH_SOURCE`,
    which the legacy path serves). Config A has no agent surface to judge
@@ -178,3 +188,12 @@ B/C doc-level surface for M-1.**
 - Not a gate key: `run_protocol.py thresholds` over the draft registry
   REFUSES to derive a signed artifact while the sign-off is unsigned — the
   refusal record is kept as the evidence that the protocol's order held.
+- Not final evidence plumbing: the committed `judged-results.json` was
+  produced by the judge script AS IT RAN (its `m2_judge_reason_raw` field
+  duplicates `m2.reason`, and an unknown prose signal would have fallen
+  through to `no_abstention`). This run's data carries only the three
+  documented signals and zero errors, so neither behavior fired. The script
+  in this directory is the HARDENED version (vocabulary guard + the
+  duplicate field dropped) for every future run; the committed results file
+  stays verbatim as this run's record — measured evidence is never edited
+  post-hoc.

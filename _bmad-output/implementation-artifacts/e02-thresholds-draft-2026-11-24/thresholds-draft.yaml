@@ -1,5 +1,6 @@
 # DRAFT — the consolidated M-1..M-5 threshold proposal (issue #2167 phase 1).
-# NOT SIGNED: sign_off.signed is false; the shipped registry is
+# NOT SIGNED: sign_off.signed is false and signed_on is null (an
+# unsigned block carries no signature date); the shipped registry is
 # protocol/thresholds.yaml and stays untouched until the operator signs.
 # Derived from the FINAL A reference (issue #2162); derivation method and
 # the judged-pass results live beside this file (method.md, judged-results.json).
@@ -12,7 +13,7 @@ sign_off:
   owner: jrevillard (ITU)
   signed: false
   agreed_on: '2026-11-23'
-  signed_on: '2026-11-24'
+  signed_on: null
   signatory: jrevillard
   basis: 'the measured A reference, re-anchored by the operator''s 2026-11-24 re-signature (values UNCHANGED)
     onto the FINAL A reference (issue #2162 — MR !1072, the forge k3s, 2026-11-24): corpus fingerprint

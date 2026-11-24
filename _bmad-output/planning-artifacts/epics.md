@@ -317,7 +317,7 @@ So that the V03 record reconciles against the chart the deployment actually runs
 **When** the baseline capture runs
 **Then** the record states the attested chart version, the source it was rendered from, the commit locator of this repository that carries it, and whether the local chart tree is identical to the attested chart
 **And** a local chart source that differs from the attested chart yields a per-difference list, every difference a row with a disposition — an undispositioned difference never passes
-**And** a comparison that cannot be established (a source that is not a GitRepository, an attested chart with no template, or a commit this checkout does not know) is UNRESOLVED and fails the capture, never a silent pass
+**And** a comparison that cannot be established (a source that is not a GitRepository, an attested chart with no template, a commit this checkout does not know, or a release secret missing or unreadable) is UNRESOLVED and fails the capture, never a silent pass
 **And** the non-retrieval tiers the chart deploys (PII sidecar, OKF server, RAGAS judge) have their operator environment compared against the chart source like the retrieval tier's
 
 ## Epic 2: Governed document-QA agent with visible work (S4a)

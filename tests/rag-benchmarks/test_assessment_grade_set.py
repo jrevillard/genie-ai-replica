@@ -108,20 +108,41 @@ def test_graded_set_census_is_acceptance_grade():
     assert census["retrieval_cases_without_gold"] == []
 
 
+def source_entries() -> dict:
+    """The committed #2148 campaign set's cases, keyed by id — the byte
+    the signed M-1 binds."""
+    return {
+        case["id"]: case
+        for case in json.loads(INHERITED_SOURCE.read_text(encoding="utf-8"))["entries"]
+    }
+
+
 def test_inherited_measurement_instrument_is_unchanged():
     """Every #2148 source case survives into the graded set with identical
     entries — the measurement instrument the signed M-1 binds, compared
     entry-by-entry against the committed source, so no rewrite (query, gold,
     expectations) can drift it while keeping its id, and no source case can
     be silently omitted from the check."""
-    source_entries = {
-        case["id"]: case
-        for case in json.loads(INHERITED_SOURCE.read_text(encoding="utf-8"))["entries"]
-    }
+    source = source_entries()
     entries = {case["id"]: case for case in graded_data()["entries"]}
-    for inherited_id, source_entry in source_entries.items():
+    for inherited_id, source_entry in source.items():
         assert entries.get(inherited_id) == source_entry, (
             f"inherited case {inherited_id} dropped or drifted from the #2148 set"
+        )
+
+
+def test_every_non_inherited_case_is_graded_namespaced():
+    """The complement of the byte-identity gate: a case that is not one of
+    the #2148 source cases must carry the graded e01g- prefix — an
+    inherited-looking id cannot smuggle an un-gated case (its gold would
+    escape the verbatim, identity and single-turn gates) past the
+    graded-case partition."""
+    source = source_entries()
+    for case in graded_data()["entries"]:
+        if case.get("id") in source and case == source[case["id"]]:
+            continue
+        assert str(case.get("id", "")).startswith("e01g-"), (
+            f"case {case.get('id')!r} is neither an inherited #2148 case nor graded-namespaced"
         )
 
 
@@ -141,8 +162,11 @@ def test_every_graded_gold_preview_is_verbatim_in_its_fixture():
                     f"{case['id']}#gold{index}: unknown source_doc {source_doc!r}"
                 )
                 continue
-            if not preview or normalize(preview) not in normalize(
-                fixture.read_text(encoding="utf-8")
+            if (
+                not preview
+                or not normalize(preview)
+                or normalize(preview)
+                not in normalize(fixture.read_text(encoding="utf-8"))
             ):
                 offenders.append(
                     f"{case['id']}#gold{index}: preview not verbatim in {source_doc}"
@@ -204,12 +228,13 @@ def test_the_ci_job_watches_every_gate_input():
 
     ci_path = REPO_ROOT / ".gitlab-ci.yml"
     job = yaml.safe_load(ci_path.read_text(encoding="utf-8"))["test:rag-benchmarks"]
-    changes = [
-        entry
+    # The merge-request rule specifically — unioning every source-guarded
+    # rule would let a future push rule's list mask a missing input here.
+    changes = next(
+        rule.get("changes", [])
         for rule in job["rules"]
-        if rule.get("if", "").startswith("$CI_PIPELINE_SOURCE")
-        for entry in rule.get("changes", [])
-    ]
+        if rule.get("if", "") == '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    )
 
     def watched(path: Path) -> bool:
         rel = path.relative_to(REPO_ROOT).as_posix()

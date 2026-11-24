@@ -44,14 +44,36 @@ the signed M-1 binds. The graded cases carry Phase-1 gold
    (`tests/rag-benchmarks/fixtures/security-corpus/README.md`) — the
    #2148 method end-to-end, including the forestry label patch;
 2. Resolve the graded gold identities: the Phase-2 pass
-   (`eval/match_gold_chunks.py`, `ARANGO_TEXT_FIELD=text` per #2153)
-   matches every preview against the live collection and fills
-   `content_hash`; a `build-set` pass (the #2148 pattern) remaps the
-   restricted cases' `authorized_source_ids` to the campaign's real file
-   ids and re-extends the forestry/narrowed case unchanged;
-3. `run_protocol.py validate-set` — the set must validate with its
+   (`eval/match_gold_chunks.py --chunk-text-field text` — the served field
+   is the contextualized `text`, the #2153 finding; the flag, not the
+   `ARANGO_TEXT_FIELD` env var that `run_eval.py` reads) matches every
+   preview against the live collection and fills `content_hash`; a
+   `build-set` pass (the #2148 pattern) remaps the inherited restricted
+   cases' `authorized_source_ids` to the campaign's real file ids AND
+   ADDS ids to the 14 graded restricted cases (they carry none, so the
+   verdict layer's mechanical subset check stays inert until the campaign
+   gives them the real vocabulary);
+3. The RESOLVED set lands in a NEW dated campaign artifact directory
+   (the #2148 pattern: that campaign's committed set carries its real
+   hashes). This directory stays Phase-1 — the identity gate
+   (`test_graded_public_gold_defers_identity_to_the_venue`) correctly
+   refuses committed hashes here, because an offline-committed hash is
+   indistinguishable from an invented one;
+4. At the re-sign, reconcile the 16 inherited cases' reference answers
+   with the seeded fixtures — four known divergences (all inherited
+   byte-identical from the pre-fixture E01 set, preserved by the
+   byte-identity gate): `e01-sec-xuser-a/b` name "the civil-protection
+   agency" where the shared fixture says "the Regional Emergency
+   Management Agency"; `e01-sec-restricted` cites a "classification
+   note" the restricted fixture does not contain; `e01-sec-injection-document`
+   and `e01-sec-injection-tool` reference answers paraphrase content the
+   fixtures do not carry. Correct them or record the divergence the
+   evaluator instructions absorb — the reference answers do not touch the
+   A-leg anchor (it scores chunks, not answers) but the B/C semantic
+   judging reads them;
+5. `run_protocol.py validate-set` — the set must validate with its
    resolved identities (67 cases);
-4. ONE re-measured A reference + re-signed M-1 on that final
+6. ONE re-measured A reference + re-signed M-1 on that final
    corpus+set basis — before any B/C verdict is composed (the #2151
    acceptance's single re-baseline).
 

@@ -39,7 +39,7 @@
 
 | Evidence | Artifact | State |
 |---|---|---|
-| The deployed baseline (V03): versions, digests, models, topology | `docs/baselines/v03-deployed-baseline-2026-11-19.md` | Recorded (story 1.2) |
+| The deployed baseline (V03): versions, digests, models, topology | `docs/baselines/v03-deployed-baseline-2026-11-19.md` | Recorded (stories 1.2, 1.10) |
 | The service exists, deployable and switchable | `components/agent-service/` (app, Dockerfile, compose wiring) + `tests/test_app.py` | Green |
 
 ## The CI gates that keep the checks continuously green

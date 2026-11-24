@@ -96,7 +96,9 @@ from protocol.drivers import (  # noqa: E402
     run_config_b,
     run_config_c,
 )
+from protocol.coexistence import CoexistenceRefusal, build_coexistence_report  # noqa: E402
 from protocol.e01 import E01Refusal, build_e01_report  # noqa: E402
+from protocol.e02 import E02Refusal, build_e02_report  # noqa: E402
 from protocol.evalset import SetValidationError, load_set  # noqa: E402
 from protocol.findings import build_findings_report, report_digest  # noqa: E402
 from protocol.gate import GateRefusal, check_gated_run  # noqa: E402
@@ -649,6 +651,125 @@ def cmd_counters(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_e02(args: argparse.Namespace) -> int:
+    """The E02 comparison report (B vs C): the typed refusals run first (a
+    refusal means nothing was built), then the pure build, then the report
+    written to --out with its digest printed."""
+    b_manifest = _load_json_refusing(args.b_manifest, "the B-leg gated manifest")
+    if b_manifest is None:
+        return 1
+    c_manifest = _load_json_refusing(args.c_manifest, "the C-leg gated manifest")
+    if c_manifest is None:
+        return 1
+    b_rows = _load_rows_refusing(args.b_rows, "the B rows")
+    if b_rows is None:
+        return 1
+    c_rows = _load_rows_refusing(args.c_rows, "the C rows")
+    if c_rows is None:
+        return 1
+    reference_manifest = None
+    if args.reference_manifest:
+        reference_manifest = _load_json_refusing(args.reference_manifest, "the reference manifest")
+        if reference_manifest is None:
+            return 1
+    thresholds = None
+    if args.thresholds:
+        thresholds = _load_json_refusing(args.thresholds, "the signed thresholds artifact")
+        if thresholds is None:
+            return 1
+    correctness_ledger = None
+    if args.correctness_ledger:
+        correctness_ledger = _load_json_refusing(
+            args.correctness_ledger, "the reference-correctness ledger"
+        )
+        if correctness_ledger is None:
+            return 1
+    entries = []
+    try:
+        _, entries = load_set(args.set_path, kind="assessment")
+    except (SetValidationError, OSError) as failed:
+        print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
+        return 1
+    set_sha256 = sha256_file(args.set_path)
+    try:
+        report = build_e02_report(
+            b_manifest=b_manifest,
+            c_manifest=c_manifest,
+            b_rows=b_rows,
+            c_rows=c_rows,
+            entries=entries,
+            set_sha256=set_sha256,
+            reference_manifest=reference_manifest,
+            thresholds=thresholds,
+            correctness_ledger=correctness_ledger,
+            created_utc=args.created_utc,
+            seed=args.seed,
+        )
+    except E02Refusal as refused:
+        print(f"REFUSED: {refused}", file=sys.stderr)
+        return 1
+    counts = report["counts"]
+    path = _write_manifest(Path(args.out).parent, Path(args.out).name, report)
+    print(
+        f"e02 report: {counts['n_cases']} case(s) ({counts['b_recorded']} B / {counts['c_recorded']} C recorded),"
+        f" {counts['n_query_classes']} query class(es),"
+        f" {counts['n_query_classes_not_covered']} class(es) not covered"
+    )
+    print(f"e02 verdict: {report['verdict']['state']}")
+    print(f"e02 digest: {report['digest'][:12]} (reproducible under the same inputs + pinned created_utc)")
+    print(f"e02 report: {path}")
+    return 0
+
+
+def cmd_coexistence(args: argparse.Namespace) -> int:
+    """The coexistence criterion (NFR-3): the controlled legacy-only vs
+    legacy-under-agent-load comparison, the agreed limits applied, and the
+    verdict computed — never narrated."""
+    control = _load_json_refusing(args.control, "the control phase's legacy measurements")
+    if control is None:
+        return 1
+    loaded = _load_json_refusing(args.loaded, "the loaded phase's legacy measurements")
+    if loaded is None:
+        return 1
+    agent_load = _load_json_refusing(args.agent_load, "the agentic load's record")
+    if agent_load is None:
+        return 1
+    limits = None
+    if args.limits:
+        limits = _load_json_refusing(args.limits, "the agreed legacy limits")
+        if limits is None:
+            return 1
+    lineage = None
+    if args.lineage:
+        lineage = _load_json_refusing(args.lineage, "the measurement lineage")
+        if lineage is None:
+            return 1
+    try:
+        report = build_coexistence_report(
+            control_measurements=control,
+            loaded_measurements=loaded,
+            agent_load=agent_load,
+            limits=limits,
+            lineage=lineage,
+            created_utc=args.created_utc,
+        )
+    except CoexistenceRefusal as refused:
+        print(f"REFUSED: {refused}", file=sys.stderr)
+        return 1
+    path = _write_manifest(Path(args.out).parent, Path(args.out).name, report)
+    phases = report["phases"]
+    print(
+        f"coexistence: control {phases['control']['n_ok']}/{phases['control']['n_requests']} ok,"
+        f" loaded {phases['loaded']['n_ok']}/{phases['loaded']['n_requests']} ok"
+    )
+    print(f"coexistence verdict: {report['verdict']['verdict']}")
+    for reason in report["verdict"]["reasons"]:
+        print(f"  - {reason}")
+    print(f"coexistence digest: {report['digest'][:12]}")
+    print(f"coexistence report: {path}")
+    return 0
+
+
 def _add_corpus_args(p: argparse.ArgumentParser) -> None:
     """The corpus identity arguments — the shared derivation
     (:func:`_corpus_fingerprint`) behind every artifact that names a corpus."""
@@ -781,6 +902,58 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--out", required=True, help="the counter-metrics report path to write")
     _add_created_utc_arg(c)
     c.set_defaults(func=cmd_counters)
+
+    e2 = sub.add_parser("e02", help="the E02 B-vs-C comparison report (story 4.5)")
+    e2.add_argument("--b-manifest", required=True, help="the B leg's config-b.manifest.json")
+    e2.add_argument("--c-manifest", required=True, help="the C leg's config-c.manifest.json")
+    e2.add_argument("--b-rows", required=True, help="the B leg's config-b.rows.json")
+    e2.add_argument("--c-rows", required=True, help="the C leg's config-c.rows.json")
+    e2.add_argument(
+        "--set",
+        dest="set_path",
+        required=True,
+        help="the assessment set the legs ran against (the query-class source; its digest is verified against the legs' lineage)",
+    )
+    e2.add_argument(
+        "--reference-manifest",
+        default=None,
+        help="the predecessor the legs were gated against (verified against the legs' lineage)",
+    )
+    e2.add_argument(
+        "--thresholds",
+        default=None,
+        help="the signed thresholds artifact (absent = every threshold recorded absent)",
+    )
+    e2.add_argument(
+        "--correctness-ledger",
+        default=None,
+        help="the reference-correctness ledger (CM-2's denominator; absent = recorded absent)",
+    )
+    e2.add_argument("--out", required=True, help="the e02.report.json path to write")
+    _add_created_utc_arg(e2)
+    e2.add_argument("--seed", type=int, default=None, help="the runs' seed (recorded as an execution condition)")
+    e2.set_defaults(func=cmd_e02)
+
+    cx = sub.add_parser(
+        "coexistence",
+        help="the coexistence criterion — legacy non-regression under concurrent agentic load (story 4.5)",
+    )
+    cx.add_argument("--control", required=True, help="the control phase's legacy measurements (JSON)")
+    cx.add_argument("--loaded", required=True, help="the loaded phase's legacy measurements (JSON)")
+    cx.add_argument("--agent-load", required=True, help="the concurrent agentic load's record (JSON)")
+    cx.add_argument(
+        "--limits",
+        default=None,
+        help="the operator's agreed legacy limits (absent = the verdict is BLOCKED, never a pass)",
+    )
+    cx.add_argument(
+        "--lineage",
+        default=None,
+        help="the measurement lineage the limits bind to (the corpus fingerprint + set digest)",
+    )
+    cx.add_argument("--out", required=True, help="the coexistence report path to write")
+    _add_created_utc_arg(cx)
+    cx.set_defaults(func=cmd_coexistence)
     return p
 
 
@@ -796,6 +969,8 @@ def main(argv: list[str] | None = None) -> int:
         ManifestError,
         PairError,
         E01Refusal,
+        E02Refusal,
+        CoexistenceRefusal,
         thresholds_mod.ThresholdsRefusal,
         CounterMetricsRefusal,
     ) as refused:

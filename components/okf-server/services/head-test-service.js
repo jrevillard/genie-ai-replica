@@ -529,7 +529,30 @@ async function routingTest(repoId, payload = {}, opts = {}) {
     } else if (probeTargets.length === 0) {
       // no probes requested and under test has no graph
     }
-    if (includeProbes && probeTargets.length) {
+    // #2061 phase 3 (E-7) — the SUPERSEDE. The retriever SKIPS the chunk
+    // probe when a head claims: the claim is decisive for the whole search
+    // set, the probe never runs, and the claimed graphs ARE the selection
+    // (genieai_retriever_arangodb.py:2644 — `if ROUTE_HEADS_SUPERSEDE and
+    // head_pass:`). The Lab ran its probe leg anyway, so LEG B could answer
+    // a question production never asks — a fidelity gap that made every
+    // scoped run measure something the deployment does not do.
+    //
+    // So the Lab now does what the retriever does: under the knob, a claim
+    // skips the probe and the claimed heads are the selection. The row says
+    // so (`supersede`), because a verdict that silently skipped a leg would
+    // be indistinguishable from one that never had a probe to run.
+    const graphByRepo = new Map();
+    if (underTest.ingested_graph_name) graphByRepo.set(repoId, underTest.ingested_graph_name);
+    for (const s of siblings) {
+      if (s.graph_name) graphByRepo.set(s.repo_id, s.graph_name);
+    }
+    const claimedGraphs = ranked
+      .filter((r) => r.head_claimed && graphByRepo.has(r.repo_id))
+      .map((r) => ({ repo_id: r.repo_id, graph: graphByRepo.get(r.repo_id) }));
+    const supersedeApplied = knobs.ROUTE_HEADS_SUPERSEDE === true && claimedGraphs.length > 0;
+    if (supersedeApplied) {
+      currentWinner = claimedGraphs[0].repo_id;
+    } else if (includeProbes && probeTargets.length) {
       const probed = await Promise.all(
         probeTargets.map(async (t) => {
           const p = await probeGraph(db, t.graph, emb.vector, knobs);
@@ -614,6 +637,16 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         probe: probeOutcome ? probeOutcome.per_repo[repoId] || null : null
       },
       siblings: sibDetail,
+      // #2061 phase 3 (E-7): the SUPERSEDE state of this leg. `applied`
+      // means the claim was decisive and the chunk probe was SKIPPED — the
+      // retriever's behaviour, reproduced. `claimed` names the graphs the
+      // selection was made of.
+      supersede: {
+        applied: supersedeApplied,
+        claimed: claimedGraphs.map((c) => c.repo_id),
+        graphs: claimedGraphs.map((c) => c.graph),
+        probe_skipped: supersedeApplied
+      },
       // #2061 phase 2 (E-2): the CARRIER this verdict was measured over —
       // the Evaluation Context's resolved set, or null when the Lab ran
       // against the whole deployment (which is what it always did, and what
@@ -640,7 +673,9 @@ async function routingTest(repoId, payload = {}, opts = {}) {
         under_test_wins_head: !!(headWinner && headWinner.is_under_test),
         head_suppressed: !!topRanked && !topRanked.head_claimed,
         current_routing_winner: currentWinner,
-        under_test_wins_current: !!(probeOutcome && probeOutcome.selected.includes(repoId)),
+        under_test_wins_current: supersedeApplied
+          ? claimedGraphs.some((c) => c.repo_id === repoId)
+          : !!(probeOutcome && probeOutcome.selected.includes(repoId)),
         margin,
         provenance: probeOutcome
           ? probeOutcome.degraded
@@ -648,13 +683,17 @@ async function routingTest(repoId, payload = {}, opts = {}) {
             : probeOutcome.floor
               ? 'floor'
               : 'qualified'
-          : topRanked && !topRanked.head_claimed
-            ? topRanked.head_claim === 'floor'
-              ? 'head-suppressed (off-domain)'
-              : topRanked.head_claim === 'veto'
-                ? `head-suppressed (forbidden: ${topRanked.tag_veto})`
-                : 'head-suppressed (forbidden/noise)'
-            : 'head-only (no graph under test)'
+          : supersedeApplied
+            ? // The claim decided — the retriever never ran the probe, and
+              // neither did the Lab. Say WHICH leg decided.
+              'heads-supersede (probe skipped)'
+            : topRanked && !topRanked.head_claimed
+              ? topRanked.head_claim === 'floor'
+                ? 'head-suppressed (off-domain)'
+                : topRanked.head_claim === 'veto'
+                  ? `head-suppressed (forbidden: ${topRanked.tag_veto})`
+                  : 'head-suppressed (forbidden/noise)'
+              : 'head-only (no graph under test)'
       },
       fidelity: {
         algorithm: 'story-1.3-replay+v2',

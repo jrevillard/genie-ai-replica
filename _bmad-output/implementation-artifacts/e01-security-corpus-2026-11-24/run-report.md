@@ -279,13 +279,12 @@ deployment "genieai-genieai-umbrella-dataprep" successfully rolled out
    pinned vm-operator's webhook (storage is a PVC spec there): the traces
    tier cannot be enabled through the chart; the release upgrade fails as a
    whole. Live-verified with three probes against the venue's webhook.
-2. **The anchor eval's `ARANGO_TEXT_FIELD` default (`chunk_text`) diverges
-   from the retrieval contract (`text`)** — on a contextualized corpus the
-   default hashes the display-only field and every gold match fails
-   silently (recall 0.0 with `n_missed_traces=0`). This run rejected its
-   first anchor over exactly this and re-ran with the field pinned; the
-   dumped evidence is kept in `rejected-chunktext-field-run/`. New issue:
-   filed with the verbatim scores and the field dump.
+2. **#2153** — the anchor eval's `ARANGO_TEXT_FIELD` default (`chunk_text`)
+   diverges from the retrieval contract (`text`) — on a contextualized
+   corpus the default hashes the display-only field and every gold match
+   fails silently (recall 0.0 with `n_missed_traces=0`). This run rejected
+   its first anchor over exactly this and re-ran with the field pinned; the
+   dumped evidence is kept in `rejected-chunktext-field-run/`.
 3. **#2121 re-confirmed live** (existing issue, not re-filed): the slim
    dataprep image cannot ingest when the venue LLM lacks native function
    calling — `json_repair` ImportError kills every ingest; this campaign

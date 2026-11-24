@@ -1684,7 +1684,7 @@ def test_e01_keeps_the_measurement_names_and_drops_the_credentials():
     """The redaction rule is a CONTRACT with the judge — asserted at the
     REPORT boundary: the declared measurement names reach the report (and a
     token count outside the allowlist), a token CREDENTIAL does not."""
-    from protocol.e01 import MEASUREMENT_KEY_NAMES
+    from protocol.redaction import MEASUREMENT_KEY_NAMES
 
     rows = _b_rows()
     metadata = {name: 1 for name in MEASUREMENT_KEY_NAMES}

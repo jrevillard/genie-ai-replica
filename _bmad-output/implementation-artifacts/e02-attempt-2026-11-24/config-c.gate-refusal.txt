@@ -1,0 +1,8 @@
+# The gate's refusal — the gated config-C leg of the E02 attempt (the agent), verbatim
+# command: run_protocol.py assess --config C --set assessment-set.json --out-dir . --corpus-collection GRAPH_SOURCE --corpus-fingerprint 6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98
+# date: 2026-11-24 (re-run AFTER MR !1063 merged — this branch carries the signed M-1 registry).
+# The C verdict is ALSO held by issue #2145 (the 10 empty-gold cases are not annotable yet): even
+# once the gate opens, a C verdict must not be composed before the gold annotations are handled.
+
+REFUSED: gated run refused (config C): reference manifest 8dc67fa1804e covers corpus 6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98, but no signed thresholds file references it. Thresholds are signed after the reference is measured (story 4.4); the harness refuses to gate on an unsigned predecessor.
+exit=1

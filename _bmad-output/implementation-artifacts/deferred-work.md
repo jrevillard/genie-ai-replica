@@ -2,6 +2,14 @@
 
 Items deferred during code reviews. Revisit when the related component is next modified.
 
+## Resolved in MR !1064 (story 4.5, 2026-11-24)
+
+Two pre-existing observations the global review round 2 carried forward, closed by the same MR that recorded them:
+
+- The config-B row carrying BOTH `status: "failure"` and the limit marker counted as a failure in the E02 gains but as a limit hit in counter_metrics → the gains census now reads the terminal states in the counter-metrics vocabulary's order (the limit marker first), so the report never calls the same row two different things.
+- A row whose base case id is in no assessment-set class fell out of the gains' census with no trace → the gains record now names `excluded_rows` (per leg, with ids) and its note.
+
+
 ## Resolved in MR !383 (prd-fix-shared-lib, 2026-09-18)
 
 Findings from the 2026-09-16 SPEC code-review catalog closed by this branch:

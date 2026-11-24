@@ -1,0 +1,1 @@
+[{'_id': '_graphs/GRAPH', '_key': 'GRAPH', '_rev': '_mb7YauC---', 'edgeDefinitions': [{'collection': 'GRAPH_HAS_SOURCE', 'from': ['GRAPH_ENTITY'], 'to': ['GRAPH_SOURCE']}, {'collection': 'GRAPH_LINKS_TO', 'from': ['GRAPH_ENTITY'], 'to': ['GRAPH_ENTITY']}], 'orphanCollections': [], 'name': 'GRAPH'}]

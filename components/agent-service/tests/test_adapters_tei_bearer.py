@@ -59,3 +59,25 @@ def test_reranking_adapter_sends_bearer_only_when_configured():
     bare = TeiRerankingAdapter("https://tei.invalid", _reranking_config(), transport=transport, bearer="")
     asyncio.run(bare.rerank("q", ["t"]))
     assert captured == [None]
+
+
+def test_create_wires_the_deployment_bearer_into_both_adapters(monkeypatch):
+    """The capability assembly passes the deployment's credential to BOTH
+    adapters — dropping `bearer=endpoints.bearer` from one create() branch
+    is exactly the regression this catches (the adapter-level tests above
+    pin the header behavior; this one pins the wiring)."""
+    from capabilities.search_knowledge import SearchKnowledgeCapability
+
+    monkeypatch.setattr(
+        "arango.ArangoClient",
+        lambda hosts: type("C", (), {"db": lambda self, *a, **k: None})(),
+    )
+    env = {
+        "ARANGO_URL": "http://localhost:8529",
+        "TEI_EMBEDDING_ENDPOINT": "https://tei.invalid/embed",
+        "TEI_RERANKING_ENDPOINT": "https://tei.invalid",
+        "VLLM_API_KEY": "deployment-key",
+    }
+    capability = SearchKnowledgeCapability.create(env)
+    assert capability._embedding._bearer == "deployment-key"
+    assert capability._reranking._bearer == "deployment-key"

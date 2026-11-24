@@ -401,9 +401,13 @@ def test_config_b_redacts_credential_named_keys_at_the_rows_write(tmp_path):
 
 def test_config_b_resume_redacts_a_legacy_rows_snapshot_at_load(tmp_path):
     """A rows file written by the pre-redaction code carries the raw
-    snapshot; the resume redacts it at load so the legacy key never
-    survives into the re-written artifact."""
-    set_path = _b_set(tmp_path, ("c1", "c2"))
+    snapshot. On a CONVERGED resume (zero pending cases) the loop never
+    runs and the returned snapshot IS the loaded prior — the load-boundary
+    redaction is what guards that path, so this test fails on code that
+    only redacts at the write boundary. (With pending cases the re-written
+    artifact is covered by the merge-replace of the new redacted snapshot;
+    the earlier redact test pins that side.)"""
+    set_path = _b_set(tmp_path, ("c1",))
     out = tmp_path / "out"
     out.mkdir()
     legacy = {
@@ -412,10 +416,8 @@ def test_config_b_resume_redacts_a_legacy_rows_snapshot_at_load(tmp_path):
     }
     (out / "config-b.rows.json").write_text(json.dumps(legacy), encoding="utf-8")
     transport = FakeBTransport()
-    drivers.run_config_b(set_path, out, transport=transport)
-    written = json.loads((out / "config-b.rows.json").read_text(encoding="utf-8"))
-    assert "VLLM_API_KEY" not in written["resolved"]["env"]
-    assert written["cases"]["c2"]["status"] == "ok"
+    result = drivers.run_config_b(set_path, out, transport=transport)
+    assert "VLLM_API_KEY" not in result["resolved"]["env"]
 
 
 def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch):

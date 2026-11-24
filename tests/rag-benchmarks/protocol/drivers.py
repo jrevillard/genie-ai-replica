@@ -800,6 +800,11 @@ def run_config_b(
         # redacted HERE, at the write boundary, by the protocol's own rule —
         # before any merge or write. The resumed prior is redacted at load
         # for the same reason (a legacy file written by the old code).
+        # Accepted trade (the rule's documented safe side, applied at this
+        # boundary): AGENT_AUTHORIZED_GRAPHS/REPOS are dropped too — the
+        # word "authorized" carries the auth marker and the exact-match
+        # keep-list does not cover it. The manifests' own narrower rule
+        # keeps them; the rows file loses that evidence.
         if isinstance(new_rows.get("resolved"), dict):
             new_rows["resolved"] = redact_deep(new_rows["resolved"])
         resolved = new_rows.get("resolved") or resolved

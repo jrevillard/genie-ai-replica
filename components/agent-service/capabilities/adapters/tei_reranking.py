@@ -203,6 +203,7 @@ class TeiRerankingAdapter:
         transport: httpx.AsyncBaseTransport | None = None,
         adaptive_config: AdaptiveConfig | None = None,
         tls_verify: bool = True,
+        bearer: str = "",
     ):
         self._endpoint = endpoint.rstrip("/")
         self._config = config
@@ -214,6 +215,9 @@ class TeiRerankingAdapter:
         # convention every other client of the self-signed GPU gateway
         # honors; a verifying default stays the default.
         self._tls_verify = tls_verify
+        # The TEI gateway's bearer, when the venue auths it (no header when
+        # the deployment carries no credential).
+        self._bearer = bearer
 
     async def rerank(self, query: str, texts: list[str], chunk_embeddings=None, query_embedding=None) -> RerankOutcome:
         """Score the candidates with TEI and select per the configured strategy.
@@ -243,6 +247,7 @@ class TeiRerankingAdapter:
             response = await client.post(
                 f"{self._endpoint}/rerank",
                 json={"query": query, "texts": texts, "truncate": False},
+                headers={"Authorization": f"Bearer {self._bearer}"} if self._bearer else {},
             )
         decoded = response.json()
         if response.status_code == 422 and isinstance(decoded, dict) and decoded.get("error_type") == "Validation":

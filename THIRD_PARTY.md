@@ -104,8 +104,10 @@ OPEA provides microservices for:
 ## AI Models
 
 The models on the OPEA-free agent path (the pre-existing legacy model legs
-keep their own records). Licences per the repository's model-licence table
-(`site/content/en/docs/rag-pipeline/choosing-models.md`) and the upstream
+keep their licence records in
+`site/content/en/docs/rag-pipeline/choosing-models.md` — until this section,
+THIRD_PARTY.md carried no model entries at all). Licences per the
+repository's model-licence table and the upstream
 model cards; the full redistribution assessment is
 [`docs/baselines/v07b-license-assessment-2026-11-24.md`](docs/baselines/v07b-license-assessment-2026-11-24.md).
 
@@ -144,9 +146,9 @@ contract's retrieval adapters.
 
 **Usage:** The model the translation leg serves by default
 (`VLLM_TRANSLATION_MODEL_ID`) — answer translation and the agent loop's
-query-preparation translation. **Restricted terms:** a pilot/release serving
-this leg carries Google's terms acceptance; the redistribution consequence is
-recorded as a blocker owned by the licensing reviewer in
+query-preparation translation. **Restricted terms** (see the Licence field
+above): the redistribution consequence is recorded as a blocker owned by the
+licensing reviewer in
 [`docs/baselines/v07b-license-assessment-2026-11-24.md`](docs/baselines/v07b-license-assessment-2026-11-24.md).
 
 ---
@@ -1344,7 +1346,7 @@ supply-chain gap in
 - **ISC License**: D3.js
 
 ### Custom / Restricted-Terms Model Licences
-- **Gemma Terms of Use**: google/gemma-3-4b-it (the translation leg) — use and redistribution subject to Google's terms and the prohibited-use policy; >700M monthly active users need a direct licence from Google (see the AI Models section and `docs/baselines/v07b-license-assessment-2026-11-24.md`)
+- **Gemma Terms of Use**: google/gemma-3-4b-it (the translation leg) — restricted terms, see the AI Models section and `docs/baselines/v07b-license-assessment-2026-11-24.md`
 
 ### Copyleft Licenses (Require Attribution/Derivative Works)
 - **GPL 2.0**: ClamAV - requires derivative works to be licensed under GPL

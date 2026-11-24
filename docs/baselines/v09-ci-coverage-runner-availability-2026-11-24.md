@@ -61,9 +61,8 @@ not "confirmed" in CI — that is the point of the row.
 ## Runner availability — what the shared runner serves
 
 - The shared docker runner serves every lane in the evidence table above:
-  pipeline 19349 ran lint, test (agent + rag-benchmarks), config, build,
-  scan, promote green on the shared infrastructure — availability for the
-  new surface is CONFIRMED by that pipeline, not asserted.
+  availability for the new surface is CONFIRMED by pipeline 19349 (the
+  executed record above), not asserted.
 - What the runner does NOT have: compose-stack capacity for the e2e stage
   (the E2E_ENABLED suspension, quoted above) and a GPU lane for the
   agentic path (the only `tags: [gpu]` job is the legacy `manual:rag-quality`,

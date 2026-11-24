@@ -62,7 +62,7 @@ context:
 - `docs/dependencies/pre-adoption-checklist.md` -- the four V07a gates (exact-version license verification with sha256, defaults audit, release channel, product-license compatibility) that the V07b assessment applies at full scale; its tooling row names the verifier.
 - `scripts/dependencies/verify-dependency-licenses.py` -- the executable license verifier (`--fetch` / `--verify` against `docs/dependencies/<component>-dependency-evidence.json`); produces the evidence rows this story must never hand-author.
 - `docs/dependencies/agent-service-dependency-evidence.json` -- the existing 49-row evidence file (1:1 with the 54-pin compiled tree's union pins); `--verify` re-runs against it.
-- `docs/baselines/choosing-models.md` (site copy: `site/content/en/docs/rag-pipeline/choosing-models.md`) -- the repo's model-license records (license-category table, per-model rows incl. Gemma Terms of Use at :113, granite/bge rows); the V07b model assessment cites these + the upstream model cards, it does not re-derive.
+- `site/content/en/docs/rag-pipeline/choosing-models.md` (no `docs/baselines/` copy exists) -- the repo's model-license records (license-category table, per-model rows incl. Gemma Terms of Use at :113, granite/bge rows); the V07b model assessment cites these + the upstream model cards, it does not re-derive.
 - `docs/e2e-tests/local-run.md` + `docs/adr/0001-gitlab-registry-build-scan-pipeline.md` -- the E2E suspension facts (no CI door, local run defines the executed set) the V09 artifact quotes for the environment-separated checks.
 
 **Facts (not to re-derive):**

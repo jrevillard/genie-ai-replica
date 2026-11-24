@@ -631,7 +631,8 @@ The MR's security panel reported "5 new potential vulnerabilities (0 critical, 3
 others)". **Every one of them exists on `main`** — the finding fingerprint carries the
 LINE number, so any edit above a flagged line makes a pre-existing finding look new.
 The evidence is the two semgrep reports side by side: the same rules fire in main's own
-pipeline, at the pre-branch line numbers.
+pipeline, at the pre-branch line numbers. (The severities below are the scanners' own;
+the panel's mix comes from its own aggregation, which this diff does not reproduce.)
 
 | finding | rule | where (MR pipeline → main) | disposition |
 |---|---|---|---|

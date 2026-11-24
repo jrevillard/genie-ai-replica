@@ -1,0 +1,9 @@
+<frozen runpy>:128: RuntimeWarning: 'agent.probe' found in sys.modules after import of package 'agent', but prior to execution of 'agent.probe'; this may result in unpredictable behaviour
+2026-11-24 15:07:21,413 INFO httpx HTTP Request: GET https://ai.assembly.govstack.global:444/llm/v1/models "HTTP/1.1 200 OK"
+2026-11-24 15:07:22,350 INFO httpx HTTP Request: POST https://ai.assembly.govstack.global:444/llm/v1/chat/completions "HTTP/1.1 200 OK"
+2026-11-24 15:07:22,433 INFO agent.loop tool search_knowledge reported transient_failure: the embedding stage failed: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1018)
+2026-11-24 15:07:23,105 INFO httpx HTTP Request: POST https://ai.assembly.govstack.global:444/llm/v1/chat/completions "HTTP/1.1 200 OK"
+2026-11-24 15:07:23,192 INFO agent.loop tool search_knowledge reported transient_failure: the embedding stage failed: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1018)
+2026-11-24 15:07:23,984 INFO httpx HTTP Request: POST https://ai.assembly.govstack.global:444/llm/v1/chat/completions "HTTP/1.1 200 OK"
+2026-11-24 15:07:24,066 INFO agent.loop tool search_knowledge reported transient_failure: the embedding stage failed: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1018)
+2026-11-24 15:07:26,737 INFO httpx HTTP Request: POST https://ai.assembly.govstack.global:444/llm/v1/chat/completions "HTTP/1.1 200 OK"

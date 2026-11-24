@@ -261,6 +261,46 @@ Older datasets used `categoryLabel` (string) — incompatible with the current
 chatqna schema (RequestContext.categoryLabels: list[str]). Sending the old
 shape silently deadens the label filter.
 
+### Evaluation surfaces — which surface consumes the gold
+
+`expected_chunks` (the gold) is consumed by ONE surface only: the **chunk-level
+retrieval** surface, measured by the config-A anchor. Every other surface is
+judged from what the run RECORDED — the answer, its outcome, the retrieved
+document ids — never from passages.
+
+| surface | which cases | measured by |
+|---|---|---|
+| `retrieval` | answerable / citation_check / representative_language, public access, no security scenario | the config-A anchor (chunk-level gold) |
+| `outcome` | unanswerable / failure / cancellation | the recorded outcome (abstention, typed failure, cancellation) |
+| `security` | any case with a `security_scenario` | the verdict layer, on the pair's B/C legs |
+| `restricted_access` | retrieval-class cases whose sources live in a restricted graph | the B/C document-level surface (config A has no authorization surface, so such a case is an authorization case, never a chunk-level one there) |
+| `unknown` | a case whose `case_class` is outside the composition vocabulary | nothing — the census counts it so it stays VISIBLE instead of vanishing from the counts |
+
+Consequences — they are the protocol's, not conventions:
+
+- A case on any surface but `retrieval` carries **no gold by design**. Empty
+  gold on those cases is correct semantics, not a missing annotation.
+- A `retrieval` case **must** carry gold: the anchor would score a gold-less
+  query vacuously (recall 1.0 by construction, every retrieved chunk counted
+  as noise) and the case would count as measured while carrying no
+  expectation. The anchor driver REFUSES such a set.
+- The anchor is fed the retrieval cases only (`config-a.gold.json`, derived
+  from the set), so its report carries rows for the cases it can score.
+  Re-running the reference in an out-dir that holds a report produced from the
+  previous (whole-set) gold is REFUSED by the anchor's own resume validation
+  (`EXIT 2: prefilled ids not in current gold`) — use a fresh out-dir (the
+  run artifacts are dated per run) or `EVAL_FRESH=1`.
+- The **coverage census** (`protocol/evalset.py::coverage_census`) states what
+  the set covers: the case count per surface and how many of the set's cases
+  carry a RESOLVED surface (`n_cases_with_a_resolved_surface` over
+  `n_set_cases`). It is a SET-level statement: it says nothing about how many
+  cases a run answered (the rows file carries that). The capture stamps it
+  (with the anchor input's digest, `anchor_projection_sha256`); the E01
+  report carries it in `counts.coverage`. Read it before reading a gold
+  count: a flat "n_empty_gold" says nothing about coverage — the same number
+  counted 3 outcome cases and 7 security cases, none of which the chunk
+  surface measures.
+
 ## Adaptive reranker — the parameter surface (methodology)
 
 The `adaptive` reranker strategy (`RERANKING_STRATEGY=adaptive`, default) keeps

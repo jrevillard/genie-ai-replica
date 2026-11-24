@@ -1004,6 +1004,15 @@ def build_e01_report(
             "b_missing": sum(1 for record in per_case.values() if record["b"] is None),
             "reference_defect_cases": sum(1 for record in per_case.values() if record["reference_defect"]),
             "skipped_cases": sum(1 for record in per_case.values() if record["skipped"]),
+            # What the set covers, per evaluation surface — the census the A
+            # capture stamped. It says how many cases carry a RESOLVED surface
+            # (every case does: the retrieval cases carry gold, the outcome and
+            # security cases are judged from the recorded outcome and the
+            # retrieved document ids), so the arbitration's basis is stated
+            # here instead of being inferred from a gold count. A capture made
+            # before the census existed carries none — recorded absent, never
+            # reconstructed.
+            "coverage": capture_stamp.get("coverage"),
         },
     }
     body["digest"] = e01_report_digest(body)

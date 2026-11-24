@@ -20,12 +20,14 @@ are fixture rows (no deployment case content). Proven here:
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 import pytest
 
 from protocol import drivers
+from protocol.evalset import evaluation_surface
 from protocol.e01 import (
     E01Refusal,
     build_e01_report,
@@ -47,7 +49,7 @@ CREATED = "2026-11-22T00:00:00+00:00"
 
 
 def _case(id_, query, case_class, access="public", **extra):
-    return {
+    case = {
         "id": id_,
         "query": query,
         "categoryLabels": [],
@@ -60,6 +62,12 @@ def _case(id_, query, case_class, access="public", **extra):
         "provenance": "assessment",
         **extra,
     }
+    # A retrieval-surface case carries gold: the chunk-level surface is the
+    # only one that consumes it, and the anchor driver refuses a set whose
+    # retrieval cases carry none.
+    if "expected_chunks" not in extra and evaluation_surface(case) == "retrieval":
+        case["expected_chunks"] = [{"chunk_key": f"{id_}-chunk-1", "content_hash": "a1b2c3d4e5f60718"}]
+    return case
 
 
 def _set_file(tmp_path, extra_answerable=("c1", "c2", "c3", "c4")):
@@ -813,6 +821,9 @@ def test_e01_per_case_records_carry_judgment_inputs_and_never_verdicts():
         "b_missing": 0,
         "reference_defect_cases": 0,
         "skipped_cases": 0,
+        # The coverage census rides the capture's stamp; a capture that
+        # carries none is recorded absent, never reconstructed.
+        "coverage": None,
     }
 
 
@@ -1344,11 +1355,34 @@ def test_capture_a_stamps_the_set_digest_and_the_corpus(tmp_path):
     seam, _ = _seam({"c1": "a1", "c2": "a2"})
     result = drivers.run_config_a_capture(set_path, tmp_path / "out", query=seam, corpus_fingerprint=CORPUS)
     expected = hashlib.sha256(set_path.read_bytes()).hexdigest()
-    assert result["capture"] == {
-        "assessment_set_sha256": expected,
-        "corpus_fingerprint": CORPUS,
-        "corpus_fingerprint_source": "pinned",
-    }
+    assert result["capture"]["assessment_set_sha256"] == expected
+    assert result["capture"]["corpus_fingerprint"] == CORPUS
+    assert result["capture"]["corpus_fingerprint_source"] == "pinned"
+    # The stamp also carries the census: what the set covers, per evaluation
+    # surface — every case has a resolved surface, so the arbitration's basis
+    # is stated instead of inferred from a gold count.
+    coverage = result["capture"]["coverage"]
+    assert coverage["n_cases_with_a_resolved_surface"] == coverage["n_set_cases"]
+    assert coverage["by_surface"]["retrieval"] == 5
+    assert coverage["by_surface"]["outcome"] == 3
+    assert coverage["by_surface"]["security"] == 7
+    assert coverage["by_surface"]["restricted_access"] == 1
+    assert coverage["retrieval_cases_without_gold"] == []
+    # The stamp also identifies the ANCHOR's input — which of the set's cases
+    # the chunk-level surface scores. A change to the surface model moves it:
+    # the digest must be sensitive to WHICH cases are on the retrieval surface.
+    projection = result["capture"]["anchor_projection_sha256"]
+    assert re.fullmatch(r"[0-9a-f]{64}", projection)
+    entries = json.loads(Path(set_path).read_text(encoding="utf-8"))["entries"]
+    for case in entries:
+        if case["id"] == "_cite":
+            case["expected_chunks"] = [{"chunk_key": "_cite-chunk-2", "content_hash": "b2c3d4e5f6071829"}]
+    changed = tmp_path / "changed-set.json"
+    changed.write_text(json.dumps({"_meta": {"provenance": "assessment"}, "entries": entries}), encoding="utf-8")
+    other = drivers.run_config_a_capture(
+        changed, tmp_path / "out-changed", query=seam, corpus_fingerprint=CORPUS
+    )
+    assert other["capture"]["anchor_projection_sha256"] != projection
     written = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
     assert written["capture"] == result["capture"]
     # Without a corpus fingerprint the capture refuses — the stamp is mandatory.
@@ -2014,3 +2048,20 @@ def test_capture_a_times_the_seam_call_only(tmp_path, monkeypatch):
     timed = [row for row in result["rows"].values() if row.get("status") == "ok"]
     assert len(timed) > 1, "the fixture timed a single case — the check would be vacuous"
     assert {row["wall_ms"] for row in timed} == {250.0}
+
+
+def test_e01_report_carries_the_coverage_census_the_capture_stamped():
+    """The arbitration's basis is STATED, not inferred: the census says how
+    many cases carry a resolved surface and on which surface each class is
+    measured. A capture that carries no census is recorded absent."""
+    census = {
+        "n_set_cases": 16,
+        "n_cases_with_a_resolved_surface": 16,
+        "by_surface": {"retrieval": 6, "outcome": 3, "security": 7, "restricted_access": 0},
+        "retrieval_cases_without_gold": [],
+    }
+    stamp = dict(_capture_stamp(), coverage=census)
+    report = _build(capture_stamp=stamp)
+    assert report["counts"]["coverage"] == census
+    # Absent — recorded as None, never reconstructed.
+    assert _build()["counts"]["coverage"] is None

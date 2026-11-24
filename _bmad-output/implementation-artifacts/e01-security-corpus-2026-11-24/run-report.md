@@ -149,7 +149,38 @@ Filed as an extracted finding (see §8).
 | set digest | `58850161afeb…` | `8016d4a26a45…` (validated: 16 cases) |
 | evaluator-instructions | `d629ff99e6273f3f` | unchanged (`d629ff99e6273f3f`) |
 
-<!-- DELTA_TABLE -->
+**M-1 (the anchor surface, 6 gold-bearing queries): the measured values are
+UNCHANGED from the signed basis — every metric identical, delta 0.0:**
+
+| metric | signed | new | delta |
+|---|---|---|---|
+| recall | 1.000 | 1.000 | 0.000 |
+| precision | 0.333 | 0.333 | 0.000 |
+| complete_recall | 1.000 | 1.000 | 0.000 |
+| noise | 0.667 | 0.667 | 0.000 |
+| retrieval_recall | 1.000 | 1.000 | 0.000 |
+| recall@1/3/5/10 | 1.000 | 1.000 | 0.000 |
+| ndcg@1/3/5/10 | 1.000 | 1.000 | 0.000 |
+
+n 6 → 6, missed traces 0 → 0. The injection documents did not displace the
+fixture chunks from their own queries' top-3 (TOP_N=3, slice) — the
+corpus-shape numbers M-1 signed are stable as NUMBERS. The signature must
+still be re-anchored: its lineage names the OLD corpus + set digests, and
+the basis moved (§6's table) — the numbers are re-certified against the new
+basis by this table, the re-signing act stays the operator's.
+
+**M-2/M-3 observations (the capture's answer texts, 9 answered rows):** 5
+answers differ in wording only (LLM sampling). Two changed SUBSTANTIVELY,
+both for the better: `e01-unans-upload-count` (the unanswerable case) moved
+from a hallucinated count ("at least two test documents") to an honest
+"there is no explicit information … unavailable from the given content";
+`e01-cancel-checklist` moved from referencing a nonexistent "long
+procurement" checklist to the same honest unavailable shape. On the
+enriched corpus the legacy path's unanswerable handling reads as
+abstention-prose where the signed basis recorded hallucinations — an
+M-3 observation the operator weighs at re-signing. `e01-fail-saturation`
+answered normally both times (config A has no admission lane — the standing
+M-3 finding, unchanged).
 
 ## 7. Cleanup and the proof
 
@@ -176,6 +207,72 @@ capture, not as data.
 
 <!-- CLEANUP_PROOF -->
 
+```text
+
+=== 1. retract + delete the 7 ingested files (retract MUST hit the graph the file was ingested into; the doc-repo DELETE refuses an ingested file, so every file retracts first)
+  doc-restricted-e01 (1795521529313_0e93c302): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 3 Chunks, 21 Edges, 17 Entities.","details":{"deleted_chunks":3,"deleted_edges":21,"deleted_ent
+  doc-restricted-e01 (1795521529313_0e93c302): doc-repo delete http=200
+  doc-shared-e01 (1795521529924_2a577260): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 4 Chunks, 26 Edges, 18 Entities.","details":{"deleted_chunks":4,"deleted_edges":26,"deleted_ent
+  doc-shared-e01 (1795521529924_2a577260): doc-repo delete http=200
+  doc-wide-e01 (1795521530794_92a1d62e): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 3 Chunks, 25 Edges, 25 Entities.","details":{"deleted_chunks":3,"deleted_edges":25,"deleted_ent
+  doc-wide-e01 (1795521530794_92a1d62e): doc-repo delete http=200
+  doc-revoked-e01 (1795521531513_d94bd9c0): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 3 Chunks, 26 Edges, 21 Entities.","details":{"deleted_chunks":3,"deleted_edges":26,"deleted_ent
+  doc-revoked-e01 (1795521531513_d94bd9c0): doc-repo delete http=200
+  doc-forestry-e01 (1795521532326_c283e2bf): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 5 Chunks, 26 Edges, 21 Entities.","details":{"deleted_chunks":5,"deleted_edges":26,"deleted_ent
+  doc-forestry-e01 (1795521532326_c283e2bf): doc-repo delete http=200
+  doc-catalogue-e01 (1795521533082_2ba4f33e): dataprep retract (graph default) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 4 Chunks, 33 Edges, 27 Entities.","details":{"deleted_chunks":4,"deleted_edges":33,"deleted_ent
+  doc-catalogue-e01 (1795521533082_2ba4f33e): doc-repo delete http=200
+  doc-servicerequest-e01 (1795521533906_bf212dab): dataprep retract (graph default) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 4 Chunks, 35 Edges, 33 Entities.","details":{"deleted_chunks":4,"deleted_edges":35,"deleted_ent
+  doc-servicerequest-e01 (1795521533906_bf212dab): doc-repo delete http=200
+
+=== 2. the restricted graph's leftover state (dataprep retract removes its chunks; verify)
+  GRAPH_RESTRICTED_E01_SOURCE chunks after retract: None (expect 0 or COLLECTION_GONE)
+
+=== 3. chatqna env restored to the baseline (ENABLE_OBSERVABILITY=0)
+Waiting for deployment spec update to be observed...
+Waiting for deployment spec update to be observed...
+Waiting for deployment "genieai-genieai-umbrella-chatqna" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "genieai-genieai-umbrella-chatqna" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "genieai-genieai-umbrella-chatqna" rollout to finish: 1 old replicas are pending termination...
+deployment "genieai-genieai-umbrella-chatqna" successfully rolled out
+ENABLE_OBSERVABILITY=0
+
+=== 4. the run-scoped observability objects go (ONLY after the ownership guard: these names are the chart's own observability names — deleting them on a venue whose baseline has the tier ON would destroy Helm-owned objects)
+  overlay tier state: baseline-off
+  guard ok: the baseline renders no observability objects — the same-named CRs are this run's
+networkpolicy.networking.k8s.io "e2148-chatqna-vt-egress" deleted from genieai namespace
+opentelemetrycollector.opentelemetry.io "genieai-collector" deleted from genieai namespace
+networkpolicy.networking.k8s.io "collector-gateway" deleted from genieai namespace
+vtsingle.operator.victoriametrics.com "vtraces" deleted from genieai namespace
+vtsingle-vtraces-54c84d7b99-sc8rt                              1/1     Terminating              0              51m
+
+=== 5. the wheel side-install disappears with any dataprep pod restart — force the honest state
+pod "genieai-genieai-umbrella-dataprep-67f746fd8d-kvggn" deleted from genieai namespace
+deployment "genieai-genieai-umbrella-dataprep" successfully rolled out
+
+=== 6. the realm entities go
+  e01-sec-eval users deleted http=204
+  e01-sec-eval clients deleted http=204
+  e01-sec-eval users gone (verified)
+  e01-sec-eval clients gone (verified)
+
+=== 7. the port-forwards go
+  no 18082 listener
+
+=== 8. the proof
+--- GRAPH_SOURCE back to the 3-chunk baseline:
+{"result":[{"file_id":"1794934129627_3d7afab4","chunks":3}],"hasMore":false,"cached":false,"extra":{"warnings":[],"stats":{"writesExecuted":0,"writesIgnored":0,"documentLookups":0,"seeks":0,"scannedFull":3,"scannedIndex":0,"cursorsCreated":0,"cursorsRearmed":0,"cacheHits":0,"cacheMisses":0,"filtered":0,"httpRequests":0,"executionTime":0.012951545999385417,"peakMemoryUsage":163840,"intermediateCommits":0}},"error":false,"code":201}
+--- graphs:
+[]
+--- no run workload:
+  clean
+--- HelmRelease still at the baseline render:
+78 ready=True
+  traces:
+    enabled: false
+--- realm clean: (the two gates above printed gone/verified)
+```
+
 ## 8. Extracted findings
 
 1. **#2152** — the chart's VTSingle render (`className`) is denied by the
@@ -199,3 +296,66 @@ capture, not as data.
 The new basis invalidates the signed M-1 (its lineage names the old corpus +
 set digests). Per the campaign contract the re-signature is the operator's
 decision against the §6 table — nothing here signs, gates or promotes.
+
+=== 1. retract + delete the 7 ingested files (retract MUST hit the graph the file was ingested into; the doc-repo DELETE refuses an ingested file, so every file retracts first)
+  doc-restricted-e01 (1795521529313_0e93c302): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 3 Chunks, 21 Edges, 17 Entities.","details":{"deleted_chunks":3,"deleted_edges":21,"deleted_ent
+  doc-restricted-e01 (1795521529313_0e93c302): doc-repo delete http=200
+  doc-shared-e01 (1795521529924_2a577260): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 4 Chunks, 26 Edges, 18 Entities.","details":{"deleted_chunks":4,"deleted_edges":26,"deleted_ent
+  doc-shared-e01 (1795521529924_2a577260): doc-repo delete http=200
+  doc-wide-e01 (1795521530794_92a1d62e): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 3 Chunks, 25 Edges, 25 Entities.","details":{"deleted_chunks":3,"deleted_edges":25,"deleted_ent
+  doc-wide-e01 (1795521530794_92a1d62e): doc-repo delete http=200
+  doc-revoked-e01 (1795521531513_d94bd9c0): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 3 Chunks, 26 Edges, 21 Entities.","details":{"deleted_chunks":3,"deleted_edges":26,"deleted_ent
+  doc-revoked-e01 (1795521531513_d94bd9c0): doc-repo delete http=200
+  doc-forestry-e01 (1795521532326_c283e2bf): dataprep retract (graph GRAPH_RESTRICTED_E01) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 5 Chunks, 26 Edges, 21 Entities.","details":{"deleted_chunks":5,"deleted_edges":26,"deleted_ent
+  doc-forestry-e01 (1795521532326_c283e2bf): doc-repo delete http=200
+  doc-catalogue-e01 (1795521533082_2ba4f33e): dataprep retract (graph default) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 4 Chunks, 33 Edges, 27 Entities.","details":{"deleted_chunks":4,"deleted_edges":33,"deleted_ent
+  doc-catalogue-e01 (1795521533082_2ba4f33e): doc-repo delete http=200
+  doc-servicerequest-e01 (1795521533906_bf212dab): dataprep retract (graph default) http=200 -> {"status":200,"message":"Retraction Complete. Deleted: 4 Chunks, 35 Edges, 33 Entities.","details":{"deleted_chunks":4,"deleted_edges":35,"deleted_ent
+  doc-servicerequest-e01 (1795521533906_bf212dab): doc-repo delete http=200
+
+=== 2. the restricted graph's leftover state (dataprep retract removes its chunks; verify)
+  GRAPH_RESTRICTED_E01_SOURCE chunks after retract: None (expect 0 or COLLECTION_GONE)
+
+=== 3. chatqna env restored to the baseline (ENABLE_OBSERVABILITY=0)
+Waiting for deployment spec update to be observed...
+Waiting for deployment spec update to be observed...
+Waiting for deployment "genieai-genieai-umbrella-chatqna" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "genieai-genieai-umbrella-chatqna" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "genieai-genieai-umbrella-chatqna" rollout to finish: 1 old replicas are pending termination...
+deployment "genieai-genieai-umbrella-chatqna" successfully rolled out
+ENABLE_OBSERVABILITY=0
+
+=== 4. the run-scoped observability objects go (ONLY after the ownership guard: these names are the chart's own observability names — deleting them on a venue whose baseline has the tier ON would destroy Helm-owned objects)
+  overlay tier state: baseline-off
+  guard ok: the baseline renders no observability objects — the same-named CRs are this run's
+networkpolicy.networking.k8s.io "e2148-chatqna-vt-egress" deleted from genieai namespace
+opentelemetrycollector.opentelemetry.io "genieai-collector" deleted from genieai namespace
+networkpolicy.networking.k8s.io "collector-gateway" deleted from genieai namespace
+vtsingle.operator.victoriametrics.com "vtraces" deleted from genieai namespace
+vtsingle-vtraces-54c84d7b99-sc8rt                              1/1     Terminating              0              51m
+
+=== 5. the wheel side-install disappears with any dataprep pod restart — force the honest state
+pod "genieai-genieai-umbrella-dataprep-67f746fd8d-kvggn" deleted from genieai namespace
+deployment "genieai-genieai-umbrella-dataprep" successfully rolled out
+
+=== 6. the realm entities go
+  e01-sec-eval users deleted http=204
+  e01-sec-eval clients deleted http=204
+  e01-sec-eval users gone (verified)
+  e01-sec-eval clients gone (verified)
+
+=== 7. the port-forwards go
+  no 18082 listener
+
+=== 8. the proof
+--- GRAPH_SOURCE back to the 3-chunk baseline:
+{"result":[{"file_id":"1794934129627_3d7afab4","chunks":3}],"hasMore":false,"cached":false,"extra":{"warnings":[],"stats":{"writesExecuted":0,"writesIgnored":0,"documentLookups":0,"seeks":0,"scannedFull":3,"scannedIndex":0,"cursorsCreated":0,"cursorsRearmed":0,"cacheHits":0,"cacheMisses":0,"filtered":0,"httpRequests":0,"executionTime":0.012951545999385417,"peakMemoryUsage":163840,"intermediateCommits":0}},"error":false,"code":201}
+--- graphs:
+[]
+--- no run workload:
+  clean
+--- HelmRelease still at the baseline render:
+78 ready=True
+  traces:
+    enabled: false
+--- realm clean: (the two gates above printed gone/verified)

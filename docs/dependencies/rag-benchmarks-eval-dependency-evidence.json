@@ -1,0 +1,101 @@
+{
+  "component": "rag-benchmarks-eval-dependency-evidence",
+  "requirements": [
+    "tests/rag-benchmarks/eval/requirements.txt"
+  ],
+  "method": "Exact-version licence verification: the SPDX expression the publisher declares for that exact version, or - when there is none - the licence file read out of the artifact of that exact version (sha256 recorded). The defaults audit (NFR-2) is a human verdict per package.",
+  "packages": [
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "license": "BSD-3-Clause",
+      "license_source": "artifact:httpx-0.28.1.tar.gz#licence:httpx-0.28.1/LICENSE.md sha256:4ec59d544f12b5f539a3a716fd321ac58ccd8030b465221f2c880200cdf28d8d",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "langchain-community",
+      "version": "0.4.2",
+      "license": "MIT",
+      "license_source": "pypi:info.license (https://pypi.org/pypi/langchain-community/0.4.2/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - no telemetry surface in the 0.4.2 sdist (grep over the published artifact)",
+        "cloud_export": "none - the package contacts no external service of its own"
+      }
+    },
+    {
+      "name": "langchain-core",
+      "version": "1.6.6",
+      "license": "MIT",
+      "license_source": "artifact:langchain_core-1.6.6.tar.gz#licence:langchain_core-1.6.6/LICENSE sha256:4ec67e4ca6e6721dba849b2ca82261597c86a61ee214bbf21416006b7b2d0478",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none by default - LangSmith tracing activates only when LANGCHAIN_TRACING_V2 is set (langchain_core/callbacks/manager.py: _tracing_v2_is_enabled)",
+        "cloud_export": "none by default - the trace export to LangSmith requires the same LANGCHAIN_TRACING_V2 variable"
+      }
+    },
+    {
+      "name": "langchain-openai",
+      "version": "1.6.7",
+      "license": "MIT",
+      "license_source": "artifact:langchain_openai-1.6.7.tar.gz#licence:langchain_openai-1.6.7/LICENSE sha256:0e9a6675825549cd637746a2a3aa6d9cc527e6d207add021435d927251017c18",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - no telemetry surface in the 1.6.7 sdist (grep over the published artifact)",
+        "cloud_export": "none - the client contacts only the model endpoint the caller configures"
+      }
+    },
+    {
+      "name": "openai",
+      "version": "3.3.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:openai-3.3.0.tar.gz#licence:openai-3.3.0/LICENSE sha256:636eb7d79da9bb6d515a4b3fd417aa26679eb3cf16396ddab4bc55fa74e616e4",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the SDK performs no telemetry of its own",
+        "cloud_export": "none - the client contacts only the endpoint the caller configures"
+      }
+    },
+    {
+      "name": "openpyxl",
+      "version": "3.1.5",
+      "license": "MIT",
+      "license_source": "artifact:openpyxl-3.1.5.tar.gz#licence:openpyxl-3.1.5/LICENCE.rst sha256:0c84bb42f5d367e5ebf9fc2dde35b16141df5ee0fdc189250858bc6c5560f69e",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "ragas",
+      "version": "0.4.3",
+      "license": "Apache-2.0",
+      "license_source": "artifact:ragas-0.4.3.tar.gz#licence:ragas-0.4.3/LICENSE sha256:664b930830f291c2936ab30bcd6ef9ca6c9c7384cc475ae0c526156a27d5a6c6",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "YES by default - anonymous usage events to https://t.explodinggradients.com (src/ragas/_analytics.py: USAGE_TRACKING_URL); the knob that turns it off is RAGAS_DO_NOT_TRACK=true",
+        "cloud_export": "YES by default - the same usage events are exported off-host (USAGE_TRACKING_URL); disable with RAGAS_DO_NOT_TRACK=true; on an offline venue the export cannot leave the host - verdict recorded, not silently accepted"
+      }
+    }
+  ],
+  "defaults_note": "The defaults verdicts are human readings of the published artifacts of the exact pins (sdist greps for telemetry/analytics surfaces, 2026-11-24) plus the committed verdict the agent-service evidence file already carries for httpx 0.28.1 (the same exact pin). The licence fields are untouched verifier output."
+}

@@ -47,8 +47,8 @@ GOLD_SOURCE_FIXTURES = {
 
 # The 16 cases the graded set inherits from the #2148 campaign set (digest
 # 8016d4a26a45…) — the measurement instrument already signed against. The
-# graded set extends it; the byte-identity test compares each entry against
-# the committed source set, so none can silently drift or drop.
+# graded set extends it; the inherited-instrument test compares each entry
+# against the committed source set, so none can silently drift or drop.
 INHERITED_CASE_IDS = (
     "e01-ans-purpose",
     "e01-ans-items",

@@ -4535,6 +4535,9 @@ test:rag-benchmarks:
         # The gate also reads the #2148 source set (the inherited cases'
         # byte-identity baseline) — an edit there must run the job too.
         - "_bmad-output/implementation-artifacts/e01-security-corpus-2026-11-24/**/*"
+        # And the E2E fixture the graded gold names as a source document —
+        # rewriting it would invalidate the set's verbatim contract.
+        - "tests/e2e/fixtures/test-document.md"
         # The protocol mirrors the server's label rule and pins itself
         # against it — a change to the server's rule must run this job.
         - "genie-ai-overlay/core/label_contract.py"

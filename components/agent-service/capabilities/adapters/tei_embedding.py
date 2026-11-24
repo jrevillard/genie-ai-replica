@@ -45,6 +45,7 @@ class TeiEmbeddingAdapter:
         connect_timeout_seconds: float = 30.0,
         total_timeout_seconds: float = 300.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        tls_verify: bool = True,
     ):
         self._endpoint = endpoint
         self._connect_timeout = connect_timeout_seconds
@@ -52,6 +53,10 @@ class TeiEmbeddingAdapter:
         # Injectable for the tests (httpx.MockTransport); production uses
         # the default connection pool.
         self._transport = transport
+        # The venue TLS knob (OPEA_SSL_SKIP_VERIFY=1) — the same deployment
+        # convention every other client of the self-signed GPU gateway
+        # honors; a verifying default stays the default.
+        self._tls_verify = tls_verify
 
     def query_instruction(self, model_id: str | None = None) -> str | None:
         """Resolve the query-instruction prefix for the active embedding model."""
@@ -77,6 +82,7 @@ class TeiEmbeddingAdapter:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(self._total_timeout, connect=self._connect_timeout),
             transport=self._transport,
+            verify=self._tls_verify,
         ) as client:
             response = await client.post(self._endpoint, json=body)
         if response.status_code != 200:

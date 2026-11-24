@@ -202,6 +202,7 @@ class TeiRerankingAdapter:
         config: RerankingConfig,
         transport: httpx.AsyncBaseTransport | None = None,
         adaptive_config: AdaptiveConfig | None = None,
+        tls_verify: bool = True,
     ):
         self._endpoint = endpoint.rstrip("/")
         self._config = config
@@ -209,6 +210,10 @@ class TeiRerankingAdapter:
         # Injectable for the tests (httpx.MockTransport); production uses
         # the default connection pool.
         self._transport = transport
+        # The venue TLS knob (OPEA_SSL_SKIP_VERIFY=1) — the same deployment
+        # convention every other client of the self-signed GPU gateway
+        # honors; a verifying default stays the default.
+        self._tls_verify = tls_verify
 
     async def rerank(self, query: str, texts: list[str], chunk_embeddings=None, query_embedding=None) -> RerankOutcome:
         """Score the candidates with TEI and select per the configured strategy.
@@ -233,6 +238,7 @@ class TeiRerankingAdapter:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(self._config.rerank_timeout_seconds, connect=self._config.connect_timeout_seconds),
             transport=self._transport,
+            verify=self._tls_verify,
         ) as client:
             response = await client.post(
                 f"{self._endpoint}/rerank",

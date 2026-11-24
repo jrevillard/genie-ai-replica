@@ -148,8 +148,11 @@ class SearchKnowledgeCapability:
             endpoints.tei_embedding_endpoint,
             connect_timeout_seconds=embedding_config.connect_timeout_seconds,
             total_timeout_seconds=embedding_config.embed_timeout_seconds,
+            tls_verify=endpoints.tls_verify,
         )
-        reranking = TeiRerankingAdapter(endpoints.tei_reranking_endpoint, reranking_config)
+        reranking = TeiRerankingAdapter(
+            endpoints.tei_reranking_endpoint, reranking_config, tls_verify=endpoints.tls_verify
+        )
         return cls(embedding, reranking, db_factory, arango_config, hybrid_config)
 
     async def search_knowledge(

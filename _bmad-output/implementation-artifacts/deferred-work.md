@@ -3170,3 +3170,11 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/4-4-thresholds-and-counter-metrics.md`
   summary: The lineage/ledger/digest helpers e01.py carries privately (`_manifest_lineage`, `verify_defects_lineage`, `reference_defects_file`, `e01_report_digest`) still exist beside the shared `manifest.manifest_lineage` / `manifest.digest_without_embedded` this story added — the ledger-construction/verification pattern is now two homes.
   evidence: /simplify (reuse + altitude, 2026-11-23): thresholds.py and counter_metrics.py were switched to the shared helpers this round, but consolidating e01.py's own private copies means rewriting story 4.3's delivered module and its 81-test suite — a cross-story refactor, deferred per protocol. Next toucher of protocol/e01.py switches its private helpers to the shared manifest helpers (the ledger-construction/verification parameterization across e01 + counter_metrics rides the same touch).
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/4-5-e02-the-agent-s-case-b-vs-c.md`
+  summary: A config-B row carrying BOTH `status: "failure"` and the limit marker (`result_budget_exhausted`) counts as a failure in the E02 gains' per-class stats but as a limit hit in counter_metrics — an ordering divergence between the two vocabularies.
+  evidence: FIX-REVIEW f=1 (2026-11-24, CLEAN) flagged it as a pre-existing observation, untouched by the fix. The E02 gains check `status == "failure"` before the limit marker; `counter_metrics._terminal_state` checks the limit marker first. Next toucher of protocol/e02.py aligns the branch order with `counter_metrics._terminal_state` (and the tests that pin each side).
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/4-5-e02-the-agent-s-case-b-vs-c.md`
+  summary: A row whose base case id is in no assessment-set class falls out of the E02 gains' per-class records and the coverage comparison (it survives verbatim in `report.per_case`) — the exclusion is symmetric across legs but the report does not SAY a row was excluded from the gains.
+  evidence: FIX-REVIEW f=1 (2026-11-24, CLEAN) — pre-existing, untouched by the fix. Next toucher of protocol/e02.py records the excluded-row count (and the ids) in the gains record, so a census that silently dropped a row is visible instead of inferred.

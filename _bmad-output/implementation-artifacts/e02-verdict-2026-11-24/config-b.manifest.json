@@ -1,0 +1,83 @@
+{
+  "artifact": "run-manifest",
+  "version": "1.0.0",
+  "protocol_version": "1.0.0",
+  "kind": "gated",
+  "config": "B",
+  "created_utc": "2026-11-24T19:47:25+00:00",
+  "corpus": {
+    "source_collection": "GRAPH_SOURCE",
+    "arango_graph_name": "GRAPH",
+    "fingerprint": "f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f"
+  },
+  "sets": {
+    "assessment": {
+      "path": "/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2167/_bmad-output/implementation-artifacts/e02-verdict-2026-11-24/assessment-set.json",
+      "sha256": "cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812"
+    }
+  },
+  "configuration": {
+    "B": {
+      "resolved_env": {
+        "AGENT_AUTHORIZED_GRAPHS": "GRAPH",
+        "AGENT_DOCREPO_URL": "http://document-repository.genieai.svc.cluster.local",
+        "AGENT_OKF_URL": "http://okf-server:3002",
+        "AGENT_RUN_MAX_EVIDENCE_BYTES": "200000",
+        "AGENT_RUN_MAX_MODEL_CALLS": "12",
+        "AGENT_RUN_MAX_STEPS": "8",
+        "AGENT_RUN_MAX_TOOL_CALLS": "12",
+        "AGENT_RUN_MAX_WALL_CLOCK_SECONDS": "240",
+        "AGENT_TOOL_MAX_RESULTS": "10",
+        "AGENT_TOOL_MAX_RESULT_BYTES": "50000",
+        "AGENT_TOOL_TIMEOUT_MS": "30000",
+        "AGENT_VERDICT_JUDGE_TIMEOUT_MS": "30000",
+        "EMBEDDING_PORT": "tcp://10.107.109.235:6000",
+        "EMBEDDING_PORT_6000_TCP": "tcp://10.107.109.235:6000",
+        "EMBEDDING_PORT_6000_TCP_ADDR": "10.107.109.235",
+        "EMBEDDING_PORT_6000_TCP_PORT": "6000",
+        "EMBEDDING_PORT_6000_TCP_PROTO": "tcp",
+        "EMBEDDING_SERVICE_HOST": "10.107.109.235",
+        "EMBEDDING_SERVICE_PORT": "6000",
+        "EMBEDDING_SERVICE_PORT_HTTP": "6000",
+        "RERANKER_PORT": "tcp://10.103.42.120:8000",
+        "RERANKER_PORT_8000_TCP": "tcp://10.103.42.120:8000",
+        "RERANKER_PORT_8000_TCP_ADDR": "10.103.42.120",
+        "RERANKER_PORT_8000_TCP_PORT": "8000",
+        "RERANKER_PORT_8000_TCP_PROTO": "tcp",
+        "RERANKER_SERVICE_HOST": "10.103.42.120",
+        "RERANKER_SERVICE_PORT": "8000",
+        "RERANKER_SERVICE_PORT_HTTP": "8000",
+        "VLLM_LLM_ENDPOINT": "https://ai.assembly.govstack.global:444/llm",
+        "VLLM_TRANSLATION_ENDPOINT": "https://ai.assembly.govstack.global:444/translation",
+        "VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it"
+      },
+      "model_ids": {
+        "llm": "ibm-granite/granite-4.1-8b"
+      },
+      "prompt_digests": {}
+    }
+  },
+  "evaluator_instructions": {
+    "path": "/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2167/tests/rag-benchmarks/protocol/evaluator-instructions.md",
+    "sha256": "d629ff99e6273f3fafa4ddf1967b4404f62b559ef854a74795815a25696e9d22"
+  },
+  "pair": {
+    "pair": "E01",
+    "compares": [
+      "A",
+      "B"
+    ],
+    "held_fixed": [
+      "corpus",
+      "evaluation_set",
+      "execution_conditions",
+      "model_services"
+    ],
+    "intentional_difference": "retrieval_backend",
+    "notes": "A is the legacy fixed RAG path (chatqna + OPEA retriever, unchanged); B is the story-1.9 no-agent pipeline over the OPEA-free port. The retrieval backend is the variable under test — every other condition is held fixed."
+  },
+  "lineage": {
+    "reference_manifest_sha256": "668e2136a4dc106f00fc56bee319e99f171511aafcf729d885a12314324ebe06",
+    "thresholds_sha256": "262e057f8522e6aaeb750ea7ed18e3f3bb873a22fe6e78199a07f74176ee7219"
+  }
+}

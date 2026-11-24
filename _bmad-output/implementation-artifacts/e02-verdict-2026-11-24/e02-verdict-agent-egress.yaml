@@ -1,0 +1,29 @@
+# The #2167 phase-2 run-scoped egress policy — ADDITIVE (k8s NetworkPolicy
+# unions: an egress denied by no policy is allowed by any selecting one;
+# this policy only ADDS allows, it never restricts). Selects ONLY this
+# run's agent pod (e02-verdict.run label); deleted with the run.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e02-verdict-agent-egress
+  namespace: genieai
+  labels:
+    e02-verdict.run: "e2167-phase2"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: e02-verdict-agent
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: embedding
+      ports:
+        - { port: 6000, protocol: TCP }
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: reranker
+      ports:
+        - { port: 8000, protocol: TCP }

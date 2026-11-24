@@ -232,11 +232,15 @@ class ModelEndpointConfig:
     serves (the recorded value ends in ``/embed``). ``TEI_RERANKING_ENDPOINT``
     is the reranker's TEI base URL — the chart templates it for the deployed
     reranker container, and the port reads the same knob for its ``/rerank``
-    call.
+    call. ``tls_verify`` reads the venue's own TLS convention
+    (``OPEA_SSL_SKIP_VERIFY=1`` — the knob every other client of the
+    self-signed GPU gateway honors); the verifying default stays the default.
     """
 
     tei_embedding_endpoint: str
     tei_reranking_endpoint: str
+    tls_verify: bool = True
+    bearer: str = ""
 
     @classmethod
     def load(cls, env=None) -> "ModelEndpointConfig":
@@ -244,4 +248,9 @@ class ModelEndpointConfig:
         return cls(
             tei_embedding_endpoint=str(source.get("TEI_EMBEDDING_ENDPOINT", "")),
             tei_reranking_endpoint=str(source.get("TEI_RERANKING_ENDPOINT", "")),
+            tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",
+            # The TEI gateway's bearer, when the venue auths it (the GPU
+            # gateway route answers 401 without it; an internal TEI serving
+            # no auth carries no credential and the header stays off).
+            bearer=str(source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY", "")),
         )

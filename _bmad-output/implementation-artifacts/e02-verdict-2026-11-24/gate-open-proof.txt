@@ -1,0 +1,6 @@
+GATE PASSED
+lineage: {
+ "reference_manifest_sha256": "668e2136a4dc106f00fc56bee319e99f171511aafcf729d885a12314324ebe06",
+ "thresholds_sha256": "262e057f8522e6aaeb750ea7ed18e3f3bb873a22fe6e78199a07f74176ee7219"
+}
+artifact signed: True | thresholds sha in lineage matches: 262e057f8522e6aaeb750ea7ed18e3f3bb873a22fe6e78199a07f74176ee7219

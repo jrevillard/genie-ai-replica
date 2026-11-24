@@ -1,0 +1,16 @@
+{
+ "uploads": {
+  "doc-restricted-e01": "1795543833584_fda6b5e0",
+  "doc-shared-e01": "1795543834440_a1a5b5ca",
+  "doc-wide-e01": "1795543834854_f9790ad9",
+  "doc-revoked-e01": "1795543835177_325ad583",
+  "doc-forestry-e01": "1795543835447_59be1c4f",
+  "doc-catalogue-e01": "1795543835759_c7cc82a8",
+  "doc-servicerequest-e01": "1795543836163_6ba54d3f"
+ },
+ "label_patch": {
+  "file_id": "1795543835447_59be1c4f",
+  "patch": "chunk_labels -> [\"Natural Resources\"] (AQL)",
+  "reason": "the documented #2162 fixture-state patch: the LLM labeling skipped the taxonomy label; without it the narrowed-scope case stays vacuous"
+ }
+}

@@ -1,0 +1,89 @@
+{
+ "artifact": "evaluation-thresholds",
+ "signed": false,
+ "corpus_fingerprint": "f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f",
+ "assessment_set_sha256": "cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812",
+ "reference_manifest_sha256": "668e2136a4dc106f00fc56bee319e99f171511aafcf729d885a12314324ebe06",
+ "thresholds": {
+  "M-1": {
+   "status": "agreed",
+   "value": {
+    "scope": "config A — the chunk/passage-level anchor metrics",
+    "metrics": {
+     "retrieval_recall": {
+      "operator": ">=",
+      "threshold": 0.95
+     },
+     "recall_at_10": {
+      "operator": ">=",
+      "threshold": 0.95
+     },
+     "ndcg_at_10": {
+      "operator": ">=",
+      "threshold": 0.9
+     },
+     "passage_recall": {
+      "operator": ">=",
+      "threshold": 0.95
+     },
+     "noise": {
+      "operator": "<=",
+      "threshold": 0.8
+     }
+    }
+   }
+  },
+  "M-2": {
+   "status": "agreed",
+   "value": {
+    "scope": "the content-blind attribution-trace surface over each leg's substantive answers (the judged pass's surface — source identities only; the same shape on every leg, so comparisons stay valid)",
+    "metrics": {
+     "ungrounded_or_partial_rate": {
+      "operator": "<=",
+      "threshold": 0.8
+     }
+    }
+   }
+  },
+  "M-3": {
+   "status": "agreed",
+   "value": {
+    "scope": "the mechanical abstention-verdict rules over each leg's rows (config A: the answer-text prose signal, judged; config B: the mechanical abstained/abstention_reason fields)",
+    "metrics": {
+     "excessive_abstention_rate": {
+      "operator": "<=",
+      "threshold": 0.25
+     },
+     "unanswerable_honest_abstention_rate": {
+      "operator": ">=",
+      "threshold": 0.95
+     }
+    }
+   }
+  },
+  "M-4": {
+   "status": "agreed",
+   "value": {
+    "scope": "each leg's own recorded per-case wall_ms (config A: the capture-a protocol layer; config B: the in-container driver; config C: the row wall_ms) — never a cross-leg comparison; the surfaces differ by execution conditions the report records as uncontrolled differences",
+    "metrics": {
+     "wall_ms": {
+      "operator": "<=",
+      "threshold": 15000
+     }
+    }
+   }
+  },
+  "M-5": {
+   "status": "agreed",
+   "value": {
+    "scope": "the per-case served token consumption (prompt + completion, from the B/C rows' usage records) — config A records no resource surface at all (the S4 checklist documents the absence), so the bound binds the legs that record one",
+    "metrics": {
+     "total_tokens_per_case": {
+      "operator": "<=",
+      "threshold": "the deployment's configured AGENT_RUN_MAX_TOTAL_TOKENS ceiling (the venue deployment's knob value, read at the B/C campaign; the knob is fail-closed with no numeric default anywhere in the enforcement path, so the ceiling is the deployment's own declared contract)"
+     }
+    }
+   }
+  }
+ }
+}

@@ -55,15 +55,27 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
-from harness import exec_in_container, write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
+# These imports sit below the sys.path insert on purpose: the eval
+# toolchain's exec/JSON-IO seam and the protocol's own digest module are
+# resolved only after the eval dir is importable (and the relative
+# protocol siblings carry no import cycle).
+from harness import (
+    exec_in_container,
+    write_json,
+)
 
-from .evalset import (  # noqa: E402 — the shared turn expansion and surface model (no import cycle)
+from .config_b_driver import default_graph as config_b_default_graph
+from .evalset import (
     as_label_list,
     coverage_census,
     evaluation_surface,
     turn_entries,
 )
-from .manifest import sha256_file, sha256_json  # noqa: E402 — the protocol's own digests (no import cycle)
+from .manifest import (
+    sha256_file,
+    sha256_json,
+)
+from .redaction import redact_deep
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -749,6 +761,11 @@ def run_config_b(
 
     cases = _load_entries(set_path)
     prior = _read_rows_file(rows_path)
+    # The resumed prior is redacted at load: a legacy rows file written by
+    # the pre-redaction code may still carry the raw snapshot (see the
+    # write-boundary redaction below).
+    if isinstance(prior.get("resolved"), dict):
+        prior["resolved"] = redact_deep(prior["resolved"])
     done = set(prior.get("cases") or {})
     pending = _pending_in_order(cases, done)
 
@@ -778,6 +795,19 @@ def run_config_b(
         )
         rows_b64 = transport.exec_cmd(container, f"base64 -w0 {CONTAINER_TMP}/rows.json", timeout=60).strip()
         new_rows = json.loads(base64.b64decode(rows_b64).decode("utf-8"))
+        # The driver's resolved snapshot rides verbatim and the rows file is
+        # the committed artifact: credential-named keys (VLLM_API_KEY rode
+        # the VLLM_ prefix into the #2167 campaign's committed copy) are
+        # redacted HERE, at the write boundary, by the protocol's own rule —
+        # before any merge or write. The resumed prior is redacted at load
+        # for the same reason (a legacy file written by the old code).
+        # Accepted trade (the rule's documented safe side, applied at this
+        # boundary): AGENT_AUTHORIZED_GRAPHS/REPOS are dropped too — the
+        # word "authorized" carries the auth marker and the exact-match
+        # keep-list does not cover it. The manifests' own narrower rule
+        # keeps them; the rows file loses that evidence.
+        if isinstance(new_rows.get("resolved"), dict):
+            new_rows["resolved"] = redact_deep(new_rows["resolved"])
         resolved = new_rows.get("resolved") or resolved
         prior = _merge_rows(prior, new_rows)
         write_json(rows_path, prior, ensure_ascii=False)
@@ -888,14 +918,21 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
     The context fields come from the case's ``context`` block (the same shape
     config B's driver reads); the defaults give a public-access eval caller
     over the legacy graph — a restricted case declares its own narrower set.
+    The legacy graph's name rides ``EVAL_DEFAULT_GRAPH`` (the venue's corpus
+    graph; GRAPH on the campaign venue) — a case that declares NO graph set
+    is that public-access caller, never an empty (refused) set.
     """
     raw = case.get("context") or {}
+    # ONE home for the fallback: the shipped driver's default_graph() (the
+    # driver's copy is forced by its standalone in-container contract; the
+    # orchestrator side reuses it so the two legs cannot drift).
+    graphs = list(raw.get("authorized_graph_names") or []) or [config_b_default_graph()]
     return {
         "question": case["query"],
         "deadline_ms": deadline_ms,
         "context": {
             "user_id": str(raw.get("user_id") or "eval-config-c"),
-            "authorized_graph_names": list(raw.get("authorized_graph_names") or []),
+            "authorized_graph_names": graphs,
             # The repo→graph mapping the CallerContext contract carries — the
             # OKF read scope. A malformed entry is dropped (the context block
             # is free-form at the schema level); an entry naming a graph

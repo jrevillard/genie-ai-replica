@@ -1,0 +1,131 @@
+apiVersion: v1
+items:
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      meta.helm.sh/release-name: genieai
+      meta.helm.sh/release-namespace: genieai
+    creationTimestamp: "2026-11-06T05:29:03Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: embedding
+      app.kubernetes.io/instance: genieai
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: genieai-umbrella
+      app.kubernetes.io/version: 0.2.183
+      genieai.io/component: embedding
+      genieai.io/managed-by: helm
+      helm.sh/chart: genieai-umbrella-0.2.183
+      helm.toolkit.fluxcd.io/name: genieai
+      helm.toolkit.fluxcd.io/namespace: flux-system
+    name: embedding
+    namespace: genieai
+    resourceVersion: "4234717"
+    uid: c95bf141-f52c-4e85-a8af-4d26eca0f177
+  spec:
+    egress:
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+    - ports:
+      - port: 4318
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+    - ports:
+      - port: 444
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 49.13.243.43/32
+    ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            genieai.io/component: chatqna
+      - podSelector:
+          matchLabels:
+            genieai.io/component: retriever
+      - podSelector:
+          matchLabels:
+            genieai.io/component: dataprep
+      ports:
+      - port: 6000
+        protocol: TCP
+    podSelector:
+      matchLabels:
+        genieai.io/component: embedding
+    policyTypes:
+    - Ingress
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      meta.helm.sh/release-name: genieai
+      meta.helm.sh/release-namespace: genieai
+    creationTimestamp: "2026-11-06T05:29:03Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: reranker
+      app.kubernetes.io/instance: genieai
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: genieai-umbrella
+      app.kubernetes.io/version: 0.2.183
+      genieai.io/component: reranker
+      genieai.io/managed-by: helm
+      helm.sh/chart: genieai-umbrella-0.2.183
+      helm.toolkit.fluxcd.io/name: genieai
+      helm.toolkit.fluxcd.io/namespace: flux-system
+    name: reranker
+    namespace: genieai
+    resourceVersion: "4234719"
+    uid: 2f539803-a250-40a9-912a-2efaade505ee
+  spec:
+    egress:
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+    - ports:
+      - port: 4318
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+    - ports:
+      - port: 444
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 49.13.243.43/32
+    ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            genieai.io/component: chatqna
+      ports:
+      - port: 8000
+        protocol: TCP
+    podSelector:
+      matchLabels:
+        genieai.io/component: reranker
+    policyTypes:
+    - Ingress
+    - Egress
+kind: List
+metadata:
+  resourceVersion: ""

@@ -34,9 +34,11 @@ class TeiEmbeddingAdapter:
     The endpoint is the recorded ``TEI_EMBEDDING_ENDPOINT`` value — the full
     embed URL the deployment serves (it ends in ``/embed``). The request body
     is TEI's native shape: ``{"inputs": [<one string>]}``. The adapter sends
-    the PREFIXED text per the model-specific instruction contract and never
-    sends an Authorization header (the deployed TEI calls carry the trace
-    context only).
+    the PREFIXED text per the model-specific instruction contract. The
+    Authorization header rides only when the deployment carries a credential
+    for the TEI endpoint (the GPU-gateway venues auth it with the same
+    bearer the model calls use; an internal TEI carries none and no header
+    is sent).
     """
 
     def __init__(
@@ -45,6 +47,8 @@ class TeiEmbeddingAdapter:
         connect_timeout_seconds: float = 30.0,
         total_timeout_seconds: float = 300.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        tls_verify: bool = True,
+        bearer: str = "",
     ):
         self._endpoint = endpoint
         self._connect_timeout = connect_timeout_seconds
@@ -52,6 +56,10 @@ class TeiEmbeddingAdapter:
         # Injectable for the tests (httpx.MockTransport); production uses
         # the default connection pool.
         self._transport = transport
+        # Both knobs ride the deployment's conventions — see the
+        # ModelEndpointConfig docstring (env_config.py) for the full story.
+        self._tls_verify = tls_verify
+        self._bearer = bearer
 
     def query_instruction(self, model_id: str | None = None) -> str | None:
         """Resolve the query-instruction prefix for the active embedding model."""
@@ -74,11 +82,13 @@ class TeiEmbeddingAdapter:
 
     async def _request_embedding(self, prefixed_text: str) -> list[float]:
         body = {"inputs": [prefixed_text]}
+        headers = {"Authorization": f"Bearer {self._bearer}"} if self._bearer else {}
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(self._total_timeout, connect=self._connect_timeout),
             transport=self._transport,
+            verify=self._tls_verify,
         ) as client:
-            response = await client.post(self._endpoint, json=body)
+            response = await client.post(self._endpoint, json=body, headers=headers)
         if response.status_code != 200:
             raise RuntimeError(
                 f"TEI embedding call failed: HTTP {response.status_code} from {self._endpoint}. "

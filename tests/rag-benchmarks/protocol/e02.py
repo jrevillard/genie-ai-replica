@@ -1134,9 +1134,13 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
     c_side = _side(c_configuration, "C")
     b_committed = b_side["resolved_env_committed"]
     c_committed = c_side["resolved_env_committed"]
+    # Only keys RECORDED ON BOTH SIDES can differ: a key present on one
+    # side alone (e.g. the B container's EVAL_* snapshot when the C side
+    # records nothing) is an unrecorded value on the other, not a
+    # disagreement — counting it manufactured a phantom divergence signal.
     differing_env = sorted(
         key
-        for key in set(b_committed) | set(c_committed)
+        for key in set(b_committed) & set(c_committed)
         if b_committed.get(key) != c_committed.get(key)
     )
     # The state is honest about what the evidence carries: the manifests'

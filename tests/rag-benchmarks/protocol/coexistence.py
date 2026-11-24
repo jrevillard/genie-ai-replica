@@ -299,10 +299,16 @@ def _apply_limits(limits: dict | None, loaded_metrics: dict) -> dict:
             comparison = None
         elif name not in LEGACY_METRICS or measured is None:
             outcome = LIMIT_NOT_MEASURABLE
-            reason = (
-                f"the measurement carries no {name!r} — the limit is not measurable here and"
-                " never passes unmeasured"
-            )
+            if name not in LEGACY_METRICS:
+                reason = (
+                    f"no legacy metric named {name!r} exists in this harness — the limit names a"
+                    " metric the criterion does not define, and never passes unmeasured"
+                )
+            else:
+                reason = (
+                    f"the measurement carries no {name!r} — the limit is not measurable here and"
+                    " never passes unmeasured"
+                )
             comparison = None
         else:
             comparison = _compare(operator, measured, threshold)
@@ -485,6 +491,18 @@ def _agent_load_summary(agent_load: dict) -> dict:
     requests_recorded = isinstance(n_requests, int) and not isinstance(n_requests, bool)
     if not requests_recorded:
         n_requests = n_terminal
+    elif n_terminal > n_requests:
+        # The tally family is refused for fabrication in BOTH directions: a
+        # record whose outcome tally exceeds its own independent request
+        # count is double-counted, and flooring it (max(0, ...)) would let
+        # the self-contradictory record through the saturation check
+        # silently — the exact silent failure the rule exists to catch.
+        raise CoexistenceRefusal(
+            "invalid_measurement",
+            f"the agentic load's outcome tally ({n_terminal}) exceeds its independently recorded"
+            f" request count ({n_requests}) — a double-counted record would hide behind the"
+            " vanished-request rule, so the record is refused",
+        )
     # The vanished-request count is DERIVED from the record's own numbers
     # (a request that was sent but reached no terminal outcome), and a
     # DECLARED value can only RAISE it: a record that claims zero while its
@@ -496,9 +514,15 @@ def _agent_load_summary(agent_load: dict) -> dict:
         n_without_terminal = derived_without_terminal
     else:
         n_without_terminal = max(n_without_terminal, derived_without_terminal)
+    tally_refusals = int(numeric_outcomes.get("admission_refused") or 0)
     n_refusals = agent_load.get("n_admission_refusals")
     if not isinstance(n_refusals, int) or isinstance(n_refusals, bool):
-        n_refusals = int(numeric_outcomes.get("admission_refused") or 0)
+        n_refusals = tally_refusals
+    else:
+        # The refused-count carries the same raise-only rule: a declaration
+        # BELOW the record's own admission_refused tally would publish fewer
+        # refusals than the record itself counted.
+        n_refusals = max(n_refusals, tally_refusals)
     usage_records = agent_load.get("usage_records") or []
     if not isinstance(usage_records, list):
         raise CoexistenceRefusal("invalid_measurement", "the agentic load's usage_records are not a list")
@@ -619,6 +643,13 @@ def build_coexistence_report(
             "missing_artifact",
             "the agentic load's record is missing — the coexistence criterion compares the legacy"
             " path UNDER a load, not alone",
+        )
+
+    if limits is not None and not isinstance(limits, dict):
+        raise CoexistenceRefusal(
+            "invalid_limits",
+            "the legacy limits artifact is not a mapping — an artifact the operator's decision"
+            " would never take is not applied — refusing before the report is built",
         )
 
     if limits is not None:

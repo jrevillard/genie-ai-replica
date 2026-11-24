@@ -41,7 +41,7 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 | The E02 join | `_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/e02.refusal.txt` | **OPEN** — refused (`missing_artifact`: the B leg's gated manifest does not exist) |
 | The E02 report (`e02.report.json`) | — | **OPEN** — unreachable before the gated legs run |
 | The multi-hop / ambiguous gains | the assessment set carries no case of those classes (`tests/rag-benchmarks/protocol/evalset.py`'s composition classes do not include them) | **OPEN** — the agentic benefit the PRD §4.1 note describes stays a HYPOTHESIS; the set is frozen at the digest the signed thresholds bind to, so it cannot be extended without invalidating the signature |
-| The gold annotations the C verdict needs | 10 of the assessment set's answerable cases carry no gold annotation (empty gold) — issue #2145 | **OPEN** — a C verdict must not be composed before #2145 is handled: the agent's answers on the unannotable cases are not judgeable, and scoring them as if they were would massage the result |
+| The gold annotations the C verdict needs | 10 of the assessment set's cases carry no gold annotation (empty gold), 7 of them answerable-class — issue #2145 | **OPEN** — a C verdict must not be composed before #2145 is handled: the agent's answers on the unannotable cases are not judgeable, and scoring them as if they were would massage the result |
 
 ## Check 3 — Bounded execution (V06)
 
@@ -72,7 +72,7 @@ S4 exits when checks 1–5 are green with their evidence recorded. Today:
 
 - check 3 (V06) and check 4 (V08) are recorded;
 - check 1 (E01) is OPEN on one predecessor — the signed thresholds artifact, which needs M-2..M-5 agreed (the operator's decision);
-- check 2 (E02) is OPEN on THREE distinct predecessors: the same signed thresholds artifact, the multi-hop/ambiguous assessment set (the gains the PRD §4.1 note describes are otherwise not measurable), and the #2145 gold annotations (a C verdict must not be composed while 10 of the set's answerable cases carry no gold);
+- check 2 (E02) is OPEN on THREE distinct predecessors: the same signed thresholds artifact, the multi-hop/ambiguous assessment set (the gains the PRD §4.1 note describes are otherwise not measurable), and the #2145 gold annotations (a C verdict must not be composed while 10 of the set's cases carry no gold, 7 of them answerable-class);
 - check 5 (coexistence) is OPEN on the live comparison and on the operator's limits artifact — the absolute legacy limits (M-4 is absent; error/availability have no dimension of their own) AND the regression tolerance between the two phases.
 
 The S4 exit is therefore **blocked on operator decisions, not on missing machinery**: the machinery (the E01 layer, the E02 layer, the coexistence criterion, the threshold registry) is delivered and green, and every gate that is still closed says which artifact is missing and who owns it. Nothing here is absorbed silently.

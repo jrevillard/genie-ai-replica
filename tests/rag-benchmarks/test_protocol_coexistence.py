@@ -478,3 +478,69 @@ def test_coexistence_publishes_no_refusal_rate_over_an_unmeasured_denominator():
     assert load_summary["requests_recorded_independently"] is False
     assert load_summary["admission_refusal_rate"] is None
     assert "never" in (load_summary["admission_refusal_rate_note"] or "")
+
+
+# ---------------------------------------------------------------------------
+# The round-5 corrections — the tally family refuses fabrication in BOTH
+# directions; declared values only raise; the harness owns its metric names
+# ---------------------------------------------------------------------------
+
+
+def test_coexistence_refuses_a_non_mapping_limits_artifact():
+    """A limits artifact the operator's decision would never take (a list) is
+    a typed refusal, not an AttributeError."""
+    with pytest.raises(CoexistenceRefusal) as failed:
+        build_coexistence_report(
+            control_measurements=_control(),
+            loaded_measurements=_loaded(),
+            agent_load=_agent_load(),
+            limits=["latency_median_ms"],
+            created_utc=CREATED,
+        )
+    assert failed.value.reason == "invalid_limits"
+
+
+def test_coexistence_refuses_an_outcome_tally_exceeding_the_request_count():
+    """Six terminal outcomes for four recorded requests is a double-counted
+    record — flooring it would let the self-contradictory record through the
+    saturation check silently."""
+    load = _agent_load()
+    load["outcomes"] = {"answered": 3, "error": 3}
+    with pytest.raises(CoexistenceRefusal) as failed:
+        _report(control=_control(), loaded=_control(), agent_load=load)
+    assert failed.value.reason == "invalid_measurement"
+    assert "exceeds" in str(failed.value)
+
+
+def test_coexistence_declared_refusals_can_only_raise_over_the_tally():
+    """The admitted-refusals count carries the vanished-request rule's mirror:
+    a declaration below the record's own admission_refused tally cannot
+    publish fewer refusals than the record itself counted."""
+    load = _agent_load()
+    load["requests"] = 6
+    load["outcomes"] = {"answered": 3, "admission_refused": 3}
+    load["n_admission_refusals"] = 1
+    report = _report(control=_control(), loaded=_control(), agent_load=load)
+    assert report["agentic_load"]["n_admission_refusals"] == 3
+
+
+def test_coexistence_splits_the_not_measurable_reason_for_an_unknown_metric():
+    """A limit naming a metric the harness does not define blames the LIMIT,
+    not the measurement — the operator's fix is naming a metric the harness
+    defines, not hunting a measurement bug."""
+    limits = _limits(unknown_metric={"operator": "<=", "threshold": 1})
+    report = _report(control=_control(), loaded=_control(), limits=limits)
+    by_metric = {record["metric"]: record for record in report["limits"]["limits"]}
+    assert by_metric["unknown_metric"]["outcome"] == "not_measurable"
+    assert "no legacy metric named" in by_metric["unknown_metric"]["reason"]
+
+
+def test_coexistence_keeps_the_measurement_reason_for_a_known_unmeasured_metric():
+    """A harness metric the measurement does not carry keeps the measurement
+    reason — the two absences have different fixes."""
+    loaded = {case: {"http_status": 200} for case, m in _loaded().items()}
+    limits = _limits()
+    report = _report(control=_control(), loaded=loaded, limits=limits)
+    by_metric = {record["metric"]: record for record in report["limits"]["limits"]}
+    assert by_metric["latency_median_ms"]["outcome"] == "not_measurable"
+    assert "the measurement carries no" in by_metric["latency_median_ms"]["reason"]

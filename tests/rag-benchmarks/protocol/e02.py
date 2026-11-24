@@ -312,6 +312,15 @@ def _verify_legs(
                 " before the report is built",
             )
     if thresholds is not None:
+        if not isinstance(thresholds, dict) or not isinstance(
+            thresholds.get("thresholds"), (dict, type(None))
+        ):
+            raise E02Refusal(
+                "invalid_thresholds",
+                "the thresholds artifact is not shaped the way the registry emits it (a mapping of"
+                " dimension codes) — an artifact the registry would never produce is not applied —"
+                " refusing before the report is built",
+            )
         if not thresholds.get("signed"):
             raise E02Refusal(
                 "thresholds_not_signed",
@@ -436,14 +445,27 @@ def _c_m2(c_rows: dict) -> dict:
 
 def _b_m3(b_rows: dict) -> dict:
     ok = _b_ok_rows(b_rows)
+
+    def _limit_hit(row: dict) -> bool:
+        # The census's limit-hit predicate, verbatim: the marker is read on
+        # BOTH shapes the vocabulary writes it to, so M-3 never calls a
+        # budget-exhausted row an abstention while the gains census calls the
+        # same row a limit hit — one name per row, on every surface.
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        usage = metadata.get("usage") if isinstance(metadata.get("usage"), dict) else {}
+        return row.get("abstention_reason") == LIMIT_MARKER_B or usage.get("outcome") == LIMIT_MARKER_C
+
     return _surface_record(
         surface=B_M3_SURFACE,
         available=True,
         values={
             "n_ok_rows": len(ok),
-            "n_abstained": sum(1 for row in ok if row.get("abstained") is True),
-            "n_with_abstention_reason": sum(1 for row in ok if row.get("abstention_reason")),
+            "n_abstained": sum(1 for row in ok if row.get("abstained") is True and not _limit_hit(row)),
+            "n_with_abstention_reason": sum(
+                1 for row in ok if row.get("abstention_reason") and not _limit_hit(row)
+            ),
             "n_not_abstained": sum(1 for row in ok if row.get("abstained") is False),
+            "n_limit_hit": sum(1 for row in ok if _limit_hit(row)),
             "n_failure_rows": sum(1 for row in b_rows.values() if isinstance(row, dict) and row.get("status") == "failure"),
         },
     )
@@ -459,13 +481,26 @@ def _c_m3(c_rows: dict) -> dict:
     and deny the agent on a fact that was never recorded).
     """
     answered = _c_answered_rows(c_rows)
+
+    def _limit_hit(row: dict) -> bool:
+        # The census's limit-hit predicate (the counter-metrics vocabulary's
+        # first terminal state): a cancelled row that exhausted its budget is
+        # a LIMIT HIT here exactly as it is in the gains census.
+        usage = row.get("usage_record") if isinstance(row.get("usage_record"), dict) else {}
+        return usage.get("outcome") == LIMIT_MARKER_C
+
     return _surface_record(
         surface=C_M3_SURFACE,
         available=True,
         values={
             "n_answered_rows": len(answered),
+            "n_limit_hit": sum(1 for row in c_rows.values() if isinstance(row, dict) and _limit_hit(row)),
             "n_cancelled_rows": sum(
-                1 for row in c_rows.values() if isinstance(row, dict) and row.get("outcome") == "cancelled"
+                1
+                for row in c_rows.values()
+                if isinstance(row, dict)
+                and row.get("outcome") == "cancelled"
+                and not _limit_hit(row)
             ),
             "n_admission_refused_rows": sum(
                 1 for row in c_rows.values() if isinstance(row, dict) and row.get("outcome") == "admission_refused"
@@ -1410,6 +1445,19 @@ def build_e02_report(
     from .e01 import M_DIMENSIONS  # the canonical dimension enumeration — one home
 
     dimensions = {}
+    # The report-level scope is read defensively on purpose: an entry the
+    # registry would never write (a null dimension, a null or non-mapping
+    # value) yields None — the shape validation in _verify_legs already
+    # refused the malformed ARTIFACTS, and this read must never crash on a
+    # shape that slips through.
+    _threshold_scope = None
+    if isinstance(thresholds, dict):
+        _m1_entry = thresholds.get("thresholds") or {}
+        if isinstance(_m1_entry, dict):
+            _m1_value = _m1_entry.get("M-1") or {}
+            if isinstance(_m1_value, dict):
+                _m1_value = _m1_value.get("value")
+                _threshold_scope = _m1_value.get("scope") if isinstance(_m1_value, dict) else None
     for code, dimension in M_DIMENSIONS.items():
         b_surface, c_surface = surfaces[code]
         dimensions[code] = {
@@ -1463,9 +1511,7 @@ def build_e02_report(
         "thresholds": {
             "present": thresholds is not None,
             "signed": bool(thresholds.get("signed")) if isinstance(thresholds, dict) else False,
-            "scope": ((thresholds.get("thresholds") or {}).get("M-1", {}).get("value") or {}).get("scope")
-            if isinstance(thresholds, dict)
-            else None,
+            "scope": _threshold_scope,
             "note": (
                 "the thresholds are the operator's decision (story 4.4's registry), consumed as-is:"
                 " the report applies the agreed bounds and records an explicit absence where none"

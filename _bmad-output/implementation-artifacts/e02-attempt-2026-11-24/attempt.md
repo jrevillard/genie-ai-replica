@@ -54,7 +54,7 @@ Nothing in the harness needs to change.
 ## The second hold on the C leg — issue #2145
 
 Even once the gate opens, the C verdict must not be composed before #2145 is
-handled: 10 of the assessment set's answerable cases carry no gold annotation
+handled: 10 of the assessment set's cases carry no gold annotation, 7 of them answerable-class
 (empty gold), so the agent's answers on them are not judgeable — a C verdict
 composed today would score the set's unannotable cases as if they were. The
 C leg's refusal record carries that hold.

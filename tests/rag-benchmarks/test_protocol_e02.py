@@ -940,3 +940,79 @@ def test_e02_reads_the_resource_record_limit_marker_on_the_b_leg():
     multi_hop = report["gains"]["per_class"]["multi_hop"]
     assert multi_hop["B"]["n_limit_hit"] == 1
     assert multi_hop["B"]["n_answered"] == 0
+
+
+# ---------------------------------------------------------------------------
+# The round-5 corrections — M-3 speaks the census's names; malformed shapes
+# are typed refusals
+# ---------------------------------------------------------------------------
+
+
+def test_e02_m3_b_does_not_call_a_budget_exhausted_row_an_abstention():
+    """A budget-exhausted B row (abstained=True + reason=result_budget_exhausted,
+    the shape config_b_driver writes) is a LIMIT HIT in the gains census — M-3
+    must give the same row the same name, or a signed M-3 bound naming
+    n_abstained would score limit hits as abstentions."""
+    b_rows = _b_rows()
+    b_rows["c2"] = dict(
+        b_rows["c2"],
+        abstained=True,
+        abstention_reason="result_budget_exhausted",
+    )
+    report = _report(b_rows=b_rows)
+    m3_b = report["dimensions"]["M-3"]["B"]["values"]
+    assert m3_b["n_abstained"] == 0
+    assert m3_b["n_with_abstention_reason"] == 0
+    assert m3_b["n_limit_hit"] == 1
+    # the gains census agrees on the same run
+    assert report["gains"]["per_class"]["unanswerable"]["B"]["n_limit_hit"] == 1
+    assert report["gains"]["per_class"]["unanswerable"]["B"]["n_abstained"] == 0
+
+
+def test_e02_m3_b_still_counts_a_real_abstention():
+    """The exclusion is the marker only: a genuine abstention keeps its name."""
+    b_rows = _b_rows()  # c2 abstains with reason=no_documents_retrieved
+    report = _report(b_rows=b_rows)
+    m3_b = report["dimensions"]["M-3"]["B"]["values"]
+    assert m3_b["n_abstained"] == 1
+    assert m3_b["n_with_abstention_reason"] == 1
+    assert m3_b["n_limit_hit"] == 0
+
+
+def test_e02_m3_c_does_not_call_a_budget_exhausted_row_a_cancellation():
+    """A cancelled C row that exhausted its budget is a LIMIT HIT in the
+    census — M-3.C must agree (one name per row on every surface)."""
+    c_rows = _c_rows()
+    c_rows["c3"] = dict(
+        c_rows["c3"],
+        outcome="cancelled",
+        usage_record={"model_calls": 1, "outcome": "budget_exhausted"},
+    )
+    report = _report(c_rows=c_rows)
+    m3_c = report["dimensions"]["M-3"]["C"]["values"]
+    assert m3_c["n_cancelled_rows"] == 0
+    assert m3_c["n_limit_hit"] == 1
+
+
+def test_e02_refuses_a_thresholds_artifact_shaped_outside_the_registry():
+    """An artifact the registry would never emit (a list where the registry
+    writes a mapping) is a typed refusal, not an AttributeError."""
+    with pytest.raises(E02Refusal) as failed:
+        _report(thresholds=["M-1"])
+    assert failed.value.reason == "invalid_thresholds"
+    thresholds = _thresholds()
+    thresholds["thresholds"] = ["M-1"]
+    with pytest.raises(E02Refusal) as failed:
+        _report(thresholds=thresholds)
+    assert failed.value.reason == "invalid_thresholds"
+
+
+def test_e02_records_absent_for_a_null_signed_dimension_entry():
+    """A signed artifact whose dimension entry is null is an ABSENCE, never a
+    crash — the null value variant of the round-1 fix."""
+    thresholds = _thresholds()
+    thresholds["thresholds"]["M-1"] = None
+    report = _report(thresholds=thresholds)
+    record = report["dimensions"]["M-1"]["B"]["threshold"]
+    assert record["status"] == "absent"
+    assert "no agreed value" in record["reason"]

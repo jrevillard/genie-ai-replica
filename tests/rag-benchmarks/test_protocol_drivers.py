@@ -401,22 +401,33 @@ def test_config_b_redacts_credential_named_keys_at_the_rows_write(tmp_path):
 
 def test_config_b_resume_redacts_a_legacy_rows_snapshot_at_load(tmp_path):
     """A rows file written by the pre-redaction code carries the raw
-    snapshot. On a CONVERGED resume (zero pending cases) the loop never
-    runs and the returned snapshot IS the loaded prior — the load-boundary
-    redaction is what guards that path, so this test fails on code that
-    only redacts at the write boundary. (With pending cases the re-written
-    artifact is covered by the merge-replace of the new redacted snapshot;
-    the earlier redact test pins that side.)"""
+    snapshot. The CONVERGED resume is the discriminating path: every set
+    entry is already done, so the container loop never runs (pinned by
+    transport.cmds == []) and the returned snapshot IS the loaded prior —
+    only the load-boundary redaction guards it. Code that redacts only at
+    the write boundary fails here: the merge-replace never fires, the raw
+    key rides the return. (With pending cases the re-written artifact is
+    covered by the merge-replace of the new redacted snapshot; the earlier
+    redact test pins that side.)"""
     set_path = _b_set(tmp_path, ("c1",))
     out = tmp_path / "out"
     out.mkdir()
+    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
+    entry_ids = [
+        e["id"]
+        for entry in entries
+        for e in (drivers.turn_entries(entry) if entry.get("turns") else [entry])
+    ]
     legacy = {
-        "cases": {"c1": {"case_id": "c1", "status": "ok", "answer": "a", "abstained": False}},
+        "cases": {
+            cid: {"case_id": cid, "status": "ok", "answer": "a", "abstained": False} for cid in entry_ids
+        },
         "resolved": {"model_id": "granite-4.1-8b", "env": {"VLLM_API_KEY": "raw-venue-key"}},
     }
     (out / "config-b.rows.json").write_text(json.dumps(legacy), encoding="utf-8")
     transport = FakeBTransport()
     result = drivers.run_config_b(set_path, out, transport=transport)
+    assert transport.cmds == []  # the converged premise, enforced not assumed
     assert "VLLM_API_KEY" not in result["resolved"]["env"]
 
 

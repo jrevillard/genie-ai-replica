@@ -1025,6 +1025,8 @@ const Map<String, dynamic> swLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Vyanzo vinavyohusiana ({n})",
+    "sourceUnavailable": "Chanzo hiki hakipatiki kutazamwa.",
     "aiGeneratedNoDocs": "Imezalishwa na AI — haizingatii nyaraka za maktaba",
     "translationUnavailable":
         "Tafsiri hazipatikani — jibu hili linaweza kuwa na maandishi ambayo hayajatafsiriwa.",
@@ -1204,4 +1206,23 @@ const Map<String, dynamic> swLocale = {
     "copyright": "Haki zote zimehifadhiwa.",
   },
   'welcomeMessage': 'Karibu! Ninawezaje kusaidia leo?',
+  "okfBrowser": {
+    "title": "Vinjari ghala",
+    "currentNotice":
+        "Inaonyesha kilichopangwa kwa faharasa sasa — si lazima liwe toleo lililotajwa.",
+    "selectHint": "Chagua dhana kutoka kwenye mti kuisoma hapa.",
+    "showMore": "Onyesha zaidi",
+    "back": "Nyuma",
+    "forward": "Mbele",
+    "backToList": "Rudi kwenye orodha",
+    "conceptUnavailable": "Dhana hii haipatikani.",
+    "unavailable": "Ghala hili haliwezi kubungwa kwa sasa.",
+    "download": "Pakua",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "Upakuaji umeshindikana.",
+    "close": "Funga",
+    "filesLabel": "Faili",
+    "filterHint": "Chuja faili",
+    "indexBadge": "index",
+  },
 };

@@ -1031,6 +1031,8 @@ const Map<String, dynamic> deLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Verwandte Quellen ({n})",
+    "sourceUnavailable": "Diese Quelle kann nicht angezeigt werden.",
     "aiGeneratedNoDocs":
         "KI-generiert — nicht auf Bibliotheksdokumenten basierend",
     "translationUnavailable":
@@ -1213,4 +1215,23 @@ const Map<String, dynamic> deLocale = {
     "copyright": "Alle Rechte vorbehalten.",
   },
   'welcomeMessage': 'Willkommen! Wie kann ich Ihnen heute helfen?',
+  "okfBrowser": {
+    "title": "Repository durchsuchen",
+    "currentNotice":
+        "Zeigt, was aktuell indexiert ist — nicht notwendigerweise die zitierte Version.",
+    "selectHint": "Wähle ein Konzept aus dem Baum, um es hier zu lesen.",
+    "showMore": "Mehr anzeigen",
+    "back": "Zurück",
+    "forward": "Vorwärts",
+    "backToList": "Zurück zur Liste",
+    "conceptUnavailable": "Dieses Konzept ist nicht verfügbar.",
+    "unavailable": "Dieses Repository kann derzeit nicht durchsucht werden.",
+    "download": "Herunterladen",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "Download fehlgeschlagen.",
+    "close": "Schließen",
+    "filesLabel": "Dateien",
+    "filterHint": "Dateien filtern",
+    "indexBadge": "index",
+  },
 };

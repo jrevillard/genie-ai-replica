@@ -266,6 +266,18 @@ describe('beginSuiteGeneration / getSuite', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  // The guard's whole job is that the request cannot leave the fixed base,
+  // and a scheme check alone does not say that: '@' is the userinfo
+  // separator (base + '@evil.com' parses as userinfo@host), '//' opens an
+  // authority, and a path with no leading '/' is not relative at all. All
+  // three must be refused BEFORE any fetch.
+  it('sidecar() rejects a path that would move the request off the fixed base', async () => {
+    await expect(svc.sidecar('/jobs/@evil.com/x')).rejects.toThrow(/rejected non-relative path/);
+    await expect(svc.sidecar('//evil.com/x')).rejects.toThrow(/rejected non-relative path/);
+    await expect(svc.sidecar('jobs/1')).rejects.toThrow(/rejected non-relative path/);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('generates via the sidecar and persists a ragas_suite with new-N entries', async () => {
     const begun = await svc.beginSuiteGeneration(
       'me',

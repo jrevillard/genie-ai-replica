@@ -394,7 +394,7 @@ licensing reviewer in
 
 ### Keycloak
 **Component Type:** Identity and Access Management
-**Version:** 26.7.0 (Docker image: quay.io/keycloak/keycloak:26.7.0)
+**Version:** 26.8.2 (Docker image: quay.io/keycloak/keycloak:26.8.2)
 **Repository:** https://www.keycloak.org/
 **License:** Apache 2.0
 **License URL:** https://github.com/keycloak/keycloak/blob/main/LICENSE

@@ -72,7 +72,7 @@ describe('model-config-controller surface', () => {
     expect(res.statusCode).toBe(201);
     expect(svc.createConfig).toHaveBeenCalledWith(
       { provider: 'z' },
-      { actor: { sub: 'user-1', name: 'alice', source_ip: '9.9.9.9' } }
+      { actor: { sub: 'user-1', user_id: 'user-1', name: 'alice', source_ip: '9.9.9.9' } }
     );
 
     svc.updateConfig.mockResolvedValueOnce({ key: 'k' });
@@ -82,7 +82,7 @@ describe('model-config-controller surface', () => {
     expect(svc.updateConfig).toHaveBeenCalledWith(
       'k',
       { label: 'L' },
-      { actor: { sub: 'user-1', name: 'alice', source_ip: '9.9.9.9' } }
+      { actor: { sub: 'user-1', user_id: 'user-1', name: 'alice', source_ip: '9.9.9.9' } }
     );
   });
 
@@ -98,12 +98,12 @@ describe('model-config-controller surface', () => {
     );
     expect(svc.createConfig).toHaveBeenCalledWith(
       { provider: 'z' },
-      { actor: { sub: 'user-1', name: 'Alice Smith', source_ip: '9.9.9.9' } }
+      { actor: { sub: 'user-1', user_id: 'user-1', name: 'Alice Smith', source_ip: '9.9.9.9' } }
     );
   });
 
   it('copy → 201; activate/deactivate/remove → 200, all keyed on req.params.key', async () => {
-    const actor = { actor: { sub: 'user-1', name: 'alice', source_ip: '9.9.9.9' } };
+    const actor = { actor: { sub: 'user-1', user_id: 'user-1', name: 'alice', source_ip: '9.9.9.9' } };
     svc.copyConfig.mockResolvedValueOnce({ key: 'k2' });
     const r1 = fakeRes();
     await ctrl.copy(fakeReq({ params: { key: 'k' } }), r1, jest.fn());

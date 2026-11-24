@@ -381,7 +381,7 @@
           {{
             translate(
               'okf.testingLab.test.empty',
-              'Type a query a user would ask and run it — the lab scores every published repository head exactly as the fan-out would.'
+              'Type a query a user would ask and run it — the lab scores every repository head in this deployment, so you can see how the heads compete.'
             )
           }}
         </p>
@@ -745,6 +745,14 @@
               {{ translate('okf.testingLab.suites.passRate', 'Pass rate') }}:
               <strong>{{ pct(lastRunSummary.pass_rate) }}</strong>
             </span>
+            <span class="okf-headtest__universe">
+              {{
+                translate('okf.testingLab.suites.universe', 'Universe: {n} competing heads').replace(
+                  '{n}',
+                  String(lastRunSummary.sibling_count || 0)
+                )
+              }}
+            </span>
             <span>
               {{ translate('okf.testingLab.suites.positives', 'Positives') }}:
               <strong>{{ lastRunSummary.positive_passed }}/{{ lastRunSummary.positive_total }}</strong>
@@ -754,16 +762,77 @@
               <strong>{{ negLabel }}</strong>
             </span>
             <span v-if="lastRunSummary.avg_margin !== null">
-              {{ translate('okf.testingLab.suites.avgMargin', 'Avg margin') }}:
+              {{ translate('okf.testingLab.suites.avgMargin', 'Avg margin') }}
+              ({{ lastRunSummary.avg_margin_n || 0 }}):
               <strong>{{ (lastRunSummary.avg_margin || 0).toFixed(3) }}</strong>
             </span>
+            <!-- #2061 phase 1c (F7): the counters that separate the
+                 outcomes a single pass rate cannot tell apart. -->
+            <span v-if="lostNoWinnerLabel" class="okf-headtest__steal">{{ lostNoWinnerLabel }}</span>
+            <span v-if="wronglyClaimedLabel" class="okf-headtest__steal">{{ wronglyClaimedLabel }}</span>
             <span v-for="steal in lastRunSummary.steals" :key="steal.by_repo" class="okf-headtest__steal">
               {{
                 translate('okf.testingLab.suites.steal', '{repo} stole {n} queries')
-                  .replace('{repo}', steal.by_repo)
+                  .replace('{repo}', steal.by_name || steal.by_repo)
                   .replace('{n}', String(steal.count))
               }}
             </span>
+            <!-- The steal accounting NOT MEASURED (no positive could be
+                 lost) is a different claim from "nothing was stolen" —
+                 null and [] are not the same thing. -->
+            <span v-if="lastRunSummary.steals === null" class="okf-headtest__muted">
+              {{ translate('okf.testingLab.suites.stealsNotMeasured', 'Steals: not measured') }}
+            </span>
+          </div>
+          <!-- #2061: when the deployment's route knobs make the Lab's
+               verdict NOT stand for production, the run says so here
+               instead of certifying a parity that does not hold. -->
+          <div v-if="parityReasons.length" class="okf-headtest__parity">
+            <strong>{{
+              translate('okf.testingLab.suites.parityTitle', 'This run does not stand for production')
+            }}</strong>
+            <ul>
+              <li v-for="reason in parityReasons" :key="reason">{{ reason }}</li>
+            </ul>
+          </div>
+          <!-- #2061 phase 1d (E-3): the PAIR-level view. An aggregate pass
+               rate hides WHICH repo took WHICH query — and a near-tie
+               between two repos is invisible in it. This names the pairs;
+               it does not replace the pass rate. -->
+          <div v-if="confusionRows.length" class="okf-headtest__confusion">
+            <h4 class="okf-headtest__confusion-title">
+              {{ translate('okf.testingLab.suites.confusionTitle', 'Where the answers came from') }}
+            </h4>
+            <table class="okf-headtest__confusion-table">
+              <thead>
+                <tr>
+                  <th scope="col">{{ translate('okf.testingLab.suites.confusionIntended', 'Intended') }}</th>
+                  <th v-for="col in confusionColumns" :key="col.key" scope="col">{{ col.label }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in confusionRows" :key="row.key">
+                  <th scope="row">
+                    {{ row.label }}
+                    <small v-if="row.unresolved" class="okf-headtest__confusion-unresolved">
+                      {{ translate('okf.testingLab.suites.unresolved', 'unresolved') }}
+                    </small>
+                    <small class="okf-headtest__confusion-total">({{ row.total }})</small>
+                  </th>
+                  <td
+                    v-for="col in confusionColumns"
+                    :key="col.key"
+                    :class="{ 'okf-headtest__confusion-cell--wrong': cellWrong(row, col) }"
+                  >
+                    {{ cellText(row, col) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="okf-headtest__confusion-accuracy">
+              {{ translate('okf.testingLab.suites.confusionAccuracy', 'Claim accuracy') }}:
+              <strong>{{ pct(confusionAccuracy) }}</strong>
+            </p>
           </div>
           <!-- 1-8d: the positive-regression tripwire — re-running the SAME
                suite after a tag cycle must never silently drop positives
@@ -1201,6 +1270,7 @@
               <th>{{ translate('okf.testingLab.suites.col.run', 'Run') }}</th>
               <th>{{ translate('okf.testingLab.suites.col.when', 'When') }}</th>
               <th>{{ translate('okf.testingLab.suites.col.passRate', 'Pass rate') }}</th>
+              <th>{{ translate('okf.testingLab.suites.col.universe', 'Universe') }}</th>
               <th>{{ translate('okf.testingLab.suites.col.headVersion', 'Head') }}</th>
               <th>{{ translate('okf.testingLab.suites.col.tags', 'Tags') }}</th>
             </tr>
@@ -1212,6 +1282,10 @@
               </td>
               <td>{{ shortDate(r.created_at) }}</td>
               <td>{{ pct(r.summary ? r.summary.pass_rate : null) }}</td>
+              <!-- #2061 phase 1d: the universe the score was measured
+                   over. A pass rate without its denominator is the trap —
+                   90% of 3 heads is not 90% of 30. -->
+              <td>{{ r.summary ? r.summary.sibling_count || 0 : '—' }}</td>
               <td>{{ r.head_version || '—' }}</td>
               <!-- 1-8e: the tuning identity — same-tags reruns are
                    bit-stable, so a pass-rate difference across runs means
@@ -1833,6 +1907,83 @@ export default {
       }
       return `${s.negative_passed}/${s.negative_evaluatable}`;
     },
+    /** #2061 phase 1c (F7): the positives the run lost with NO winner at
+     * all — the answer vanished, and the pass rate alone cannot show it. */
+    lostNoWinnerLabel() {
+      const n = this.lastRunSummary && this.lastRunSummary.lost_no_winner;
+      if (!n) return '';
+      return this.translate('okf.testingLab.suites.lostNoWinner', '{n} positive(s) lost with no winner').replace(
+        '{n}',
+        String(n)
+      );
+    },
+    /** #2061 phase 1c (F7): the negatives the under-test correctly
+     * refused that a SIBLING answered anyway — a wrong repo answered. */
+    wronglyClaimedLabel() {
+      const n = this.lastRunSummary && this.lastRunSummary.negative_wrongly_claimed;
+      if (!n) return '';
+      return this.translate(
+        'okf.testingLab.suites.wronglyClaimed',
+        '{n} negative(s) were taken by another repository'
+      ).replace('{n}', String(n));
+    },
+    /** #2061 phase 1d (E-3): the pair-level matrix, as rows. */
+    confusionRows() {
+      const m = this.lastRunSummary && this.lastRunSummary.confusion;
+      return m && m.rows ? m.rows : [];
+    },
+    /** #2061 phase 1d (E-3): the matrix's columns. The "no winner" column
+     * is named HERE, not by the server — a label is UI copy, and the UI
+     * copy is translated. */
+    confusionColumns() {
+      const m = this.lastRunSummary && this.lastRunSummary.confusion;
+      if (!m || !m.columns) return [];
+      return m.columns.map((c) => ({
+        ...c,
+        label: c.key === 'none' ? this.translate('okf.testingLab.suites.confusionNone', 'no winner') : c.label
+      }));
+    },
+    /** #2061 phase 1d (E-3): the aggregate claim accuracy. */
+    confusionAccuracy() {
+      const m = this.lastRunSummary && this.lastRunSummary.confusion;
+      if (!m || m.claim_accuracy === null || m.claim_accuracy === undefined) return null;
+      return m.claim_accuracy;
+    },
+    /**
+     * #2061: why this run does NOT stand for production.
+     *
+     * The server sends CODES (the sentence that explains one to a human is
+     * UI copy, and UI copy is translated).
+     */
+    parityReasons() {
+      const p = this.lastRunSummary && this.lastRunSummary.parity;
+      if (!p || p.production_equivalent !== false || !Array.isArray(p.reasons)) return [];
+      const copy = {
+        routing_disabled: [
+          'okf.testingLab.suites.parityRoutingDisabled',
+          'Routing is disabled in this deployment — the head gate decides nothing there, so this run scores the gate, not the routing.'
+        ],
+        heads_not_supersede: [
+          'okf.testingLab.suites.parityHeadsNotSupersede',
+          'Heads do not supersede the chunk competition here — the chunk pool decides routing, so a suppressed head can still be routed.'
+        ],
+        head_weight: [
+          'okf.testingLab.suites.parityHeadWeight',
+          'The head pseudo-row carries a weight other than 1 — the Lab replays the chunk competition without that row.'
+        ]
+      };
+      return p.reasons.map((code) => {
+        const hit = copy[code];
+        return hit ? this.translate(hit[0], hit[1]) : code;
+      });
+    },
+    /** #2061 phase 1d (E-3): the cells, indexed for the table lookup. */
+    confusionCellMap() {
+      const m = this.lastRunSummary && this.lastRunSummary.confusion;
+      const map = new Map();
+      if (m && m.cells) for (const c of m.cells) map.set(`${c.intended}|${c.actual}`, c);
+      return map;
+    },
     manualKindOptions() {
       return [
         { value: 'positive', label: this.translate('okf.testingLab.suites.kindPositive', 'should select') },
@@ -2183,6 +2334,20 @@ export default {
     },
     pct(v) {
       return v === null || v === undefined ? '—' : Math.round(v * 100) + '%';
+    },
+    /** #2061 phase 1d (E-3): one matrix cell — the count and the rate it
+     * carries within its row. An empty cell is "never happened", not zero. */
+    cellText(row, col) {
+      const c = this.confusionCellMap.get(`${row.key}|${col.key}`);
+      if (!c) return '—';
+      return `${c.count} (${Math.round(c.rate * 100)}%)`;
+    },
+    /** #2061 phase 1d (E-3): a cell the wrong repo answered. */
+    cellWrong(row, col) {
+      const c = this.confusionCellMap.get(`${row.key}|${col.key}`);
+      // null = UNKNOWN (the intended repository could not be resolved) —
+      // neither right nor wrong, so it is not painted as wrong.
+      return !!(c && c.correct === false);
     },
     shortDate(iso) {
       try {
@@ -3618,6 +3783,64 @@ export default {
 }
 .okf-headtest__steal {
   color: var(--danger);
+}
+/* #2061 phase 1d (E-3) — the pair-level matrix. It sits BESIDE the pass
+   rate, not in place of it: the aggregate hides the pairs, and a pair
+   names the fix. */
+.okf-headtest__confusion {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+.okf-headtest__confusion-title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.okf-headtest__confusion-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.okf-headtest__confusion-table th,
+.okf-headtest__confusion-table td {
+  padding: var(--space-xs);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.okf-headtest__confusion-total {
+  color: var(--muted);
+  font-weight: 400;
+}
+.okf-headtest__confusion-cell--wrong {
+  color: var(--danger);
+  font-weight: 600;
+}
+.okf-headtest__confusion-accuracy {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--text-sm);
+}
+.okf-headtest__confusion-unresolved {
+  color: var(--muted);
+  font-style: italic;
+}
+/* #2061 — the run that does not stand for production says so, loudly,
+   instead of letting a Lab verdict be read as a production verdict. */
+.okf-headtest__parity {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.okf-headtest__parity ul {
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-md);
+}
+.okf-headtest__muted {
+  color: var(--muted);
 }
 .okf-headtest__counts {
   display: flex;

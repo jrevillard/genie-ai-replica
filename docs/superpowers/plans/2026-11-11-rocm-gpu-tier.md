@@ -1,5 +1,21 @@
 # ROCm GPU Service Tier Implementation Plan
 
+> **SUPERSEDED (2026-11-20): the vendor axis collapsed into the base
+> files (MR !968 review, Jerome's directive).** This plan still describes
+> the shape it REPLACED — compose overlays (`docker-compose.rocm.yaml`),
+> `VLLM_ROCM_IMAGE` / `TEI_ROCM_*`, a standalone
+> `deploy-gpu-rocm.yml`, and a `group_vars/rocm_gpu_api` directory (the
+> name never matched the inventory group — the silent-variable defect,
+> fixed by `vars_files`). Do not build any of it: the shipped shape is
+> the SAME base files (`docker-compose.yaml` / `docker-compose.gpu.yaml`)
+> with the vendor axis as interpolated values and the pooling services
+> behind the `rocm-models` profile, one ansible playbook
+> (`deploy-gpu.yml`, ROCm vars via `vars/rocm_gpu_nodes.yml` +
+> `vars/vault-rocm-gpu.yml`). Read it as history only; the live contract
+> lives in `tests/config-validator/__tests__/rocm-compose-render.test.js`
+> and `docs/helm-k8s-rocm-handoff.md`. The tasks below are ALL COMPLETE —
+> implemented, then superseded where they predate the collapse.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deploy the GENIE.AI GPU service tier on AMD ROCm (local Strix Halo, gfx1151) as a parallel, config-and-image-pin-driven path that never touches the NVIDIA deployment files.

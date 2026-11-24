@@ -1022,6 +1022,8 @@ const Map<String, dynamic> bnLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "সম্পর্কিত উৎসসমূহ ({n})",
+    "sourceUnavailable": "এই উৎসটি দেখার জন্য উপলব্ধ নয়।",
     "aiGeneratedNoDocs":
         "এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়",
     "translationUnavailable":
@@ -1203,4 +1205,23 @@ const Map<String, dynamic> bnLocale = {
     "copyright": "সর্বস্বত্ব সংরক্ষিত।",
   },
   'welcomeMessage': 'স্বাগতম! আজ আমি কিভাবে আপনাকে সাহায্য করতে পারি?',
+  "okfBrowser": {
+    "title": "ভাণ্ডার ব্রাউজ করুন",
+    "currentNotice":
+        "এখন যা সূচিবদ্ধ আছে তা দেখানো হচ্ছে — সেই সংস্করণই নয় যেটি উদ্ধৃত হয়েছিল।",
+    "selectHint": "এখানে পড়তে ট্রি থেকে একটি কনসেপ্ট নির্বাচন করুন।",
+    "showMore": "আরও দেখান",
+    "back": "পিছনে",
+    "forward": "সামনে",
+    "backToList": "তালিকায় ফিরে যান",
+    "conceptUnavailable": "এই ধারণাটি উপলব্ধ নয়।",
+    "unavailable": "এই ভাণ্ডারটি এই মুহূর্তে ব্রাউজ করা যাচ্ছে না।",
+    "download": "ডাউনলোড",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "ডাউনলোড ব্যর্থ হয়েছে।",
+    "close": "বন্ধ করুন",
+    "filesLabel": "ফাইল",
+    "filterHint": "ফাইল ফিল্টার করুন",
+    "indexBadge": "index",
+  },
 };

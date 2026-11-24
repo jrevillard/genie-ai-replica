@@ -1009,6 +1009,8 @@ const Map<String, dynamic> arLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "مصادر ذات صلة ({n})",
+    "sourceUnavailable": "هذا المصدر غير متاح للعرض.",
     "aiGeneratedNoDocs":
         "مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة",
     "translationUnavailable":
@@ -1188,4 +1190,23 @@ const Map<String, dynamic> arLocale = {
     "copyright": "جميع الحقوق محفوظة.",
   },
   'welcomeMessage': 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
+  "okfBrowser": {
+    "title": "استعراض المستودع",
+    "currentNotice":
+        "يعرض ما هو مفهرس الآن — وليس بالضرورة النسخة التي تم الاستشهاد بها.",
+    "selectHint": "اختر مفهوما من الشجرة لقراءته هنا.",
+    "showMore": "عرض المزيد",
+    "back": "رجوع",
+    "forward": "تقدّم",
+    "backToList": "العودة إلى القائمة",
+    "conceptUnavailable": "هذا المفهوم غير متاح.",
+    "unavailable": "لا يمكن استعراض هذا المستودع في الوقت الحالي.",
+    "download": "تنزيل",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "فشل التنزيل.",
+    "close": "إغلاق",
+    "filesLabel": "الملفات",
+    "filterHint": "تصفية الملفات",
+    "indexBadge": "index",
+  },
 };

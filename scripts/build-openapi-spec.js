@@ -25,13 +25,18 @@ const path = require('path');
 const { createRequire } = require('module');
 
 const BACKEND_DIR = path.resolve(__dirname, '..', 'components', 'gov-chat-backend');
+// #1939: okf-server's annotated citizen routes join the glob — the mobile
+// client's Dart models for the OKF surface generate from the SAME spec, so
+// the drift gate pins them like every backend contract. swagger-jsdoc reads
+// annotation text only; it never executes the routes file.
+const OKF_ROUTES_FILE = path.resolve(__dirname, '..', 'components', 'okf-server', 'routes', 'okf-routes.js');
 
 function buildSpec() {
   const backendRequire = createRequire(path.join(BACKEND_DIR, 'package.json'));
   const swaggerJsdoc = backendRequire('swagger-jsdoc');
   const spec = swaggerJsdoc({
     definition: backendRequire('./swagger-definition'),
-    apis: [path.join(BACKEND_DIR, 'routes', '*.js')]
+    apis: [path.join(BACKEND_DIR, 'routes', '*.js'), OKF_ROUTES_FILE]
   });
   // Sanity checks: a broken apis glob yields a spec with zero paths, and a
   // pin assignment dropped from the env -i line shows up as an 'undefined'

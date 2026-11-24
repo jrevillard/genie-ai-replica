@@ -11,7 +11,7 @@ from json import loads
 from pathlib import Path
 from sys import argv, exit
 
-from build_deck import I18N, SLIDES, parse, structure
+from build_deck import I18N, SLIDES, first_drift, parse, register_problems, structure
 
 REFERENCE = 'en'
 
@@ -23,17 +23,9 @@ def check(code):
     candidate = parse(code)
 
     if structure(candidate) != structure(english):
-        for index, (mine, theirs) in enumerate(zip(structure(candidate), structure(english)), 1):
-            if mine != theirs:
-                problems.append(
-                    f"slide {index}: {mine} does not match the English structure {theirs}"
-                )
-                break
-        else:
-            problems.append(
-                f"the file has {len(candidate)} slides against {len(english)} in English"
-            )
+        problems.append(first_drift(structure(candidate), structure(english)))
         return problems
+    problems += register_problems(code, candidate)
 
     english_keys = set(loads((I18N / f'{REFERENCE}.json').read_text(encoding='utf-8')))
     candidate_keys = set(loads((I18N / f'{code}.json').read_text(encoding='utf-8')))

@@ -53,3 +53,63 @@ directly, drive a live benchmark, or repair stored state.
 call the RAGAS sidecar / the deployed service directly and expect
 `x-ragas-secret` (`RAGAS_INTERNAL_SECRET` / `OKF_INTERNAL_SECRET`). They are
 dev tools, not part of the product surface.
+
+## The group-scoped scenario (the fixture for a scoped Testing Lab)
+
+`lab-scoped-scenario.js` builds the deployment state a **scoped** Testing Lab
+run needs: repositories that are fenced behind a group, and principals whose
+group memberships differ. It exists because the Lab's universe today is the
+DEPLOYMENT's — it scores every repository head that competes, whichever
+caller opened the run. A scoped evaluation has to be able to say "this
+repository is OUTSIDE the evaluated set", and that can only be tested against
+a deployment where the fences differ per principal.
+
+**What it builds** (all in the target deployment's Keycloak realm):
+
+| Piece | Name | What it is |
+|---|---|---|
+| fence A | the smoke repository | `acl.restricted = true`, held by `okf-lab-scope-a` |
+| fence B | the repository an earlier grant already fenced | `acl.restricted = true`, held by `okf-lab-scope-b` |
+| group A | `okf-lab-scope-a` | holds the scope-shaped realm role `okf:t:<fence A>:read` |
+| group B | `okf-lab-scope-b` | holds the scope-shaped realm role `okf:t:<fence B>:read` |
+| principal A | `okf-lab-principal-a` | member of group A only |
+| principal B | `okf-lab-principal-b` | member of group B only |
+| principal AB | `okf-lab-principal-ab` | member of BOTH groups — the union case |
+| control | `okf-lab-principal-none` | no group — the scopeless caller |
+
+The grants go through the PRODUCT's own facility
+(`POST /api/okf/repos/:id/access/grant-group`), which creates the
+scope-shaped realm role and assigns it to the group; a member of the group
+carries that role in `realm_access.roles`, and the okf-server middleware folds
+realm role names that are scope strings into the caller's effective scopes.
+
+**The global scope mode is left at its default (`open`).** The per-repo fence
+is what decides, and that is the posture the deployment runs in — flipping
+the global mode would change the deployment's behaviour far beyond the test.
+
+**Run it** (from the build root — it reads `.env`):
+
+```bash
+node scripts/okf-testing-lab/lab-scoped-scenario.js            # apply + verify
+node scripts/okf-testing-lab/lab-scoped-scenario.js --verify   # verify only
+node scripts/okf-testing-lab/lab-scoped-scenario.js --teardown # remove it all
+```
+
+It is idempotent, and it restores what it borrowed: the throwaway
+tools-admin caller is deleted and direct access grants are put back the way
+it found them.
+
+**The verification is structural, not a name check.** The fence's graph name
+is minted from the repository's name and version, so the script derives each
+fence as the SET DIFFERENCE between the principal that holds it and the
+control that holds none, and then asserts:
+
+- the control traverses neither fence;
+- a group holder traverses its own fence and NOT the other one;
+- a member of BOTH groups traverses BOTH — the union — and the union is
+  exactly `control + A + B`, strictly larger than either group alone.
+
+**Credentials.** The principals' passwords are random and written to
+`okf-scenario-credentials.json` in the build root — git-ignored, host-side,
+never printed and never committed. Read them from there to log a principal
+into the UI. Delete the file when the scenario is torn down.

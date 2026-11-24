@@ -277,6 +277,84 @@ describe('routingTest', () => {
     });
   }
 
+  // ─── #2061 phase 1b: the probe leg is retried and bounded by a
+  // PER-RUN timeout. The knobs arrive per run, so a retune of the retry
+  // count or the timeout takes effect on the next run — and a probe that
+  // fails never fails the whole test: the repository is marked errored
+  // and the aggregate may become 'degraded'. ───
+  function graphedRepoSetup(probeBehaviour) {
+    frontmatterService.teiEmbed.mockResolvedValue([unit(DIM, 0)]);
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'Under Test',
+      lifecycle_state: 'publish',
+      ingested_graph_name: 'OKF_me_v1',
+      head: makeHead({ vector: unit(DIM, 0) }),
+      frontmatter: { updated_at: '2026-10-07T00:00:00.000Z' }
+    });
+    __mockDb.query.mockImplementation(async (aql) => {
+      if (aql.includes('FILTER r.head != null')) {
+        return {
+          all: async () => [
+            {
+              _key: 'sib1',
+              name: 'Sibling',
+              lifecycle_state: 'publish',
+              ingested_at: '2026-10-07T00:00:00.000Z',
+              ingested_graph_name: 'OKF_sib_v1',
+              version: 1
+            }
+          ]
+        };
+      }
+      if (aql.includes('r._key IN @ids')) {
+        return { all: async () => [{ _key: 'sib1', head: makeHead({ vector: unit(DIM, 1) }) }] };
+      }
+      if (aql.includes('_SOURCE')) return probeBehaviour();
+      return { all: async () => [] };
+    });
+  }
+
+  it('retries a failing probe and marks the aggregate DEGRADED (never a silent pass)', async () => {
+    // #2061 phase 3: the probe leg only runs when the head does NOT claim —
+    // that is what the retriever does under ROUTE_HEADS_SUPERSEDE. With the
+    // knob OFF, the chunk competition decides routing and the probe runs,
+    // so this is the knob-off production behaviour.
+    process.env.RETRIEVER_ROUTE_HEADS_SUPERSEDE = 'false';
+    let probeCalls = 0;
+    try {
+      graphedRepoSetup(() => {
+        probeCalls += 1;
+        throw new Error('arango down');
+      });
+      const res = await svc.routingTest('me', { query: 'cancer screening guidance', include_probes: true }, {});
+      // ROUTE_RETRY = 1 → two attempts per probed graph, two graphs probed.
+      expect(probeCalls).toBe(4);
+      expect(res.verdict.provenance).toBe('degraded');
+      // The head leg is unaffected by the probe failure — the run still
+      // answers the routing question it can answer.
+      expect(res.verdict.head_routing_winner).toBe('me');
+    } finally {
+      delete process.env.RETRIEVER_ROUTE_HEADS_SUPERSEDE;
+    }
+  });
+
+  it('bounds a hanging probe by the PER-RUN timeout (a lowered knob takes effect at once)', async () => {
+    // The timeout is read PER RUN, so a retune applies to the next run
+    // with no restart — the module-load capture could not do this.
+    process.env.RETRIEVER_ROUTE_PROBE_TIMEOUT_MS = '20';
+    process.env.RETRIEVER_ROUTE_HEADS_SUPERSEDE = 'false';
+    try {
+      graphedRepoSetup(() => new Promise(() => {})); // never settles
+      const res = await svc.routingTest('me', { query: 'cancer screening guidance', include_probes: true }, {});
+      expect(res.verdict.provenance).toBe('degraded');
+      expect(res.fidelity.knobs.ROUTE_PROBE_TIMEOUT_MS).toBe(20);
+    } finally {
+      delete process.env.RETRIEVER_ROUTE_PROBE_TIMEOUT_MS;
+      delete process.env.RETRIEVER_ROUTE_HEADS_SUPERSEDE;
+    }
+  });
+
   it('suppresses a query that never clears the claim FLOOR (off-domain)', async () => {
     // score 0.5 clears the forbidden centroid by +0.5 (margin would
     // pass) and matches no forbidden tag — but 0.5 < ROUTE_HEAD_FLOOR
@@ -663,13 +741,15 @@ describe('guardSuggestions (Story 1-8d — no self-forbidding suggestion survive
   });
 });
 
-// ---------- gate v2 knobs: env-tunable at module load ----------
+// ---------- gate v2 knobs: env-tunable per run ----------
 
 describe('gate v2 knobs are env-tunable', () => {
-  // ROUTE_HEAD_FLOOR / ROUTE_FORBIDDEN_TAG_MAX are parsed at module
-  // load (production tunes them via .env). A fresh require under
-  // overridden env proves the contract; the top-level `svc` keeps its
-  // original knobs, so these tests load their own instance.
+  // #2061 phase 1b: the knobs are resolved PER RUN through the ONE shared
+  // loader (services/route-knobs.js) — NOT captured at module load. A
+  // production retune therefore takes effect on the next run with no
+  // service restart, and the run record carries the values it was scored
+  // under. These tests still load their own instance so a value set here
+  // cannot leak into the other suites through the shared environment.
   function freshLoad(envOverrides) {
     jest.resetModules();
     for (const [k, v] of Object.entries(envOverrides)) process.env[k] = v;
@@ -751,5 +831,91 @@ describe('rebuildHead', () => {
     repositoryService.getById.mockResolvedValue({ _key: 'me' });
     frontmatterService.readFrontmatterFromRepoDoc.mockResolvedValue(null);
     await expect(svc.rebuildHead('me', {})).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #2061 phase 3 (E-7) — the SUPERSEDE.
+//
+// The retriever SKIPS the chunk probe when a head claims: the claim is
+// decisive for the whole search set and the probe never runs
+// (genieai_retriever_arangodb.py:2644 — `if ROUTE_HEADS_SUPERSEDE and
+// head_pass:`). The Lab ran its probe leg anyway, so its LEG B could
+// answer a question production never asks.
+//
+// The Lab now does what the retriever does — and says so.
+// ---------------------------------------------------------------------------
+
+describe('#2061 phase 3 (E-7): the supersede — a claimed head skips the chunk probe', () => {
+  function setup() {
+    frontmatterService.teiEmbed.mockResolvedValue([unit(DIM, 0)]);
+    repositoryService.getById.mockResolvedValue({
+      _key: 'me',
+      name: 'Under Test',
+      lifecycle_state: 'publish',
+      ingested_graph_name: 'GRAPH_ME',
+      head: makeHead({ vector: unit(DIM, 0) }),
+      frontmatter: { updated_at: '2026-10-07T00:00:00.000Z' }
+    });
+    const queries = [];
+    __mockDb.query.mockImplementation(async (aql) => {
+      queries.push(String(aql));
+      if (aql.includes('FILTER r.head != null')) {
+        return {
+          all: async () => [
+            {
+              _key: 'sib1',
+              name: 'Sibling',
+              lifecycle_state: 'publish',
+              ingested_at: null,
+              ingested_graph_name: null,
+              version: 1
+            }
+          ]
+        };
+      }
+      if (aql.includes('r._key IN @ids')) {
+        return { all: async () => [{ _key: 'sib1', head: makeHead({ vector: unit(DIM, 1) }) }] };
+      }
+      if (aql.includes('_SOURCE')) {
+        return { all: async () => [0.9, 0.8, 0.7] };
+      }
+      return { all: async () => [] };
+    });
+    return queries;
+  }
+
+  it('a CLAIMED head skips the chunk probe, exactly as the retriever does', async () => {
+    const queries = setup();
+    const res = await svc.routingTest('me', { query: 'cancer screening guidance', include_probes: true }, {});
+    expect(res.supersede.applied).toBe(true);
+    expect(res.supersede.probe_skipped).toBe(true);
+    expect(res.supersede.claimed).toContain('me');
+    // The probe never ran — no SOURCE query was issued at all.
+    expect(queries.filter((q) => q.includes('_SOURCE'))).toEqual([]);
+  });
+
+  it('with the knob OFF the probe runs, as the retriever does', async () => {
+    process.env.RETRIEVER_ROUTE_HEADS_SUPERSEDE = 'false';
+    try {
+      const queries = setup();
+      const res = await svc.routingTest('me', { query: 'cancer screening guidance', include_probes: true }, {});
+      expect(res.supersede.applied).toBe(false);
+      expect(res.supersede.probe_skipped).toBe(false);
+      expect(queries.filter((q) => q.includes('_SOURCE')).length).toBeGreaterThan(0);
+    } finally {
+      delete process.env.RETRIEVER_ROUTE_HEADS_SUPERSEDE;
+    }
+  });
+
+  it('a head that does NOT claim still probes (the supersede is not a blanket skip)', async () => {
+    const queries = setup();
+    // The query is ORTHOGONAL to the head — the floor kills the claim, so
+    // no head claimed and the chunk competition must still decide.
+    frontmatterService.teiEmbed.mockResolvedValue([unit(DIM, 1)]);
+    const res = await svc.routingTest('me', { query: 'cancer screening guidance', include_probes: true }, {});
+    expect(res.supersede.applied).toBe(false);
+    expect(res.supersede.probe_skipped).toBe(false);
+    expect(queries.filter((q) => q.includes('_SOURCE')).length).toBeGreaterThan(0);
   });
 });

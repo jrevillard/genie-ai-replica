@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/agent_activity_line.dart';
+import 'package:genie_ai_mobile/components/chat/answer_sources_bar.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
@@ -30,6 +31,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
+import 'package:genie_ai_mobile/okf/okf_citation.dart';
+import 'package:genie_ai_mobile/okf/okf_citation_open.dart';
 
 import 'quick_help_scope.dart';
 
@@ -1641,6 +1644,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final response = jsonDecode(res.body) as Map<String, dynamic>;
       final Map<String, dynamic>? metadata = response['metadata'];
 
+      // The citation rows under ONE resolution: the backend answers carry
+      // them as `source_documents` (chatqna's raw name) — `sources` alone
+      // left the message's list empty while the sidebar resolved the same
+      // rows through the fallback, and the answer's sources bar rendered
+      // nothing (live-found 2026-11-19).
+      final List<dynamic> responseSources =
+          metadata?['sources'] ?? metadata?['source_documents'] ?? [];
+
+      // What happened to the language of the answer: chatqna reports whether
+      // it translated it. An answer that was not translated is flagged, so
       // What happened to the language of the answer: the metadata's
       // translation_status (the lanes that persist it) or the body's root
       // latch (the agent lane's metadata does not carry the field). An
@@ -1670,7 +1683,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'role': 'assistant',
         'content': response['response'] ?? tr('chatbot.noResponse'),
         'timestamp': DateTime.now().toIso8601String(),
-        'sources': metadata?['sources'] ?? [],
+        'sources': responseSources,
         'confidence': metadata?['confidence_score'],
         'metadata': metadata,
         // Whatever the live path sets, this path sets too — the truth
@@ -1681,8 +1694,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'isSaved': false,
       };
 
-      final List<dynamic> newDocs =
-          metadata?['sources'] ?? metadata?['source_documents'] ?? [];
+      final List<dynamic> newDocs = responseSources;
 
       setState(() {
         _messages.add(assistantMessage);
@@ -2518,6 +2530,33 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   // ===========================================================================
+  // CITATION OPENING (#1937/#1938)
+  // ===========================================================================
+
+  /// Routes a tapped citation row (the web's `openSourceDocument`):
+  /// the OKF action lives in the ONE shared opener (`openOkfCitation` —
+  /// browse push + unavailable notice, the /simplify review's unified
+  /// ladder; an OKF row that cannot be browsed gets the notice, never a
+  /// silent external launch). What remains here is this surface's own
+  /// external-URL rung and the final honest notice.
+  void _openCitation(Map<String, dynamic> doc) {
+    if (openOkfCitation(context, doc, logTag: 'chat.citation')) return;
+    final url = (doc['url'] ?? doc['sourceUrl'] ?? '').toString();
+    final uri = Uri.tryParse(url);
+    if (uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty) {
+      debugPrint('chat.citation external url=$url');
+      launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    debugPrint('chat.citation unavailable ${citationLogTag(doc)}');
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(tr('chatbot.sourceUnavailable'))));
+  }
+
+  // ===========================================================================
   // UI BUILD
   // ===========================================================================
   @override
@@ -2782,6 +2821,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 }
                               },
                             ),
+
+                            // The per-answer related-sources bar (#1937):
+                            // the same citation rows the web chat renders
+                            // under every answer. The bar is navigation-
+                            // agnostic; _openCitation decides what a tap
+                            // means (browse / launch / honest notice).
+                            if (!isUser &&
+                                (msg['sources'] as List?)?.isNotEmpty == true)
+                              AnswerSourcesBar(
+                                sources: msg['sources'] as List,
+                                labelBuilder: (n) => tr(
+                                  'chatbot.sourcesBarLabel',
+                                  args: {'n': n},
+                                ),
+                                onOpen: _openCitation,
+                              ),
 
                             // The backend could not translate the answer into
                             // the requested language: the text above is the

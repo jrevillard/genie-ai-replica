@@ -28,6 +28,160 @@ router.use(authenticate);
 // ordering-plus-option pair to keep in sync.
 const servingReads = express.Router();
 servingReads.use(requireScope('read', { allowScopelessWhenOpen: true }));
+/**
+ * #1939 (mobile OKF parity): the NAMED schemas behind the three citizen
+ * serving reads annotated below. They exist so the client-generation spec
+ * (scripts/build-openapi-spec.js scans this file) emits TYPED Dart models
+ * for the mobile app — the citizen shapes, never the steward variants.
+ * swagger-jsdoc merges annotation-contributed components into the generated
+ * spec; the backend's runtime docs never scan this file, so these schemas
+ * surface only in the client-generation contract the api-client drift gate
+ * pins.
+ * @swagger
+ * components:
+ *   schemas:
+ *     ConceptTreePage:
+ *       type: object
+ *       description: >-
+ *         One page of the paginated concept-tree index (W9). An
+ *         out-of-range offset yields an empty concepts array with total
+ *         still true.
+ *       required: [total, offset, limit, concepts]
+ *       properties:
+ *         total:
+ *           type: integer
+ *           description: Total concept count, independent of paging.
+ *         offset:
+ *           type: integer
+ *         limit:
+ *           type: integer
+ *         concepts:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/ConceptTreeRow'
+ *     ConceptTreeRow:
+ *       type: object
+ *       description: >-
+ *         One row of the tree index — outgoing AUTHOR links only; the
+ *         parser-derived structure rides the concept card.
+ *       required: [concept_id]
+ *       properties:
+ *         concept_id:
+ *           type: string
+ *         title:
+ *           type: string
+ *           nullable: true
+ *         is_index:
+ *           type: boolean
+ *           nullable: true
+ *           description: Index/root marker for the tree's bold rows.
+ *         index_status:
+ *           type: string
+ *           nullable: true
+ *           description: Graph drain status the status dot renders.
+ *         links:
+ *           type: array
+ *           description: Outgoing author links, as concept ids.
+ *           items:
+ *             type: string
+ *     ConceptCard:
+ *       type: object
+ *       description: >-
+ *         The CAP-2 CITIZEN projection of a concept. The steward read
+ *         returns the full meta row plus max_doc_chars server-side; citizen
+ *         callers (and the mobile app) consume THIS shape only. A field the
+ *         concept lacks is absent from the response.
+ *       required: [repo_id, concept_id, title]
+ *       properties:
+ *         repo_id:
+ *           type: string
+ *         concept_id:
+ *           type: string
+ *         graph_name:
+ *           type: string
+ *           nullable: true
+ *         bundle_version:
+ *           type: string
+ *           nullable: true
+ *         title:
+ *           type: string
+ *         labels:
+ *           type: array
+ *           items:
+ *             type: string
+ *         summary:
+ *           type: string
+ *           nullable: true
+ *         body:
+ *           type: string
+ *           description: The concept document body — markdown, never raw HTML.
+ *         links:
+ *           type: array
+ *           description: >-
+ *             Outgoing author links as SERVED — the meta row's field copied
+ *             verbatim, so rows carry the author-link OBJECT shape
+ *             ({to_concept_id, label}; legacy rows may carry {target, label}
+ *             with a .md path). NOT a bare-string array: the 2026-11-19
+ *             mobile crash was exactly this lie (the generated Dart client
+ *             cast the object row to String and threw mid-render).
+ *           items:
+ *             $ref: '#/components/schemas/ConceptCardLink'
+ *         sources:
+ *           type: array
+ *           description: CAP-4 originating-document identities.
+ *           items:
+ *             $ref: '#/components/schemas/ConceptCardSource'
+ *     ConceptCardLink:
+ *       type: object
+ *       description: >-
+ *         One outgoing author link on the concept card. to_concept_id is
+ *         the graph edge identity; target is the legacy frontmatter path
+ *         (ends .md) some rows still carry — readers take to_concept_id
+ *         first, then target, and strip a trailing .md / concepts/ prefix
+ *         (the Vue browser's contract). A field the row lacks is absent.
+ *       properties:
+ *         to_concept_id:
+ *           type: string
+ *         target:
+ *           type: string
+ *         label:
+ *           type: string
+ *     ConceptCardSource:
+ *       type: object
+ *       description: >-
+ *         CAP-4 narrowed originating-document identity. An entry carrying
+ *         NEITHER file_id nor resource is dropped server-side. missing is
+ *         true when doc-repo answers 404 for the origin (a dangling
+ *         reference the UI says is not in the document repository).
+ *       properties:
+ *         kind:
+ *           type: string
+ *           nullable: true
+ *         file_id:
+ *           type: string
+ *           nullable: true
+ *         file_name:
+ *           type: string
+ *           nullable: true
+ *         resource:
+ *           type: string
+ *           nullable: true
+ *         missing:
+ *           type: boolean
+ *           nullable: true
+ *     ResolveRepoResponse:
+ *       type: object
+ *       description: >-
+ *         The CAP-1 identity the saved-conversation restore resolver
+ *         rebuilds for a pre-CAP-1 citation row.
+ *       required: [repo_id]
+ *       properties:
+ *         repo_id:
+ *           type: string
+ *         bundle_version:
+ *           type: string
+ *           nullable: true
+ */
 servingReads.get('/retrieval-config', retrievalConfigController.getRetrievalConfig);
 servingReads.get('/authz/graphs', authzResolverController.getGraphs);
 // CAP-2 (chat-source resolution, 2026-11-04): the concept CONTENT read is a
@@ -40,6 +194,53 @@ servingReads.get('/authz/graphs', authzResolverController.getGraphs);
 // mutations stay behind the strict router gate below; this shadows only the
 // single-concept GET (same handler the /repos sub-router registers, so
 // scoped callers behave identically).
+/**
+ * @swagger
+ * "/api/okf/repos/{repo_id}/concepts/{concept_id}":
+ *   get:
+ *     summary: Fetch a concept's citizen card
+ *     description: >-
+ *       CAP-2 serving read: the concept document a chat citation grounded
+ *       on — the body as markdown, author links and CAP-4 origin sources
+ *       (an origin the document repository answers 404 for is stamped
+ *       missing: true). Serves while OKF_SCOPE_MODE is open even without
+ *       an okf scope (allowScopelessWhenOpen); closed mode keeps the
+ *       read-scope gate. The per-repo fence and publication gate apply
+ *       inside: a restricted or non-serving repo answers 404
+ *       REPO_NOT_FOUND — foreign and fenced are indistinguishable
+ *       (anti-enumeration). The steward variant (full meta row plus
+ *       max_doc_chars) exists server-side; citizen callers receive the
+ *       ConceptCard projection only.
+ *     tags: [Okf]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: repo_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Repository id.
+ *       - in: path
+ *         name: concept_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Concept id.
+ *     responses:
+ *       '200':
+ *         description: The citizen concept card.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ConceptCard'
+ *       '401':
+ *         description: Unauthorized - invalid or missing authentication token.
+ *       '404':
+ *         description: >-
+ *           Not found - error code REPO_NOT_FOUND (foreign, fenced or
+ *           non-serving repo, anti-enumeration) or CONCEPT_NOT_FOUND.
+ *           Body: {error, message}.
+ */
 servingReads.get('/repos/:repo_id/concepts/:concept_id', require('../controllers/repository-controller').getConcept);
 // W9 (concept tree browse, 2026-11-08): the paginated tree INDEX is a
 // serving read like the concept GET above — the citizen's browser walks
@@ -50,6 +251,61 @@ servingReads.get('/repos/:repo_id/concepts/:concept_id', require('../controllers
 // composition), so restricted and draft/retracted repos are unreachable
 // from the index too. The payload stays bounded (offset/limit, clamp
 // 1..500) — the full corpus never ships in one response.
+/**
+ * @swagger
+ * "/api/okf/repos/{repo_id}/concept-tree":
+ *   get:
+ *     summary: Browse the repository's paginated concept-tree index
+ *     description: >-
+ *       W9 serving read: every concept of the repository as a paginated
+ *       index for the citizen's browser. The page size defaults to 200 and
+ *       clamps to 1..500; offset clamps to >= 0; an out-of-range offset
+ *       yields an empty page with total still true. Serves while
+ *       OKF_SCOPE_MODE is open even without an okf scope
+ *       (allowScopelessWhenOpen); closed mode keeps the read-scope gate.
+ *       The per-repo fence and publication gate apply inside: a restricted
+ *       or non-serving repo answers 404 REPO_NOT_FOUND — foreign and
+ *       fenced are indistinguishable (anti-enumeration).
+ *     tags: [Okf]
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: repo_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Repository id.
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *           minimum: 0
+ *         description: Page start (0-based).
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 200
+ *           minimum: 1
+ *           maximum: 500
+ *         description: Page size (clamped to 1..500).
+ *     responses:
+ *       '200':
+ *         description: One page of the concept tree.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ConceptTreePage'
+ *       '401':
+ *         description: Unauthorized - invalid or missing authentication token.
+ *       '404':
+ *         description: >-
+ *           Not found - REPO_NOT_FOUND: foreign, fenced or non-serving
+ *           repository, anti-enumeration. Body: {error, message}.
+ */
 servingReads.get('/repos/:repo_id/concept-tree', require('../controllers/repository-controller').getConceptTree);
 // #1817 (saved-conversation OKF restore, 2026-11-13): the PRE-CAP-1 citation
 // resolver is a serving read like the two above — a restored conversation
@@ -60,6 +316,47 @@ servingReads.get('/repos/:repo_id/concept-tree', require('../controllers/reposit
 // a restricted or non-serving twin never resolves for a citizen, and no
 // candidate surviving every gate answers 404 (foreign and fenced
 // indistinguishable).
+/**
+ * @swagger
+ * "/api/okf/concepts/resolve-repo":
+ *   get:
+ *     summary: Resolve the serving repository holding a concept
+ *     description: >-
+ *       Saved-conversation restore resolver (#1817): one concept_id in,
+ *       the caller-visible serving repository out — repo_id plus
+ *       bundle_version carry the CAP-1 identity a pre-CAP-1 persisted
+ *       citation row lost. Restricted or non-serving twin repositories are
+ *       skipped, not returned; a concept_id no visible serving repo holds
+ *       answers 404 CONCEPT_NOT_FOUND (foreign and fenced
+ *       indistinguishable, anti-enumeration). Serves while OKF_SCOPE_MODE
+ *       is open even without an okf scope (allowScopelessWhenOpen); closed
+ *       mode keeps the read-scope gate.
+ *     tags: [Okf]
+ *     security: []
+ *     parameters:
+ *       - in: query
+ *         name: concept_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The concept id to resolve.
+ *     responses:
+ *       '200':
+ *         description: The serving repository holding the concept.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ResolveRepoResponse'
+ *       '400':
+ *         description: >-
+ *           Bad request - CONCEPT_ID_REQUIRED. Body: {error, message}.
+ *       '401':
+ *         description: Unauthorized - invalid or missing authentication token.
+ *       '404':
+ *         description: >-
+ *           Not found - CONCEPT_NOT_FOUND: no candidate survives every
+ *           gate, foreign and fenced indistinguishable.
+ */
 servingReads.get('/concepts/resolve-repo', require('../controllers/repository-controller').resolveConceptRepo);
 router.use(servingReads);
 
@@ -71,6 +368,24 @@ router.use('/repos', require('./repos-routes'));
 // Story 8-7 — named remote-model configurations (LiteLLM gateway or direct
 // provider APIs). Platform-level: tools-admin inside the sub-router.
 router.use('/model-configs', require('./model-config-routes'));
+
+// #2061 phase 2 — E-1, the Evaluation Context catalogue: named, versioned,
+// snapshot-resolved authorization principals. Superadmin-gated on BOTH
+// populations (the tools-admin realm role OR a wildcard okf:*:*:admin scope)
+// — a context may name ANY repository, so writing one is a deployment-wide
+// power. The READ surface carries the same gate: a context names the
+// repositories a PRINCIPAL traverses, which is exactly the information a
+// non-superadmin caller has no business reading. The consumers are the
+// operator surfaces (the Studio editor, the Lab), which are admin-gated.
+const evalContextController = require('../controllers/evaluation-context-controller');
+router.post('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.createContext);
+router.get('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.listContexts);
+router.get('/eval-contexts/:id', evalContextController.requireSuperadmin, evalContextController.getContext);
+router.post(
+  '/eval-contexts/:id/refresh',
+  evalContextController.requireSuperadmin,
+  evalContextController.refreshContext
+);
 
 // Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the governance
 // write is tools-admin only and audited before→after in the service.

@@ -1030,6 +1030,28 @@ services:
       # model is DISCOVERED on the judge base (the !631 policy); the pin
       # applies only when the judge base IS the deployment endpoint (#1181).
       - RAGAS_JUDGE_MODEL=${RAGAS_JUDGE_MODEL:-}
+      # The ROUTE GATE knobs — the SAME values the retriever reads
+      # (genie-ai-overlay/retriever/config.py). The Testing Lab replays the
+      # production routing gate locally, so it must be scored under the
+      # thresholds the deployment is ACTUALLY running. Without these lines
+      # the Lab scored under the code defaults while the retriever used the
+      # deployment's, and the two never met — a Lab pass rate could not be
+      # compared with production at all (#2061 phase 1b).
+      # EVERY route knob is here, not only the numeric thresholds: three of
+      # them change the routing OUTCOME (routing off, heads not
+      # superseding, a head weight other than 1), and a Lab that ignored
+      # them would certify a gated verdict for a deployment that does not
+      # gate. The run record says so when they are off.
+      - RETRIEVER_ROUTE_ENABLED=${RETRIEVER_ROUTE_ENABLED:-true}
+      - RETRIEVER_ROUTE_TOP_K=${RETRIEVER_ROUTE_TOP_K:-40}
+      - RETRIEVER_ROUTE_MIN_CHUNKS=${RETRIEVER_ROUTE_MIN_CHUNKS:-3}
+      - RETRIEVER_ROUTE_PROBE_TIMEOUT_MS=${RETRIEVER_ROUTE_PROBE_TIMEOUT_MS:-2000}
+      - RETRIEVER_ROUTE_RETRY=${RETRIEVER_ROUTE_RETRY:-1}
+      - RETRIEVER_ROUTE_HEAD_WEIGHT=${RETRIEVER_ROUTE_HEAD_WEIGHT:-1.0}
+      - RETRIEVER_ROUTE_HEAD_MARGIN=${RETRIEVER_ROUTE_HEAD_MARGIN:-0.01}
+      - RETRIEVER_ROUTE_HEAD_FLOOR=${RETRIEVER_ROUTE_HEAD_FLOOR:-0.55}
+      - RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX=${RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX:-0.55}
+      - RETRIEVER_ROUTE_HEADS_SUPERSEDE=${RETRIEVER_ROUTE_HEADS_SUPERSEDE:-true}
       # ArangoDB — same database as the graphs (ADR-okf-018); direct arangojs, no ORM.
       - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
@@ -3246,7 +3268,17 @@ services:
     # here so compose and chart state the same identity (#1227). Pinned by
     # name: the image's USER is the numeric source of truth.
     user: "keycloak:root"
-    image: quay.io/keycloak/keycloak:26.7.0
+    # 26.8.2 bundles Red Hat OpenJDK 21.0.13.1 — the fix for CVE-2026-114938
+    # ("Java4Shell", memory corruption in the accelerated Base64 decoder,
+    # pre-auth RCE against Keycloak). The tag MOVES: upstream republishes it
+    # on every 26.8.x rebuild, so it only ever gets newer (and more
+    # patched) than the 26.8.2-3 build that carries the fix — index digest
+    # sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3.
+    # ONE caveat: between 2026-11-05 and 2026-11-19 the tag pointed at the
+    # vulnerable 26.8.2-1 / 26.8.2-2 builds, and compose's default pull
+    # policy (missing) does not re-pull an image it already has — a host
+    # that pulled it inside that window must re-pull it (see docs/UPGRADE.md).
+    image: quay.io/keycloak/keycloak:26.8.2
     # The upstream image ships an empty CMD (kc.sh prints its usage and exits
     # without a subcommand). The dropped custom image baked `start` via its
     # Dockerfile; restore that explicit startup for both compose and swarm.

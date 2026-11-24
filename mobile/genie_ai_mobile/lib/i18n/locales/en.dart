@@ -1020,6 +1020,8 @@ const Map<String, dynamic> enLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Related sources ({n})",
+    "sourceUnavailable": "This source is not available to view.",
     "placeholder": "Type your query here...",
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "translationUnavailable":
@@ -1203,4 +1205,23 @@ const Map<String, dynamic> enLocale = {
     "copyright": "All rights reserved.",
   },
   'welcomeMessage': 'Welcome! How can I assist you today?',
+  "okfBrowser": {
+    "title": "Browse repository",
+    "currentNotice":
+        "Showing what is indexed now — not necessarily the version that was cited.",
+    "selectHint": "Select a concept from the tree to read it here.",
+    "showMore": "Show more",
+    "back": "Back",
+    "forward": "Forward",
+    "backToList": "Back to list",
+    "conceptUnavailable": "This concept is not available.",
+    "unavailable": "This repository cannot be browsed right now.",
+    "download": "Download",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "Download failed.",
+    "close": "Close",
+    "filesLabel": "Files",
+    "filterHint": "Filter files",
+    "indexBadge": "index",
+  },
 };

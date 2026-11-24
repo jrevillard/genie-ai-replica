@@ -88,6 +88,27 @@ rocm_gpu_node_local: true
 # gpu_vendor == 'rocm' branch of templates/docker-compose.gpu.yaml.j2. The
 # app side selects the same backend with RERANKER_BACKEND=vllm (rendered
 # in env.j2 SECTION 18B).
+# The pooling toggle (deploy-gpu.yml's deploy/validate plays assemble the
+# compose --profile argument from it; default true via `| default(true)`).
+#
+#   rocm_pooling: true   — single-server venue (the documented topology):
+#     the two pooling vLLM instances (vllm-reranker, vllm-embedding) start
+#     locally; RERANKER_BACKEND / EMBEDDING_BACKEND stay vllm in
+#     env.strixhalo.
+#
+#   rocm_pooling: false  — split venue: the node's gpu-proxy routes
+#     /rerank and /v1/embeddings to the node-side TEI instances, so unset
+#     RERANKER_BACKEND / EMBEDDING_BACKEND in env.strixhalo the same way
+#     (see its header). The pooling services do not render (compose
+#     profiles are resolved inside the loader — a profile-disabled
+#     service is absent from the file docker compose up receives) and
+#     their ~4.6 GiB of GTT stays unclaimed.
+#
+# The path-based smoke tests hit the PROXY routes (/rerank/, /embed/),
+# which answer through whatever backend each route carries — they stay
+# valid in both states.
+rocm_pooling: true
+
 gpu_rerank_upstream: vllm-reranker:8000
 # Task 14 mirror — the EMBEDDING side. The node's TEI ROCm image cannot run
 # on gfx1151 either, so the node's embedder is a fourth vLLM instance (the

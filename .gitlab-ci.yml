@@ -4196,9 +4196,11 @@ docs:validate:
     # the repo root (#2096) — stays deliberately UNPINNED: its shipped
     # default model is Granite 3.x, whose parser also needs a chat
     # template this stack cannot reference (the file's own note carries
-    # the reasoning). The flags must never appear unconditionally here;
-    # assert it structurally so a future pin cannot land silently.
-    - python3 -c "import yaml; s=yaml.safe_load(open('docker-compose.gpu.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']"
+    # the reasoning). The flags must never appear unconditionally here —
+    # in the command OR the entrypoint (a pin in the entrypoint would
+    # leave the command clean); assert both so a future pin cannot land
+    # silently.
+    - python3 -c "import yaml; s=yaml.safe_load(open('docker-compose.gpu.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; assert not any('tool-call-parser' in str(x) or 'enable-auto-tool-choice' in str(x) for x in s.get('entrypoint', [])), s.get('entrypoint')"
     # #2119: the served-model ids are MANDATORY — a render without them must
     # FAIL, and the error must NAME the variable (never a silent default).
     # The runner script carries set -e: capture the expected failure with
@@ -4973,9 +4975,9 @@ chart:lint:
       --set opea.gpu.mode=in-cluster
       --set opea.models.llm.modelId=ibm-granite/granite-3.3-2b-instruct
       > /tmp/rendered-incluster-granite3.yaml
-    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster.yaml'))); d=next(x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'); a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='granite4', a"
-    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-override.yaml'))); d=next(x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'); a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='hermes', a"
-    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-granite3.yaml'))); d=next(x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'); a=d['spec']['template']['spec']['containers'][0]['args']; assert '--tool-call-parser' not in a and '--enable-auto-tool-choice' not in a, a"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='granite4', a"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-override.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster-override.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='hermes', a"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-granite3.yaml'))); d=next((x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'), None); assert d is not None, 'vllm Deployment missing from /tmp/rendered-incluster-granite3.yaml'; a=d['spec']['template']['spec']['containers'][0]['args']; assert '--tool-call-parser' not in a and '--enable-auto-tool-choice' not in a, a"
     # The image-tag RULES (issue #2000's naming refactor): one version, one
     # variant, one pin. Four renders, one assertion set — the version for
     # every GENIE.AI image, the variant on the three model-serving images

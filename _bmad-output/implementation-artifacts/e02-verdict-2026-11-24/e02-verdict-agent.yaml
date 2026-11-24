@@ -54,7 +54,7 @@ spec:
     spec:
       containers:
         - name: agent-service
-          image: registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-agent-server:pending-f08dcf1a
+          image: registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-agent-server:pending-414bd980
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8080"]
           ports:

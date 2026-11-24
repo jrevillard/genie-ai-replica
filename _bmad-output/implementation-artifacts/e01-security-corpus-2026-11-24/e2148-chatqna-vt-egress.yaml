@@ -1,0 +1,28 @@
+# A run-scoped, ADDITIVE NetworkPolicy (issue #2148, following the !1056
+# precedent e01-chatqna-vt-egress.yaml): the anchor's trace harvest runs
+# `curl` to VictoriaTraces from INSIDE the chatqna pod, and the release's
+# chatqna egress policy allows the collector (4318) but not the traces store
+# (10428). NetworkPolicy allow-rules are a union, so this adds the one path
+# the anchor needs and deletes cleanly at run end.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2148-chatqna-vt-egress
+  namespace: genieai
+  labels:
+    e2148.genieai.io/run: "2148"
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: chatqna
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vtsingle
+              app.kubernetes.io/instance: vtraces
+      ports:
+        - protocol: TCP
+          port: 10428

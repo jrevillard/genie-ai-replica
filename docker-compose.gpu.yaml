@@ -60,6 +60,18 @@ services:
     group_add:
       - "${RENDER_GID:-65534}" # nobody — inert for the root containers vLLM ships
       - "${VIDEO_GID:-65533}" # nogroup
+    # Tool-calling: deliberately UNPINNED on this stack (#2096 — the
+    # #2052 class). The shipped default model is Granite 3.x, whose
+    # documented parser (`granite`) also needs a chat template this
+    # stack cannot reference, so a pin here would boot an unusable
+    # tool-calling setup — and a granite4 pin on the 3.x default would
+    # misparse its tool output silently. The VLLM_TOOL_CALL_PARSER
+    # lever feeds ONLY docker-compose.yaml's vllm service (see env);
+    # the chart (opea.models.llm.toolCallParser) and the ansible GPU
+    # template (vllm_tool_call_parser) carry the same decision for
+    # theirs. A deployment overriding THIS stack's model to Granite 4.x
+    # adds the two flags here by hand:
+    #   --enable-auto-tool-choice --tool-call-parser granite4
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}

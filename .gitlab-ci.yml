@@ -4192,6 +4192,13 @@ docs:validate:
     # with THAT parser instead of the derived default (absent for 3.x).
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-parser-override.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it vllm_tool_call_parser=granite"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-parser-override.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite' in s['command']"
+    # The third vLLM serving surface — the standalone GPU-node stack at
+    # the repo root (#2096) — stays deliberately UNPINNED: its shipped
+    # default model is Granite 3.x, whose parser also needs a chat
+    # template this stack cannot reference (the file's own note carries
+    # the reasoning). The flags must never appear unconditionally here;
+    # assert it structurally so a future pin cannot land silently.
+    - python3 -c "import yaml; s=yaml.safe_load(open('docker-compose.gpu.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']"
     # #2119: the served-model ids are MANDATORY — a render without them must
     # FAIL, and the error must NAME the variable (never a silent default).
     # The runner script carries set -e: capture the expected failure with
@@ -4212,6 +4219,7 @@ docs:validate:
         - "tests/ansible-non-root/**/*"
         - "CLAUDE.md"
         - ".gitlab-ci.yml"
+        - "docker-compose.gpu.yaml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -4947,6 +4955,27 @@ chart:lint:
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.mode=in-cluster
       > /tmp/rendered-incluster.yaml
+    # The REC-6 tool-calling pin on the in-cluster vLLM (#2095): asserted
+    # STRUCTURALLY on the parsed Deployment args, mirroring the
+    # docs:validate asserts for the ansible surface — the granite4 flags
+    # render with the Granite 4.x default model, an explicit
+    # toolCallParser value overrides, and a non-4.x model id without a
+    # value renders NO flags.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true
+      --set opea.gpu.mode=in-cluster
+      --set opea.models.llm.toolCallParser=hermes
+      > /tmp/rendered-incluster-override.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true
+      --set opea.gpu.mode=in-cluster
+      --set opea.models.llm.modelId=ibm-granite/granite-3.3-2b-instruct
+      > /tmp/rendered-incluster-granite3.yaml
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster.yaml'))); d=next(x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'); a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='granite4', a"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-override.yaml'))); d=next(x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'); a=d['spec']['template']['spec']['containers'][0]['args']; assert '--enable-auto-tool-choice' in a and a[a.index('--tool-call-parser')+1]=='hermes', a"
+    - python3 -c "import yaml; docs=list(yaml.safe_load_all(open('/tmp/rendered-incluster-granite3.yaml'))); d=next(x for x in docs if x and x.get('kind')=='Deployment' and x['metadata']['name']=='vllm'); a=d['spec']['template']['spec']['containers'][0]['args']; assert '--tool-call-parser' not in a and '--enable-auto-tool-choice' not in a, a"
     # The image-tag RULES (issue #2000's naming refactor): one version, one
     # variant, one pin. Four renders, one assertion set — the version for
     # every GENIE.AI image, the variant on the three model-serving images

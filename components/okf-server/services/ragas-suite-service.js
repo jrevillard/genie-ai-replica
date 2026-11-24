@@ -47,6 +47,14 @@ const frontmatterService = require('./frontmatter-service');
 const modelCache = require('./vllm-model-cache');
 const repositoryService = require('./repository-service');
 const headTestService = require('./head-test-service');
+// #2061 phase 3 (E-7): the pairing between a suite's binding and a run.
+const pairingService = require('./evaluation-pairing-service');
+// #2061 phase 3 (E-7): the code a SKIPPED question carries. It is NOT a
+// pipeline failure — the question was never attempted, because the
+// repository it was minted from left the carrier. It must therefore never
+// be retried, never be counted as an error, and never be answered: the
+// summary keeps it in its own bucket, so the error count stays honest.
+const SKIPPED_DEPENDENCY_NOT_IN_CARRIER = 'SKIPPED_DEPENDENCY_NOT_IN_CARRIER';
 // ONE rerank client (review !622 round 9, #78662): the private copy moved
 // to ./rerank-client verbatim — batching, pool, retry ladder and all.
 const { rerankTexts } = require('./rerank-client');
@@ -101,6 +109,19 @@ const TOP_N = Math.max(1, parseInt(process.env.OKF_RAGAS_TOP_N || process.env.RE
 const maxCorpusChunks = () => Math.max(1, parseInt(process.env.OKF_RAGAS_MAX_CORPUS_CHUNKS || '1600', 10));
 const CONTEXT_CHARS = 2000; // per-context cap stored on run rows (xlsx uses answer_first_200 anyway)
 const CONCEPT_BODY_CAP = parseInt(process.env.OKF_MAX_CONCEPT_DOC_CHARS || '200000', 10);
+
+// #2061 phase 3 (E-7) — the passage key. A corpus document and the passage
+// a question cites are the same text, so the leading characters identify the
+// chunk. The whitespace is normalised because a passage may be re-wrapped on
+// its way through the sidecar; the length is short enough that two chunks of
+// the same corpus do not share it by accident.
+const PASSAGE_KEY_CHARS = 120;
+function passageKey(text) {
+  const norm = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return norm ? norm.slice(0, PASSAGE_KEY_CHARS) : '';
+}
 
 // The DECLARED serve posture, recorded on every run doc so the record is
 // self-attributing: a mass-abstention run carries the configuration it ran
@@ -293,6 +314,12 @@ function ragasSecret() {
   return process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || '';
 }
 
+// A sidecar path is a fixed RELATIVE path under the base: one leading '/'
+// (never two — that would be an authority), then segments built from the
+// characters a route name and a job id need. No scheme, no authority, no
+// userinfo, no query, no whitespace.
+const RELATIVE_SIDECAR_PATH = /^\/(?:[A-Za-z0-9._~-][A-Za-z0-9._~/-]*)?$/;
+
 /**
  * Call the ragas-service sidecar. Network-class failures map to a typed
  * RAGAS_UNAVAILABLE (503) — the panel says so honestly; nothing hangs.
@@ -301,7 +328,14 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
   // Egress guard (review 2026-10-29): `path` is a hard-coded constant at
   // every call site — reject anything that could turn the fixed-base
   // concatenation into an arbitrary URL, so a future caller cannot.
-  if (typeof path !== 'string' || path.includes('://')) {
+  //
+  // The scheme check alone did NOT say that: '@' is the userinfo separator
+  // (base + '@evil.com' parses as userinfo@host), a '//' prefix opens an
+  // authority, and a path with no leading '/' is not relative at all — all
+  // three reached the fetch. The path must now be a RELATIVE path under the
+  // fixed base: one leading '/', then segments of the characters a job id
+  // and a route name need. Everything else is refused BEFORE any fetch.
+  if (typeof path !== 'string' || !RELATIVE_SIDECAR_PATH.test(path)) {
     throw new Error(`ragas sidecar: rejected non-relative path: ${String(path).slice(0, 80)}`);
   }
   const headers = { 'X-RAGAS-Secret': ragasSecret() };
@@ -316,6 +350,13 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
   const budget = timeoutMs || RAGAS_TIMEOUT_MS;
   let resp;
   try {
+    // The sidecar base is deployment configuration (OKF_RAGAS_URL), never
+    // request data, and the path is a constant — or the sidecar's own job
+    // id — that the guard above has already proven relative. The SSRF rule
+    // cannot see either: it traces the path argument into the URL without
+    // reading the guard. The invariant is pinned by a test in
+    // __tests__/ragas-suite-service.test.js.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     resp = await fetch(`${RAGAS_URL()}${path}`, {
       method,
       headers,
@@ -1095,7 +1136,29 @@ async function beginSuiteGeneration(repoId, payload = {}, opts = {}) {
   genInFlight.assertFree(repoId, {
     message: 'a benchmark-suite generation is already running for this repository'
   });
-  const repoIds = normalizeRepoIds(repoId, payload.repo_ids);
+  // #2061 phase 3 (E-7): the POOL is the carrier's when the suite is minted
+  // FOR a context — the caller's `repo_ids` are REPLACED, not merged with
+  // it. A caller may not widen the corpus beyond what the context names.
+  const binding = opts.binding || null;
+  let repoIds;
+  if (binding) {
+    const measured = binding.repos || (binding.carrier && binding.carrier.repos) || [];
+    repoIds = measured.map((r) => r.repo_id);
+    if (!repoIds.includes(repoId)) {
+      const named = measured.map((r) => r.name || r.repo_id);
+      const err = new Error(
+        `the repository under test "${repoId}" is not in the evaluation context ` +
+          `"${(binding.context && binding.context.name) || 'the context'}"` +
+          `${binding.context && binding.context.version ? ` (version ${binding.context.version})` : ''}, ` +
+          `which measures: ${named.length ? named.join(', ') : 'nothing'}.`
+      );
+      err.code = 'UNDER_TEST_OUT_OF_CARRIER';
+      err.status = 409;
+      throw err;
+    }
+  } else {
+    repoIds = normalizeRepoIds(repoId, payload.repo_ids);
+  }
   for (const rid of repoIds) {
     await repositoryService.getById(rid, { authz: opts.authz }); // 404 now, not mid-poll
   }
@@ -1235,7 +1298,12 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     span.setAttribute('okf.repo_id', repoId);
     const db = await dbService.getConnection();
     await ensureCollection(db);
-    const repoIds = payload.repo_ids || [repoId];
+    // #2061 phase 3 (E-7): a suite minted FOR a context draws its corpus
+    // from the carrier — the caller's list never widens it.
+    const binding = opts.binding || null;
+    const repoIds = binding
+      ? (binding.repos || (binding.carrier && binding.carrier.repos) || []).map((r) => r.repo_id)
+      : payload.repo_ids || [repoId];
     const { docs, coverage } = await buildCorpusDocuments(db, repoIds);
     if (!docs.length) {
       const err = new Error(
@@ -1327,28 +1395,90 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       throw err;
     }
     const now = new Date().toISOString();
-    const entries = samples.slice(0, MAX_ENTRIES).map((s, i) => ({
-      id: `new-${i + 1}`,
-      query: String(s.user_input || '').trim(),
-      reference_answer: String(s.reference || ''),
-      // Reference passages stored WHOLE (capped at CONTEXT_CHARS, the run
-      // leg's per-context cap — a published chunk fits intact). The old
-      // 500-char slice cut them mid-table and often kept the WRONG section
-      // of the concept for the question it grounded: entity-recall then
-      // compared the wrong section's entities against correctly-retrieved
-      // chunks (2026-10-19: every entity-recall row of a 20-question suite
-      // failed at 0.10–0.50 with context_recall at 1.0).
-      reference_passages: (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
+    // #2061 phase 3 (E-7): the SOURCE-REPOSITORY STAMP. The corpus documents
+    // carry their chunk metadata (repo_id, graph, chunk_key); the sidecar
+    // answers with the passages the questions were minted from, so the
+    // passage is matched back to the document it came from. A question whose
+    // passage is not in the corpus is NOT stamped — "not measured" is null,
+    // never a guess.
+    const sourceByPassage = new Map();
+    for (const d of docs) {
+      const key = passageKey(d.page_content);
+      if (key && !sourceByPassage.has(key)) {
+        sourceByPassage.set(key, d.metadata || {});
+      }
+    }
+    const stamped = samples.slice(0, MAX_ENTRIES).map((s, i) => {
+      const passages = (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
         String(c).slice(0, CONTEXT_CHARS)
-      ),
-      source_doc: '',
-      language: '',
-      difficulty: [s.query_style, s.query_length].filter(Boolean).join('/') || '',
-      persona: s.persona_name || '',
-      synthesizer: s.synthesizer_name || '',
-      oos: false,
-      source: 'llm'
+      );
+      // The FIRST passage that matches a corpus document names the source.
+      let meta = null;
+      for (const p of passages) {
+        const hit = sourceByPassage.get(passageKey(p));
+        if (hit) {
+          meta = hit;
+          break;
+        }
+      }
+      return {
+        id: `new-${i + 1}`,
+        query: String(s.user_input || '').trim(),
+        reference_answer: String(s.reference || ''),
+        // Reference passages stored WHOLE (capped at CONTEXT_CHARS, the run
+        // leg's per-context cap — a published chunk fits intact). The old
+        // 500-char slice cut them mid-table and often kept the WRONG section
+        // of the concept for the question it grounded: entity-recall then
+        // compared the wrong section's entities against correctly-retrieved
+        // chunks (2026-10-19: every entity-recall row of a 20-question suite
+        // failed at 0.10–0.50 with context_recall at 1.0).
+        reference_passages: passages,
+        source_doc: '',
+        // The stamp — the corpus the question was minted from.
+        source_repo_id: meta && meta.repo_id ? meta.repo_id : null,
+        source_graph: meta && meta.graph ? meta.graph : null,
+        source_chunk_key: meta && meta.chunk_key ? meta.chunk_key : null,
+        language: '',
+        difficulty: [s.query_style, s.query_length].filter(Boolean).join('/') || '',
+        persona: s.persona_name || '',
+        synthesizer: s.synthesizer_name || '',
+        oos: false,
+        source: 'llm'
+      };
+    });
+    // #2061 phase 3 (E-7) + David (2026-11-23): the EVALUATION CONTEXT
+    // applies to the GENERATION. A question whose ground truth could not be
+    // tied to the corpus it was minted from is INVALID for a context-bound
+    // benchmark: its passages are not in the evaluated corpus, so the
+    // served retrieval cannot find them and the judge would score a
+    // context_recall of ~0 — a FAILURE that is an artefact of the corpus,
+    // not of the system. Such a question is NOT minted.
+    //
+    // Without a binding there is no context to apply and the behaviour is
+    // unchanged: the stamp is null ("not measured" is null, never a guess).
+    const unattributed = binding ? stamped.filter((e) => !e.source_repo_id) : [];
+    const entries = (binding ? stamped.filter((e) => e.source_repo_id) : stamped).map((e, i) => ({
+      ...e,
+      id: `new-${i + 1}`
     }));
+    if (binding && unattributed.length) {
+      logger.warn('ragas-suite.generate.unattributed_questions', {
+        repo_id: repoId,
+        suite_key: opts.suiteKey,
+        discarded: unattributed.length,
+        kept: entries.length
+      });
+    }
+    if (binding && !entries.length) {
+      const err = new Error(
+        'every generated question could not be attributed to a repository in the evaluation context — ' +
+          "the corpus it was minted from does not match the context's repositories, so the benchmark " +
+          'would measure nothing. Re-mint after the corpus has drained, or widen the context.'
+      );
+      err.code = 'NO_ATTRIBUTABLE_QUESTIONS';
+      err.status = 409;
+      throw err;
+    }
     const repos = await Promise.all(repoIds.map((rid) => repositoryService.getById(rid, { authz: opts.authz })));
     const suiteDoc = {
       _key: opts.suiteKey,
@@ -1370,6 +1500,22 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         judge_pick: { config_key: opts.judge_config_key || null, model: opts.judge_model || null },
         judge: modelConfigService.judgeFidelity(effectiveJudge),
         repos: repos.map((r) => ({ id: r.repo_id || r._key, name: r.name })),
+        // #2061 phase 3 (E-7): the CONTEXT SNAPSHOT this suite was minted
+        // for — the snapshot, never a reference alone. Absent on a suite
+        // minted without a context.
+        ...(binding
+          ? {
+              context: {
+                id: binding.context.id,
+                name: binding.context.name,
+                version: binding.context.version,
+                hash: binding.context.hash || null,
+                repos: binding.repos,
+                repo_set_hash: binding.repo_set_hash,
+                head_version_hash: binding.head_version_hash
+              }
+            }
+          : {}),
         dimensions: {
           testset_size: entries.length,
           requested_size: payload.testset_size,
@@ -1999,6 +2145,13 @@ async function rescoreRun(repoId, suiteKey, runKey, opts = {}, ctx = {}) {
           })),
           results,
           summary,
+          // #2061 phase 3 (E-7): a re-score measures EXACTLY what the source
+          // run measured — the answers were not regenerated, only re-judged —
+          // so the source's pairing and carrier travel with it. Without them
+          // this doc is a run in the history that says NOTHING about what it
+          // is comparable to, sitting beside runs that do.
+          pairing: (source.payload && source.payload.pairing) || null,
+          carrier: (source.payload && source.payload.carrier) || null,
           // The same coverage block the run path writes. Without it the
           // invalid-run banner's coverage branch can never fire for a
           // re-score — and a re-score that measured only part of the suite
@@ -2104,6 +2257,12 @@ async function beginRunSuite(repoId, suiteKey, payload = {}, opts = {}) {
   await ensureCollection(db);
   const suite = await loadSuite(db, repoId, suiteKey);
   const metrics = normalizeMetrics(payload.metrics);
+  // #2061 phase 3 (E-7): the PAIRING gate answers the CALLER. A run that
+  // cannot serve what the suite was minted for is REFUSED HERE — a
+  // synchronous 409, before a run doc exists — instead of a run that starts,
+  // animates, and fails a moment later with the same reason.
+  const pairing = pairingFor(suite, repoId, opts);
+  if (pairing.refusal) throw pairing.refusal;
   const inflight = runInFlight.get(suiteKey);
   if (inflight) {
     const err = new Error('a run is already executing for this suite');
@@ -2206,6 +2365,68 @@ function normalizeMetrics(requested) {
   return metrics;
 }
 
+/**
+ * The PAIRING for a run — and the REFUSAL it produces when it cannot be
+ * measured at all.
+ *
+ * ONE helper, TWO callers. `beginRunSuite` asks it BEFORE the run is
+ * accepted, so a refused pairing answers the CALLER synchronously (409)
+ * instead of starting a run that animates and fails a moment later with the
+ * same reason; `runSuite` asks it again while the run executes, so the
+ * record and the gate cannot drift apart.
+ */
+function pairingFor(suite, repoId, opts = {}) {
+  const carrier = opts.carrier || null;
+  const payload = (suite && suite.payload) || {};
+  const suiteContext = payload.context || null;
+  const runContext = carrier && carrier.context ? carrier.context : null;
+  const pairingResult = pairingService.pair({
+    suiteContext,
+    suiteRepoId: repoId,
+    runContext,
+    runCarrier: carrier,
+    runKeys: opts.keys || null,
+    rows: payload.entries || [],
+    experiment: opts.experiment || null
+  });
+  return {
+    carrier,
+    suiteContext,
+    runContext,
+    pairingResult,
+    refusal: pairingRefusal(pairingResult, suiteContext, runContext)
+  };
+}
+
+/** The refusal a blocked pairing produces — or null when it is not blocked. */
+function pairingRefusal(pairingResult, suiteContext, runContext) {
+  if (!pairingResult || pairingResult.status !== 'blocked') return null;
+  const crossContext = pairingResult.reasons.includes('cross_context');
+  const evaporated = pairingResult.reasons.includes('pool_evaporated');
+  const poolSize = ((suiteContext && suiteContext.repos) || []).length;
+  const err = new Error(
+    crossContext
+      ? `the benchmark suite was minted for the evaluation context "${suiteContext && suiteContext.name}" ` +
+          `(${suiteContext && suiteContext.version ? `version ${suiteContext.version}` : 'unknown version'}) ` +
+          `and this run serves a different one` +
+          `${runContext ? ` ("${runContext.id}")` : ' (no context — the deployment itself)'}. ` +
+          'A run may only serve the context it was minted for; a superadmin may record a deliberate ' +
+          'cross-context experiment, and its result is then rendered as NOT comparable.'
+      : evaporated
+        ? `the benchmark suite was minted for ${poolSize} repository(ies) and only ` +
+          `${pairingResult.pool_coverage !== undefined ? Math.round(pairingResult.pool_coverage * 100) : '?'}% of them ` +
+          `are still in this run's carrier (missing: ${pairingResult.missing_pool.join(', ')}). ` +
+          'Past half the pool the run would serve a DIFFERENT corpus than the suite was minted for — ' +
+          'a number over it would answer a different question — so it is refused.'
+        : `the benchmark suite was minted for ${poolSize} repository(ies) and this ` +
+          `run serves a carrier that does not hold them (missing: ${pairingResult.missing_pool.join(', ')}).`
+  );
+  err.code = crossContext ? 'CROSS_CONTEXT_BLOCKED' : 'PAIRING_BLOCKED';
+  err.status = 409;
+  err.pairing = pairingResult;
+  return err;
+}
+
 async function runSuite(repoId, suiteKey, opts = {}) {
   return withSpan('okf.ragas.run', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
@@ -2219,7 +2440,18 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // array rides the EXISTING `context.authorized_graph_names` field, so
     // chatqna and the retriever are UNCHANGED: the served pipeline is the
     // production one, measured over the carrier the context names.
-    const carrier = opts.carrier || null;
+    // #2061 phase 3 (E-7): the PAIRING — the suite was minted for a context
+    // (or not); this run serves the carrier (or not). The same tiers as the
+    // routing suite: a cross-context run is refused unless a superadmin
+    // recorded the experiment, and a suite minted for another context may
+    // not be measured over this one.
+    const entries = suite.payload.entries;
+    const { carrier, suiteContext, runContext, pairingResult, refusal } = pairingFor(suite, repoId, opts);
+    if (refusal) throw refusal;
+    // The questions whose SOURCE repository left the carrier cannot be
+    // scored over this corpus — they are skipped, counted, and never
+    // silently dropped.
+    const skippedEntryIndexes = new Set(pairingResult.skipped_rows.map((r) => r.index));
     const carrierGraphNames = carrier && carrier.graph_names ? carrier.graph_names : null;
     const graphNames = serveGraphNames(carrier, await graphNamesFor(db, repoIds));
     if (!graphNames.length) {
@@ -2235,9 +2467,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       err.status = 409;
       throw err;
     }
-    const entries = suite.payload.entries;
     const results = [];
     let doneCount = 0;
+    // The denominator is EVERY question in this run's scope — the skipped
+    // ones included. A skipped question is not attempted, but it IS part of
+    // what the run covers, and a denominator that left them out while the
+    // counter counted them would let the bar pass 100%.
     const total = entries.length;
     await report(opts, { phase: 'retrieval', done: 0, total });
     let cursorIdx = 0;
@@ -2280,6 +2515,31 @@ async function runSuite(repoId, suiteKey, opts = {}) {
         const i = cursorIdx++;
         if (i >= entries.length) return;
         const e = entries[i];
+        // #2061 phase 3 (E-7): a question whose SOURCE repository left the
+        // carrier cannot be scored over this corpus. It is skipped — with a
+        // reason — and never silently dropped.
+        if (skippedEntryIndexes.has(i)) {
+          results[i] = {
+            id: e.id,
+            query: e.query,
+            contexts: [],
+            context_keys: [],
+            candidate_keys: [],
+            candidates: [],
+            answer: '',
+            abstained: false,
+            abstention_reason: '',
+            source_repo_id: e.source_repo_id || null,
+            error: {
+              code: SKIPPED_DEPENDENCY_NOT_IN_CARRIER,
+              status: null,
+              message: 'not attempted — the repository this question was minted from is not in the carrier'
+            }
+          };
+          doneCount += 1;
+          await report(opts, { phase: 'retrieval', done: doneCount, total });
+          continue;
+        }
         try {
           if (serveMode) {
             // SERVE: the question goes through the citizen's own pipeline.
@@ -2375,7 +2635,17 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // by now, and a sequential single-flight retry is the politest possible
     // shape. A row that fails again keeps its error and still counts against
     // validity — honesty is not traded away for completeness.
-    const erroredIdx = results.reduce((acc, r, i) => (r && r.error ? [...acc, i] : acc), []);
+    // #2061 phase 3 (E-7): a SKIPPED question is NOT an errored row. It
+    // did not die on a transient infra error — it was never attempted,
+    // because the repository it was minted from left the carrier. Retrying
+    // it would answer it over a corpus it was never minted against, which
+    // is the one thing the pairing exists to prevent; and it would replace
+    // the row's "not attempted" record with an answer, so the run doc would
+    // claim a row was skipped while showing it answered.
+    const erroredIdx = results.reduce(
+      (acc, r, i) => (r && r.error && r.error.code !== SKIPPED_DEPENDENCY_NOT_IN_CARRIER ? [...acc, i] : acc),
+      []
+    );
     if (erroredIdx.length && !abortErr && !userCancelledRun.has(opts.runKey)) {
       logger.info('ragas-suite.run_completeness_sweep', {
         repo_id: repoId,
@@ -2478,7 +2748,21 @@ async function runSuite(repoId, suiteKey, opts = {}) {
     // documented denominator).
     const inScopeIds = new Set(entries.filter((e) => e.oos).map((e) => e.id));
     const inScopeRows = results.filter((r) => r && !inScopeIds.has(r.id));
-    const erroredRows = inScopeRows.filter((r) => r.error).length;
+    // A row that was NOT ATTEMPTED is not a failure. A skipped row carries
+    // an `error` (that is how the row records its reason), but the pipeline
+    // never failed on it — it was never asked. Counting it as an error
+    // would file "the repository this question was minted from is not in
+    // the carrier" as the CAUSE of the run, which sends the operator to the
+    // wrong row: the run may have died of something else entirely, and the
+    // skipped rows are not that something.
+    const isFailure = (r) => Boolean(r && r.error) && r.error.code !== SKIPPED_DEPENDENCY_NOT_IN_CARRIER;
+    const erroredRows = inScopeRows.filter(isFailure).length;
+    // ...and the rows that were NOT ATTEMPTED. A run in which every
+    // in-scope row was skipped did not fail — it measured nothing, and the
+    // envelope must say THAT: "every answer failed" would point the
+    // operator at a pipeline that worked perfectly.
+    const skippedRows = inScopeRows.filter((r) => r.error && r.error.code === SKIPPED_DEPENDENCY_NOT_IN_CARRIER).length;
+    const nothingMeasured = inScopeRows.length > 0 && skippedRows === inScopeRows.length;
     const abstainedRows = inScopeRows.filter((r) => r && r.abstained).length;
     const answeredRows = inScopeRows.filter(isAnswered).length;
     // The dominant abstention reason, for the failed-run envelope — the
@@ -2511,7 +2795,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
       // (2026-10-27: 50 refusals were judged and filed as a 0-score run).
       const abstentionOnly = abstainedRows > 0 && erroredRows === 0;
       const firstErr =
-        (results.find((r) => r.error && r.error.code !== 'SKIPPED_RUN_ABORTED') || {}).error ||
+        (
+          results.find(
+            (r) =>
+              r.error && r.error.code !== 'SKIPPED_RUN_ABORTED' && r.error.code !== SKIPPED_DEPENDENCY_NOT_IN_CARRIER
+          ) || {}
+        ).error ||
         (abstentionOnly
           ? {
               code: 'MASS_ABSTENTION',
@@ -2525,8 +2814,12 @@ async function runSuite(repoId, suiteKey, opts = {}) {
                 'not a benchmark result: fix the cause the reasons name, then run again.'
             }
           : {
-              code: 'ANSWER_LEG_FAILED',
-              message: 'every answer failed'
+              code: nothingMeasured ? 'NOTHING_MEASURED' : 'ANSWER_LEG_FAILED',
+              message: nothingMeasured
+                ? `none of the ${inScopeRows.length} in-scope rows could be measured — every one was ` +
+                  'not attempted because the repository it was minted from is not in the carrier. ' +
+                  'This is not a pipeline failure: refresh the context (or widen it) and run again.'
+                : 'every answer failed'
             });
       // Top-level `error` is the READ contract for failed runs — getRunSuite
       // strips a failed doc to {run_key, suite_key, status, error} and the
@@ -2731,6 +3024,29 @@ async function runSuite(repoId, suiteKey, opts = {}) {
               graph_names: carrier.graph_names || []
             }
           : null,
+        // #2061 phase 3 (E-7): the PAIRING — the suite's binding, this
+        // run's context, and whether the two are about the same thing.
+        pairing: {
+          status: pairingResult.status,
+          comparable: pairingResult.comparable,
+          reasons: pairingResult.reasons,
+          missing_pool: pairingResult.missing_pool,
+          carrier_grew: pairingResult.carrier_grew,
+          // The share of the suite's pool this run still measured over.
+          pool_coverage: pairingResult.pool_coverage === undefined ? null : pairingResult.pool_coverage,
+          skipped_rows: pairingResult.skipped_rows.map((r) => ({
+            id: r.id,
+            query: (entries[r.index] || {}).query || null,
+            reason: r.reason,
+            dependencies: r.dependencies
+          })),
+          suite_context_id: suiteContext ? suiteContext.id : null,
+          suite_context_version: suiteContext ? suiteContext.version : null,
+          run_context_id: runContext ? runContext.id : null,
+          repo_set_hash: (opts.keys && opts.keys.repo_set_hash) || null,
+          head_version_hash: (opts.keys && opts.keys.head_version_hash) || null,
+          experiment: opts.experiment || null
+        },
         source_attribution: sourceAttribution,
         // How much of the suite the judge actually measured — a partial
         // average is not a benchmark result (sidecar review F2). The
@@ -2841,15 +3157,18 @@ function rowWasJudged(r) {
  * The population is the IN-SCOPE rows. An out-of-scope row is a control:
  * deliberately unanswerable, kept for contrast, "never counted as a failure,
  * a control and not a result" (the guide). It must therefore sit in NONE of
- * the four buckets, in NONE of the means, and in NONE of the coverage
+ * the five buckets, in NONE of the means, and in NONE of the coverage
  * denominators. Mixing the two populations is what made the panel's outcome
  * bar misreport which rows failed: n_errors and n_abstained counted
  * out-of-scope rows while n_evaluable and failing_count did not, and the
  * panel's client-side subtraction (failing_count − n_abstained) subtracted
  * a decline that was never judged in the first place.
  *
- * The four buckets now partition the in-scope rows exactly, each row in
+ * The five buckets now partition the in-scope rows exactly, each row in
  * exactly one:
+ *   skipped   — the question was NOT ATTEMPTED (its source repository left
+ *               the carrier); never judged; NOT an error — the pipeline never
+ *               failed, and it is never retried
  *   error     — the pipeline failed; no answer; never judged
  *   abstained — the answerer declined; NEVER judged (2026-10-27: an
  *               abstention is not an answer — the refusal is not submitted
@@ -2867,6 +3186,7 @@ function summarizeRun(suite, results, metrics) {
   const inScope = results.filter((r) => !(byId.get(r.id) || {}).oos);
   const nOos = results.length - inScope.length;
   let nErrors = 0;
+  let nSkipped = 0;
   let nAbstained = 0;
   // A decline was HISTORICALLY two states: arrived with no answer (never
   // judged — no score, out of the averages, coverage-reducing) or arrived
@@ -2891,6 +3211,14 @@ function summarizeRun(suite, results, metrics) {
     }
     const judged = rowWasJudged(r);
     if (r.error) {
+      // A question that was NOT ATTEMPTED is not a pipeline failure: it was
+      // skipped because the repository it was minted from left the carrier.
+      // It is its own bucket — "not measured", never a zero and never an
+      // error, because neither claim is true of it.
+      if (r.error.code === SKIPPED_DEPENDENCY_NOT_IN_CARRIER) {
+        nSkipped += 1;
+        continue;
+      }
       nErrors += 1;
       continue;
     }
@@ -2927,6 +3255,7 @@ function summarizeRun(suite, results, metrics) {
   return {
     n,
     n_errors: nErrors,
+    n_skipped: nSkipped,
     n_abstained: nAbstained,
     n_abstained_unjudged: nAbstainedUnjudged,
     n_evaluable: inScope.length,

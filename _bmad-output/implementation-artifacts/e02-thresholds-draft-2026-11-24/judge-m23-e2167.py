@@ -121,6 +121,7 @@ def judge_call(row: dict, entry: dict) -> dict:
         {
             "model": MODEL,
             "temperature": 0,
+            "max_tokens": 500,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -140,13 +141,16 @@ def judge_call(row: dict, entry: dict) -> dict:
     last_error = None
     for attempt in range(4):
         try:
-            with urllib.request.urlopen(request, timeout=120, context=SSL_CONTEXT) as response:
+            with urllib.request.urlopen(request, timeout=240, context=SSL_CONTEXT) as response:
                 body = json.loads(response.read().decode("utf-8"))
             content = body["choices"][0]["message"]["content"]
             verdict = json.loads(content)
             verdict["judge_usage"] = body.get("usage", {})
             return verdict
-        except (urllib.error.HTTPError, urllib.error.URLError, KeyError, json.JSONDecodeError) as failed:
+        except (urllib.error.HTTPError, urllib.error.URLError, KeyError, json.JSONDecodeError, TimeoutError, OSError) as failed:
+            # OSError/TimeoutError: a mid-body socket read timing out is the
+            # same retryable transport class as a URLError (the C leg's long
+            # answers made the gateway exceed the read timeout on first tries).
             last_error = failed
             time.sleep(5 * (attempt + 1))
     raise RuntimeError(f"judge call failed after retries for {row['case_id']}: {last_error}")

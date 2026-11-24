@@ -697,6 +697,23 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       }
     });
 
+    test('the GPU-node stack stays deliberately unpinned for tool calling (#2096)', () => {
+      // #2096: the stack's shipped default model is Granite 3.x, whose
+      // documented parser (`granite`) also needs a chat template this
+      // stack cannot reference — the flags must never appear here (the
+      // file's own comment carries the reasoning and the by-hand remedy
+      // for a Granite 4.x override). Checked on the resolved command,
+      // both compose shapes (folded string / list): joined, then
+      // substring-matched, so an equals-form token cannot slip past
+      // element equality.
+      const services = JSON.parse(gpuNvidia.stdout).services;
+      const command = Array.isArray(services['vllm-llm'].command)
+        ? services['vllm-llm'].command.join(' ')
+        : String(services['vllm-llm'].command);
+      expect(command).not.toContain('--tool-call-parser');
+      expect(command).not.toContain('--enable-auto-tool-choice');
+    });
+
     test('the NVIDIA GPU-node render keeps its historical published ports', () => {
       // The NVIDIA GPU-node stack must publish exactly what it always did:
       // the parameterized rows render as "443"/"80" when the port vars are

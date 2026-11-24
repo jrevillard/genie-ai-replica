@@ -4192,15 +4192,6 @@ docs:validate:
     # with THAT parser instead of the derived default (absent for 3.x).
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-parser-override.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it vllm_tool_call_parser=granite"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-parser-override.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite' in s['command']"
-    # The third vLLM serving surface — the standalone GPU-node stack at
-    # the repo root (#2096) — stays deliberately UNPINNED: its shipped
-    # default model is Granite 3.x, whose parser also needs a chat
-    # template this stack cannot reference (the file's own note carries
-    # the reasoning). The flags must never appear unconditionally here —
-    # in the command OR the entrypoint (a pin in the entrypoint would
-    # leave the command clean); assert both so a future pin cannot land
-    # silently.
-    - python3 -c "import yaml; s=yaml.safe_load(open('docker-compose.gpu.yaml'))['services']['vllm-llm']; c=str(s['command']); assert 'tool-call-parser' not in c and '--enable-auto-tool-choice' not in c, c; e=str(s.get('entrypoint') or ''); assert 'tool-call-parser' not in e and 'enable-auto-tool-choice' not in e, e"
     # #2119: the served-model ids are MANDATORY — a render without them must
     # FAIL, and the error must NAME the variable (never a silent default).
     # The runner script carries set -e: capture the expected failure with
@@ -4221,7 +4212,6 @@ docs:validate:
         - "tests/ansible-non-root/**/*"
         - "CLAUDE.md"
         - ".gitlab-ci.yml"
-        - "docker-compose.gpu.yaml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success

@@ -639,12 +639,15 @@ a test-only dependency; it never reaches a runtime image).
 
 ### langdetect
 **Component Type:** Language Detection Library
-**Version:** 1.0.9 (the pinned version of the agent service and the overlay)
+**Version:** 1.0.9 (Python — the pinned version of the agent service and the overlay); ^0.2.1 (npm — document-repository)
 **Repository:** https://github.com/Mimino666/langdetect
 **License:** Apache 2.0 (or BSD-like)
 **License URL:** https://github.com/Mimino666/langdetect/blob/master/LICENSE
 
-**Usage:** Automatic language detection for text content.
+**Usage:** Automatic language detection for text content. The Python pin is
+license-verified for its exact version in
+`docs/dependencies/agent-service-dependency-evidence.json` (the artifact
+LICENSE carries the vendored Cybozu Labs Apache-2.0 NOTICE).
 
 ---
 
@@ -733,7 +736,7 @@ recorded V02 semantics).
 **Version:** 1.26.4
 **Repository:** https://github.com/numpy/numpy
 **License:** BSD 2-Clause
-**License URL:** https://github.com/numpy/numpy/blob/main/LICENSES/LICENSE_numpy_bsd2.txt
+**License URL:** https://github.com/numpy/numpy/blob/main/LICENSE.txt
 
 **Usage:** The adaptive selection math of the agent service and the reranker.
 
@@ -744,7 +747,7 @@ recorded V02 semantics).
 **Version:** 1.17.1
 **Repository:** https://github.com/scipy/scipy
 **License:** BSD 2-Clause
-**License URL:** https://github.com/scipy/scipy/blob/main/LICENSES_license.txt
+**License URL:** https://github.com/scipy/scipy/blob/main/LICENSE.txt
 
 **Usage:** kneed's dependency tree on the agent service (the knee-detection math).
 
@@ -767,7 +770,7 @@ which setuptools ships. 81.0.0 is the newest release that still carries it
 ### rag-benchmarks eval tree
 **Component Type:** Python dependency tree (eval-only, never in a runtime image)
 **Version:** the 7 top-level pins of `tests/rag-benchmarks/eval/requirements.txt`
-**License:** MIT and Apache 2.0 - per package, verified for the exact version
+**License:** MIT, Apache 2.0 and BSD 3-Clause - per package, verified for the exact version
 **License URL:** `docs/dependencies/rag-benchmarks-eval-dependency-evidence.json`
 
 **Usage:** The evaluation harness's judge stack (ragas, the langchain

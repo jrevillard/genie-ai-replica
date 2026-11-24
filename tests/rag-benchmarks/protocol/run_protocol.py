@@ -685,12 +685,12 @@ def cmd_e02(args: argparse.Namespace) -> int:
         if correctness_ledger is None:
             return 1
     entries = []
-    if args.set_path:
-        try:
-            _, entries = load_set(args.set_path, kind="assessment")
-        except SetValidationError as failed:
-            print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
-            return 1
+    try:
+        _, entries = load_set(args.set_path, kind="assessment")
+    except SetValidationError as failed:
+        print(f"REFUSED: {args.set_path}: {failed}", file=sys.stderr)
+        return 1
+    set_sha256 = sha256_file(args.set_path)
     try:
         report = build_e02_report(
             b_manifest=b_manifest,
@@ -698,6 +698,7 @@ def cmd_e02(args: argparse.Namespace) -> int:
             b_rows=b_rows,
             c_rows=c_rows,
             entries=entries,
+            set_sha256=set_sha256,
             reference_manifest=reference_manifest,
             thresholds=thresholds,
             correctness_ledger=correctness_ledger,
@@ -910,8 +911,8 @@ def build_parser() -> argparse.ArgumentParser:
     e2.add_argument(
         "--set",
         dest="set_path",
-        default=None,
-        help="the assessment set (the query-class source; absent = every case reads as unclassified)",
+        required=True,
+        help="the assessment set the legs ran against (the query-class source; its digest is verified against the legs' lineage)",
     )
     e2.add_argument(
         "--reference-manifest",

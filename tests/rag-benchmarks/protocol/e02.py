@@ -10,37 +10,52 @@ orchestration is the recorded intentional difference, so the E02 delta
 attributes to the agent and to nothing else (PRD §8, pair E02).
 
 This module is the E02 comparison layer: a pure, digest-pinned join of the B
-leg and the C leg into per-dimension records, the gains per query class, the
-costs, the thresholds applied, the uncontrolled differences and an honest
-verdict.
+leg and the C leg into per-dimension records, the B-vs-C comparison, the gains
+per query class, the costs, the thresholds applied, the uncontrolled
+differences and an honest verdict.
 
 The honesty rules are the point of the layer, and they are the reason the
 report is allowed to be unsatisfying:
 
 * a surface a leg cannot provide is recorded as NOT AVAILABLE with its reason —
-  never invented, never silently dropped;
+  never invented, never silently dropped (a count nobody measured is never
+  published as a zero);
 * a threshold nobody agreed is recorded as ABSENT with its blocking reason —
   never defaulted, never reported as satisfied;
-* a bound scoped to another configuration's surface is recorded as NOT
-  MEASURABLE here — the signed retrieval bounds are scoped to config A's
-  chunk-level anchor metrics, and config B/C measure the doc-level surface, so
-  the bounds do not transfer (the thresholds registry says so in its own
-  ``surface`` and ``scope`` fields);
+* a bound scoped to another configuration is NOT APPLICABLE here, and a bound
+  whose surface does not carry the metric is NOT MEASURABLE — the scope is
+  ACTED ON, not quoted;
+* a signed bound whose direction or threshold is not comparable is
+  UNINTERPRETABLE — it blocks, it never passes and never fails;
 * a query class the assessment set does not carry is recorded as NOT COVERED —
   the agentic benefit the PRD §4.1 note describes (multi-hop and ambiguous
-  queries) stays a HYPOTHESIS until a set carries those cases;
-* a negative result is recorded, not massaged.
+  queries) stays a HYPOTHESIS;
+* the verdict is a B-vs-C comparison — a bound the FIXED pipeline breaks is its
+  own state, never the agent's verdict, and a negative result is recorded, not
+  massaged;
+* every row the report writes is redacted at every depth (the shared
+  ``redaction`` rule) — a credential-named key never reaches a committed
+  artifact.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 from . import PROTOCOL_VERSION
 from . import pairs as pairs_mod
-from .counter_metrics import CounterMetricsRefusal, build_counter_metrics_report
+from .counter_metrics import (
+    COST_COUNTERS,
+    FAILURE_STATES,
+    LIMIT_MARKER_B,
+    LIMIT_MARKER_C,
+    CounterMetricsRefusal,
+    build_counter_metrics_report,
+)
 from .evalset import base_case_id
-from .manifest import manifest_digest, sha256_json
+from .manifest import manifest_digest, manifest_lineage, sha256_json
+from .redaction import redact_deep
 
 E02_REPORT_VERSION = "1.0.0"
 E02_REPORT_ARTIFACT = "e02-report"
@@ -61,8 +76,8 @@ B_M3_SURFACE = "the B row's mechanical abstention facts (abstained / abstention_
 C_M3_SURFACE = "the C row's answer text (config C carries no mechanical abstention flag)"
 B_M4_SURFACE = "the protocol layer's per-case wall_ms (the B rows)"
 C_M4_SURFACE = "the protocol layer's per-case wall_ms (the C rows)"
-B_M5_SURFACE = "the B row's resource record (the row's metadata.usage)"
-C_M5_SURFACE = "the C row's usage_record"
+B_M5_SURFACE = "the run's aggregated cost counters (the B rows' metadata.usage)"
+C_M5_SURFACE = "the run's aggregated cost counters (the C rows' usage_record)"
 
 # The query classes the PRD §4.1 note names as the agentic-gain classes. A set
 # that carries no case of a class is reported as NOT COVERED — the benefit
@@ -97,6 +112,7 @@ HONEST_EVIDENCE_STATEMENT = (
 THRESHOLD_APPLIED = "applied"
 THRESHOLD_ABSENT = "absent"
 THRESHOLD_NOT_MEASURABLE = "not_measurable"
+THRESHOLD_NOT_APPLICABLE = "not_applicable"
 THRESHOLD_UNINTERPRETABLE = "uninterpretable"
 
 # The comparison outcomes.
@@ -108,6 +124,13 @@ COMPARISON_NOT_MEASURABLE = "not_measurable"
 VERDICT_SUPPORTED = "supported"
 VERDICT_NOT_SUPPORTED = "not_supported"
 VERDICT_UNASSESSABLE = "unassessable"
+
+# The scope rule: a signed scope that names a configuration applies to THAT
+# configuration only. The signed M-1 bounds are scoped to "config A — the
+# chunk/passage-level anchor metrics"; the E02 legs measure the doc-level
+# surface, so those bounds are NOT APPLICABLE here — whatever metric names
+# they happen to carry.
+_SCOPE_CONFIG = re.compile(r"config\s*([abc])\b", re.IGNORECASE)
 
 
 class E02Refusal(RuntimeError):
@@ -121,13 +144,6 @@ class E02Refusal(RuntimeError):
 # ---------------------------------------------------------------------------
 # The typed refusals — before any report is built
 # ---------------------------------------------------------------------------
-
-
-def _manifest_lineage(manifest: dict) -> tuple[str | None, str | None]:
-    """The (corpus fingerprint, assessment-set digest) a manifest records."""
-    corpus = (manifest.get("corpus") or {}).get("fingerprint")
-    assessment = ((manifest.get("sets") or {}).get("assessment") or {}).get("sha256")
-    return corpus, assessment
 
 
 def _verify_row_vocabulary(rows: dict, config: str) -> None:
@@ -173,6 +189,7 @@ def _verify_legs(
     c_manifest: dict,
     b_rows: dict,
     c_rows: dict,
+    set_sha256: str | None = None,
     reference_manifest: dict | None = None,
     thresholds: dict | None = None,
 ) -> None:
@@ -180,10 +197,10 @@ def _verify_legs(
     identity, lineage.
 
     The E02 lineage is stricter than E01's in one respect: BOTH legs are gated
-    runs, and they must have been gated against the SAME predecessor — two
-    legs gated against different references were measured under different
-    thresholds, and comparing them would attribute the difference to the
-    agent.
+    runs, and they must have been gated against the SAME predecessor AND the
+    SAME signed thresholds — two legs gated against different thresholds were
+    measured under different bounds, and comparing them would attribute the
+    difference to the agent.
     """
     for name, value in (("the B-leg gated manifest", b_manifest), ("the C-leg gated manifest", c_manifest)):
         if not isinstance(value, dict) or not value:
@@ -210,8 +227,8 @@ def _verify_legs(
     _verify_row_vocabulary(b_rows, "B")
     _verify_row_vocabulary(c_rows, "C")
 
-    b_corpus, b_set = _manifest_lineage(b_manifest)
-    c_corpus, c_set = _manifest_lineage(c_manifest)
+    b_corpus, b_set = manifest_lineage(b_manifest)
+    c_corpus, c_set = manifest_lineage(c_manifest)
     absent = []
     if not b_corpus:
         absent.append("the B leg's corpus fingerprint")
@@ -236,32 +253,52 @@ def _verify_legs(
             "lineage_mismatch",
             "the legs do not share a lineage — " + " and ".join(mismatched) + " — refusing before the report is built",
         )
-
-    # Both legs are gated runs: the gate wrote the predecessor it selected into
-    # each manifest. They must be the SAME predecessor — a comparison across
-    # two predecessors would attribute the thresholds' difference to the agent.
-    b_gated_against = (b_manifest.get("lineage") or {}).get("reference_manifest_sha256")
-    c_gated_against = (c_manifest.get("lineage") or {}).get("reference_manifest_sha256")
-    if not b_gated_against or not c_gated_against:
+    # The assessment set the report reads its query classes from must be the
+    # set the legs ran against: the class census is a claim about the set, and
+    # a claim about another set is not a claim at all.
+    if set_sha256 is not None and set_sha256 != b_set:
         raise E02Refusal(
             "lineage_mismatch",
-            "a gated leg carries no reference-manifest lineage — the gate records the predecessor"
-            " it selected — refusing before the report is built",
+            f"the assessment set supplied to the report ({set_sha256!r}) is not the set the legs ran"
+            f" against ({b_set!r}) — refusing before the report is built",
         )
-    if b_gated_against != c_gated_against:
+
+    # Both legs are gated runs: the gate wrote the predecessor and the signed
+    # thresholds it selected into each manifest. They must be the SAME — a
+    # comparison across two predecessors or two thresholds artifacts would
+    # attribute their difference to the agent.
+    b_lineage = b_manifest.get("lineage") or {}
+    c_lineage = c_manifest.get("lineage") or {}
+    for leg, lineage in (("B", b_lineage), ("C", c_lineage)):
+        if not lineage.get("reference_manifest_sha256") or not lineage.get("thresholds_sha256"):
+            raise E02Refusal(
+                "lineage_mismatch",
+                f"the {leg} leg carries no gate lineage (the predecessor and the signed thresholds"
+                " the gate selected) — refusing before the report is built",
+            )
+    if b_lineage["reference_manifest_sha256"] != c_lineage["reference_manifest_sha256"]:
         raise E02Refusal(
             "lineage_mismatch",
-            f"the legs were gated against DIFFERENT predecessors ({b_gated_against!r} vs"
-            f" {c_gated_against!r}) — they were measured under different thresholds, so the"
-            " comparison would attribute the difference to the agent — refusing before the report is built",
+            f"the legs were gated against DIFFERENT predecessors ({b_lineage['reference_manifest_sha256']!r}"
+            f" vs {c_lineage['reference_manifest_sha256']!r}) — they were measured under different"
+            " thresholds, so the comparison would attribute the difference to the agent — refusing"
+            " before the report is built",
+        )
+    if b_lineage["thresholds_sha256"] != c_lineage["thresholds_sha256"]:
+        raise E02Refusal(
+            "lineage_mismatch",
+            f"the legs were gated against DIFFERENT signed thresholds"
+            f" ({b_lineage['thresholds_sha256']!r} vs {c_lineage['thresholds_sha256']!r}) — refusing"
+            " before the report is built",
         )
     if reference_manifest is not None:
         reference_digest = manifest_digest(reference_manifest)
-        if reference_digest != b_gated_against:
+        if reference_digest != b_lineage["reference_manifest_sha256"]:
             raise E02Refusal(
                 "lineage_mismatch",
                 f"the supplied reference manifest ({reference_digest!r}) is not the predecessor the"
-                f" legs were gated against ({b_gated_against!r}) — refusing before the report is built",
+                f" legs were gated against ({b_lineage['reference_manifest_sha256']!r}) — refusing"
+                " before the report is built",
             )
     if thresholds is not None:
         if not thresholds.get("signed"):
@@ -276,11 +313,22 @@ def _verify_legs(
                 "the thresholds artifact binds another corpus or assessment set — refusing before the"
                 " report is built",
             )
-        if thresholds.get("reference_manifest_sha256") != b_gated_against:
+        if thresholds.get("reference_manifest_sha256") != b_lineage["reference_manifest_sha256"]:
             raise E02Refusal(
                 "thresholds_lineage_mismatch",
                 "the thresholds artifact references another predecessor than the legs were gated"
                 " against — refusing before the report is built",
+            )
+        # The legs carry the digest of the thresholds artifact the gate
+        # selected; the artifact the report would apply must BE it.
+        applied_digest = sha256_json(thresholds)
+        if applied_digest != b_lineage["thresholds_sha256"]:
+            raise E02Refusal(
+                "thresholds_lineage_mismatch",
+                f"the thresholds artifact supplied to the report ({applied_digest[:12]}) is not the"
+                f" one the legs were gated under ({b_lineage['thresholds_sha256'][:12]}) — the report"
+                " would apply bounds the legs were not measured under — refusing before the report"
+                " is built",
             )
 
 
@@ -393,7 +441,11 @@ def _b_m3(b_rows: dict) -> dict:
 def _c_m3(c_rows: dict) -> dict:
     """Config C carries NO mechanical abstention flag — the no-agent pipeline
     owns that flag — so the C surface is the answer text and the terminal
-    outcome, and the record SAYS so instead of inventing an abstention count.
+    outcomes, and the record SAYS so instead of inventing an abstention count.
+
+    The absence is carried by the MISSING key: a count nobody measured is
+    never published as a zero (a zero would compare against a signed bound
+    and deny the agent on a fact that was never recorded).
     """
     answered = _c_answered_rows(c_rows)
     return _surface_record(
@@ -401,18 +453,25 @@ def _c_m3(c_rows: dict) -> dict:
         available=True,
         values={
             "n_answered_rows": len(answered),
-            "n_rows_with_abstention_fact": 0,
-            "n_cancelled_rows": sum(1 for row in c_rows.values() if isinstance(row, dict) and row.get("outcome") == "cancelled"),
+            "n_cancelled_rows": sum(
+                1 for row in c_rows.values() if isinstance(row, dict) and row.get("outcome") == "cancelled"
+            ),
+            "n_admission_refused_rows": sum(
+                1 for row in c_rows.values() if isinstance(row, dict) and row.get("outcome") == "admission_refused"
+            ),
             "n_error_rows": sum(
                 1
                 for row in c_rows.values()
-                if isinstance(row, dict) and row.get("outcome") not in (None, "answered")
+                if isinstance(row, dict)
+                and row.get("outcome") in FAILURE_STATES
             ),
         },
         notes=[
             "config C carries no mechanical abstention flag (the no-agent pipeline owns it): the"
             " abstention correctness of the agentic leg is a JUDGED dimension — the row carries"
-            " the answer text and the terminal outcome, and the judge layer decides",
+            " the answer text and the terminal outcome, and the judge layer decides. NO"
+            " abstention count is published for this leg: the fact was never recorded, and a"
+            " zero would be a fabricated measurement",
         ],
     )
 
@@ -470,18 +529,38 @@ def _latency_surface(rows: dict, config: str, surface: str) -> dict:
     )
 
 
+def _aggregate_cost(usage_records: list[dict]) -> dict:
+    """The run's cost surface: the counters of the cost vocabulary, summed
+    over the leg's rows, with the number of contributing rows named.
+
+    The shape is the SAME on both legs (the same counter names, the same
+    aggregation) so a signed bound compares like with like — and it is the
+    RUN's cost, not one arbitrary case's spend.
+    """
+    totals: dict = {}
+    for record in usage_records:
+        if not isinstance(record, dict):
+            continue
+        for counter in COST_COUNTERS:
+            value = record.get(counter)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                entry = totals.setdefault(counter, {"sum": 0.0, "n_rows": 0})
+                entry["sum"] += float(value)
+                entry["n_rows"] += 1
+    if not totals:
+        return {}
+    return {counter: entry["sum"] for counter, entry in sorted(totals.items())}
+
+
 def _b_m5(b_rows: dict) -> dict:
-    recorded: dict = {}
+    records = []
     for row in _b_ok_rows(b_rows):
         metadata = row.get("metadata")
-        if not isinstance(metadata, dict):
-            continue
-        for key, value in metadata.items():
-            if str(key) != "usage":
-                continue
-            recorded.setdefault(str(key), value)
-    if recorded:
-        return _surface_record(surface=B_M5_SURFACE, available=True, values=recorded)
+        if isinstance(metadata, dict) and isinstance(metadata.get("usage"), dict):
+            records.append(metadata["usage"])
+    aggregated = _aggregate_cost(records)
+    if aggregated:
+        return _surface_record(surface=B_M5_SURFACE, available=True, values=aggregated)
     return _surface_record(
         surface=B_M5_SURFACE,
         available=False,
@@ -492,15 +571,14 @@ def _b_m5(b_rows: dict) -> dict:
 
 
 def _c_m5(c_rows: dict) -> dict:
-    recorded: dict = {}
+    records = []
     for row in _c_answered_rows(c_rows):
         usage = row.get("usage_record")
-        if not isinstance(usage, dict):
-            continue
-        for key, value in usage.items():
-            recorded.setdefault(str(key), value)
-    if recorded:
-        return _surface_record(surface=C_M5_SURFACE, available=True, values=recorded)
+        if isinstance(usage, dict):
+            records.append(usage)
+    aggregated = _aggregate_cost(records)
+    if aggregated:
+        return _surface_record(surface=C_M5_SURFACE, available=True, values=aggregated)
     return _surface_record(
         surface=C_M5_SURFACE,
         available=False,
@@ -525,13 +603,20 @@ def _normalize_operator(value) -> str | None:
     return candidate if candidate in OPERATORS else None
 
 
+def _numeric(value):
+    """The numeric value of a bound's threshold — None when it is not one."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
 def _bound_records(value) -> list[dict]:
     """The signed bounds of one dimension, whatever shape the registry gave
     them: a per-metric mapping (the M-1 shape) or a single bound.
 
     A bound the shape is not understood for is NOT dropped — it is returned
-    with ``operator: None`` so the report records it as uninterpretable
-    instead of silently ignoring a signed number.
+    with ``operator: None`` (or a missing metric) so the report records it as
+    uninterpretable instead of silently ignoring a signed number.
     """
     if not isinstance(value, dict):
         return [{"metric": None, "operator": None, "threshold": value, "shape": "scalar"}]
@@ -566,25 +651,43 @@ def _bound_records(value) -> list[dict]:
             operator, threshold = ">=", value.get("min")
         elif isinstance(value.get("max"), (int, float)):
             operator, threshold = "<=", value.get("max")
-    return [{"metric": None, "operator": operator, "threshold": threshold, "shape": "single"}]
+    # A single bound names the metric it bounds — without the name it cannot
+    # be looked up on any surface, and reporting it as "scoped elsewhere"
+    # would blame the surface for a bound that names nothing.
+    metric = value.get("metric") or value.get("name")
+    return [
+        {
+            "metric": str(metric) if isinstance(metric, str) and metric.strip() else None,
+            "operator": operator,
+            "threshold": threshold,
+            "shape": "single",
+        }
+    ]
 
 
 def _compare(operator: str, measured, threshold) -> bool | None:
-    """The comparison itself; None when the two sides are not comparable."""
+    """The comparison itself.
+
+    ``None`` means NOT COMPARABLE (a missing measurement, a non-numeric
+    threshold) — it is distinct from ``False`` (the bound was breached) and
+    the caller records it as uninterpretable, never as a failure.
+    """
     if not isinstance(measured, (int, float)) or isinstance(measured, bool):
         return None
-    if not isinstance(threshold, (int, float)) or isinstance(threshold, bool):
+    bound = _numeric(threshold)
+    if bound is None:
         return None
+    value = float(measured)
     if operator == ">=":
-        return measured >= threshold
+        return value >= bound
     if operator == "<=":
-        return measured <= threshold
+        return value <= bound
     if operator == ">":
-        return measured > threshold
+        return value > bound
     if operator == "<":
-        return measured < threshold
+        return value < bound
     if operator == "==":
-        return measured == threshold
+        return value == bound
     return None
 
 
@@ -595,9 +698,7 @@ def _lookup_metric(values: dict, metric: str | None):
     under ``metrics``); a surface that does not carry the metric yields None,
     which the caller records as NOT MEASURABLE.
     """
-    if not isinstance(values, dict):
-        return None
-    if metric is None:
+    if not isinstance(values, dict) or not metric:
         return None
     if metric in values:
         candidate = values[metric]
@@ -609,14 +710,33 @@ def _lookup_metric(values: dict, metric: str | None):
     return None
 
 
-def _apply_threshold(thresholds: dict | None, code: str, surface: dict) -> dict:
+def _scope_applies_to(scope, config: str) -> bool:
+    """Whether a signed scope applies to a leg.
+
+    A scope that names a configuration applies to THAT configuration only:
+    the signed M-1 bounds are scoped to "config A — the chunk/passage-level
+    anchor metrics", and the E02 legs measure the doc-level surface, so those
+    bounds do not apply here — whatever metric names they happen to carry.
+    A scope that names no configuration is surface-neutral: the metric lookup
+    decides.
+    """
+    if not isinstance(scope, str):
+        return True
+    named = {match.group(1).upper() for match in _SCOPE_CONFIG.finditer(scope)}
+    if not named:
+        return True
+    return config in named
+
+
+def _apply_threshold(thresholds: dict | None, code: str, surface: dict, config: str) -> dict:
     """Apply the signed bound of one dimension to one leg's measured surface.
 
     The outcome vocabulary is explicit: ``applied`` (the bound was compared
     and the result is pass/fail), ``absent`` (nobody agreed a bound — the
-    blocking reason is recorded), ``not_measurable`` (the bound is scoped to
-    another surface — it does not transfer) and ``uninterpretable`` (the
-    signed shape carries no comparable direction).
+    blocking reason is recorded), ``not_applicable`` (the bound is scoped to
+    another configuration), ``not_measurable`` (the surface does not carry the
+    metric) and ``uninterpretable`` (the signed bound carries no comparable
+    direction or threshold — it blocks, it never passes and never fails).
     """
     if thresholds is None:
         return {
@@ -639,11 +759,32 @@ def _apply_threshold(thresholds: dict | None, code: str, surface: dict) -> dict:
         }
     value = entry.get("value")
     scope = value.get("scope") if isinstance(value, dict) else None
+    records = _bound_records(value)
+    if not records:
+        return {
+            "status": THRESHOLD_ABSENT,
+            "reason": (
+                f"the signed value for {code} carries no bound — an empty bound set is an absence,"
+                " never a satisfied dimension"
+            ),
+            "bounds": [],
+        }
     values = surface.get("values") if surface.get("available") else None
     bounds = []
-    for record in _bound_records(value):
+    for record in records:
         measured = _lookup_metric(values, record["metric"])
-        if record["operator"] is None:
+        if record["metric"] is None:
+            outcome = THRESHOLD_UNINTERPRETABLE
+            comparison = None
+            reason = "the signed bound names no metric — it cannot be looked up on any surface"
+        elif not _scope_applies_to(scope, config):
+            outcome = THRESHOLD_NOT_APPLICABLE
+            comparison = None
+            reason = (
+                f"the signed scope ({scope}) does not name this leg's configuration ({config}) —"
+                " the bound is scoped elsewhere and does not transfer"
+            )
+        elif record["operator"] is None:
             outcome = THRESHOLD_UNINTERPRETABLE
             comparison = None
             reason = (
@@ -653,14 +794,20 @@ def _apply_threshold(thresholds: dict | None, code: str, surface: dict) -> dict:
             outcome = THRESHOLD_NOT_MEASURABLE
             comparison = None
             reason = (
-                f"this leg's measurement surface does not carry {record['metric']!r} — the signed"
-                " bound is scoped to another surface and does not transfer"
-                + (f" (the signed scope: {scope})" if scope else "")
+                f"this leg's measurement surface does not carry {record['metric']!r} — the bound"
+                " is not measurable here"
             )
         else:
             comparison = _compare(record["operator"], measured, record["threshold"])
-            outcome = COMPARISON_PASS if comparison else COMPARISON_FAIL
-            reason = None
+            if comparison is None:
+                outcome = THRESHOLD_UNINTERPRETABLE
+                reason = (
+                    "the signed bound's threshold is not a comparable number — the bound is"
+                    " recorded, never read as a breach"
+                )
+            else:
+                outcome = COMPARISON_PASS if comparison else COMPARISON_FAIL
+                reason = None
         bounds.append(
             {
                 "metric": record["metric"],
@@ -677,16 +824,24 @@ def _apply_threshold(thresholds: dict | None, code: str, surface: dict) -> dict:
         status = THRESHOLD_APPLIED
     elif THRESHOLD_UNINTERPRETABLE in statuses:
         status = THRESHOLD_UNINTERPRETABLE
+    elif THRESHOLD_NOT_APPLICABLE in statuses:
+        status = THRESHOLD_NOT_APPLICABLE
     else:
         status = THRESHOLD_NOT_MEASURABLE
     record = {"status": status, "scope": scope, "bounds": bounds}
     if status == THRESHOLD_NOT_MEASURABLE:
         record["reason"] = (
             "no signed bound is measurable on this leg's surface — the signed bounds apply to"
-            " another configuration's measurement surface"
+            " another measurement surface"
+        )
+    elif status == THRESHOLD_NOT_APPLICABLE:
+        record["reason"] = (
+            "the signed bounds are scoped to another configuration — they do not transfer to this leg"
         )
     elif status == THRESHOLD_UNINTERPRETABLE:
-        record["reason"] = "a signed bound carries no comparable direction — recorded, never guessed"
+        record["reason"] = (
+            "a signed bound carries no comparable direction or threshold — recorded, never guessed"
+        )
     return record
 
 
@@ -713,8 +868,22 @@ def _query_class(entry: dict) -> str:
 
 
 def _leg_class_stats(rows: dict, config: str) -> dict:
-    """The per-class counts of one leg: answered, abstained, failed, cancelled."""
-    stats = {"n_answered": 0, "n_abstained": 0, "n_failed": 0, "n_cancelled": 0, "n_rows": 0}
+    """The per-class counts of one leg.
+
+    The vocabulary is the counter-metrics layer's terminal-state vocabulary:
+    an ADMISSION REFUSAL is neither a failure nor a limit hit (the lane
+    refused the run on purpose — CM-3 counts it apart), and the report must
+    not contradict its own CM-3 record.
+    """
+    stats = {
+        "n_answered": 0,
+        "n_abstained": 0,
+        "n_admission_refused": 0,
+        "n_limit_hit": 0,
+        "n_failed": 0,
+        "n_cancelled": 0,
+        "n_rows": 0,
+    }
     for row in rows.values():
         if not isinstance(row, dict):
             continue
@@ -725,17 +894,26 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
                 continue
             if row.get("abstained") is True:
                 stats["n_abstained"] += 1
+            if row.get("abstention_reason") == LIMIT_MARKER_B:
+                stats["n_limit_hit"] += 1
             if row.get("status") == "ok":
                 stats["n_answered"] += 1
-        else:
-            outcome = row.get("outcome")
-            if outcome == "cancelled":
-                stats["n_cancelled"] += 1
-                continue
-            if outcome != "answered":
-                stats["n_failed"] += 1
-                continue
-            stats["n_answered"] += 1
+            continue
+        outcome = row.get("outcome")
+        usage = row.get("usage_record") if isinstance(row.get("usage_record"), dict) else {}
+        if outcome == "cancelled":
+            stats["n_cancelled"] += 1
+            continue
+        if outcome == "admission_refused":
+            stats["n_admission_refused"] += 1
+            continue
+        if usage.get("outcome") == LIMIT_MARKER_C:
+            stats["n_limit_hit"] += 1
+            continue
+        if outcome != "answered":
+            stats["n_failed"] += 1
+            continue
+        stats["n_answered"] += 1
     return stats
 
 
@@ -758,9 +936,11 @@ def _class_latency(rows: dict, config: str, case_ids: set[str]) -> list[float]:
 def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
     """The gains per query class — the B-vs-C delta, class by class.
 
-    The two classes the PRD §4.1 note names (multi-hop, ambiguous) are
-    reported even when the set carries no case of them: a class with no case
-    is NOT COVERED, and the benefit stays a hypothesis.
+    The class census comes from the ASSESSMENT SET (the cases the legs were
+    measured on), not from the rows: a class the set carries but the legs
+    produced no row for is still a class the set carries, and a class the set
+    does not carry is NOT COVERED — the benefit the PRD §4.1 note describes
+    stays a hypothesis.
     """
     class_of: dict[str, str] = {}
     for entry in entries or []:
@@ -768,25 +948,30 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
             continue
         class_of[base_case_id(entry["id"])] = _query_class(entry)
 
-    members: dict[str, set[str]] = {}
-    for case_id in set(b_rows) | set(c_rows):
-        base = base_case_id(case_id)
-        members.setdefault(class_of.get(base, "unclassified"), set()).add(case_id)
+    set_classes: dict[str, set[str]] = {}
+    for case_id, name in class_of.items():
+        set_classes.setdefault(name, set()).add(case_id)
 
     per_class = {}
-    for name in sorted(members):
-        case_ids = members[name]
+    for name in sorted(set_classes):
+        case_ids = set_classes[name]
         b_stats = _leg_class_stats({cid: b_rows[cid] for cid in case_ids if cid in b_rows}, "B")
         c_stats = _leg_class_stats({cid: c_rows[cid] for cid in case_ids if cid in c_rows}, "C")
         b_walls = _class_latency(b_rows, "B", case_ids)
         c_walls = _class_latency(c_rows, "C", case_ids)
         per_class[name] = {
-            "n_cases": len(case_ids),
+            "n_cases_in_set": len(case_ids),
+            "n_cases_recorded": {
+                "B": b_stats["n_rows"],
+                "C": c_stats["n_rows"],
+            },
             "B": {**b_stats, "latency": _latency_stats(b_walls) if b_walls else None},
             "C": {**c_stats, "latency": _latency_stats(c_walls) if c_walls else None},
             "delta": {
                 "answered": c_stats["n_answered"] - b_stats["n_answered"],
                 "abstained": c_stats["n_abstained"] - b_stats["n_abstained"],
+                "admission_refused": c_stats["n_admission_refused"] - b_stats["n_admission_refused"],
+                "limit_hit": c_stats["n_limit_hit"] - b_stats["n_limit_hit"],
                 "failed": c_stats["n_failed"] - b_stats["n_failed"],
                 "cancelled": c_stats["n_cancelled"] - b_stats["n_cancelled"],
                 "median_latency_ms": (
@@ -804,12 +989,12 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
 
     not_covered = []
     for name in AGENTIC_GAIN_CLASSES:
-        if name in per_class:
+        if name in set_classes:
             continue
         not_covered.append(
             {
                 "query_class": name,
-                "n_cases": 0,
+                "n_cases_in_set": 0,
                 "reason": (
                     "the assessment set carries no case of this class — the agentic benefit the"
                     " PRD §4.1 note describes stays a HYPOTHESIS until a set carries the class;"
@@ -818,12 +1003,29 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
                 ),
             }
         )
-    return {"per_class": per_class, "not_covered": not_covered}
+    return {
+        "per_class": per_class,
+        "not_covered": not_covered,
+        "census_source": "the assessment set's entries (the cases the legs ran against)",
+    }
 
 
 # ---------------------------------------------------------------------------
 # The uncontrolled differences — recorded evidence only
 # ---------------------------------------------------------------------------
+
+
+def _recorded_comparison(b_value, c_value, note: str) -> dict:
+    """A per-leg comparison that never claims equality from ABSENCE: an
+    unrecorded side is 'not recorded', never 'identical' (the harness records
+    what it measured and says what it did not)."""
+    if b_value is None or c_value is None:
+        state = "not_recorded"
+    elif b_value == c_value:
+        state = "identical"
+    else:
+        state = "different"
+    return {"B": b_value, "C": c_value, "state": state, "note": note}
 
 
 def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | None) -> dict:
@@ -839,9 +1041,9 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
     def _side(configuration: dict, config: str) -> dict:
         return {
             "config": config,
-            "model_ids": configuration.get("model_ids") or {},
-            "prompt_digests": configuration.get("prompt_digests") or {},
-            "resolved_env": configuration.get("resolved_env") or {},
+            "model_ids": redact_deep(configuration.get("model_ids") or {}),
+            "prompt_digests": redact_deep(configuration.get("prompt_digests") or {}),
+            "resolved_env": redact_deep(configuration.get("resolved_env") or {}),
         }
 
     b_side = _side(b_configuration, "B")
@@ -862,10 +1064,23 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
                 " the delta attributes to the agent"
             ),
         },
-        "model_ids": {"B": b_side["model_ids"], "C": c_side["model_ids"]},
-        "prompt_digests": {"B": b_side["prompt_digests"], "C": c_side["prompt_digests"]},
-        "resolved_env_differences": {
+        "model_ids": _recorded_comparison(
+            b_side["model_ids"] or None,
+            c_side["model_ids"] or None,
+            "the model ids the two legs ran against — a difference here is an UNCONTROLLED difference"
+            " (the delta would then attribute a model change to the agent)",
+        ),
+        "prompt_digests": _recorded_comparison(
+            b_side["prompt_digests"] or None,
+            c_side["prompt_digests"] or None,
+            "the prompt digests the two legs ran against — a difference here is an UNCONTROLLED"
+            " difference",
+        ),
+        "resolved_env": {
+            "B": b_side["resolved_env"],
+            "C": c_side["resolved_env"],
             "differing_keys": differing_env,
+            "state": "identical" if not differing_env else "different",
             "note": (
                 "the resolved env is recorded from the two runs' own snapshots; a key that differs"
                 " is an uncontrolled difference the reader must weigh"
@@ -897,53 +1112,127 @@ def e02_report_digest(report: dict) -> str:
     return sha256_json(body)
 
 
-def _verdict(dimensions: dict, gains: dict) -> dict:
-    """The honest verdict over the recorded dimensions.
+def _shared_metrics(b_surface: dict, c_surface: dict) -> dict:
+    """The B-vs-C comparison of one dimension: the metrics BOTH legs measured,
+    with the delta (C minus B).
 
-    The agentic benefit is SUPPORTED only when a measured dimension shows the
-    agent ahead of the fixed pipeline AND the dimension carries a bound that
-    was actually applied. A dimension with no applicable bound leaves the
-    question unassessed — never a pass.
+    A metric only one leg measured is not in the comparison — there is nothing
+    to compare it with, and the report never manufactures the other side.
     """
-    assessed = []
+    b_values = b_surface.get("values") if b_surface.get("available") else None
+    c_values = c_surface.get("values") if c_surface.get("available") else None
+    if not isinstance(b_values, dict) or not isinstance(c_values, dict):
+        return {"available": False, "metrics": {}, "note": "one leg does not carry this dimension's surface"}
+    metrics = {}
+    for name in sorted(set(b_values) & set(c_values)):
+        b_value = b_values[name]
+        c_value = c_values[name]
+        if isinstance(b_value, (int, float)) and isinstance(c_value, (int, float)):
+            metrics[name] = {
+                "B": b_value,
+                "C": c_value,
+                "delta": c_value - b_value,
+            }
+    return {
+        "available": True,
+        "metrics": metrics,
+        "note": "the delta is C minus B on the metrics both legs measured",
+    }
+
+
+def _verdict(dimensions: dict, gains: dict) -> dict:
+    """The honest verdict over the recorded comparison.
+
+    The verdict is a B-vs-C statement:
+
+    * a bound the AGENT's leg breaks is a measured regression — the agent is
+      NOT SUPPORTED;
+    * a bound the FIXED pipeline's leg breaks is the fixed pipeline's own
+      state — it is recorded, never the agent's verdict;
+    * the agent answered fewer cases than the fixed pipeline — a measured
+      regression;
+    * otherwise, when a bound could be applied to the agent's leg and the
+      agent gained a class, the gain is SUPPORTED;
+    * when nothing could be measured, the verdict is UNASSESSABLE — never a
+      pass.
+    """
+    per_dimension = {}
+    agent_failures = []
+    fixed_failures = []
+    agent_bounds_applied = []
     unassessed = []
-    failed = []
     for code, record in dimensions.items():
-        for leg in E02_LEGS:
-            threshold = record[leg]["threshold"]
-            status = threshold.get("status")
-            if status != THRESHOLD_APPLIED:
+        b_threshold = record["B"]["threshold"]
+        c_threshold = record["C"]["threshold"]
+        per_dimension[code] = {
+            "dimension": record["dimension"],
+            "B": {
+                "threshold_status": b_threshold["status"],
+                "reason": b_threshold.get("reason"),
+                "bounds": b_threshold.get("bounds") or [],
+            },
+            "C": {
+                "threshold_status": c_threshold["status"],
+                "reason": c_threshold.get("reason"),
+                "bounds": c_threshold.get("bounds") or [],
+            },
+            "comparison": _shared_metrics(record["B"], record["C"]),
+        }
+        for leg, threshold in (("C", c_threshold), ("B", b_threshold)):
+            if threshold["status"] == THRESHOLD_APPLIED:
+                if any(bound["outcome"] == COMPARISON_FAIL for bound in threshold.get("bounds") or []):
+                    (agent_failures if leg == "C" else fixed_failures).append(
+                        {"dimension": code, "leg": leg}
+                    )
+                elif leg == "C":
+                    agent_bounds_applied.append(code)
+            else:
                 unassessed.append(
                     {
                         "dimension": code,
                         "leg": leg,
-                        "threshold_status": status,
+                        "threshold_status": threshold["status"],
                         "reason": threshold.get("reason"),
                     }
                 )
-                continue
-            outcomes = {bound["outcome"] for bound in threshold.get("bounds") or []}
-            if COMPARISON_FAIL in outcomes:
-                failed.append({"dimension": code, "leg": leg})
-            else:
-                assessed.append({"dimension": code, "leg": leg})
-    not_covered = [entry["query_class"] for entry in gains.get("not_covered") or []]
-    if failed:
+    classes_with_gain = [
+        name
+        for name, record in (gains.get("per_class") or {}).items()
+        if (record.get("delta") or {}).get("answered", 0) > 0
+    ]
+    coverage = {
+        "B_answered": sum(
+            record.get("B", {}).get("n_answered", 0) for record in (gains.get("per_class") or {}).values()
+        ),
+        "C_answered": sum(
+            record.get("C", {}).get("n_answered", 0) for record in (gains.get("per_class") or {}).values()
+        ),
+    }
+    coverage["delta"] = coverage["C_answered"] - coverage["B_answered"]
+    if agent_failures or coverage["delta"] < 0:
         state = VERDICT_NOT_SUPPORTED
-    elif not assessed:
+    elif not agent_bounds_applied:
         state = VERDICT_UNASSESSABLE
-    else:
+    elif classes_with_gain:
         state = VERDICT_SUPPORTED
+    else:
+        state = VERDICT_UNASSESSABLE
     return {
         "state": state,
-        "assessed_dimensions": assessed,
-        "failed_dimensions": failed,
+        "per_dimension": per_dimension,
+        "coverage": coverage,
+        "classes_with_a_gain": classes_with_gain,
+        "agent_bound_failures": agent_failures,
+        "fixed_pipeline_bound_failures": fixed_failures,
+        "agent_bounds_applied": agent_bounds_applied,
         "unassessed_dimensions": unassessed,
-        "not_covered_query_classes": not_covered,
         "note": (
-            "the agentic benefit stays a HYPOTHESIS until it is measured on GENIE's own corpora"
-            " and query mix (PRD §4.1) — a negative result is recorded, not massaged, and an"
-            " unassessed dimension is never read as a pass"
+            "the verdict is a B-vs-C comparison: a bound the AGENT's leg breaks, or a coverage"
+            " below the fixed pipeline's, is a measured regression; a bound the FIXED pipeline's"
+            " leg breaks is its own state and never the agent's verdict. The agentic benefit stays"
+            " a HYPOTHESIS until it is measured on GENIE's own corpora and query mix (PRD §4.1) — a"
+            " negative result is recorded, not massaged, and an unmeasured dimension is never read"
+            " as a pass"
         ),
     }
 
@@ -954,7 +1243,8 @@ def build_e02_report(
     c_manifest: dict,
     b_rows: dict,
     c_rows: dict,
-    entries: list[dict] | None = None,
+    entries: list[dict],
+    set_sha256: str,
     reference_manifest: dict | None = None,
     thresholds: dict | None = None,
     correctness_ledger: dict | None = None,
@@ -964,25 +1254,28 @@ def build_e02_report(
     """Build the E02 comparison report — a pure function of its inputs plus
     the pinned ``created_utc``.
 
-    ``entries`` is the assessment set's entries (the query-class source);
-    ``reference_manifest`` is the predecessor the legs were gated against (it
-    is verified against the legs' own lineage, never assumed);
-    ``thresholds`` is the SIGNED thresholds artifact — the report applies the
-    agreed bounds and records an explicit absence when there is none;
-    ``correctness_ledger`` is CM-2's denominator (the cases the fixed pipeline
-    answers correctly), lineage-verified before it is applied.
+    ``entries`` is the assessment set's entries and ``set_sha256`` that set
+    file's digest — the query-class source and the proof that the census is
+    a claim about the set the legs ran against; ``reference_manifest`` is the
+    predecessor the legs were gated against (verified against the legs' own
+    lineage, never assumed); ``thresholds`` is the SIGNED thresholds artifact
+    — the report applies the agreed bounds and records an explicit absence
+    when there is none; ``correctness_ledger`` is CM-2's denominator (the
+    cases the fixed pipeline answers correctly), lineage-verified before it is
+    applied.
     """
     _verify_legs(
         b_manifest=b_manifest,
         c_manifest=c_manifest,
         b_rows=b_rows,
         c_rows=c_rows,
+        set_sha256=set_sha256,
         reference_manifest=reference_manifest,
         thresholds=thresholds,
     )
     b_digest = manifest_digest(b_manifest)
     c_digest = manifest_digest(c_manifest)
-    corpus_fingerprint, assessment_set_sha256 = _manifest_lineage(b_manifest)
+    corpus_fingerprint, assessment_set_sha256 = manifest_lineage(b_manifest)
 
     surfaces = {
         "M-1": (_b_m1(b_rows), _c_m1(c_rows)),
@@ -998,8 +1291,8 @@ def build_e02_report(
         b_surface, c_surface = surfaces[code]
         dimensions[code] = {
             "dimension": dimension,
-            "B": {**b_surface, "threshold": _apply_threshold(thresholds, code, b_surface)},
-            "C": {**c_surface, "threshold": _apply_threshold(thresholds, code, c_surface)},
+            "B": {**b_surface, "threshold": _apply_threshold(thresholds, code, b_surface, "B")},
+            "C": {**c_surface, "threshold": _apply_threshold(thresholds, code, c_surface, "C")},
         }
 
     gains = _build_gains(entries or [], b_rows, c_rows)
@@ -1021,8 +1314,8 @@ def build_e02_report(
         b_row = b_rows.get(case_id)
         c_row = c_rows.get(case_id)
         per_case[case_id] = {
-            "b": b_row if isinstance(b_row, dict) else None,
-            "c": c_row if isinstance(c_row, dict) else None,
+            "b": redact_deep(b_row) if isinstance(b_row, dict) else None,
+            "c": redact_deep(c_row) if isinstance(c_row, dict) else None,
         }
 
     body = {
@@ -1038,6 +1331,7 @@ def build_e02_report(
             "b_rows_sha256": sha256_json(b_rows),
             "c_rows_sha256": sha256_json(c_rows),
             "assessment_set_sha256": assessment_set_sha256,
+            "assessment_set_digest_supplied": set_sha256,
             "corpus_fingerprint": corpus_fingerprint,
             "reference_manifest_sha256": manifest_digest(reference_manifest) if reference_manifest else None,
             "thresholds_sha256": sha256_json(thresholds) if thresholds is not None else None,
@@ -1046,7 +1340,7 @@ def build_e02_report(
         "thresholds": {
             "present": thresholds is not None,
             "signed": bool(thresholds.get("signed")) if isinstance(thresholds, dict) else False,
-            "scope": (thresholds.get("thresholds") or {}).get("M-1", {}).get("value", {}).get("scope")
+            "scope": ((thresholds.get("thresholds") or {}).get("M-1", {}).get("value") or {}).get("scope")
             if isinstance(thresholds, dict)
             else None,
             "note": (

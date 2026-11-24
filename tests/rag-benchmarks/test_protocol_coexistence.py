@@ -7,18 +7,27 @@ phases' legacy measurements and the agentic load's record are fixtures, the
 legacy limits are a synthetic operator artifact. Proven here:
 
 * the controlled comparison runs and its verdict is COMPUTED from the agreed
-  legacy limits — never narrated;
-* a limit nobody agreed makes the verdict BLOCKED, and a limit the
-  measurement cannot carry makes it BLOCKED too — never a pass;
-* a legacy path that degraded under the agentic load FAILS the criterion,
+  legacy limits AND the agreed regression tolerance — never narrated;
+* a limit nobody agreed makes the verdict BLOCKED, a limit the measurement
+  cannot carry makes it BLOCKED, and a limit whose threshold is not a number
+  is UNINTERPRETABLE — never a breach nobody measured;
+* a regression nobody agreed a tolerance for is NOT MEASURABLE — the
+  controlled comparison's own question cannot be scored, so the verdict
+  blocks;
+* a legacy path that degraded past the agreed tolerance FAILS the criterion,
   and BOTH phases' numbers are in the report whatever the verdict;
 * a request that reached no terminal outcome FAILS the criterion — the
-  admission lane refuses a saturated run, it never queues it;
+  admission lane refuses a saturated run, it never queues it — and a load
+  record with no independent request count makes that check NOT MEASURABLE;
+* the two phases must cover the same request mix: a comparison over two
+  different populations blocks the verdict;
+* a limits artifact that declares a lineage cannot be applied without one;
 * the report reproduces byte-identically under a pinned created_utc.
 """
 
 import argparse
 import json
+from pathlib import Path
 
 import pytest
 
@@ -77,19 +86,38 @@ def _agent_load():
     }
 
 
-def _limits(**overrides):
+def _limits(*, regression=True, **overrides):
     limits = {
         "latency_median_ms": {"operator": "<=", "threshold": 1500},
         "error_rate": {"operator": "<=", "threshold": 0.0},
         "availability": {"operator": ">=", "threshold": 1.0},
     }
     limits.update(overrides)
-    return {
+    artifact = {
         "artifact": "legacy-non-regression-limits",
         "corpus_fingerprint": CORPUS,
         "assessment_set_sha256": SET_SHA,
         "limits": limits,
     }
+    if regression:
+        artifact["regression"] = {
+            "latency_median_ms": {"max_delta": 200.0},
+            "availability": {"max_delta": 0.0},
+            "error_rate": {"max_delta": 0.0},
+        }
+    return artifact
+
+
+def _report(*, control=None, loaded=None, agent_load=None, limits=_limits(), lineage=True, **kwargs):
+    return build_coexistence_report(
+        control_measurements=control if control is not None else _control(),
+        loaded_measurements=loaded if loaded is not None else _loaded(),
+        agent_load=agent_load if agent_load is not None else _agent_load(),
+        limits=limits,
+        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA} if lineage else None,
+        created_utc=CREATED,
+        **kwargs,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -98,14 +126,7 @@ def _limits(**overrides):
 
 
 def test_coexistence_reports_both_phases_whatever_the_verdict():
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_loaded(),
-        agent_load=_agent_load(),
-        limits=_limits(),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
-    )
+    report = _report()
     control = report["phases"]["control"]
     loaded = report["phases"]["loaded"]
     assert control["n_ok"] == 4 and control["n_failed"] == 0
@@ -118,14 +139,7 @@ def test_coexistence_reports_both_phases_whatever_the_verdict():
 
 
 def test_coexistence_fails_when_the_legacy_path_degraded():
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_loaded(),
-        agent_load=_agent_load(),
-        limits=_limits(),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
-    )
+    report = _report()
     assert report["verdict"]["verdict"] == "fail"
     assert report["verdict"]["reasons"]
     # The failing legacy numbers are in the report — never smoothed away.
@@ -133,28 +147,29 @@ def test_coexistence_fails_when_the_legacy_path_degraded():
     assert report["phases"]["loaded"]["failures"][0]["case_id"] == "q3"
 
 
-def test_coexistence_passes_when_the_legacy_path_holds():
-    loaded = {case_id: dict(measurement) for case_id, measurement in _control().items()}
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=loaded,
-        agent_load=_agent_load(),
-        limits=_limits(),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
+def test_coexistence_fails_when_the_legacy_path_degraded_past_the_agreed_tolerance():
+    """The controlled comparison's own question: the legacy path must not
+    degrade under the agentic load."""
+    limits = _limits(
+        latency_median_ms={"operator": "<=", "threshold": 5000},
+        error_rate={"operator": "<=", "threshold": 1.0},
+        availability={"operator": ">=", "threshold": 0.0},
     )
+    report = _report(limits=limits)
+    assert report["verdict"]["verdict"] == "fail"
+    assert any("degraded" in reason for reason in report["verdict"]["reasons"])
+    assert report["regression_verdict"]["verdict"] == "fail"
+
+
+def test_coexistence_passes_when_the_legacy_path_holds():
+    report = _report(control=_control(), loaded=_control())
     assert report["verdict"]["verdict"] == "pass"
     assert report["verdict"]["reasons"] == []
+    assert report["regression_verdict"]["verdict"] == "pass"
 
 
 def test_coexistence_is_blocked_when_no_limits_were_agreed():
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_loaded(),
-        agent_load=_agent_load(),
-        limits=None,
-        created_utc=CREATED,
-    )
+    report = _report(limits=None)
     assert report["verdict"]["verdict"] == "blocked"
     assert report["limits"]["present"] is False
     assert report["limits"]["reason"]
@@ -163,37 +178,29 @@ def test_coexistence_is_blocked_when_no_limits_were_agreed():
     assert report["phases"]["loaded"]["n_failed"] == 1
 
 
+def test_coexistence_is_blocked_when_no_regression_tolerance_was_agreed():
+    report = _report(control=_control(), loaded=_control(), limits=_limits(regression=False))
+    assert report["regression_verdict"]["present"] is False
+    assert report["regression_verdict"]["reason"]
+    assert report["verdict"]["verdict"] == "blocked"
+
+
 def test_coexistence_is_blocked_when_a_limit_cannot_be_measured():
-    # The legacy path holds (no failure, no slowdown) and one limit names a
-    # metric the measurement does not carry: the limit is NOT MEASURABLE, and
-    # it blocks the verdict instead of passing it.
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_control(),
-        agent_load=_agent_load(),
-        limits=_limits(
-            latency_median_ms={"operator": "<=", "threshold": 1500},
-            error_rate={"operator": "<=", "threshold": 0.0},
-            availability={"operator": ">=", "threshold": 1.0},
-            unknown_metric={"operator": "<=", "threshold": 1},
-        ),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
+    limits = _limits(
+        latency_median_ms={"operator": "<=", "threshold": 1500},
+        error_rate={"operator": "<=", "threshold": 0.0},
+        availability={"operator": ">=", "threshold": 1.0},
+        unknown_metric={"operator": "<=", "threshold": 1},
     )
+    report = _report(control=_control(), loaded=_control(), limits=limits)
     outcomes = {record["metric"]: record["outcome"] for record in report["limits"]["limits"]}
     assert outcomes["unknown_metric"] == "not_measurable"
     assert report["verdict"]["verdict"] == "blocked"
 
 
-def test_coexistence_is_blocked_when_a_limit_carries_no_direction():
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_control(),
-        agent_load=_agent_load(),
-        limits=_limits(latency_median_ms={"threshold": 1500}),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
-    )
+def test_coexistence_is_blocked_when_a_limit_carries_no_comparable_threshold():
+    limits = _limits(latency_median_ms={"operator": "<=", "threshold": "1500"})
+    report = _report(control=_control(), loaded=_control(), limits=limits)
     outcomes = {record["metric"]: record["outcome"] for record in report["limits"]["limits"]}
     assert outcomes["latency_median_ms"] == "uninterpretable"
     assert report["verdict"]["verdict"] == "blocked"
@@ -204,28 +211,35 @@ def test_coexistence_fails_when_a_request_reached_no_terminal_outcome():
     answered nor was refused is a silent failure."""
     load = _agent_load()
     load["n_without_terminal_outcome"] = 1
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_control(),
-        agent_load=load,
-        limits=_limits(),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
-    )
+    report = _report(control=_control(), loaded=_control(), agent_load=load)
     assert report["verdict"]["verdict"] == "fail"
     assert report["saturation"]["every_request_reached_a_terminal_outcome"] is False
     assert any("never queues it" in reason for reason in report["verdict"]["reasons"])
 
 
+def test_coexistence_is_blocked_when_the_load_record_carries_no_request_count():
+    """A request count derived from the outcome tally can never reveal a
+    vanished request — the saturation check must be marked NOT MEASURED."""
+    load = _agent_load()
+    load.pop("requests")
+    report = _report(control=_control(), loaded=_control(), agent_load=load)
+    assert report["agentic_load"]["requests_recorded_independently"] is False
+    assert report["agentic_load"]["saturation_check_available"] is False
+    assert report["verdict"]["verdict"] == "blocked"
+
+
+def test_coexistence_blocks_when_the_two_phases_cover_different_request_mixes():
+    loaded = {case_id: dict(measurement) for case_id, measurement in _control().items()}
+    loaded.pop("q4")
+    report = _report(control=_control(), loaded=loaded)
+    assert report["phase_coverage"]["same_request_mix"] is False
+    assert report["phase_coverage"]["mismatched_case_ids"] == ["q4"]
+    assert report["verdict"]["verdict"] == "blocked"
+    assert any("same request mix" in reason for reason in report["verdict"]["reasons"])
+
+
 def test_coexistence_records_the_saturation_response_and_the_load_cost():
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_control(),
-        agent_load=_agent_load(),
-        limits=_limits(),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
-    )
+    report = _report(control=_control(), loaded=_control())
     load = report["agentic_load"]
     assert load["n_admission_refusals"] == 1
     assert load["admission_refusal_rate"] == 0.25
@@ -237,16 +251,8 @@ def test_coexistence_records_the_saturation_response_and_the_load_cost():
 
 
 def test_coexistence_reproduces_under_a_pinned_created_utc():
-    kwargs = dict(
-        control_measurements=_control(),
-        loaded_measurements=_loaded(),
-        agent_load=_agent_load(),
-        limits=_limits(),
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA},
-        created_utc=CREATED,
-    )
-    first = build_coexistence_report(**kwargs)
-    second = build_coexistence_report(**kwargs)
+    first = _report()
+    second = _report()
     assert first["digest"] == second["digest"]
     assert coexistence_report_digest(first) == first["digest"]
 
@@ -291,6 +297,19 @@ def test_coexistence_refuses_limits_of_another_lineage():
             created_utc=CREATED,
         )
     assert failed.value.reason == "limits_lineage_mismatch"
+
+
+def test_coexistence_refuses_a_limits_artifact_with_a_lineage_and_no_lineage_supplied():
+    with pytest.raises(CoexistenceRefusal) as failed:
+        build_coexistence_report(
+            control_measurements=_control(),
+            loaded_measurements=_loaded(),
+            agent_load=_agent_load(),
+            limits=_limits(),
+            lineage=None,
+            created_utc=CREATED,
+        )
+    assert failed.value.reason == "missing_lineage"
 
 
 def test_coexistence_refuses_a_measurement_with_no_outcome():

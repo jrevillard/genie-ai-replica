@@ -78,6 +78,7 @@ context:
 - `tests/rag-benchmarks/protocol/evalset.py` — `COMPOSITION_CLASSES` (:60), `DEFAULT_COMPOSITION_MINIMINUMS` (:72), the `expectations` free-form dict (:280) (the per-case query-class tag's home — no schema change needed), `load_entries` / the validation entry points.
 - `tests/rag-benchmarks/protocol/run_protocol.py` — the CLI conventions: `build_parser` (:687) (argparse subparsers with `set_defaults(func=cmd_*)`), `main` (:787) (typed refusals → exit 1, usage → exit 2), `_write_manifest` / `_write_findings_report` (the out-dir writers), `_add_created_utc_arg` (the digest pin).
 - `tests/rag-benchmarks/protocol/verdicts.py` — `build_verdicts` (:559) (the judge layer's row reading; `row.get("outcome", row.get("status"))` is the terminal-row reader), `VERDICT_VALUES` (:106).
+- `tests/rag-benchmarks/protocol/redaction.py` — NEW: the depth-aware credential rule, ONE home for the reports that write whole rows (the E01 report's private copy moved here in this story; the E02 report applies the same rule on every path it writes).
 - `tests/rag-benchmarks/protocol/findings.py` — `build_findings_report` (:78), `report_digest` (:59) (the versioned-artifact header + digest precedent).
 - `components/agent-service/noagent/lane.py` — `AdmissionLane` / `LaneBusyError` (the flock slot pool: a saturated lane REFUSES, never queues — the observed saturation/admission response).
 - `components/agent-service/noagent/pipeline.py` — `NoAgentResult.abstained` (:111) (the mechanical abstention flag config B carries and config C does not).
@@ -145,13 +146,62 @@ The reference manifest digest (`8dc67fa1804e`) is the SAME one the E01 config-B 
 **The residual.** The live E02 measurement and the live coexistence measurement are a campaign activity, not this story's code: the first needs the signed thresholds (the operator's M-2..M-5 decision), the second needs the agentic path deployed on the venue AND the agreed legacy limits. Both are filed as ONE backlog issue — **#2146** ("Story 4.5 residual — the live E02 measurement and the live coexistence criterion", `status::backlog`), the way #2118 was story 4.3's residual — so the blocker is durable and named, with the three unblocking steps written down.
 
 **Surprises worth recording.**
-- The signed M-1 bounds are scoped to **config A's chunk-level anchor metrics** (`value.scope` in the registry) — they do NOT transfer to the E02 legs, which measure the doc-level surface. The report's threshold application is scope-aware: a bound the surface does not carry is recorded as NOT MEASURABLE (with the scope quoted), never applied across surfaces and never read as a pass.
-- Config C's rows carry NO mechanical abstention flag (the no-agent pipeline owns `abstained`), so M-3's config-C surface is the answer text — recorded with the reason, not invented as a count.
+- The signed M-1 bounds are scoped to **config A's chunk-level anchor metrics** (`value.scope` in the registry) — they do NOT transfer to the E02 legs, which measure the doc-level surface. The report's threshold application is scope-aware: a bound whose scope names another configuration is recorded as NOT APPLICABLE, and a bound the surface does not carry is NOT MEASURABLE — neither is applied, neither is a pass.
+- Config C's rows carry NO mechanical abstention flag (the no-agent pipeline owns `abstained`), so M-3's config-C surface is the answer text — recorded with the reason, and NO abstention count is published for that leg: a count nobody measured is never a zero.
 - The gate recognises ONLY `kind == "reference"` manifests (config A) as predecessors — a config-B manifest is `kind == "gated"`. So the E02 run directory carries the config-A reference manifest (the thresholds bind to it) and BOTH legs are gated runs in it.
+- The gate stamps the digest of the thresholds artifact it selected into each leg's manifest: the report applies the artifact the legs were gated under, and refuses any other.
+
+**The global review (round 1) — 16 important findings, all applied.**
+The first global review of the implementation commit returned 16 important findings, 2 nits and 1 pre-existing (the pre-existing one is environmental: the reviewer's venv lacked `pydantic`, and the suite is green with it installed — 353 protocol + 214 eval + 24 capture tests). The important findings and their corrections:
+
+1. *A fabricated zero on the agent's abstention surface* → the M-3 config-C surface no longer publishes an abstention count at all; a signed bound on it is NOT MEASURABLE, never a measured breach.
+2. *The verdict compared no legs* → the verdict is now a B-vs-C comparison: a bound the FIXED pipeline breaks is its own state (recorded, never the agent's verdict), a bound the AGENT breaks — or a coverage below the fixed pipeline's — is a measured regression, and the per-dimension comparison carries the shared metrics' deltas.
+3. *The signed scope was decorative* → the scope is ACTED ON: a scope naming another configuration makes the bound NOT APPLICABLE, whatever metric names it carries.
+4. *No depth-aware redaction in E02* → the depth-aware rule moved to ONE home (`protocol/redaction.py`, shared with E01), and every row, cost value and manifest map the E02 report writes goes through it.
+5. *The thresholds digest was never checked* → the artifact the report applies must be the one the gate stamped into both legs; another one is refused.
+6. *The class census came from the rows, and the set's digest was never checked* → the census comes from the assessment set, the set's digest is verified against the legs' lineage (and recorded in the report's inputs), and the `--set` argument is required.
+7. *An incomparable bound was recorded as a breach* → `None` (not comparable) is now distinct from `False` (breached): an incomparable direction or threshold is UNINTERPRETABLE, and it blocks.
+8. *An empty bound set read as satisfied* → an empty bound set is an ABSENCE, never an assessed dimension.
+9. *A single bound never read its metric name* → it carries the name through, and a bound that names no metric is UNINTERPRETABLE (the reason no longer blames the surface).
+10. *The two legs' M-5 surfaces had different shapes* → both publish the same aggregated run-level cost counters.
+11. *An admission refusal counted as a failure* → the per-class counts use the counter-metrics' terminal-state vocabulary, so the report no longer contradicts its own CM-3 record.
+12. *The model ids and prompt digests were copied without a comparison* → they carry a comparison state (identical / different / not recorded) like E01's.
+13. *A null signed value crashed the build* → it records an absence.
+
+The coexistence criterion's four:
+14. *The control-vs-loaded regression never entered the verdict* → the criterion now needs an AGREED regression tolerance (the operator's, like every other bound); a degradation past it FAILS the criterion, and no agreed tolerance means the controlled comparison's own question is not measurable → BLOCKED, never a pass.
+15. *The request count was derived from the outcome tally* → the saturation check needs an independent request count; without one it is NOT MEASURED (and the verdict blocks), so a vanished request can never hide.
+16. *The two phases' request mixes were never compared* → a mismatch is recorded and BLOCKS the verdict (the numbers stay visible).
+
+The two nits: the limits artifact that declares a lineage can no longer be applied without one (a typed refusal), and the S4 checklist no longer claims M-1 is agreed on this branch (the signature lives in the open draft MR !1063).
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+Global review round 1 (the implementation commit, 2026-11-24): 16 important, 2 nit, 1 pre-existing. Every finding was verified against the code and applied — none was dismissed.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | the C M-3 surface published `n_rows_with_abstention_fact: 0` — a fabricated zero a signed bound could compare against | important | applied — the key is gone; a bound on it is NOT MEASURABLE |
+| 2 | `_verdict` compared no legs (each leg's own absolute bound) and a B-leg failure flipped the agent's verdict | important | applied — the verdict is a B-vs-C comparison; the fixed pipeline's failures are its own state |
+| 3 | the signed `scope` was quoted, never acted on | important | applied — a scope naming another configuration makes the bound NOT APPLICABLE |
+| 4 | E02 wrote rows with no depth-aware credential redaction | important | applied — the rule moved to `protocol/redaction.py` (one home, shared with E01) and every written path goes through it |
+| 5 | the thresholds artifact's digest was never compared with the legs' `lineage.thresholds_sha256` | important | applied — the report applies the artifact the legs were gated under, or refuses |
+| 6 | the class census came from the rows and the set's digest was never checked | important | applied — the census comes from the set, its digest is verified against the legs and recorded |
+| 7 | an incomparable bound was recorded as a breach (`None` is falsy) | important | applied — incomparable is UNINTERPRETABLE, and it blocks |
+| 8 | an empty bound set read as an applied dimension | important | applied — an empty bound set is an absence |
+| 9 | the single-bound branch never read the bound's metric name | important | applied — the name is carried through; a bound naming no metric is UNINTERPRETABLE |
+| 10 | the two legs' M-5 surfaces had different shapes and only the first row's record was kept | important | applied — both publish the same aggregated run-level counters |
+| 11 | an admission refusal was counted as a failure, contradicting the report's own CM-3 | important | applied — the counter-metrics' terminal-state vocabulary is used |
+| 12 | the model ids and prompt digests were copied with no comparison | important | applied — both carry a comparison state (identical / different / not recorded) |
+| 13 | a null signed value crashed the report build (`.get('value', {})` returns the stored None) | important | applied — it records an absence |
+| 14 | the control-vs-loaded regression was reported but never entered the verdict | important | applied — the criterion needs an AGREED regression tolerance; past it is a FAIL, absent it is BLOCKED |
+| 15 | the request count was derived from the outcome tally, so the silent-failure check was dead | important | applied — the check needs an independent request count; without one it is NOT MEASURED |
+| 16 | the two phases' request mixes were never compared | important | applied — a mismatch is recorded and blocks the verdict |
+| 17 | the limits-lineage refusal was conditional on `--lineage` being supplied | nit | applied — a limits artifact that declares a lineage cannot be applied without one |
+| 18 | the S4 checklist claimed M-1 was agreed while the branch's registry records it absent | nit | applied — the row now names MR !1063 as the pending carrier |
+| 19 | three suite failures (`pydantic` missing in the reviewer's venv) | pre-existing | not a code defect — the suites are green with `pydantic` installed (353 + 214 + 24 tests) |
 
 ## Design Notes
 
@@ -162,6 +212,12 @@ The reference manifest digest (`8dc67fa1804e`) is the SAME one the E01 config-B 
 2. *The legacy limits.* NFR-3's criterion compares the legacy path against "agreed legacy latency/error/availability limits". Only the retrieval-quality bounds are agreed; M-4 (latency) is absent and error/availability have no dimension of their own in M-1..M-5. The coexistence verdict is therefore BLOCKED on the missing limits, with the limit named — never a default.
 
 **The query-class tag's home.** The per-case query class is read from the case's `expectations.query_class` when present, falling back to the case's `case_class`. `expectations` is already a free-form per-case dict (`evalset.py:280`) — no schema change, no new field, and the composition floor is untouched. A set that wants multi-hop/ambiguous gains tags its cases; a set that does not is reported as not covering them.
+
+**Why the coexistence criterion needs an AGREED regression tolerance.** The controlled comparison's own question is "did the legacy path degrade under the agentic load?" — the delta between the control and the loaded phase. Scoring a degradation needs a tolerance, and a tolerance nobody agreed is a default nobody chose: the legacy path's latency on a shared venue moves by noise, so "any degradation is a regression" would fail the criterion on the venue, not on the agent. The tolerance is therefore the operator's, recorded in the limits artifact next to the absolute limits (`regression: {<metric>: {max_delta: …}}`). Absent it, the regression is NOT MEASURABLE and the verdict is BLOCKED — the criterion never passes on an unmeasured comparison, and the deltas are in the report either way.
+
+**Why the verdict is a comparison, not a score.** The layer computes no judgement: the gain is the judged dimension (M-2) and the judge owns it. What the layer can do is compare — the agent's leg against the fixed pipeline's leg, metric by metric, and bound by bound. So the verdict has exactly three states and each says what it measured: `not_supported` (a measured regression: the agent broke an applied bound, or its coverage fell below the fixed pipeline's), `supported` (every bound that could be applied to the agent's leg held, and the agent gained a class), `unassessable` (nothing was measurable — never a pass). A bound the FIXED pipeline breaks is recorded as the fixed pipeline's own state and never flips the agent's verdict: the E02 delta attributes to the agent, and only to the agent.
+
+**Why the signed scope is acted on.** The registry's `scope` field is prose ("config A — the chunk/passage-level anchor metrics"), and the M-1 bounds it carries are chunk-level metrics the E02 legs never measure. Deciding applicability by metric NAME alone would apply a config-A bound to config C the moment a name happened to collide — the report would compare two different surfaces and call it a breach. So a scope that names a configuration applies to that configuration only, and the report records the bound as NOT APPLICABLE, with the scope quoted.
 
 ## Verification
 

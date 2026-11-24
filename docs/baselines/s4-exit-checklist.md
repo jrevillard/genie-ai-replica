@@ -13,7 +13,7 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 
 | Dimension | Agreed? | Consequence for the S4 exit |
 |---|---|---|
-| M-1 retrieval quality | yes (2026-11-23, MR !1063) | applied where the surface carries the metric; the E02 legs measure the doc-level surface, so the chunk-level bounds do not transfer — recorded as not measurable, never as a pass |
+| M-1 retrieval quality | **in MR !1063** (draft, open): the operator signed the five retrieval bounds on 2026-11-23, but the branch's own registry (`protocol/thresholds.yaml`) still records M-1 as absent and the sign-off as unsigned until that MR lands | the bounds are scoped to config A's chunk-level anchor metrics, and the scope is ACTED ON: a bound scoped to another configuration is recorded as not applicable, so the E02 legs (doc-level surface) are never measured against them |
 | M-2 answer grounding | no | no answer-grounding bound can be applied to any leg; the E02 verdict stays unassessable on that dimension |
 | M-3 abstention correctness | no | the same for the abstention dimension |
 | M-4 latency | no | the coexistence criterion's legacy latency limit has no agreed value → the criterion's verdict is BLOCKED, never a pass |
@@ -60,7 +60,7 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 | Evidence | Artifact | State |
 |---|---|---|
 | The controlled comparison (legacy-only vs legacy-under-agent-load), the agreed-limits application, the saturation/admission response and the computed verdict | `tests/rag-benchmarks/protocol/coexistence.py` + `run_protocol.py coexistence` | Green (story 4.5) |
-| The live comparison on the venue | — | **OPEN** — needs the agentic path deployed on the venue and the legacy limits agreed (M-4 is absent; error/availability have no dimension of their own) → the verdict would be BLOCKED, not a pass |
+| The live comparison on the venue | — | **OPEN** — needs the agentic path deployed on the venue and the operator's limits artifact: the absolute legacy limits (M-4 is absent; error/availability have no dimension of their own) AND the regression tolerance between the two phases (the controlled comparison's own question — did the legacy path degrade under the agentic load? — cannot be scored without one) → the verdict is BLOCKED, never a pass |
 | The agentic load's saturation response (the admission lane refuses a saturated run with a 429 + `Retry-After`; it never queues) | `components/agent-service/noagent/lane.py` (`AdmissionLane` / `LaneBusyError`) | Recorded (the mechanism); the observed rate is part of the live comparison |
 
 ## Exit condition

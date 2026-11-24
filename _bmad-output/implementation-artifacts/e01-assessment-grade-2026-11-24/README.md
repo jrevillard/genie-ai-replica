@@ -1,7 +1,8 @@
 # The acceptance-grade assessment set (issue #2151)
 
 The graded E01 assessment set: `assessment-set.json`, digest
-`6e8ed58b73e5` — it supersedes the #2148 campaign set (digest
+`88b270ad42a7` (plain file sha256, the convention the #2148 digest
+follows) — it supersedes the #2148 campaign set (digest
 `8016d4a26a45…`, 16 cases) as the set a run consumes. Authored
 2026-11-24; no venue was touched and no measurement was taken for this
 authoring (the re-baseline is the operator-driven campaign after merge).

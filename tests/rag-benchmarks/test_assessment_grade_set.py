@@ -40,30 +40,33 @@ SECURITY_CORPUS_DIR = REPO_ROOT / "tests" / "rag-benchmarks" / "fixtures" / "sec
 # outside this benchmark tree); the security corpus contributes the rest.
 GOLD_SOURCE_FIXTURES = {
     "test-document.md": REPO_ROOT / "tests" / "e2e" / "fixtures" / "test-document.md",
-    **{path.name: path for path in sorted(SECURITY_CORPUS_DIR.glob("*.md"))},
+    # The fixtures' README is admin prose, not corpus content — a preview
+    # copied from it would pass a verbatim check and never match a chunk.
+    **{path.name: path for path in sorted(SECURITY_CORPUS_DIR.glob("e01-sec-doc-*.md"))},
 }
 
 # The 16 cases the graded set inherits from the #2148 campaign set (digest
 # 8016d4a26a45…) — the measurement instrument already signed against. The
-# graded set extends it; it must never silently re-class or drop one.
-INHERITED_CASE_CLASSES = {
-    "e01-ans-purpose": "answerable",
-    "e01-ans-items": "answerable",
-    "e01-ans-formatting": "answerable",
-    "e01-unans-upload-count": "unanswerable",
-    "e01-cite-items": "citation_check",
-    "e01-lang-es": "representative_language",
-    "e01-lang-zh": "representative_language",
-    "e01-fail-saturation": "failure",
-    "e01-cancel-checklist": "cancellation",
-    "e01-sec-restricted": "answerable",
-    "e01-sec-xuser-a": "answerable",
-    "e01-sec-xuser-b": "answerable",
-    "e01-sec-narrowed": "answerable",
-    "e01-sec-permission": "answerable",
-    "e01-sec-injection-document": "answerable",
-    "e01-sec-injection-tool": "answerable",
-}
+# graded set extends it; the byte-identity test compares each entry against
+# the committed source set, so none can silently drift or drop.
+INHERITED_CASE_IDS = (
+    "e01-ans-purpose",
+    "e01-ans-items",
+    "e01-ans-formatting",
+    "e01-unans-upload-count",
+    "e01-cite-items",
+    "e01-lang-es",
+    "e01-lang-zh",
+    "e01-fail-saturation",
+    "e01-cancel-checklist",
+    "e01-sec-restricted",
+    "e01-sec-xuser-a",
+    "e01-sec-xuser-b",
+    "e01-sec-narrowed",
+    "e01-sec-permission",
+    "e01-sec-injection-document",
+    "e01-sec-injection-tool",
+)
 
 # The security corpus fixture each inherited security scenario exercises
 # (the fixtures README's table, restated so the coverage check is mechanical).
@@ -107,12 +110,26 @@ def test_graded_set_census_is_acceptance_grade():
 
 
 def test_inherited_measurement_instrument_is_unchanged():
-    """The 16 inherited cases keep their ids and classes — the graded set is
-    the same instrument grown, not a rewritten one."""
+    """The 16 inherited cases are byte-identical to the #2148 campaign set —
+    the measurement instrument the signed M-1 binds, compared entry-by-entry
+    against the committed source, so no rewrite (query, gold, expectations)
+    can drift it while keeping its id."""
+    inherited_source = (
+        REPO_ROOT
+        / "_bmad-output"
+        / "implementation-artifacts"
+        / "e01-security-corpus-2026-11-24"
+        / "assessment-set.json"
+    )
+    source_entries = {
+        case["id"]: case for case in json.loads(inherited_source.read_text(encoding="utf-8"))["entries"]
+    }
     entries = {case["id"]: case for case in graded_data()["entries"]}
-    for inherited_id, inherited_class in INHERITED_CASE_CLASSES.items():
+    for inherited_id in INHERITED_CASE_IDS:
         assert inherited_id in entries, f"inherited case {inherited_id} dropped"
-        assert entries[inherited_id]["case_class"] == inherited_class
+        assert entries[inherited_id] == source_entries[inherited_id], (
+            f"inherited case {inherited_id} drifted from the #2148 set"
+        )
 
 
 def test_every_graded_gold_preview_is_verbatim_in_its_fixture():

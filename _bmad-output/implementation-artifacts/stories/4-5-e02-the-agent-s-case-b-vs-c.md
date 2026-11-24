@@ -277,6 +277,14 @@ FIX-REVIEW f=1 (chain 3, the diff 184627aab..96c926473, fresh context, mutation 
 | D2 | M-3.B's n_limit_hit scanned ok rows only while the census scans ALL rows: a failure row carrying the marker was n_failure_rows on the surface, n_limit_hit in the census | new defect | applied — the marker outranks the failure flag on the surface too (the classified tallies exclude census-classified limit hits; n_limit_hit scans every row), pinned by a test |
 | D3 | M-3.C's n_answered_rows / n_admission_refused_rows / n_error_rows did not exclude limit-hit rows — a marked row was counted twice inside the surface | new defect | applied — the census's first-terminal-state rule applied to every tally on the surface (a marked row is n_limit_hit exactly once), pinned by a test |
 
+FIX-REVIEW f=2 (the diff 96c926473..51cccd099, fresh context, 21/21 live census-agreement probes + row-sum invariants + mutation battery): D1/D2/D3 VERIFIED-FIXED — and 1 NEW nit, NOT CLEAN. Applied:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| N1 | the n_error_rows exclusion arm on M-3.C was UNPINNED (dropping it left all 54 tests green) | new defect | applied — the exactly-once test feeds a marked error row too and pins n_error_rows=0 alongside the other tallies |
+
+FIX-REVIEW f=3 (the diff 51cccd099..500bf46a5, fresh context, mutation re-run in a /tmp copy): N1 VERIFIED-FIXED, no new defects, 629 passed, worktree clean — **VERDICT: CLEAN**. The round-5 chain is closed: every M-3 tally speaks the census's name, every exclusion arm has a failing test, and the malformed-artifact/tally families are typed refusals.
+
 ## Design Notes
 
 **Why the live E02 legs are refused, and what that does NOT mean.** The partial-order gate (story 4.1) refuses a gated B/C run until a SIGNED thresholds artifact exists, and story 4.4's `promotion_decision` produces that artifact only when every measured dimension (M-1..M-5) carries an agreed value. The operator's 2026-11-23 signature covers M-1 alone; M-2..M-5 stay explicitly absent. So the gate keeps refusing — and that refusal is the protocol working as designed (PRD §8: "an absent threshold blocks promotion rather than defaulting"), not a defect to route around. The live outcome of this story is therefore: the machinery ships, the refusal is recorded verbatim, and the live measurement waits on an operator decision nobody but the operator can make.

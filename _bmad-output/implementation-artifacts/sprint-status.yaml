@@ -29,7 +29,11 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-17-2026 15:20
-last_updated: 11-24-2026 17:35
+
+
+=======
+last_updated: 11-24-2026 18:10
+
 project: genie-ai
 project_key: NOKEY
 tracking_system: file-system
@@ -75,7 +79,7 @@ development_status:
   4-3-e01-behavior-preservation-a-vs-b: done
   4-4-thresholds-and-counter-metrics: done
   4-5-e02-the-agent-s-case-b-vs-c: done
-  4-6-release-readiness-evidence-v09-v07b: backlog
+  4-6-release-readiness-evidence-v09-v07b: review
   epic-4-retrospective: optional
 action_items:
   - id: "epic-1-retro-item-1-disposition-v05-section-9-items-2-5-fix"

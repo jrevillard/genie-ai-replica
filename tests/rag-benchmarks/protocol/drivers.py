@@ -205,36 +205,46 @@ def anchor_projection(cases: list[dict]) -> list[dict]:
     return [case for case in cases if evaluation_surface(case) == "retrieval"]
 
 
-def anchor_projection_sha256(cases: list[dict]) -> str:
+def anchor_projection_sha256(projection: list[dict]) -> str:
     """The digest of the anchor's input — the projection's identity.
 
     The set's own digest identifies the set; this identifies WHICH of its
     cases the chunk-level surface scores. Both are recorded, so an artifact
-    says what it measured, not only what it was built from.
+    says what it measured, not only what it was built from. The projection is
+    the argument (not the cases): the caller already holds it, and deriving
+    it twice would digest two lists that can only differ by accident.
     """
-    return sha256_json(anchor_projection(cases))
+    return sha256_json(projection)
 
 
 def _gold_without_identity(cases: list[dict]) -> list[str]:
-    """The retrieval cases whose gold carries no matchable identity.
+    """The retrieval cases whose gold the anchor cannot match.
 
-    The anchor matches a gold chunk on its content hash (the protocol's
-    identity) or its chunk key; an entry with neither matches against
-    nothing, and the case would drop out of the aggregate silently.
+    The anchor's own rule (``eval/run_eval.py::score_anchor``): the gold list
+    is every entry's content hash, and ONLY when no entry carries one does it
+    fall back to the chunk keys. An entry with neither identity is dropped
+    under both branches — and so is an entry that carries only a chunk key
+    beside hashed siblings, because the hash branch wins. Such an entry
+    matches against nothing while the case counts as annotated, so the case
+    is listed here (the anchor would score it against fewer gold chunks than
+    the set declares).
     """
-    shapeless: list[str] = []
+    unmatched: list[str] = []
     for case in cases:
-        for index, chunk in enumerate(case.get("expected_chunks") or []):
-            if not isinstance(chunk, dict):
-                shapeless.append(f"{case.get('id')}#{index}")
-                continue
-            content_hash = chunk.get("content_hash")
-            chunk_key = chunk.get("chunk_key")
-            has_hash = isinstance(content_hash, str) and bool(content_hash.strip())
-            has_key = isinstance(chunk_key, str) and bool(chunk_key.strip())
-            if not has_hash and not has_key:
-                shapeless.append(f"{case.get('id')}#{index}")
-    return shapeless
+        chunks = [chunk for chunk in (case.get("expected_chunks") or []) if isinstance(chunk, dict)]
+        hashes = [chunk for chunk in chunks if _has_text(chunk.get("content_hash"))]
+        keys = [chunk for chunk in chunks if _has_text(chunk.get("chunk_key"))]
+        effective = hashes or keys
+        if len(effective) != len(chunks):
+            for index, chunk in enumerate(chunks):
+                if chunk not in effective:
+                    unmatched.append(f"{case.get('id')}#gold{index}")
+    return unmatched
+
+
+def _has_text(value) -> bool:
+    """True for a non-empty string — the shape check the gold identities use."""
+    return isinstance(value, str) and bool(value.strip())
 
 
 def run_config_a(
@@ -284,24 +294,20 @@ def run_config_a(
             " construction) and count as measured while carrying no expectation"
         )
     anchor_cases = anchor_projection(cases)
-    unanchorable = [
-        str(case.get("id"))
-        for case in anchor_cases
-        if case.get("turns") or not str(case.get("query", "")).strip()
-    ]
+    unanchorable = [str(case.get("id")) for case in anchor_cases if case.get("turns")]
     if unanchorable:
         raise DriverError(
             "the config-A anchor refuses a retrieval case it cannot drive as ONE query"
             f" ({', '.join(unanchorable)}) — a multi-turn case's queries are its turns (the"
-            " capture's rows) and a case without a query has nothing to drive, so such a case"
-            " is measured by nothing"
+            " capture's rows), so the chunk-level surface measures nothing on it"
         )
     shapeless = _gold_without_identity(anchor_cases)
     if shapeless:
         raise DriverError(
-            "the config-A anchor refuses a gold entry with no identity"
-            f" ({', '.join(shapeless)}) — the anchor matches a gold chunk on its content hash"
-            " (or its chunk key), so an entry with neither is matched against nothing"
+            "the config-A anchor refuses gold it cannot match"
+            f" ({', '.join(shapeless)}) — the anchor matches on the content hashes and only"
+            " falls back to the chunk keys when no entry carries one, so an entry dropped by"
+            " that rule would match against nothing while the case counts as annotated"
         )
     gold_path = out_dir / "config-a.gold.json"
     write_json(
@@ -340,11 +346,17 @@ def run_config_a(
             # for the retrieval surface only, so this is where the reader
             # learns why.
             "coverage": census,
-            "anchor_projection_sha256": anchor_projection_sha256(cases),
+            "anchor_projection_sha256": anchor_projection_sha256(anchor_projection(cases)),
         },
         ensure_ascii=False,
     )
-    return {"report": report, "report_path": str(report_path), "rows": skip_rows, "rows_path": str(rows_path)}
+    return {
+        "report": report,
+        "report_path": str(report_path),
+        "rows": skip_rows,
+        "rows_path": str(rows_path),
+        "coverage": census,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -574,7 +586,7 @@ def run_config_a_capture(
         "coverage": coverage_census(cases),
         # The identity of the ANCHOR's input — which of the set's cases the
         # chunk-level surface scores. A change to the surface model moves it.
-        "anchor_projection_sha256": anchor_projection_sha256(cases),
+        "anchor_projection_sha256": anchor_projection_sha256(anchor_projection(cases)),
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set

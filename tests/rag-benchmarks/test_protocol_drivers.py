@@ -68,6 +68,12 @@ def test_config_a_runs_the_anchor_pattern_and_records_the_report(tmp_path):
     assert Path(result["report_path"]).exists()
 
 
+def _refusing_runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
+    """The runner a refusal test installs: the anchor must NOT run on a set it
+    cannot measure, so reaching it fails the test."""
+    raise AssertionError("the anchor must not run on an unmeasurable set")
+
+
 def _sample_set_with(tmp_path, case_id, mutate):
     """The CI sample set with ONE case mutated — the setup the anchor's
     refusal tests share."""
@@ -89,11 +95,8 @@ def test_config_a_refuses_a_set_whose_retrieval_cases_carry_no_gold(tmp_path):
 
     set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", drop_gold)
 
-    def runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
-        raise AssertionError("the anchor must not run on an unmeasurable set")
-
     with pytest.raises(drivers.DriverError) as failed:
-        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner)
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
     assert "carry no gold" in str(failed.value)
     assert "sample-ans-pub-1" in str(failed.value)
 
@@ -108,13 +111,29 @@ def test_config_a_refuses_a_retrieval_case_the_anchor_cannot_drive_as_one_query(
 
     set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", turns_only)
 
-    def runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
-        raise AssertionError("the anchor must not run on an unmeasurable set")
-
     with pytest.raises(drivers.DriverError) as failed:
-        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner)
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
     assert "ONE query" in str(failed.value)
     assert "sample-ans-pub-1" in str(failed.value)
+
+
+def test_config_a_refuses_a_gold_entry_the_anchor_cannot_match(tmp_path):
+    """The anchor's gold rule: the content hashes, and only when no entry
+    carries one does it fall back to the chunk keys. So an entry that carries
+    only a chunk key BESIDE hashed siblings is dropped — it matches against
+    nothing while the case counts as annotated."""
+    def mixed_identities(case):
+        case["expected_chunks"] = [
+            {"chunk_key": "sample-ans-pub-1-chunk-1", "content_hash": "a1b2c3d4e5f60718"},
+            {"chunk_key": "sample-ans-pub-1-chunk-2"},
+        ]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", mixed_identities)
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "cannot match" in str(failed.value)
+    assert "sample-ans-pub-1#gold1" in str(failed.value)
 
 
 def test_config_a_refuses_a_gold_entry_with_no_identity(tmp_path):
@@ -126,13 +145,10 @@ def test_config_a_refuses_a_gold_entry_with_no_identity(tmp_path):
 
     set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", preview_only)
 
-    def runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
-        raise AssertionError("the anchor must not run on an unmeasurable set")
-
     with pytest.raises(drivers.DriverError) as failed:
-        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner)
-    assert "no identity" in str(failed.value)
-    assert "sample-ans-pub-1#0" in str(failed.value)
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "cannot match" in str(failed.value)
+    assert "sample-ans-pub-1#gold0" in str(failed.value)
 
 
 def test_config_a_records_the_identity_of_the_anchor_input(tmp_path):

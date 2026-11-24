@@ -41,16 +41,12 @@ at least one NON-LATIN case), plus the access axis (public AND restricted) and
 the failure and cancellation classes. A missing class fails validation NAMING
 the class and its required minimum; a complete set passes.
 
-Evaluation surfaces — which surface measures which case:
-
-``expected_chunks`` (the gold) is consumed by ONE surface only: the
-chunk-level retrieval surface, measured by the config-A anchor. Every other
-surface is judged from what the run RECORDED — the answer, the outcome, the
-retrieved document ids — never from passages. So a case on another surface
-carrying no gold is not a missing annotation, it is the correct semantics;
-and a case ON the retrieval surface carrying no gold would be measured by
-NOTHING, which the anchor driver refuses (see :func:`evaluation_surface`
-and :func:`coverage_census`).
+Evaluation surfaces — which surface measures which case: the gold
+(``expected_chunks``) is consumed by ONE surface only, the chunk-level
+retrieval surface; every other surface is judged from what the run RECORDED.
+The surfaces and their consequences are documented in
+``tests/rag-benchmarks/CLAUDE.md``; the rules live in
+:func:`evaluation_surface` and :func:`coverage_census`.
 
 TUNING sets are composition-free (they exist to tune, not to assess) but keep
 the schema and the provenance symmetry: a tuning set refuses an
@@ -124,14 +120,17 @@ DEFAULT_SECURITY_MINIMUMS = {scenario: 1 for scenario in SECURITY_SCENARIOS}
 # — so a case on one of them carries no gold BY DESIGN, and a case on the
 # retrieval surface without gold is measured by NOTHING (the anchor driver
 # refuses it — see :func:`evaluation_surface` and :func:`coverage_census`).
-SURFACES = ("retrieval", "outcome", "security", "restricted_access")
+SURFACES = ("retrieval", "outcome", "security", "restricted_access", "unknown")
 
 # The classes measured on the chunk-level retrieval surface.
 RETRIEVAL_CLASSES = ("answerable", "citation_check", "representative_language")
 
 # The classes judged from the recorded OUTCOME (abstention, typed failure,
-# cancellation) — never from passages.
-OUTCOME_CLASSES = ("unanswerable", "failure", "cancellation")
+# cancellation) — never from passages. DERIVED from the composition classes,
+# so a new class lands on exactly one of the two surfaces.
+OUTCOME_CLASSES = tuple(
+    case_class for case_class in COMPOSITION_CLASSES if case_class not in RETRIEVAL_CLASSES
+)
 
 # The minimum of non-Latin cases inside the representative_language class.
 DEFAULT_NON_LATIN_MINIMUM = 1

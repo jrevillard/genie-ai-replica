@@ -290,7 +290,7 @@ def cmd_reference(args: argparse.Namespace) -> int:
         Path(args.out_dir), "A", entries, result.get("rows") or {}, absent_rows="skipped"
     )
     _print_findings_summary(report)
-    _print_coverage("reference run", coverage_census(entries))
+    _print_coverage("reference run", result.get("coverage") or {})
     print(f"reference run: report {result['report_path']}")
     print(f"reference manifest: {path}")
     print(f"findings report: {report_path}")

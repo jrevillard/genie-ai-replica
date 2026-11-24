@@ -403,3 +403,11 @@ def test_coverage_census_names_a_retrieval_case_without_gold(assessment_data):
     census = es.coverage_census(data["entries"])
     assert census["retrieval_cases_without_gold"] == ["sample-ans-pub-1"]
     assert census["n_cases_with_a_resolved_surface"] == census["n_set_cases"] - 1
+
+
+def test_the_two_class_partitions_cover_the_composition_classes():
+    """The retrieval classes and the outcome classes partition the composition
+    classes — a new class lands on exactly one surface, never silently on
+    "unknown"."""
+    assert set(es.RETRIEVAL_CLASSES) | set(es.OUTCOME_CLASSES) == set(es.COMPOSITION_CLASSES)
+    assert not set(es.RETRIEVAL_CLASSES) & set(es.OUTCOME_CLASSES)

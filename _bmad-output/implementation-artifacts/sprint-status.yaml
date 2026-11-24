@@ -32,7 +32,7 @@ generated: 11-17-2026 15:20
 
 
 =======
-last_updated: 11-24-2026 18:10
+last_updated: 11-24-2026 19:50
 
 project: genie-ai
 project_key: NOKEY
@@ -79,7 +79,7 @@ development_status:
   4-3-e01-behavior-preservation-a-vs-b: done
   4-4-thresholds-and-counter-metrics: done
   4-5-e02-the-agent-s-case-b-vs-c: done
-  4-6-release-readiness-evidence-v09-v07b: review
+  4-6-release-readiness-evidence-v09-v07b: done
   epic-4-retrospective: optional
 action_items:
   - id: "epic-1-retro-item-1-disposition-v05-section-9-items-2-5-fix"

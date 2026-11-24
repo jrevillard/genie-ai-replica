@@ -64,6 +64,7 @@ from harness import (
     write_json,
 )
 
+from .config_b_driver import default_graph as config_b_default_graph
 from .evalset import (
     as_label_list,
     coverage_census,
@@ -922,8 +923,10 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
     is that public-access caller, never an empty (refused) set.
     """
     raw = case.get("context") or {}
-    default_graph = os.environ.get("EVAL_DEFAULT_GRAPH", "GRAPH")
-    graphs = list(raw.get("authorized_graph_names") or []) or [default_graph]
+    # ONE home for the fallback: the shipped driver's default_graph() (the
+    # driver's copy is forced by its standalone in-container contract; the
+    # orchestrator side reuses it so the two legs cannot drift).
+    graphs = list(raw.get("authorized_graph_names") or []) or [config_b_default_graph()]
     return {
         "question": case["query"],
         "deadline_ms": deadline_ms,

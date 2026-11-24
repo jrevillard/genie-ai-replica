@@ -252,5 +252,5 @@ class ModelEndpointConfig:
             # The TEI gateway's bearer, when the venue auths it (the GPU
             # gateway route answers 401 without it; an internal TEI serving
             # no auth carries no credential and the header stays off).
-            bearer=str(source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY", "") or ""),
+            bearer=str(source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY", "")),
         )

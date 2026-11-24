@@ -213,12 +213,9 @@ class TeiRerankingAdapter:
         # Injectable for the tests (httpx.MockTransport); production uses
         # the default connection pool.
         self._transport = transport
-        # The venue TLS knob (OPEA_SSL_SKIP_VERIFY=1) — the same deployment
-        # convention every other client of the self-signed GPU gateway
-        # honors; a verifying default stays the default.
+        # Both knobs ride the deployment's conventions — see the
+        # ModelEndpointConfig docstring (env_config.py) for the full story.
         self._tls_verify = tls_verify
-        # The TEI gateway's bearer, when the venue auths it (no header when
-        # the deployment carries no credential).
         self._bearer = bearer
 
     async def rerank(self, query: str, texts: list[str], chunk_embeddings=None, query_embedding=None) -> RerankOutcome:

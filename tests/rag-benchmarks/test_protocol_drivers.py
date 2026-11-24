@@ -442,12 +442,7 @@ def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch
     # The graph fallback reads the ambient env — pin the default shape.
     monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
     import asyncio
-    import importlib.util
-
-    driver_path = Path(drivers.__file__).parent / "config_b_driver.py"
-    spec = importlib.util.spec_from_file_location("config_b_driver_under_test", driver_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_driver("under_test")
 
     agent_service = Path(__file__).resolve().parents[2] / "components" / "agent-service"
     monkeypatch.syspath_prepend(str(agent_service))
@@ -1122,16 +1117,23 @@ def test_c_payload_drops_malformed_repo_entries():
 # ---------------------------------------------------------------------
 
 
+def _load_driver(unique_name: str):
+    """Load the shipped in-container driver by path (its file name carries
+    dashes; the unique module name keeps repeated loads independent)."""
+    import importlib.util
+
+    driver_path = Path(drivers.__file__).parent / "config_b_driver.py"
+    spec = importlib.util.spec_from_file_location(unique_name, driver_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_default_graph_reads_the_eval_env(monkeypatch):
     """The public-access default graph's NAME rides ``EVAL_DEFAULT_GRAPH``
     (the venue's legacy graph; GRAPH on the campaign venue) — unset falls
     back to GRAPH."""
-    import importlib.util
-
-    driver_path = Path(drivers.__file__).parent / "config_b_driver.py"
-    spec = importlib.util.spec_from_file_location("config_b_driver_default_graph", driver_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_driver("default_graph")
     monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
     assert module.default_graph() == "GRAPH"
     monkeypatch.setenv("EVAL_DEFAULT_GRAPH", "GRAPH_VENUE")
@@ -1141,12 +1143,7 @@ def test_default_graph_reads_the_eval_env(monkeypatch):
 def test_b_context_uses_the_env_graph_for_a_graphless_case(monkeypatch):
     """A case declaring no graph set assembles the env-named default (never
     an empty set — the capability refuses one); a declared set survives."""
-    import importlib.util
-
-    driver_path = Path(drivers.__file__).parent / "config_b_driver.py"
-    spec = importlib.util.spec_from_file_location("config_b_driver_ctx_graph", driver_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_driver("ctx_graph")
     # build_context imports the CallerContext contract — the component tree
     # rides sys.path (the same seam the driver-exec tests use).
     agent_service = Path(__file__).resolve().parents[2] / "components" / "agent-service"
@@ -1174,12 +1171,7 @@ def test_resolve_model_id_reads_both_client_spellings():
     A client with neither carries no id — None, never a crash (the bug that
     JSON-encoded a bound method into the resolved-env snapshot and killed
     the B leg's rows write)."""
-    import importlib.util
-
-    driver_path = Path(drivers.__file__).parent / "config_b_driver.py"
-    spec = importlib.util.spec_from_file_location("config_b_driver_model_id", driver_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_driver("model_id")
 
     class AsyncClient:
         async def model_id(self):

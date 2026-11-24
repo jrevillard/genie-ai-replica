@@ -157,11 +157,22 @@ SIGNED_CORPUS_FINGERPRINT = "f82298c0852a39c800c67d292e02c5d931525719d9d025ff767
 SIGNED_ASSESSMENT_SET_SHA256 = "cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812"
 SIGNED_ON = "2026-11-24"
 
-
-def _ABSENT_DIMENSIONS() -> list[str]:
-    """Every measured dimension the signature does NOT cover — derived, so a
-    dimension added to the protocol later is covered here too."""
-    return [code for code in thresholds_mod.MEASURED_DIMENSIONS if code != "M-1"]
+# The consolidated 2026-11-24 signature (issue #2167) added M-2..M-5 against
+# the FINAL A reference through the #2167 phase-1 derivation package. The
+# pins move with the signature so a typo in any bound goes red.
+SIGNED_GROUNDING_BOUNDS = {
+    "ungrounded_or_partial_rate": {"operator": "<=", "threshold": 0.80},
+}
+SIGNED_ABSTENTION_BOUNDS = {
+    "excessive_abstention_rate": {"operator": "<=", "threshold": 0.25},
+    "unanswerable_honest_abstention_rate": {"operator": ">=", "threshold": 0.95},
+}
+SIGNED_LATENCY_BOUNDS = {
+    "wall_ms": {"operator": "<=", "threshold": 15000},
+}
+SIGNED_RESOURCE_BOUNDS = {
+    "total_tokens_per_case": {"operator": "<=", "threshold": 30000},
+}
 
 
 def test_the_shipped_registry_carries_the_signed_retrieval_thresholds():
@@ -205,44 +216,37 @@ def test_the_shipped_registry_binds_the_signature_to_the_measured_reference():
         ), label
 
 
-def test_the_shipped_registry_reports_every_other_dimension_absent():
-    """Every measured dimension the signature does not cover stays EXPLICITLY
-    absent with its reason, and each one blocks the promotion."""
+def test_the_shipped_registry_carries_the_full_consolidated_signature():
+    """Every measured dimension carries an agreed value: the M-1 retrieval
+    bounds of 2026-11-23 (re-anchored 2026-11-24) plus the consolidated
+    signature's M-2..M-5 of 2026-11-24 (issue #2167) — each against its
+    pinned bounds, no more, no less."""
     registry = thresholds_mod.load_registry(REGISTRY)
     decision = thresholds_mod.promotion_decision(registry)
     assert set(decision["dimensions"]) == set(thresholds_mod.MEASURED_DIMENSIONS)
-    for code in _ABSENT_DIMENSIONS():
+    expected_bounds = {
+        "M-1": (SIGNED_RETRIEVAL_BOUNDS, "2026-11-23"),
+        "M-2": (SIGNED_GROUNDING_BOUNDS, "2026-11-24"),
+        "M-3": (SIGNED_ABSTENTION_BOUNDS, "2026-11-24"),
+        "M-4": (SIGNED_LATENCY_BOUNDS, "2026-11-24"),
+        "M-5": (SIGNED_RESOURCE_BOUNDS, "2026-11-24"),
+    }
+    for code, (bounds, agreed_on) in expected_bounds.items():
         record = decision["dimensions"][code]
-        assert record["status"] == thresholds_mod.STATUS_ABSENT
-        assert record["value"] is None
-        assert record["absent_reason"]
-        assert record["agreement_date"] is None
-        blocking = [
-            reason
-            for reason in decision["blocking_reasons"]
-            if reason["code"] == thresholds_mod.BLOCK_DIMENSION_ABSENT and reason["dimension"] == code
-        ]
-        assert blocking, f"{code} does not block the promotion"
+        assert record["status"] == thresholds_mod.STATUS_AGREED, code
+        assert record["value"]["metrics"] == bounds, code
+        assert record["agreement_date"] == agreed_on, code
 
 
-def test_the_shipped_registry_blocks_the_promotion_on_the_absent_dimensions():
-    """The signature covers M-1 only: the absent dimensions keep the promotion
-    blocked — a signed dimension never unblocks an absent one."""
+def test_the_shipped_registry_promotion_is_allowed():
+    """The full signature lets the promotion through: every measured
+    dimension agreed, the sign-off signed, zero blocking reasons — the
+    gate-compatible thresholds artifact can derive."""
     registry = thresholds_mod.load_registry(REGISTRY)
     decision = thresholds_mod.promotion_decision(registry)
-    assert decision["promotion"] == "blocked"
+    assert decision["promotion"] == "allowed"
     assert decision["sign_off"]["signed"] is True
-    blocked_by_absence = {
-        reason["dimension"]
-        for reason in decision["blocking_reasons"]
-        if reason["code"] == thresholds_mod.BLOCK_DIMENSION_ABSENT
-    }
-    assert blocked_by_absence == set(_ABSENT_DIMENSIONS())
-    assert not [
-        reason
-        for reason in decision["blocking_reasons"]
-        if reason["code"] == thresholds_mod.BLOCK_SIGNOFF_UNSIGNED
-    ]
+    assert decision["blocking_reasons"] == []
 
 
 def test_the_shipped_registry_invents_no_threshold_value():
@@ -645,12 +649,16 @@ def test_the_derivation_refuses_a_reference_without_a_lineage():
 # ---------------------------------------------------------------------------
 
 
-def test_the_cli_exits_1_on_the_shipped_registry(tmp_path, capsys):
-    assert main(["thresholds", "--registry", str(REGISTRY)]) == 1
+def test_the_cli_on_the_shipped_registry_demands_the_reference_manifest(tmp_path, capsys):
+    """The shipped registry carries the full signature, so the command's
+    blocked branch never fires; the allowed promotion binds to a measured
+    reference instead — without --reference-manifest it exits 2 with the
+    usage error before any report prints, never a derived artifact."""
+    assert main(["thresholds", "--registry", str(REGISTRY)]) == 2
     printed = capsys.readouterr()
-    assert "BLOCKED" in printed.out
-    assert "M-1" in printed.out
-    assert OWNER in printed.out
+    assert "--reference-manifest" in printed.err
+    assert "they were agreed against" in printed.err
+    assert printed.out == ""
 
 
 def test_the_cli_exits_1_on_a_malformed_registry(tmp_path, capsys):

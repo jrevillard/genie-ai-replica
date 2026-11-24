@@ -1,0 +1,109 @@
+{
+  "artifact": "evaluation-thresholds",
+  "signed": true,
+  "corpus_fingerprint": "f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f",
+  "assessment_set_sha256": "cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812",
+  "reference_manifest_sha256": "668e2136a4dc106f00fc56bee319e99f171511aafcf729d885a12314324ebe06",
+  "thresholds": {
+    "M-1": {
+      "value": {
+        "scope": "config A — the chunk/passage-level anchor metrics",
+        "metrics": {
+          "retrieval_recall": {
+            "operator": ">=",
+            "threshold": 0.95
+          },
+          "recall_at_10": {
+            "operator": ">=",
+            "threshold": 0.95
+          },
+          "ndcg_at_10": {
+            "operator": ">=",
+            "threshold": 0.9
+          },
+          "passage_recall": {
+            "operator": ">=",
+            "threshold": 0.95
+          },
+          "noise": {
+            "operator": "<=",
+            "threshold": 0.8
+          }
+        }
+      },
+      "dimension": "retrieval_quality",
+      "surface": "config A: the chunk-level anchor metrics (recall, precision, complete_recall, noise, retrieval_recall, passage_recall, recall@k, ndcg@k); config B: the doc-level source_documents — the surfaces differ by construction (pair E01), so the threshold applies per surface and never across them.",
+      "rationale": "the operator signed these bounds on 2026-11-23 against the measured A-only reference (issue #2118 / MR !1056 — 6 evaluable cases: retrieval_recall 1.0, recall_at_10 1.0, ndcg_at_10 1.0, passage_recall 1.0, noise 0.667). Every bound is a line the reference satisfies and a later run must keep satisfying: a regression past it is visible instead of averaged away (PRD §8). The reference rests on a 3-chunk corpus (one document, the venue's upload-validation fixture) over 6 evaluable cases, where recall and ndcg sit at their ceiling — the bounds are a floor the later runs must keep, not a fine-grained regression detector on that corpus",
+      "agreement_date": "2026-11-23"
+    },
+    "M-2": {
+      "value": {
+        "scope": "the content-blind attribution-trace surface over each leg's substantive answers (source identities only; the same shape on every leg, so comparisons stay valid)",
+        "metrics": {
+          "ungrounded_or_partial_rate": {
+            "operator": "<=",
+            "threshold": 0.8
+          }
+        }
+      },
+      "dimension": "answer_grounding",
+      "surface": "the content-blind attribution-trace surface over each leg's substantive answers (the judged pass's surface — source identities only; the same shape on every leg, so comparisons stay valid)",
+      "rationale": "signed by the operator's consolidated signature of 2026-11-24 (issue #2167), derived from the judged pass over the FINAL A reference's capture (60 ok rows, judge ibm-granite/granite-4.1-8b, temperature 0, instructions d629ff99e6273f3f): 0.733 ungrounded-or-partial measured on the 45 substantive answers. The bound is the measured line plus ~0.07 margin — the M-1 pattern (a line the reference satisfies that a later run must keep satisfying). The measured weakness of config A's attributed-grounding is recorded in the derivation method; the B-vs-C comparison carries the sharper signal. Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md",
+      "agreement_date": "2026-11-24"
+    },
+    "M-3": {
+      "value": {
+        "scope": "the mechanical abstention-verdict rules over each leg's rows (config A: the answer-text prose signal, judged; config B: the mechanical abstained/abstention_reason fields)",
+        "metrics": {
+          "excessive_abstention_rate": {
+            "operator": "<=",
+            "threshold": 0.25
+          },
+          "unanswerable_honest_abstention_rate": {
+            "operator": ">=",
+            "threshold": 0.95
+          }
+        }
+      },
+      "dimension": "abstention_correctness",
+      "surface": "the mechanical abstention-verdict rules over each leg's rows (config A: the answer-text prose signal, judged; config B: the mechanical abstained/abstention_reason fields)",
+      "rationale": "signed by the operator's consolidated signature of 2026-11-24 (issue #2167), derived from the judged pass over the FINAL A reference: 4/4 unanswerable cases abstained honestly (1.000) and 10/54 = 0.185 excessive abstentions on the answerable class — all ten restricted-visibility cases whose refusal is correct for config A's actual reach. The bounds are the measured lines plus margin; they tolerate that construction on the A reference while catching a later leg abstaining on ordinary answerable cases. Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md",
+      "agreement_date": "2026-11-24"
+    },
+    "M-4": {
+      "value": {
+        "scope": "each leg's own recorded per-case wall_ms (config A: the capture-a protocol layer; config B: the in-container driver; config C: the row wall_ms) — never a cross-leg comparison",
+        "metrics": {
+          "wall_ms": {
+            "operator": "<=",
+            "threshold": 15000
+          }
+        }
+      },
+      "dimension": "latency",
+      "surface": "each leg's own recorded per-case wall_ms (config A: the capture-a protocol layer; config B: the in-container driver; config C: the row wall_ms) — never a cross-leg comparison; the surfaces differ by execution conditions the report records as uncontrolled differences",
+      "rationale": "signed by the operator's consolidated signature of 2026-11-24 (issue #2167), derived from the FINAL A reference's measured distribution (n=60: min 3620.5, median 5944.7, p90 8016.1, p95 8498.2, max 10512.5 ms) — the measured maximum plus ~43% headroom for shared-GPU jitter, cross-checked against the issue #2118 reference's own max (11443 ms over 9 cases; the two maxima sit in the same band). Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md",
+      "agreement_date": "2026-11-24"
+    },
+    "M-5": {
+      "value": {
+        "scope": "the per-case served token consumption (prompt + completion, from the B/C rows' usage records) — the same quantity the deployment's AGENT_RUN_MAX_TOTAL_TOKENS knob enforces fail-closed per run",
+        "metrics": {
+          "total_tokens_per_case": {
+            "operator": "<=",
+            "threshold": 30000
+          }
+        }
+      },
+      "dimension": "resource_consumption",
+      "surface": "the per-case served token consumption (prompt + completion, from the B/C rows' usage records) — config A records no resource surface at all (the S4 checklist documents the absence), so the bound binds the legs that record one",
+      "rationale": "signed by the operator's consolidated signature of 2026-11-24 (issue #2167): the bound number is the deployment's DECLARED ceiling (AGENT_RUN_MAX_TOTAL_TOKENS=30000) — a fact of the deployment, not an invented default: the knob is REQUIRED and fail-closed (an unset knob answers 503 budget_configuration_missing, no run starts), it enforces exactly this quantity per run (the served prompt+completion total; reaching it is the honest typed budget_exhausted terminal), and the measured A reference carries no resource surface to derive from (the measured A max of 10512 wall-ms x3 headroom names the same order of magnitude). TO REVISIT after the first gated B measurement: the first B leg's usage records are the measured distribution this bound's next revision derives from. Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md",
+      "agreement_date": "2026-11-24"
+    }
+  },
+  "sign_off": {
+    "owner": "jrevillard (ITU)",
+    "signed_on": "2026-11-24"
+  },
+  "registry_sha256": "676a44cc0f9330d26371ce08903a49916e41a8adcd4b069b1f9b02e2855813a6"
+}

@@ -74,7 +74,7 @@ development_status:
   4-2-authorization-and-injection-scenario-suite: done
   4-3-e01-behavior-preservation-a-vs-b: done
   4-4-thresholds-and-counter-metrics: done
-  4-5-e02-the-agent-s-case-b-vs-c: review
+  4-5-e02-the-agent-s-case-b-vs-c: done
   4-6-release-readiness-evidence-v09-v07b: backlog
   epic-4-retrospective: optional
 action_items:

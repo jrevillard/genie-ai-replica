@@ -13,11 +13,13 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 
 | Dimension | Agreed? | Consequence for the S4 exit |
 |---|---|---|
-| M-1 retrieval quality | **in MR !1063** (draft, open): the operator signed the five retrieval bounds on 2026-11-23, but the branch's own registry (`protocol/thresholds.yaml`) still records M-1 as absent and the sign-off as unsigned until that MR lands | the bounds are scoped to config A's chunk-level anchor metrics, and the scope is ACTED ON: a bound scoped to another configuration is recorded as not applicable, so the E02 legs (doc-level surface) are never measured against them |
-| M-2 answer grounding | no | no answer-grounding bound can be applied to any leg; the E02 verdict stays unassessable on that dimension |
+| M-1 retrieval quality | **YES — merged** (MR !1063, squash `9ca967274`, 2026-11-23/24): the five retrieval bounds are signed against the measured reference, and this branch carries the merged registry | the bounds are scoped to config A's chunk-level anchor metrics, and the scope is ACTED ON: a bound scoped to another configuration is recorded as not applicable, so the E02 legs (doc-level surface) are never measured against them |
+| M-2 answer grounding | no | no answer-grounding bound can be applied to any leg; the E02 verdict stays unassessable on that dimension — and the promotion decision stays BLOCKED |
 | M-3 abstention correctness | no | the same for the abstention dimension |
 | M-4 latency | no | the coexistence criterion's legacy latency limit has no agreed value → the criterion's verdict is BLOCKED, never a pass |
 | M-5 resource consumption | no | the agentic cost surface has no agreed bound; the reference records no resource surface at all on the venue |
+
+**The gate state after !1063 merged** (`_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/thresholds-promotion-refusal.txt`, verbatim): the sign-off IS signed (owner `jrevillard (ITU)`, 2026-11-23), M-1 carries the five signed bounds — and the promotion decision is still **BLOCKED**, because M-2..M-5 carry no agreed threshold. `derive_thresholds_artifact` refuses, so no signed thresholds artifact exists, and the gated B/C legs keep refusing (`missing_thresholds`) — the attempt's refusal records were re-produced on this branch after the merge, with the same reference manifest digest (`8dc67fa1804e`) the E01 leg was refused against.
 
 ## Check 1 — E01: behavior preservation (A vs B)
 
@@ -39,6 +41,7 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 | The E02 join | `_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/e02.refusal.txt` | **OPEN** — refused (`missing_artifact`: the B leg's gated manifest does not exist) |
 | The E02 report (`e02.report.json`) | — | **OPEN** — unreachable before the gated legs run |
 | The multi-hop / ambiguous gains | the assessment set carries no case of those classes (`tests/rag-benchmarks/protocol/evalset.py`'s composition classes do not include them) | **OPEN** — the agentic benefit the PRD §4.1 note describes stays a HYPOTHESIS; the set is frozen at the digest the signed thresholds bind to, so it cannot be extended without invalidating the signature |
+| The gold annotations the C verdict needs | 10 of the assessment set's answerable cases carry no gold annotation (empty gold) — issue #2145 | **OPEN** — a C verdict must not be composed before #2145 is handled: the agent's answers on the unannotable cases are not judgeable, and scoring them as if they were would massage the result |
 
 ## Check 3 — Bounded execution (V06)
 

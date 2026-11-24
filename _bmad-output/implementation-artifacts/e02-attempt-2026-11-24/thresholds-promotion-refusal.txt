@@ -1,0 +1,13 @@
+# The promotion decision over the MERGED registry (MR !1063, squash 9ca967274), verbatim
+# command: promotion_decision(load_registry('protocol/thresholds.yaml')) + derive_thresholds_artifact
+# date: 2026-11-24 — the sign-off IS signed (owner jrevillard (ITU), 2026-11-23) and M-1 carries the
+# five signed bounds; the decision is still BLOCKED because M-2..M-5 carry no agreed threshold:
+
+promotion: blocked
+sign_off: signed = True | owner = jrevillard (ITU)
+  BLOCK: M-2 - M-2 (answer_grounding) has no agreed threshold — no grounding threshold is agreed: the operator's signature of
+  BLOCK: M-3 - M-3 (abstention_correctness) has no agreed threshold — no abstention-correctness threshold is agreed: the oper
+  BLOCK: M-4 - M-4 (latency) has no agreed threshold — no latency threshold is agreed: the operator's signature of 2026-11-23
+  BLOCK: M-5 - M-5 (resource_consumption) has no agreed threshold — no resource-consumption threshold is agreed, and the meas
+signed artifact: REFUSED — no signed thresholds artifact is produced: M-2 (answer_grounding) has no agreed threshold — no grounding threshold is agreed: the operator's signature of 2026-1
+exit=0

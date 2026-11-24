@@ -5008,7 +5008,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
   });
 });
 
-// --- Slim build lane cache contract (#2031) ---
+// --- Slim build lane cache contract ---
 // The slim lane (jobs declaring SLIM_REQUIREMENTS_FILE: dataprep, retriever,
 // reranker) builds the SAME Dockerfiles as the fat lane — Dockerfiles the
 // build-time gate requires to declare ARG CACHE_BUST on their apt upgrade
@@ -5054,7 +5054,8 @@ describe('the slim build lane cache contract (#2031)', () => {
     // buildx invocations in the shared template must sit AFTER a
     // FORCE_IMAGE_REBUILD conditional that passes a CACHE_BUST build-arg —
     // pinning only one lane's literal let the other lane refreeze its
-    // packages while the test stayed green (the drift class #2031 is).
+    // packages while the test stayed green (the drift class this contract
+    // exists for).
     // Matching the conditional line + the build-arg (not a full literal)
     // survives reformatting while still failing when an arm is dropped,
     // moved after the build, or de-conditionalized. The value may be

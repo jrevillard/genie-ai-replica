@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/utils/okf_citation.dart';
 
-/// The OKF-concept citation identity (issue #2069): the mobile twin of the
+/// The OKF-concept citation identity: the mobile twin of the
 /// web's `isOkfConceptSource` / `translateSources` branch. A concept row is
 /// NOT a repository document — it resolves through okf-server.
 void main() {

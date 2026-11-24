@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Real-markdown integration smoke for the agentic translation leg
-// (services/translation/agentic-translation-leg.js — story 2.10). Runs on
+// (services/translation/agentic-translation-leg.js). Runs on
 // Node's built-in test runner:
 //
 //   node --test scripts/agentic-translation-markdown.node-test.js
@@ -12,7 +12,7 @@
 // form), so a loading-shape regression in the leg's `loadMarkdownLibs` —
 // `require('remark-parse').default` vs the namespace, a renamed export —
 // would ship all-green and surface only as runtime failed translations when
-// story 2.4 wires the leg. This smoke loads the four packages EXACTLY as
+// the routes wire the leg. This smoke loads the four packages EXACTLY as
 // `loadMarkdownLibs` does (the requires below must stay in the same shape)
 // and round-trips one markdown string through the leg's discipline: parse →
 // visit text nodes → normalizeInlineSpacing → splitEdges → cores →

@@ -25,7 +25,7 @@ payload rules. The production client still belongs to whichever runtime
 the decision selects.
 
 The probe itself runs IN-PROCESS; the HTTP surface for governed runs is
-the run surface (``app.py``, story 2.3). Live entry::
+the run surface (``app.py``). Live entry::
 
     python -m agent.probe
 

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""Capture-artifact suitability checks (story 4.1 — reuse is checked, never blind).
+"""Capture-artifact suitability checks (reuse is checked, never blind).
 
 The existing capture machinery (``capture_baseline.py``) produces committed
 baseline artifacts carrying ``harness_sha`` (sha256 over the pinned eval

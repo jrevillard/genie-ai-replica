@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-# GENIE.AI agent service — internal-only FastAPI service (Epic 1).
+# GENIE.AI agent service — internal-only FastAPI service.
 # The image carries the service and its pinned dependency tree, nothing else:
 # no model, no GPU stack, no build toolchain.
 
@@ -26,10 +26,10 @@ RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
     CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# The capability layer (story 1.6): the port implementation and its adapters
+# The capability layer: the port implementation and its adapters
 # are carried into the image beside the service modules. The preparation
-# module (story 1.8) rides beside them: the loop-side query preparation and
-# its vendored language registry. The noagent package (story 1.9) rides
+# module rides beside them: the loop-side query preparation and
+# its vendored language registry. The noagent package rides
 # beside both: config B, the fixed single-pass pipeline. The agent package
 # rides beside all of them: the runtime seam and the probe.
 COPY app.py tracing.py ./

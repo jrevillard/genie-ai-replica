@@ -4,11 +4,11 @@ const http = require('http');
 const https = require('https');
 const { logger, parsePositiveInt } = require('../shared-lib');
 
-// Story 2.4b — the shared agent-run vocabulary. The deadline pair, the
+// The shared agent-run vocabulary. The deadline pair, the
 // citation→source_documents mapping, the metadata assembly and the upstream
 // body reader live HERE (one home each) so the two consumers of the
-// agent-service seam — the streaming frame writer (story 2.4) and the
-// non-streaming JSON consumer (story 2.4b) — cannot drift apart. The frame
+// agent-service seam — the streaming frame writer and the
+// non-streaming JSON consumer — cannot drift apart. The frame
 // writer re-exports the pieces its test pins read; production code imports
 // from this module directly.
 
@@ -23,9 +23,8 @@ const agentHttpsAgent = new https.Agent({ keepAlive: true });
 //
 // The pair rule (`AGENT_UPSTREAM_TIMEOUT_MS >= deadline_ms + reserves`) holds
 // by construction: the deadline the BFF communicates is the timeout MINUS the
-// named reserves. The reserves are module constants, not knobs — 2.10
-// revisits them when translation allowances land. The judge-overrun ceiling
-// (AGENT_VERDICT_JUDGE_TIMEOUT_MS, story 2.6) is not part of this derivation
+// named reserves. The reserves are module constants, not knobs. The judge-overrun ceiling
+// (AGENT_VERDICT_JUDGE_TIMEOUT_MS) is not part of this derivation
 // yet: the run surface bounds its own wall clock and answers honestly, so a
 // long run surfaces as the agent's own budget_exhausted/run_error, never as
 // a BFF timeout.
@@ -160,7 +159,7 @@ function citationToSourceDocument(citation) {
  *   low-confidence miss), this is "we never got an answer", and a post-hoc
  *   AQL counting abstentions has to be able to tell them.
  *
- * (Moved here from routes/query-routes.js in story 2.4b: the non-streaming
+ * (Moved here from routes/query-routes.js: the non-streaming
  * JSON consumer assembles the same base shape and a second copy would drift.)
  *
  * @returns {Object}
@@ -183,19 +182,19 @@ const emptyStreamMetadata = () => ({
  *
  * Base: the legacy empty-stream shape (`emptyStreamMetadata()` — abstained
  * null, filter_labels null), so an agentic doc is indistinguishable in shape
- * from a legacy one — with ONE deliberate override (story 3.2): `abstained`
+ * from a legacy one — with ONE deliberate override: `abstained`
  * normalizes to `false`, the legacy answered vocabulary. An agentic turn is
  * an ANSWER (its insufficiency, when any, lives in grounding_status / the
  * marking), and the legacy `null` means "chatqna never answered" — an
  * agentic turn must never read as that in abstention analytics. The
  * non-streaming JSON consumer re-derives `abstained` from the verdict on top
- * of this base (story 2.4b's V05 vocabulary: a verdict-bearing answered run
+ * of this base (the V05 vocabulary: a verdict-bearing answered run
  * is false unless the insufficiency was required; NO verdict restores null —
  * "decision never reported"). The verdict overlays the additive grounding
  * fields and the citation set; a run WITHOUT a verdict event defaults to
  * `unverified` — never a confident default. The `agent_run` block (run_id +
  * the terminal usage record when one arrived) rides additively on the wire
- * and into the persisted doc — the version-record persistence of this story.
+ * and into the persisted doc — the version-record persistence.
  *
  * The base factory defaults to THIS module's own `emptyStreamMetadata` — the
  * one home: a caller cannot inject a divergent base shape (the streaming
@@ -208,13 +207,13 @@ const emptyStreamMetadata = () => ({
  * @param {string|null} params.runId - The seam run id.
  * @param {Object|null} params.usageRecord - The terminal usage record.
  * @param {Object|null} [params.runStart] - The captured run-start block
- *   (story 2.11: `{run_id, execution_versions, started_at}` — what the
+ *   (`{run_id, execution_versions, started_at}` — what the
  *   `run_started` seam event carried). Merged into `agent_run` so the
  *   success finalize COMPLETES the start write instead of clobbering it:
  *   a finalize that never arrives leaves the start write intact, which IS
  *   the cancelled-run guarantee.
- * @param {string|null} [params.outcome] - The honest terminal outcome
- *   (story 2.11 vocabulary). Carried with `finished_at` on the assembled
+ * @param {string|null} [params.outcome] - The honest terminal outcome.
+ *   Carried with `finished_at` on the assembled
  *   block; the BFF-terminal paths write theirs through the outcome patch
  *   instead (query-service persistAgentRunOutcome).
  * @returns {Object}
@@ -227,7 +226,7 @@ function assembleAgentMetadata({
   runStart,
   outcome
 }) {
-  // ONE deliberate override on the legacy empty-stream base (story 3.2):
+  // ONE deliberate override on the legacy empty-stream base:
   // analytics vocabulary parity with the legacy answered path.
   const metadata = { ...baseFactory(), abstained: false };
   if (verdict) {
@@ -264,7 +263,7 @@ function assembleAgentMetadata({
   return metadata;
 }
 
-// ─── the run attribution (story 2.11, AD-11) ────────────────────────────────
+// ─── the run attribution ────────────────────────────────────────────────────
 
 /**
  * The run-start block a `run_started` seam event carries — ONE home for the

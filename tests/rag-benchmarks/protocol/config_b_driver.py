@@ -7,14 +7,14 @@ The harness ships this file into the agent-service container (via the
 docker-exec transport, see ``drivers.run_config_b``) and runs it there, where
 ``noagent.pipeline`` and the component's dependency set are importable and
 the vLLM/TEI/doc-repo network position is the serving position. The driver is
-the caller story 1.9 defined — it NEVER re-implements noagent behavior:
+the caller the harness defined — it NEVER re-implements noagent behavior:
 
 * it imports ``noagent.pipeline`` (:class:`NoAgentPipeline`,
   :class:`NoAgentResult`) and consumes the result's fields verbatim;
 * it assembles the pipeline through the same knobs config C's seam reads
   (``NoAgentConfig.load`` for the lane, ``OrchestratorConfig.load`` for the
   operation budget — the shared admission/budget policy is what makes the
-  E02 attribution honest, AD-10);
+  E02 attribution honest);
 * one case = one ``pipeline.run`` pass, admitted through the lane like every
   other request mode.
 
@@ -24,7 +24,7 @@ I/O (positional argv, matching the eval toolchain's convention)::
 
 ``cases.json`` — ``{"cases": [{"id", "query", "language", "context": {...}}, ...]}``
 (a multi-turn case arrives pre-expanded by the harness into per-turn entries
-with turn-indexed ids ``<case_id>#t<n>`` and a ``turn`` field — story 4.2;
+with turn-indexed ids ``<case_id>#t<n>`` and a ``turn`` field;
 the driver runs each entry as the single case it is)
 ``rows.json``  — ``{"cases": {case_id: row}, "resolved": {...}}`` written
 ATOMICALLY (tmp + ``os.replace``) after EVERY case, so a mid-run kill leaves
@@ -113,7 +113,7 @@ def _turn_field(entry: dict) -> dict:
 def row_from_result(case: dict, result, wall_ms: float) -> dict:
     """Consume the ``NoAgentResult`` unchanged — the row carries its fields
     verbatim (the contract this driver exists to keep: zero noagent behavior
-    duplicated in the harness). A per-turn entry (story 4.2) carries its
+    duplicated in the harness). A per-turn entry carries its
     1-based ``turn`` index onto the row."""
     row = {
         "case_id": case["id"],
@@ -173,14 +173,14 @@ def run_cases(cases: list[dict], pipeline) -> dict:
 def build_pipeline():
     """The in-container assembly — the ONLY place the agent-service imports happen.
 
-    The pipeline is story 1.9's, assembled from the deployment's own knobs:
+    The pipeline is the noagent pipeline, assembled from the deployment's own knobs:
     the lane from ``NoAgentConfig.load`` (the same ``AdmissionLane.from_config``
     the C seam builds), the budget from ``OrchestratorConfig.load`` (the same
     fail-closed read — the shared admission/budget policy of E02), and the
     capability via ``SearchKnowledgeCapability.create`` — the SAME capability
     object the governed run's port assembly wires (called directly by the
     no-agent pipeline, whose own authorized-set check refuses an empty set
-    and validates graph names, per story 1.9).
+    and validates graph names).
     """
     sys.path.insert(0, AGENT_SERVICE_HOME)
     from agent.orchestrator import OrchestratorConfig

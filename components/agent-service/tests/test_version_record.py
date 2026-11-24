@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The execution-version record (story 2.11, FR-17): the builder's fields
+"""The execution-version record: the builder's fields
 and hash stability, the no-secrets invariant, the override prompt hashed,
 the model identity resolved fail-soft, and the run-start handshake — the
 record riding ``run_started`` on the loop path, the governed path and the
@@ -290,7 +290,7 @@ def test_the_pre_loop_failure_path_emits_the_record(tmp_path):
 
 def test_replace_keeps_the_record_out_of_the_usage_record(tmp_path):
     """The record rides the START event only — the terminal usage record's
-    key set is untouched (AD-12: no new doc shapes beyond the additive
+    key set is untouched (no new doc shapes beyond the additive
     block the BFF assembles)."""
     model = ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "grounded"}'))
     orchestrator = _orchestrator_with(model, fake_port(), tmp_path)

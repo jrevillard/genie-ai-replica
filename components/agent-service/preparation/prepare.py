@@ -28,8 +28,8 @@ The orchestrator of the recorded §5.1 order (V02
    absent).
 
 The three failure classes keep their distinct outcomes (V02 §5.4, mapped
-onto the capability contract's taxonomy — see the Design Notes of the
-story): an oversized input RAISES the typed
+onto the capability contract's taxonomy — see the Design Notes): an
+oversized input RAISES the typed
 :class:`~preparation.translation.TranslationInputTooLongError` (the
 abstention class — never an untranslated fallback), while an unavailable or
 blank translation RETURNS an unprepared result carrying

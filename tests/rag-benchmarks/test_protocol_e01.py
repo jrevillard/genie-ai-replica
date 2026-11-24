@@ -775,7 +775,7 @@ def test_e01_reports_all_five_dimensions_for_both_configs_with_named_surfaces():
     assert dimensions["M-3"]["B"]["values"]["n_with_abstention_reason"] == 1
     assert dimensions["M-3"]["B"]["values"]["n_failure_rows"] == 1
     # M-4: latency stats on both sides, in the metric's own unit, with NO
-    # tolerance band (the thresholds are story 4.4's to sign).
+    # tolerance band (the thresholds are the threshold registry's to sign).
     assert dimensions["M-4"]["A"]["values"]["median"] == 10.0
     assert dimensions["M-4"]["A"]["values"]["unit"] == "ms"
     assert dimensions["M-4"]["A"]["values"]["n_excluded_non_ok_rows"] == 2
@@ -923,7 +923,7 @@ def test_e01_inputs_are_digested_and_the_report_is_reproducible_under_the_pin():
 
 
 # ---------------------------------------------------------------------------
-# e01 — the reference-defects ledger (FR-26)
+# e01 — the reference-defects ledger
 # ---------------------------------------------------------------------------
 
 
@@ -1913,7 +1913,7 @@ def test_e01_scope_match_is_null_when_the_comparison_is_partial():
 def test_e01_scope_match_is_null_when_a_case_measured_no_filter():
     """A case that recorded a scope but measured NO effective filter leaves
     the comparison partial — the report publishes null, never a match it did
-    not measure (FR-27). The verdict must not read as a match over the cases
+    not measure. The verdict must not read as a match over the cases
     it compared, with an unmeasured case counted in."""
     captured, rows = _scoped_rows("c1", ["Forestry"])
     # c2 is scoped on A, measured no filter, and has no B counterpart.

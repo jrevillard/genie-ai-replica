@@ -1,7 +1,7 @@
 const { EventEmitter } = require('events');
 
-// Story 2.5's additive integration pin (scope ruling 132214 — NO BFF
-// production change): the 2.10 answer-translation leg, asserted against the
+// The additive integration pin (NO BFF
+// production change): the answer-translation leg, asserted against the
 // CANONICAL run usage record the agent-service emits — the terminal frame's
 // `usage_record`, consumed verbatim by the residual plan and by the leg.
 // The pairing is the whole contract: one record shape, two consumers, one
@@ -56,7 +56,7 @@ const { createAgenticTranslationLeg } = require('../../../services/translation/a
 const { computeResidual, planTranslation } = require('../../../services/agent-residual-budget');
 
 // The canonical terminal usage record — the RunUsageRecord the governed run
-// surface emits as its stream's last frame (story 2.3's counters plus the
+// surface emits as its stream's last frame (the counters plus the
 // integration slice's additive fields: language, preparation_status,
 // injection_findings). ONE home for the pairing suites.
 const canonicalRunUsage = (overrides = {}) => ({

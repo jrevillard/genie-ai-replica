@@ -1,6 +1,6 @@
 'use strict';
 
-// Story 2.4 — the seam dialect's one parser. The agent service streams the
+// The seam dialect's one parser. The agent service streams the
 // internal envelope `{run_id, call_id, seq, kind, payload}` as SSE `data:`
 // lines, plus its own terminal usage-record frame
 // (`data: {"usage_record":{...}}`). This module turns ONE data line into a

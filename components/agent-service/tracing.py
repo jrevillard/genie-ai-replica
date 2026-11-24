@@ -212,7 +212,7 @@ def setup_tracing(service_name: str) -> None:
             "FastAPI auto-instrumentation unavailable (install opentelemetry-instrumentation-fastapi): %s", exc
         )
 
-    # --- Outbound HTTP instrumentation (story 2.11) ---
+    # --- Outbound HTTP instrumentation ---
     # W3C traceparent propagation on every outbound hop: httpx (the model
     # endpoint and the TEI embed/rerank calls) and requests (the doc-repo /
     # okf-server adapter GETs, run in worker threads — asyncio.to_thread

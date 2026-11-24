@@ -354,7 +354,7 @@ def test_config_b_splits_the_payload_by_bytes_before_the_argv_cap(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Multi-turn execution (story 4.2)
+# Multi-turn execution
 # ---------------------------------------------------------------------------
 
 

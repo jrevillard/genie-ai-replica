@@ -137,7 +137,7 @@ async function refuseUnsupportedLanguage(targetLanguage) {
 // Metadata persisted when chatqna never sent a metadata event (stream error,
 // or the answer ended before the envelope). One factory, so the two call sites
 // cannot drift into storing different key sets for the same kind of query.
-// Story 2.4b: the factory's ONE home is the shared agent-run contract module
+// The factory's ONE home is the shared agent-run contract module
 // (services/agent-run-contract.js) — the non-streaming JSON consumer
 // assembles the same base shape, so the definition moved there and this file
 // imports it. The field conventions are documented beside the definition.
@@ -319,7 +319,7 @@ module.exports = (queryService) => {
     }
 
     try {
-      // Story 2.4 — the agentic entry resolves the fan-out posture ONCE, in
+      // The agentic entry resolves the fan-out posture ONCE, in
       // the frame writer (the CallerContext assembly): initStreamQuery skips
       // the carrier there, so the posture is never read twice for one
       // request. The legacy entry keeps the carrier attach, unchanged.
@@ -330,8 +330,8 @@ module.exports = (queryService) => {
         agenticBranch ? { skipFanoutCarrier: true } : undefined
       );
 
-      // Story 2.4 — the guarded agentic branch. The shared routing helper is
-      // the ONLY way the agentic endpoint is exposed (AD-9): when the flag is
+      // The guarded agentic branch. The shared routing helper is
+      // the ONLY way the agentic endpoint is exposed: when the flag is
       // off, the legacy chatqna relay below serves byte-identically. The
       // branch sits AFTER initStreamQuery — the `queries` doc exists with the
       // legacy shape and the same queryId completes it at finalize (queryId
@@ -369,7 +369,7 @@ module.exports = (queryService) => {
       // consumes the request body before the route handler runs, so `req` has
       // already emitted 'close' by the time the first `await` resolves; the
       // signal is `res.on('close')`. The dead `req` listener this replaces
-      // carried exactly the cleanup below (story 2.4 put it on the living
+      // carried exactly the cleanup below (now on the living
       // object, armed BEFORE the upstream call so the connect window is
       // covered); `close` fires on EVERY response end, so the
       // `doneState.handled` guard keeps a normally completed stream from being
@@ -385,7 +385,7 @@ module.exports = (queryService) => {
           logger.info('QueryService.stream_client_disconnected', { queryId });
           if (fullResponseText) {
             // The partial save carries the `answer_interrupted` honesty
-            // marker (ADR agentic-003) — the same marker the agentic
+            // marker — the same marker the agentic
             // disconnect path writes: one finalize, one honesty contract,
             // both paths.
             queryService
@@ -475,7 +475,7 @@ module.exports = (queryService) => {
         }
       }
 
-      // Streaming translation (issue #829): when enabled and the UI language is not
+      // Streaming translation: when enabled and the UI language is not
       // English, buffer the EN answer and stream-translate complete units (sentence/
       // paragraph boundaries) so the user sees the target language WHILE streaming,
       // instead of an English stream that flips at the end. The unit machinery
@@ -584,7 +584,7 @@ module.exports = (queryService) => {
           // The stream ended without a `done` frame (a truncated upstream —
           // generator abort, proxy trim): this finalize is a partial save and
           // carries the same `answer_interrupted` honesty marker as the
-          // close paths (ADR agentic-003). A `done` frame already handled
+          // close paths. A `done` frame already handled
           // leaves the metadata untouched — the marker must never leak into
           // a normally completed answer.
           if (!doneState.handled) {
@@ -612,7 +612,7 @@ module.exports = (queryService) => {
       }
       if (!res.headersSent) {
         if (error.statusCode === 401) {
-          // Story 1.1: an expired/invalid bearer caught during fan-out
+          // An expired/invalid bearer caught during fan-out
           // resolution propagates as 401 — never silently degraded to the
           // legacy path (the request itself is invalid).
           res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
@@ -858,14 +858,14 @@ module.exports = (queryService) => {
       }
       const queryData = { ...req.body, userId };
       const targetLanguage = requestedTargetLanguage(queryData);
-      // Story 2.4b — the guarded agentic branch decides the language
+      // The guarded agentic branch decides the language
       // resolution. BOTH entries only check the language here (an
       // unsupported one is refused): the agentic JSON path translates the
       // WHOLE ANSWER post-run through the agentic translation leg (see
       // runAgentJsonTurn), and the legacy path's answer is translated by the
       // chatqna service server-side — a request-resolved translator would be
       // one neither path uses. The routing helper is the ONLY way the agentic
-      // entry is exposed (AD-9).
+      // entry is exposed.
       const refusal = await refuseUnsupportedLanguage(targetLanguage);
       if (refusal) {
         return res.status(400).json(refusal);
@@ -887,7 +887,7 @@ module.exports = (queryService) => {
       if (error.statusCode === 401) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: error.message });
       }
-      // Story 2.4b — the agentic JSON errors are typed (AgentJsonTurnError):
+      // The agentic JSON errors are typed (AgentJsonTurnError):
       // the passthrough statuses (429/503/422), the 504 upstream-timeout
       // answer and the 502s carry their exact JSON error contract in `body`
       // and are answered verbatim. The CLASS gate, not a statusCode+body
@@ -900,7 +900,7 @@ module.exports = (queryService) => {
         }
         return res.status(error.statusCode).json(error.body);
       }
-      // Story 3.1's general typed-error passthrough (the streaming path
+      // The general typed-error passthrough (the streaming path
       // applies the same mapping): the error declares its own status and
       // machine-readable code — an intentional, named state never renders
       // as the 500 "unexpected server fault" class below. Second, after the

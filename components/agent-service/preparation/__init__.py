@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The input-preparation module: the loop-side half of query readiness.
 
-The epic context assigns preparation to the agent application layer: "the
+The architecture assigns preparation to the agent application layer: "the
 agent application layer prepares every query … The port requires prepared
 English queries and never calls vLLM." This package is that layer — a
 plain injectable component (no HTTP surface, no loop coupling, no agent
@@ -17,7 +17,7 @@ the module lives outside the port package.
 
 Behavior is frozen to the V02 record
 (``docs/baselines/v02-opea-query-path-contract.md`` §5); the structure is
-free (clean-slate per AD-10 — no ``comps`` import, no OPEA service call,
+free (clean-slate — no ``comps`` import, no OPEA service call,
 no shared library with the overlay). What the record freezes: the order of
 operations (§5.1), the ``query_translation_status`` vocabulary (§5.2 — the
 contract's ``QueryPreparationStatus``), the bounds (§5.3), the three

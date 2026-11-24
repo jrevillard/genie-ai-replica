@@ -122,7 +122,7 @@ def test_an_unassembled_port_answers_503_naming_the_knob(monkeypatch):
 
 
 def test_an_unimplemented_verdict_policy_answers_503_naming_the_knob(monkeypatch):
-    """The release policy is deployment-level and iteration-1 ships
+    """The release policy is deployment-level and ships
     verdict-marked only: a deployment asking for another value is refused
     at the config load — the same honest 503, the knob and the value named,
     never a silently-degraded policy."""
@@ -226,7 +226,7 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
 
 
 def test_the_verdict_projects_citations_onto_the_frontend_source_documents_shape(tmp_path, monkeypatch):
-    """FR-13: the delivered citations ride the verdict payload projected
+    """The delivered citations ride the verdict payload projected
     onto the exact envelope variants the frontend citation mapping reads —
     the run surface serves them, the BFF's frame writer forwards them."""
     grounded_script = multihop_turns(judge_reply='{"verdict": "grounded"}')

@@ -15,7 +15,7 @@ import 'package:openapi/api.dart';
 import '../helpers/chatbot_harness.dart';
 import '../helpers/test_app.dart';
 
-// The agent activity line's mobile contract (issue #1966): the line
+// The agent activity line's mobile contract: the line
 // renders in the trailing in-flight slot from the turn's first
 // agent_activity frame, replaces the legacy indicator for the rest of
 // the turn, collapses at the first chunk and never re-opens; the
@@ -670,7 +670,7 @@ void main() {
       // The saving mock serves the same stream route and captures the
       // messages-post bodies the save uploads: the record the save
       // carries must hold the outcome the restore reads — the agent
-      // lane's server-side doc does not persist it (#2080).
+      // lane's server-side doc does not persist it.
       final chatKey = GlobalKey<ChatBotComponentState>();
       final saving = _SavingStreamMockClient(tree);
       final controller = await mountStreaming(
@@ -702,7 +702,7 @@ void main() {
         findsOneWidget,
       );
 
-      // The save flow itself (the dialog is not this story's surface):
+      // The save flow itself (the dialog is not the surface under test):
       // the established state-key call the restored suites use.
       await chatKey.currentState!.saveConversation();
       await tester.pumpAndSettle();
@@ -919,7 +919,7 @@ void main() {
       await I18nService().changeLanguage('fr');
       // No httpClient: the non-streaming JSON path. The response carries
       // the legacy is_grounded fallback input (no grounding_status) and
-      // the agent lane's root translationFailed latch (#2080: its
+      // the agent lane's root translationFailed latch (its
       // metadata does not carry translation_status).
       usePhoneSurface(tester);
       mockChatbotConfigAsset(tester, config);

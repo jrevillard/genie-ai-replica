@@ -3,7 +3,7 @@
 """The ``search_knowledge`` port: outcome mapping, budget, and the contract seam.
 
 The recorded empty cases stay distinct (V02 §4.13/§4.14) and map onto the
-accepted contract surface (story 1.5: every empty case is an
+accepted contract surface (every empty case is an
 ``insufficient_evidence`` answer); the budget and cancellation declarations
 behave per the contract's limit semantics.
 """
@@ -300,7 +300,7 @@ def test_okf_candidate_with_unresolvable_file_id_is_skipped_not_cited_with_an_em
     """The OKF branch is guarded too: a resolved ``repo_id`` with no
     resolvable ``file_id`` never mints ``OkfConceptProvenance(concept_id="")``
     — the empty identity would collapse the repository's hits in the
-    no-agent dedup (issue #2032)."""
+    no-agent dedup."""
     rows_file_id = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": None}]
     rows_identity = [{"key": "c1", "repo_id": "repo-1", "bundle_version": 7}]
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
@@ -371,8 +371,8 @@ def test_multi_graph_search_addresses_every_authorized_graph_and_merges_candidat
                 rows = [{"key": f"{self._graph}-c1", "text": f"from-{self._graph}", "score": 0.9, "file_id": "f1"}]
             elif "doc._key IN @chunk_ids" in query and "okf_concepts_meta" not in query:
                 # The file_id enrichment answers too: a chunk whose
-                # enrichment finds no row is skipped at minting (issue
-                # #2032), so the fake must resolve the file_id it carries.
+                # enrichment finds no row is skipped at minting, so the
+                # fake must resolve the file_id it carries.
                 rows = [{"key": f"{self._graph}-c1", "file_id": "f1"}]
             else:
                 rows = []
@@ -789,14 +789,14 @@ def test_create_wires_the_contract_surface(monkeypatch):
     signature = inspect.signature(capability.search_knowledge)
     parameters = list(signature.parameters)
     # The protocol call is the first three parameters; the abstention sink
-    # is OPTIONAL (story 1.9) and defaults to None.
+    # is OPTIONAL and defaults to None.
     assert parameters[:3] == ["context", "request", "budget"]
     assert parameters[3] == "abstention_sink"
     assert signature.parameters["abstention_sink"].default is None
 
 
 # ---------------------------------------------------------------------
-# The abstention sink (story 1.9): the exact reason at each insufficient site
+# The abstention sink: the exact reason at each insufficient site
 # ---------------------------------------------------------------------
 
 

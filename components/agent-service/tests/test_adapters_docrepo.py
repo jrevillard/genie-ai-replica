@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The doc-repo metadata adapter (story 1.7): resolution of a legacy file id.
+"""The doc-repo metadata adapter: resolution of a legacy file id.
 
 The adapter performs the GET the deployed fleet performs — one metadata read,
 every response envelope unwrapped — and maps the outcome to the port's

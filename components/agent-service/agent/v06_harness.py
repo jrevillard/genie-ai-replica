@@ -20,13 +20,13 @@ What it produces, against the DEPLOYED endpoint:
   verbatim; the parser is recorded behaviorally (what the server DID), never
   assumed — the parser axis is server-side configuration the client cannot
   set. First-call latency per schema is recorded as the FSM-compile
-  observation: it informs the orchestrator's budget sizing (story 2.3), it
+  observation: it informs the orchestrator's budget sizing, it
   decides nothing here.
 * the **cancellation demos** — a streaming completion cancelled mid-flight
   (CancelledError, connection aborted, no completion delivered) and a
   loop-level run cancelled during a model call (CancelledError propagates,
   no terminal event emitted). Runtime-level only: the full request path is
-  story 2.3/2.4 territory.
+  not this harness's territory.
 * one JSON evidence record, printed by the live entry::
 
       python -m agent.v06_harness

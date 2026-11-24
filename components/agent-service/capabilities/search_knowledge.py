@@ -5,7 +5,7 @@
 Implements the contract's ``DocumentCapabilityPort.search_knowledge`` on top
 of the adapters. The behavior is frozen to the V02 record
 (``docs/baselines/v02-opea-query-path-contract.md``); the structure is free
-(clean-slate per the architecture spine's AD-10).
+(clean-slate).
 
 The recorded pipeline, as executed here:
 
@@ -28,7 +28,7 @@ The recorded pipeline, as executed here:
    ``TransientError`` — there is no fallback to the retrieval order.
 
 The operation never calls vLLM and never prepares a query: preparation is
-the loop's business (story 1.8), and the contract refuses non-prepared
+the loop's business, and the contract refuses non-prepared
 input before this code runs.
 
 Cancellation propagates unchanged: ``asyncio.CancelledError`` is never
@@ -280,7 +280,7 @@ class SearchKnowledgeCapability:
         # drops the unresolvable source at citation assembly (chatqna warns
         # and skips it), and an empty ``concept_id``/``file_id`` would reach
         # the BFF's ``source_documents`` unresolvable and collapse the
-        # no-agent dedup (issue #2032).
+        # no-agent dedup.
         hits = []
         for scored in outcome.selection:
             doc = candidates[scored.position]["doc"]

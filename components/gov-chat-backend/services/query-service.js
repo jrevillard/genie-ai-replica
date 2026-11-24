@@ -75,9 +75,9 @@ function resolveQueryRoute() {
   return { agentic: false, url: opeaChatQnaUrl() };
 }
 
-// The refusal story 3.1 attached to this adapter (503 AGENTIC_PATH_NOT_SERVED
-// while the JSON agentic path "did not exist yet") is gone: story 2.4b IS the
-// agentic serving path — createQuery's agentic branch below consumes the flag
+// The refusal attached to this adapter (503 AGENTIC_PATH_NOT_SERVED
+// while the JSON agentic path "did not exist yet") is gone: the agentic
+// serving path exists — createQuery's agentic branch below consumes the flag
 // decision before the legacy leg, so an activated flag is served, never
 // refused. (The streaming entry's agentic branch is served by the frame
 // writer in the route handler; the entry itself stays branch-neutral.)
@@ -577,7 +577,7 @@ class QueryService {
    * Returns early without calling ChatQnA (caller handles the stream).
    * @param {Object} queryData - Query data from the request
    * @param {Object} authHeaders - Auth headers to forward to OPEA
-   * @param {Object} [opts] - `{ skipFanoutCarrier }` (story 2.4): the agentic
+   * @param {Object} [opts] - `{ skipFanoutCarrier }`: the agentic
    *   entry passes true — the frame writer resolves the SAME posture once for
    *   its CallerContext assembly, so the carrier attach (a second upstream
    *   read of a posture it would not use) is skipped there. The legacy entry
@@ -666,12 +666,12 @@ class QueryService {
       };
     }
 
-    // Story 1.1 — resolve the OKF retrieval posture + the caller's authorized
+    // Resolve the OKF retrieval posture + the caller's authorized
     // graph set and attach the fan-out carrier to the payload context.
     // Fail-closed: any resolver problem (except a 401, which propagates — the
     // request itself is invalid) degrades to the legacy carrier, i.e. the
     // payload stays byte-identical to pre-1.1. The agentic entry skips it:
-    // the frame writer resolves the same posture once (story 2.4).
+    // the frame writer resolves the same posture once.
     if (!skipFanoutCarrier) {
       await this._attachFanoutCarrier(opeaPayload, authHeaders, queryId, queryData.sessionId);
     }
@@ -680,12 +680,12 @@ class QueryService {
   }
 
   /**
-   * Story 1.1 (ADR-okf-039) / story 2.4 — resolve the fan-out posture: the
+   * Resolve the fan-out posture: the
    * deployment's retrieval mode, the server's `engaged` flag, and (when
    * engaged) the caller's authorized OKF graph set plus the session's sticky
    * set. ONE home for the resolution, consumed by BOTH consumers that need
    * it: `_attachFanoutCarrier` (the chatqna payload) and the agent
-   * `CallerContext` assembly (story 2.4) — one resolution per request, no
+   * `CallerContext` assembly — one resolution per request, no
    * double upstream calls, no drift between the two views.
    *
    * The okf-server is the source of truth: the `engaged` flag is the
@@ -754,7 +754,7 @@ class QueryService {
     });
     if (postureUnknown) {
       // ONE emission site for the whole "the deployment's posture could not
-      // be read" fact (#1687): an unreachable upstream or a garbled body —
+      // be read" fact: an unreachable upstream or a garbled body —
       // whatever mode the local fallback carries. The warning code is the
       // same; `source` and `mode` in the payload say which fallback is
       // being served and why, so a dashboard cannot read the outage as
@@ -774,7 +774,7 @@ class QueryService {
 
     // Per-call authz — only when the server engaged the fan-out (the carrier
     // is empty regardless when engaged is false).
-    // Story 1.3 — the sticky lookup (below) needs only engaged+sessionId and
+    // The sticky lookup (below) needs only engaged+sessionId and
     // is INDEPENDENT of the authz call, so both start together: one fewer
     // sequential ArangoDB round-trip per engaged chat query (review
     // 2026-10-29).
@@ -797,7 +797,7 @@ class QueryService {
         : [];
     }
 
-    // Story 1.3 — sticky conversation-continuity set: the routed graphs that
+    // Sticky conversation-continuity set: the routed graphs that
     // produced previous answers in THIS conversation. The retriever searches
     // them unconditionally (they bypass affinity qualification), which keeps
     // signal-free follow-ups ("why are they missing from the table?") locked
@@ -849,7 +849,7 @@ class QueryService {
   }
 
   /**
-   * Story 2.4 — the agent `CallerContext` the run request carries: the
+   * The agent `CallerContext` the run request carries: the
    * trusted caller context the agent-service port enforces by construction.
    * Built from the SHARED posture resolution (no second upstream read), so
    * the agent's authorized set is exactly the graph set the chatqna carrier
@@ -896,11 +896,11 @@ class QueryService {
   }
 
   /**
-   * Story 1.1 (ADR-okf-039) — attach the multi-graph fan-out carrier to the
+   * Attach the multi-graph fan-out carrier to the
    * chatqna payload context.
    *
-   * The posture comes from the shared `resolveFanoutPosture` (story 2.4
-   * extracted it; the payload rules are unchanged and byte-identical). The
+   * The posture comes from the shared `resolveFanoutPosture` (the
+   * payload rules are unchanged and byte-identical). The
    * carrier rules:
    *   - mode == 'hybrid' AND engaged → `authorized_graph_names` = legacy graph
    *     (process.env.ARANGO_GRAPH_NAME) FIRST, then the authz-resolver's OKF
@@ -1002,7 +1002,7 @@ class QueryService {
   }
 
   /**
-   * Story 1.3 — load the sticky (conversation-continuity) graph set for a
+   * Load the sticky (conversation-continuity) graph set for a
    * session: the routed graphs persisted on the most recent query of this
    * session that carries one. Single indexed-enough lookup; empty when the
    * conversation has no prior OKF answer (first query → fresh routing only).
@@ -1032,7 +1032,7 @@ class QueryService {
   }
 
   /**
-   * Story 1.3 — derive the routed-graph set from a finalized answer's source
+   * Derive the routed-graph set from a finalized answer's source
    * documents: distinct graph_name values, legacy graph excluded (it is
    * always searched anyway and must never stick). Persisted on the query
    * document; the NEXT query in the session reads it as its sticky set.
@@ -1046,21 +1046,21 @@ class QueryService {
   }
 
   /**
-   * Story 1.3 — persist the routed-graph set on a finalized query (ONE
+   * Persist the routed-graph set on a finalized query (ONE
    * helper for all three finalize paths). An EMPTY set is persisted too:
    * that is what lets _loadStickyGraphs reset a session's stickiness when
    * routing moves on (see the load-side note).
    *
-   * Story 2.4b — the AGENTIC finalize paths pass `skipRoutedGraphs`: the
+   * The AGENTIC finalize paths pass `skipRoutedGraphs`: the
    * agent citation envelope carries no `graph_name` by contract
    * (capabilities/citations.py drops it deliberately), so an agentic answer
    * cannot name routed graphs — it leaves the stickiness untouched instead
    * of falsely resetting it (the `okfRoutedGraphs` key stays unset on the
    * update payload). The skip is BRANCH-DRIVEN, never sniffed off the
-   * metadata: story 3.2's rollback self-healing finalizes a legacy turn
+   * metadata: the rollback self-healing finalizes a legacy turn
    * over agentic-shaped metadata and MUST persist the empty set (the flag
    * flipped off — stale stickiness must not glue the legacy path). Carrying
-   * graph_name through the envelope is an iteration-2 decision owned
+   * graph_name through the envelope is a decision owned
    * agent-side; until then the agentic entries pass the skip, everything
    * else persists — including an empty set.
    * @param {Object} updateData - The update payload being assembled
@@ -1098,7 +1098,7 @@ class QueryService {
       isAnswered: true,
       metadata
     };
-    // Story 1.3 — persist the routed set (empty persists too: it RESETS stickiness).
+    // Persist the routed set (empty persists too: it RESETS stickiness).
     this._persistRoutedGraphs(updateData, metadata, queryId, { skipRoutedGraphs });
     await this.queries.update(queryId, updateData);
 
@@ -1115,8 +1115,8 @@ class QueryService {
   }
 
   /**
-   * Story 2.11 — persist the run-start attribution block into the `queries`
-   * doc AT START (the run-start handshake, AD-11): `metadata.agent_run =
+   * Persist the run-start attribution block into the `queries`
+   * doc AT START (the run-start handshake): `metadata.agent_run =
    * {run_id, execution_versions, started_at}`. The doc was minted by
    * initStreamQuery/createQuery before the agent leg ran, so a cancelled,
    * timed-out or crashed run keeps its versions the same way a completed
@@ -1146,7 +1146,7 @@ class QueryService {
   }
 
   /**
-   * Story 2.11 — persist the honest terminal outcome:
+   * Persist the honest terminal outcome:
    * `metadata.agent_run.outcome` + `finished_at`. Merges into the existing
    * block without clobbering the versions the start write persisted (the
    * success finalize carries its outcome inside the assembled metadata
@@ -1190,7 +1190,7 @@ class QueryService {
    * @param {Object} queryData - Query data
    * @param {Object|null} headers - `{authorization}` for the OPEA call and
    *   (agentic branch) the posture resolution.
-   * @param {Object} [options] - Story 2.4b: the agentic branch's translation
+   * @param {Object} [options] - The agentic branch's translation
    *   input `{targetLanguage}` — the route resolves it (the same resolution
    *   that refuses an unsupported language); the whole-answer translation
    *   itself runs through the agentic translation leg inside the turn. The
@@ -1301,7 +1301,7 @@ class QueryService {
       let opeaMetadata = null;
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
-      // Story 2.4b — the additive JSON latch: `translationFailed: true` rides
+      // The additive JSON latch: `translationFailed: true` rides
       // the 201 body ONLY when the whole-answer translation failed (the
       // sibling of the streaming `done.translationFailed` flag). Legacy
       // branches never set it, so the flag-off return stays byte-identical.
@@ -1311,8 +1311,8 @@ class QueryService {
       let agenticTurn = false;
 
       // *** START: TEST MODE LOGIC ***
-      // Story 2.4b — the guarded agentic branch sits FIRST (the routing
-      // helper is the only way the non-streaming entry is exposed, AD-9):
+      // The guarded agentic branch sits FIRST (the routing
+      // helper is the only way the non-streaming entry is exposed):
       // the agent leg consumes the seam stream (posture resolved ONCE here —
       // the fan-out carrier below stays inside the legacy OPEA branch, so it
       // never runs twice), aggregates the answer and the result flows into
@@ -1391,7 +1391,7 @@ class QueryService {
           };
         }
 
-        // Story 1.1 — attach the fan-out carrier exactly as the stream path
+        // Attach the fan-out carrier exactly as the stream path
         // does (initStreamQuery): okf_only must not leak into the legacy
         // corpus and hybrid must fan out on this route too. Same 401
         // propagation / no-bearer-skip / fail-closed semantics.
@@ -1417,11 +1417,11 @@ class QueryService {
         logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
       }
 
-      // Story 2.4b — ONE persist/analytics/return tail for every branch
+      // ONE persist/analytics/return tail for every branch
       // (agentic, test-mode, legacy OPEA): the doc the mint above created is
       // completed with the branch's answer + the assembled metadata (the
       // `agent_run` block rides into the doc on the agentic branch), the
-      // sticky routed-graph set persists with it (story 1.3), analytics
+      // sticky routed-graph set persists with it, analytics
       // records the completed doc, and the SAME queryId is returned —
       // continuity by construction, not by convention.
       const updateData = {
@@ -1430,7 +1430,7 @@ class QueryService {
         isAnswered: true,
         metadata: opeaMetadata
       };
-      // Story 1.3 — sticky persistence (empty persists too: RESETS stickiness).
+      // Sticky persistence (empty persists too: RESETS stickiness).
       this._persistRoutedGraphs(
         updateData,
         opeaMetadata,

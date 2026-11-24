@@ -126,8 +126,8 @@ class RunBudgetMonitor:
 
     @property
     def injection_findings(self) -> int:
-        """How many injection attempts the run's taint scan recorded (AD-13
-        — everything counted, findings included)."""
+        """How many injection attempts the run's taint scan recorded
+        (everything counted, findings included)."""
         return self._injection_findings
 
     @property
@@ -205,8 +205,8 @@ class RunBudgetMonitor:
 
     def take_aux_model_call(self) -> None:
         """Claim one AUXILIARY model dispatch (judge, classification,
-        preparation translation): the same fleet model-call budget (AD-6 —
-        one budget for everything that calls the model), tallied separately
+        preparation translation): the same fleet model-call budget
+        (one budget for everything that calls the model), tallied separately
         from the loop's own calls."""
         self.take_model_call()
         self._aux_model_calls += 1

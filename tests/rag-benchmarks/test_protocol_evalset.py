@@ -39,7 +39,7 @@ def test_assessment_sample_validates():
     assert scenarios == set(es.SECURITY_SCENARIOS)
 
 
-# --- Security vocabulary + minimums (story 4.2) ------------------------------
+# --- Security vocabulary + minimums -------------------------------------------
 
 
 def test_unknown_security_scenario_value_is_a_typed_error(assessment_data):
@@ -74,7 +74,7 @@ def test_security_scenario_case_with_context_object_validates():
     assert es.validate_set(data, "tuning") == []
 
 
-# --- Multi-turn shape (story 4.2) --------------------------------------------
+# --- Multi-turn shape ---------------------------------------------------------
 
 
 def test_multiturn_case_validates_and_query_is_then_optional():

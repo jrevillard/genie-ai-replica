@@ -1,6 +1,6 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// Story 1.3 (Epic 1): the agent service must stay deployable, switchable and
+// The agent service must stay deployable, switchable and
 // parked by default. These gates are STATIC repository checks - they inspect
 // the sources, they never start the stack.
 
@@ -81,7 +81,7 @@ describe('agent service (story 1.3)', () => {
     const contract = contracts.find((entry) => entry.service === 'agent-service');
 
     expect(contract).toBeDefined();
-    // Profile + replicas pair — the okf-server/certbot shape (#2053); the
+    // Profile + replicas pair — the okf-server/certbot shape; the
     // rationale lives on the compose block itself.
     expect(contract.profiles).toEqual(['agent']);
     expect(contract.replicas).toBe('${AGENT_ENABLED:-0}');

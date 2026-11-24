@@ -37,14 +37,14 @@ const CORS_HEADERS = { 'access-control-allow-origin': '*' };
  * The wire bytes of a mocked answer: the chunk frames, the metadata
  * frame when one is given, and the done frame that closes the stream.
  *
- * The agentic extension (story 2.9): `options.activity` carries one
+ * The agentic extension: `options.activity` carries one
  * entry per chunk — an `{status, operation, callId}` object or null —
  * and a non-null entry emits an `agent_activity` frame immediately
  * before that chunk (the pinned interleave: activity frames ride
  * WITH the chunks); `options.verdict` carries the projection payload
  * and emits an `agent_verdict` frame after the last chunk, before the
- * metadata frame — the pinned terminal order (agent-frame-writer.js,
- * story 2.4). A two-arg call builds exactly the legacy bytes, so the
+ * metadata frame — the pinned terminal order (agent-frame-writer.js).
+ * A two-arg call builds exactly the legacy bytes, so the
  * five existing event types keep their dialect by construction.
  */
 function sseBody(chunks, metadata, options = {}) {

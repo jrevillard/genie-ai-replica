@@ -218,7 +218,7 @@ def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=No
     ``judge_model`` (a ``LoopModelClient`` double) defaults to the scripted
     strict grounded reply; ``authorized_repos`` passes through to the
     pipeline (the caller's repo set); ``execution_versions`` rides the loop
-    (story 2.11 — the run-start handshake, ``None`` keeps the probe shape). Returns ``(loop, collector, monitor,
+    (the run-start handshake, ``None`` keeps the probe shape). Returns ``(loop, collector, monitor,
     verifier)`` — the collector carries every seam event, the monitor the
     run's counts, the verifier its ledger for finding assertions.
     """

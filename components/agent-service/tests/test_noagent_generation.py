@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The fixed generation stage (story 1.9).
+"""The fixed generation stage.
 
 Mutation-sensitive pins: the recorded payload params ride every request
 (temperature 0.01, top_p 0.95, frequency_penalty 0.0, stream false,

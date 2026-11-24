@@ -1,6 +1,6 @@
 'use strict';
 
-// Story 2.4 — the BFF frame writer: the I/O matrix as executable checks,
+// The BFF frame writer: the I/O matrix as executable checks,
 // following the query-routes.test.js mocking pattern. AGENT_ENABLED=1 is set
 // BEFORE the app module loads (the routing helper reads it once at module
 // load), so every test here exercises the AGENTIC branch of
@@ -40,7 +40,7 @@ jest.mock('../../services/user-provisioning-service', () => ({
 jest.mock('../../services/query-service', () => ({
   initStreamQuery: jest.fn(),
   finalizeStreamQuery: jest.fn(),
-  // Story 2.11 — the run-start handshake + the honest-outcome patch.
+  // The run-start handshake + the honest-outcome patch.
   persistAgentRunStart: jest.fn(),
   persistAgentRunOutcome: jest.fn(),
   parseChatQnASSELine: jest.fn(),
@@ -350,7 +350,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
         source: 'okf-concept'
       }
     ]);
-    // Story 2.11: the assembled block carries the run-start handshake
+    // The assembled block carries the run-start handshake
     // (started_at) and the honest outcome (answered + finished_at) —
     // execution_versions is absent, this fixture's run_started payload
     // carries none (an older agent service; the block degrades).
@@ -368,19 +368,19 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(metadata.abstained).toBe(false);
     expect(metadata.filter_labels).toBeNull();
     // The interrupted marker is a partial-save-only field: a normal
-    // completion never carries it (ADR agentic-003).
+    // completion never carries it.
     expect(metadata.answer_interrupted).toBeUndefined();
 
     expect(done).toEqual({ type: 'done', queryId: 'q1', translationFailed: false });
 
     // The same metadata is persisted — the agent_run block rides into the
-    // queries doc (the version-record persistence of this story).
+    // queries doc (the version-record persistence at the terminal).
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
       'q1',
       'Hello world.',
       expect.any(Number),
       expect.objectContaining({ grounding_status: 'grounded', is_grounded: true, agent_run: metadata.agent_run }),
-      // Story 3.2 merged reality: the agentic finalize carries the
+      // Merged reality: the agentic finalize carries the
       // branch-driven sticky-set skip as the trailing options argument.
       expect.anything()
     );
@@ -739,7 +739,7 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     expect(frames.map((f) => f.type)).toEqual(['chunk', 'error']);
     expect(frames[1]).toEqual({ type: 'error', message: 'token budget exhausted', code: 'AGENT_RUN_ERROR' });
     // No metadata, no done, nothing fabricated — the doc stays unanswered
-    // EXCEPT the honest outcome (story 2.11): the agent's own verdict,
+    // EXCEPT the honest outcome: the agent's own verdict,
     // verbatim the usage record's outcome, rides the outcome patch.
     expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
     expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
@@ -981,7 +981,7 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
       expect(frames[frames.length - 1].type).toBe('error');
       expect(frames.find((f) => f.type === 'done')).toBeUndefined();
       expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
-      // Story 2.11 — the BFF-attributed deadline is an honest terminal: the
+      // The BFF-attributed deadline is an honest terminal: the
       // doc reads timed_out, and the abort's stream teardown does NOT
       // overwrite it with `interrupted` (the one-outcome latch).
       expect(queryService.persistAgentRunOutcome).toHaveBeenCalledTimes(1);
@@ -1055,7 +1055,7 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
 
     const response = await responsePromise;
     const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
-    // Story 2.11: the honest outcome rides the assembled block (answered +
+    // The honest outcome rides the assembled block (answered +
     // finished_at). This script carries NO run_started event, so no
     // run-start keys (started_at / execution_versions) exist — the run_id
     // comes from the envelope, the write still completes.
@@ -1258,6 +1258,88 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     );
   });
 
+  it('the terminal keeps the SSE keepalive emitting during the post-stream translation window', async () => {
+    // The keepalive keeps emitting through the whole-answer translation
+    // window (tens of seconds are legal behind the translation reserve — a
+    // zero-byte wire there lets an idle-timeout proxy sever the SSE before
+    // `done`). SSE comments cannot move the pinned frame order; this is the
+    // legacy terminal's own discipline.
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    // The keepalive interval is hardcoded 15000ms — the spy shortens ONLY the
+    // period (the real interval machinery, real clock, real wire bytes run
+    // unchanged) so the test can watch ticks inside a sub-second window.
+    // Faking the timer globals instead leaks into supertest's socket teardown
+    // and hangs the run.
+    const realSetInterval = global.setInterval.bind(global);
+    const setIntervalSpy = jest.spyOn(global, 'setInterval').mockImplementation((fn) => realSetInterval(fn, 50));
+    // The translation holds the window for 250ms: the shortened interval
+    // (50ms) must tick INSIDE it.
+    const translationGate = new Promise((resolve) => {
+      setTimeout(resolve, 250);
+    });
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn(() =>
+        translationGate.then(() => ({
+          text: 'Bonjour le monde.',
+          failed: false,
+          queryTranslationStatus: 'translated',
+          accounting: {
+            outcome: 'translated',
+            queryTranslationStatus: 'translated',
+            configError: null,
+            mode: 'full-answer'
+          },
+          error: null
+        }))
+      )
+    );
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    try {
+      const responsePromise = authPost('/api/queries/stream', {
+        sessionId: 's1',
+        messages: [{ role: 'user', content: 'q' }],
+        context: { language: 'DE' }
+      });
+      responsePromise.catch(() => {});
+      for (let i = 0; i < 500 && mockStream.listenerCount('data') === 0; i++) {
+        await flush(10);
+      }
+      expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+      mockStream.push(
+        `data: ${JSON.stringify(envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }))}\n\n`
+      );
+      mockStream.push(`data: ${JSON.stringify(envelope('verdict', GROUNDED_VERDICT, { seq: 1 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify(envelope('run_finished', { outcome: 'answered' }, { seq: 2 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify({ usage_record: USAGE_RECORD })}\n\n`);
+      mockStream.emit('end'); // the terminal runs; the translation holds the window
+
+      // Wait PAST the first tick while the translation is still pending.
+      const response = await responsePromise;
+
+      const text = response.text;
+      const metaPos = text.indexOf('"type":"metadata"');
+      const translationPos = text.indexOf('"type":"translation"');
+      // The FIRST keepalive AT OR AFTER the metadata frame: a setup tick that
+      // fired before the terminal (possible on a loaded runner) lands earlier
+      // in the stream and must not satisfy the window assertion.
+      const keepalivePos = text.indexOf(': keepalive', metaPos);
+      expect(metaPos).toBeGreaterThan(-1);
+      expect(translationPos).toBeGreaterThan(-1);
+      // The keepalive ticked DURING the translation window (after metadata,
+      // before the translation frame) — the wire never went silent.
+      expect(keepalivePos).toBeGreaterThan(-1);
+      expect(keepalivePos).toBeLessThan(translationPos);
+      const frames = parseSSEEvents(text);
+      expect(frames[frames.length - 1].type).toBe('done');
+      expect(frames[frames.length - 1].translationFailed).toBe(false);
+    } finally {
+      setIntervalSpy.mockRestore();
+    }
+  });
+
   it('a failed leg translation reports translationFailed on done; the English answer stands', async () => {
     delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
@@ -1458,12 +1540,12 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
       expect.objectContaining({
         grounding_status: 'unverified',
         is_grounded: false,
-        // Story 2.11: the partial save carries the honest `cancelled`
+        // The partial save carries the honest `cancelled`
         // outcome (+ finished_at); this stream carried no run_started, so
         // no execution_versions/started_at ride.
         agent_run: expect.objectContaining({ run_id: 'run-abc', outcome: 'cancelled' }),
         // The honesty marker: a partial save is never indistinguishable
-        // from a completion (ADR agentic-003).
+        // from a completion.
         answer_interrupted: true,
         // Interrupted turns read NULL, never false: the decision was never
         // terminaled (`answer_interrupted` already marks interrupted-ness;
@@ -1475,7 +1557,7 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
     );
     // No frames after the disconnect.
     expect(res.writes.some((w) => w.includes('"type":"done"'))).toBe(false);
-    // Exactly ONE write carries the outcome (story 2.11): the partial
+    // Exactly ONE write carries the outcome: the partial
     // save's assembled metadata — the standalone patch stays latched OFF,
     // because a fire-and-forget patch racing the save is a second
     // read-merge-write whose stale metadata could overwrite the save's
@@ -1568,7 +1650,7 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
       expect.objectContaining({
         grounding_status: 'grounded',
         is_grounded: true,
-        // Story 2.11: the partial save carries the honest `cancelled` outcome.
+        // The partial save carries the honest `cancelled` outcome.
         agent_run: expect.objectContaining({ run_id: 'run-abc', outcome: 'cancelled' }),
         answer_interrupted: true
       }),
@@ -1633,7 +1715,7 @@ describe('proxyAgentRun — posture failures (401 propagates, others fail closed
   });
 });
 
-// ── story 2.11 — execution attribution and observability ────────────────────
+// ── execution attribution and observability ────────────────────────────────
 // The run-start handshake and the honest outcome vocabulary: every terminal
 // path writes exactly one outcome; the three named AC failure cases
 // (cancel-before-first-token, timeout-during-judge, kill-before-final-

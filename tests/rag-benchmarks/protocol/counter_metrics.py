@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The counter-metrics report (story 4.4) — CM-1, CM-2, CM-3.
+"""The counter-metrics report — CM-1, CM-2, CM-3.
 
 Counter-metrics are FIRST-CLASS results, not a side note inside another
 dimension's record. The proof that the agent earned its cost includes showing

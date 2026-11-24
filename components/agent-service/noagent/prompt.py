@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The ported prompt surface — deployed chatqna's prompt, verbatim (story 1.9).
+"""The ported prompt surface — deployed chatqna's prompt, verbatim.
 
 Every string here is the deployed module's own text, copied byte for byte
 (``genieai_chatqna.py``: the system default :1922-1941, the abstention

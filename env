@@ -125,7 +125,7 @@ HUGGING_FACE_HUB_TOKEN=
 # guided JSON) — e.g. ibm-granite/granite-3.3-2b-instruct (faster).
 # VLLM_LLM_MODEL_ID=
 #
-#   Tool-calling note (#2052): the vLLM container is pinned with
+#   Tool-calling note: the vLLM container is pinned with
 #   --enable-auto-tool-choice --tool-call-parser $VLLM_TOOL_CALL_PARSER
 #   (default granite4 — the parser for Granite 4.x models). Serving a model
 #   outside Granite 4.x (env.strixhalo's granite-3.1-2b, for example) must
@@ -1427,12 +1427,12 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   COMPOSE_PROFILES=opea,okf      # in this env file
 # OKF_ENABLED=1
 #
-# --- AGENT feature flag (Epic 1) ------------------------------------------------
+# --- AGENT feature flag ---------------------------------------------------------
 # AGENT_ENABLED parks the agent service (components/agent-service):
 #   0 (default) — the service runs ZERO replicas and declares no host port and
 #                 no gateway route, so nothing agentic is reachable.
 #   1           — the service runs (internal only; the capability tools land
-#                 in the stories that follow).
+#                 in the knobs that follow).
 # MUST be 0 or 1, not true/false. Ansible: agent_enabled in group_vars.
 #
 # COMPOSE PROFILE PAIRING (compose mode): the agent-service sits behind the
@@ -1445,13 +1445,13 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   COMPOSE_PROFILES=agent         # in this env file
 # AGENT_ENABLED=1
 #
-# Agent run-budget knobs (story 2.3) — REQUIRED for the run surface. Read
+# Agent run-budget knobs — REQUIRED for the run surface. Read
 # fail-closed: a run request against a deployment that has not set one of
 # them is answered 503 naming every missing knob — there is no numeric
 # default anywhere in the enforcement path. The one-replica deployment
 # contract (AGENT_ENABLED 0/1) makes the admission lane's flock slot pool
 # the global bound; a saturated lane answers 429 with Retry-After. Pair
-# rule for the BFF's agent leg (story 2.4): AGENT_UPSTREAM_TIMEOUT_MS must
+# rule for the BFF's agent leg: AGENT_UPSTREAM_TIMEOUT_MS must
 # be >= AGENT_RUN_MAX_WALL_CLOCK_SECONDS + the translation and
 # finalization reserves — docs/agent-budget-deadline-pairs.md.
 # Loop iterations (one iteration = one model call plus its tool dispatches).
@@ -1479,7 +1479,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # is answered 503 naming the knob. The judge is one auxiliary model call at
 # finalize; its absence/timeout yields the unverified verdict, never grounded.
 # AGENT_VERDICT_JUDGE_TIMEOUT_MS=
-# Release policy for the citation verdict: iteration 1 ships
+# Release policy for the citation verdict: ships
 # verdict-marked ONLY — an answer streams normally and a failed verdict
 # produces the correction event and persisted marking, never silence. Any
 # other value is refused at the first run request (the run surface answers
@@ -1493,7 +1493,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # is answered 503 with the code run_surface_unconfigured naming what is
 # missing. Deliberate scope: the corpus/model knob set the full assembly
 # needs — the remaining TEI/Arango/vLLM endpoints ride the governed
-# assembly wiring in the integration story, and until then the 503 names
+# assembly wiring once the integration lands, and until then the 503 names
 # exactly what is missing.
 # AGENT_DOCREPO_URL=
 # AGENT_OKF_URL=
@@ -1530,7 +1530,7 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # OPENAI_API_KEY=
 # VLLM_API_KEY=
 # OPEA_SSL_SKIP_VERIFY=
-# Agentic translation-leg allowances (story 2.10) — REQUIRED on the agentic
+# Agentic translation-leg allowances — REQUIRED on the agentic
 # path, read fail-closed by the BFF: a missing or unusable knob means answer
 # translation cannot be bounded and is skipped (the English answer stays)
 # with the knob named in an ERROR log and in the execution record — no
@@ -1540,11 +1540,11 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # post-stream whole-answer paths (streaming translation off, and the
 # non-streaming JSON entry) — the run's residual plan reads the TERMINAL
 # usage record, which only exists after the run; streamed unit translation
-# stays on the request-resolved translator in iteration 1.
+# stays on the request-resolved translator.
 # AGENT_TRANSLATION_MAX_TOKENS=
 # AGENT_TRANSLATION_MAX_CALLS=
 #
-# BFF agent-leg knobs (story 2.4) — read by the backend when it proxies an
+# BFF agent-leg knobs — read by the backend when it proxies an
 # agentic request (the branch is gated by AGENT_ENABLED through the shared
 # routing helper; with the flag off these are never read. NOTE: AGENT_ENABLED
 # reaches the backend through an explicit compose entry — flipping the flag

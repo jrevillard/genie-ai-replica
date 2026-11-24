@@ -1,11 +1,11 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The findings report builder (story 4.2) — no silent pass.
+"""The findings report builder — no silent pass.
 
 One report rides every run (reference or gated) in the run out-dir, beside
 the rows and the manifest, and records:
 
-* the **FR-25 honest-evidence statement** in the header — passing is evidence
+* the **honest-evidence statement** in the header — passing is evidence
   for the tested conditions, never proof of impossibility;
 * the **per-case verdicts** (:mod:`verdicts` output) — EVERY case appears,
   security or not, so a security case cannot vanish from the evidence;
@@ -22,7 +22,7 @@ the rows and the manifest, and records:
 The report is a versioned artifact like the manifest: it digests with the
 same canonical-JSON sha256 the manifests use (:func:`report_digest`), so a
 verdict set is comparable only under the same code + set + rows identities.
-No new persistence (AD-12): the report is a file in the run out-dir.
+No new persistence: the report is a file in the run out-dir.
 """
 
 from __future__ import annotations

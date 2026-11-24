@@ -708,6 +708,94 @@ The scope still holds, the pairing still pairs, and the cross-context refusal st
 refuses. The build tree was left clean: 0 evaluation contexts, ROPC off, the throwaway
 helper deleted.
 
+### The container wave — 23 on the panel, 29 under it (2026-11-24)
+
+The container panel reported **23 new potential vulnerabilities (0 critical, 3 high and 20
+others)**. Underneath it are **29 findings**: the widget counts by (package, advisory) and
+collapses the seven Trivy TEMP rows of `libseccomp2` into one, so 20 CVE-bearing findings +
+the `libseccomp2` cluster + the `login.defs`/`passwd` cluster = 23 panel rows. The severity
+mix reconciles exactly: 3 High + 20 others = 23.
+
+**None of them is this branch's.** The branch changes **no Dockerfile and no dependency
+file**; the wave is the Debian **trixie 13.7 → 13.8** point release, and the base version
+is readable in the report itself — `debian 13.8` in the MR pipeline's scan, `debian 13.7` in
+the project's last default-branch scan (the okf-server image tag `pending-efa236f0`, 2506
+findings). The two reports were diffed finding by finding, and exactly these 29 keys are
+new:
+
+| severity (raw) | count | what |
+|---|---|---|
+| High | 3 | `CVE-2026-107494` on `openssl`, `libssl3t64`, `openssl-provider-legacy` |
+| Medium | 9 | `CVE-2026-121482`, `CVE-2026-84786`, `CVE-2026-95690` (the openssl trio) |
+| Low | 5 | `CVE-2026-121481` (the openssl trio), `CVE-2026-126765` (`libc-bin`, `libc6`) |
+| Unknown | 12 | `CVE-2026-127039/127040/127231` (`libgnutls30t64`) + the TEMP rows (`libseccomp2` ×7, `login.defs`, `passwd`) |
+
+Nine distinct CVEs and eight Trivy TEMP advisories — seventeen advisory keys over 29
+findings.
+
+**Every one was verified against the playbook's three sources before it was dismissed:**
+the live apt candidate in the freshly pulled base image is the installed version (nothing
+newer exists), Trivy's `fix[]` is empty, and the Debian security tracker lists the package
+as vulnerable with no fixed version for the trixie suite. (The tracker answers for the nine
+CVEs; the eight TEMP rows carry no CVE, so the two package-level sources carry the verdict
+for them.) Every finding is therefore `affected-no-fix` → **ACCEPTABLE_RISK**, and each
+dismissal comment names the package, the version, the three sources, the date and the
+triage section.
+
+**The dispositions: 29 dismissals, all `ACCEPTABLE_RISK`** — 24 through
+`vulnerabilityDismiss` (the entity gid) and 5 through `securityFindingDismiss` (the raw
+finding uuid, for the entities the analyzer had not minted yet). David authorised the wave
+before it was applied. The wave is recorded in `docs/security/cve-triage-2026q3.md`
+("front 10: the trixie 13.8 point release"), which is the file the dismissal comments
+point at.
+
+**The lesson, and it is the wave-9 lesson again:** a point release of the Debian suite
+moves every OS package in the image, so a branch that changes nothing can still surface a
+wave of base-image CVEs. The wave arrives with the base, not with the diff; the base
+version is read out of the report, not inferred; and the monthly rebuild surfaces the fix
+the day Debian ships one.
+
+### The license-compliance panel — the two licenses, and why they are not new (2026-11-24)
+
+The license panel reported "detected **2** new licenses and policy violations; approval
+required". The two are **Blue Oak Model License 1.0.0** (`BlueOak-1.0.0`) and **Python
+License 2.0** (`Python-2.0`) — both in the project's ROOT `package-lock.json`
+(`glob`/`minimatch`/`path-scurry`/`minipass`/`jackspeak`, and `argparse`), and both
+**permissive**.
+
+**Why they trip the rule.** The DPG license policy (`license_finding`, `license_states:
+[newly_detected]`, `role_approvers: [maintainer]`, `approvals_required: 1`) enumerates the
+allowed licenses — 20 spellings of MIT, Apache-2.0, BSD-2/3, ISC, MPL-2.0 and LGPL — and
+these two spellings are not in that enumeration, even though the policy's own description
+says the permissive and weak-copyleft licences "are allowed and pass without approval". The
+rule also declares **no `fallback_behavior`**, so GitLab's empty default fails it CLOSED:
+whenever the comparison pairs a complete source report against an incomplete target, every
+source licence the target lacks counts as newly introduced. The CI comment on the security
+templates already describes this trap ("without one the comparison is made against an empty
+target and every license of the source counts as newly introduced").
+
+**Why they are not new in THIS branch — measured, not asserted:**
+
+- the diff touches **no dependency file** — no `package.json`, no lock file, nothing an
+  analyzer reads (`git diff --name-only origin/main...HEAD` returns only okf-server code,
+  tests, docs and rules);
+- the source pipeline's and the target pipeline's dependency-scanning reports carry the
+  **same 2018 packages** and the **same licence set**. Per SBOM, the source and the target
+  agree on every manifest: the root manifest carries the same two non-allowlisted licences
+  on both sides, and so do the other permissive-but-unlisted ones elsewhere in the tree
+  (`0BSD`, `CC-BY-3.0`, `CC-BY-4.0`, `CC0-1.0`, `MIT-0`, `Python-2.0`, `PSF-2.0`,
+  `Unlicense`, `1 unknown`);
+- the policy's own evaluation on the current pipeline pair reports **`violationsCount: 0`,
+  `errors: []`, `licenseScanning: []`**, and the MR carries `approvals_required: 0`,
+  `merge_status: can_be_merged`, `detailed_merge_status: mergeable`.
+
+So the gate is clear, and it is not a gate this branch can trip: the branch introduces no
+dependency, so it can introduce no licence. If it ever shows up again the policy's own
+remedy is one click (`role_approvers: [maintainer]`); the durable fix — adding the
+permissive licences the policy's own description promises to allow, or turning the
+enumeration into a deny-list — is filed as **#2147** rather than changed here, because the
+policy is a security control and it is the maintainer's to change.
+
 ### The T7 ruling — the site page rides phase 4 (2026-11-23)
 
 `site/content/en/docs/knowledge-base/testing-lab.md` documents the Lab DIALOG, and the

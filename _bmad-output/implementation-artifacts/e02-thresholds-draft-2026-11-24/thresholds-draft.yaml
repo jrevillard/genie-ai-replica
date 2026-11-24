@@ -1,0 +1,145 @@
+# DRAFT — the consolidated M-1..M-5 threshold proposal (issue #2167 phase 1).
+# NOT SIGNED: sign_off.signed is false; the shipped registry is
+# protocol/thresholds.yaml and stays untouched until the operator signs.
+# Derived from the FINAL A reference (issue #2162); derivation method and
+# the judged-pass results live beside this file (method.md, judged-results.json).
+registry_version: 1.0.0
+artifact: evaluation-threshold-registry
+description: 'DRAFT (issue #2167 phase 1, 2026-11-24 — NOT SIGNED): the consolidated M-1..M-5 proposal
+  derived from the FINAL A reference (issue #2162), for the operator''s single signature decision. The
+  shipped registry (protocol/thresholds.yaml) is untouched until the operator signs.'
+sign_off:
+  owner: jrevillard (ITU)
+  signed: false
+  agreed_on: '2026-11-23'
+  signed_on: '2026-11-24'
+  signatory: jrevillard
+  basis: 'the measured A reference, re-anchored by the operator''s 2026-11-24 re-signature (values UNCHANGED)
+    onto the FINAL A reference (issue #2162 — MR !1072, the forge k3s, 2026-11-24): corpus fingerprint
+    f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f, assessment-set digest cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812,
+    67 cases (40 anchor-scored). The bounds were originally signed 2026-11-23 against the issue #2118
+    reference (MR !1056, corpus 6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98, set
+    58850161afebad599234e5ef54b1122a17684e5de7b81e36b9b6c3867152a784, 6 evaluable cases); the #2162 re-measurement
+    on the acceptance-grade set returned delta-0.0 on every scored M-1 metric.'
+  note: 'The signature covers the retrieval-quality thresholds (M-1) only: the other dimensions ship as
+    explicitly absent, with their reason, and they keep blocking the promotion until their own thresholds
+    are agreed.'
+dimensions:
+  M-1:
+    dimension: retrieval_quality
+    surface: 'config A: the chunk-level anchor metrics (recall, precision, complete_recall, noise, retrieval_recall,
+      passage_recall, recall@k, ndcg@k); config B: the doc-level source_documents — the surfaces differ
+      by construction (pair E01), so the threshold applies per surface and never across them.'
+    status: agreed
+    value:
+      scope: config A — the chunk/passage-level anchor metrics
+      metrics:
+        retrieval_recall:
+          operator: '>='
+          threshold: 0.95
+        recall_at_10:
+          operator: '>='
+          threshold: 0.95
+        ndcg_at_10:
+          operator: '>='
+          threshold: 0.9
+        passage_recall:
+          operator: '>='
+          threshold: 0.95
+        noise:
+          operator: <=
+          threshold: 0.8
+    absent_reason: null
+    rationale: 'the operator signed these bounds on 2026-11-23 against the measured A-only reference (issue
+      #2118 / MR !1056 — 6 evaluable cases: retrieval_recall 1.0, recall_at_10 1.0, ndcg_at_10 1.0, passage_recall
+      1.0, noise 0.667). Every bound is a line the reference satisfies and a later run must keep satisfying:
+      a regression past it is visible instead of averaged away (PRD §8). The reference rests on a 3-chunk
+      corpus (one document, the venue''s upload-validation fixture) over 6 evaluable cases, where recall
+      and ndcg sit at their ceiling — the bounds are a floor the later runs must keep, not a fine-grained
+      regression detector on that corpus'
+    agreement_date: '2026-11-23'
+  M-2:
+    dimension: answer_grounding
+    surface: the captured answers (config A) and the row answers + source_documents (config B) — judged
+      under the versioned evaluator instructions, never by a heuristic computed here
+    status: agreed
+    value:
+      scope: the content-blind attribution-trace surface over each leg's substantive answers (the judged
+        pass's surface — source identities only; the same shape on every leg, so comparisons stay valid)
+      metrics:
+        ungrounded_or_partial_rate:
+          operator: <=
+          threshold: 0.8
+    absent_reason: null
+    rationale: 'PROPOSED (issue #2167 phase 1): the judged pass over the FINAL A reference''s capture
+      (60 ok rows, judge ibm-granite/granite-4.1-8b, temperature 0, instructions d629ff99e6273f3f) measured
+      0.733 ungrounded-or-partial on the 45 substantive answers. The bound is the measured line plus ~0.07
+      margin — the M-1 pattern (a line the reference satisfies that a later run must keep satisfying).
+      The measured weakness of config A''s attributed-grounding is recorded in the derivation method;
+      the B-vs-C comparison carries the sharper signal. Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md'
+    agreement_date: '2026-11-24'
+  M-3:
+    dimension: abstention_correctness
+    surface: the mechanical abstention facts (abstained / abstention_reason) recorded by the no-agent
+      lane (config B), plus the judged abstention correctness of the answers
+    status: agreed
+    value:
+      scope: 'the mechanical abstention-verdict rules over each leg''s rows (config A: the answer-text
+        prose signal, judged; config B: the mechanical abstained/abstention_reason fields)'
+      metrics:
+        excessive_abstention_rate:
+          operator: <=
+          threshold: 0.25
+        unanswerable_honest_abstention_rate:
+          operator: '>='
+          threshold: 0.95
+    absent_reason: null
+    rationale: 'PROPOSED (issue #2167 phase 1): the judged pass measured 4/4 unanswerable cases honestly
+      abstaining (1.000) and 10/54 = 0.185 excessive abstentions on the answerable class — all ten restricted-visibility
+      cases whose refusal is correct for config A''s actual reach. The bounds are the measured lines plus
+      margin; they tolerate that construction on the A reference while catching a later leg abstaining
+      on ordinary answerable cases. Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md'
+    agreement_date: '2026-11-24'
+  M-4:
+    dimension: latency
+    surface: the per-request wall_ms of the protocol layer — the capture-a rows (config A) and the driver
+      rows (config B / config C)
+    status: agreed
+    value:
+      scope: 'each leg''s own recorded per-case wall_ms (config A: the capture-a protocol layer; config
+        B: the in-container driver; config C: the row wall_ms) — never a cross-leg comparison; the surfaces
+        differ by execution conditions the report records as uncontrolled differences'
+      metrics:
+        wall_ms:
+          operator: <=
+          threshold: 15000
+    absent_reason: null
+    rationale: 'PROPOSED (issue #2167 phase 1): derived from the FINAL A reference''s measured distribution
+      (n=60: min 3620.5, median 5944.7, p90 8016.1, p95 8498.2, max 10512.5 ms) — the measured maximum
+      plus ~43% headroom for shared-GPU jitter, cross-checked against the issue #2118 reference''s own
+      max (11443 ms over 9 cases; the two maxima sit in the same band). Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md'
+    agreement_date: '2026-11-24'
+  M-5:
+    dimension: resource_consumption
+    surface: the agentic cost surface (the run's model_calls / aux_model_calls / tool_calls / prompt_tokens
+      / completion_tokens / wall_clock_seconds) and the config-B rows' resource record
+    status: agreed
+    value:
+      scope: the per-case served token consumption (prompt + completion, from the B/C rows' usage records)
+        — config A records no resource surface at all (the S4 checklist documents the absence), so the
+        bound binds the legs that record one
+      metrics:
+        total_tokens_per_case:
+          operator: <=
+          threshold: the deployment's configured AGENT_RUN_MAX_TOTAL_TOKENS ceiling (the venue deployment's
+            knob value, read at the B/C campaign; the knob is fail-closed with no numeric default anywhere
+            in the enforcement path, so the ceiling is the deployment's own declared contract)
+    absent_reason: null
+    rationale: 'PROPOSED (issue #2167 phase 1): no measured distribution exists to derive a number from
+      (the reference records no resource surface; inventing one is the default the protocol forbids).
+      The honest bound is the deployment''s own declared ceiling: consumption inside AGENT_RUN_MAX_TOTAL_TOKENS.
+      Until the venue''s number is concrete the bound reads UNINTERPRETABLE in the report grammar — it
+      BLOCKS the dimension, never passes silently. At signature the operator either signs the concrete
+      number read from the deployment or keeps M-5 absent (an absence keeps the gate closed — this package
+      is the argument for the ceiling rule). Method: _bmad-output/implementation-artifacts/e02-thresholds-draft-2026-11-24/method.md'
+    agreement_date: '2026-11-24'

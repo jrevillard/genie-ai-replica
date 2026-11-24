@@ -1,0 +1,2 @@
+gate refusal: thresholds_not_signed
+gated run refused (config B): the reference for corpus f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f exists, but thresholds lineage does not verify — an unsigned thresholds file. Thresholds are signed 

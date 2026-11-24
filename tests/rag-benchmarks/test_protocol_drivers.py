@@ -20,7 +20,7 @@ import pytest
 from protocol import drivers
 from protocol import gate as gate_mod
 from protocol.evalset import evaluation_surface
-from protocol.manifest import manifest_digest
+from protocol.manifest import manifest_digest, sha256_json
 from protocol.run_protocol import cmd_assess, cmd_reference
 
 CORPUS = "c" * 64
@@ -134,19 +134,26 @@ def test_config_a_records_the_identity_of_the_anchor_input(tmp_path):
     WHICH of its cases the chunk-level surface scores. Both are recorded, so
     an artifact says what it measured."""
     set_path = _a_set_file(tmp_path)
-    data = json.loads(set_path.read_text(encoding="utf-8"))
+    calls = []
 
     def runner(gold, out, seed, env_extra=None):
+        calls.append(gold)
         out.write_text(json.dumps({"aggregate": {}, "n_missed_traces": 0}), encoding="utf-8")
         return {"aggregate": {}, "n_missed_traces": 0}
 
     result = drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner)
     rows = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
-    assert rows["anchor_projection_sha256"] == drivers.anchor_projection_sha256(data["entries"])
-    assert rows["coverage"]["n_set_cases"] == 16
-    # The projection IS the retrieval surface — the anchor's rows and the
-    # census's retrieval count agree.
-    assert len(drivers.anchor_projection(data["entries"])) == rows["coverage"]["by_surface"]["retrieval"]
+    # The recorded identity is the digest of the file the anchor ACTUALLY read.
+    anchored = json.loads(Path(calls[0]).read_text(encoding="utf-8"))["entries"]
+    assert rows["anchor_projection_sha256"] == sha256_json(anchored)
+    # The anchored cases are the retrieval-surface ones, and the census agrees.
+    assert {case["id"] for case in anchored} == {
+        "sample-ans-pub-1",
+        "sample-cite-pub-1",
+        "sample-lang-ru-1",
+        "sample-lang-es-1",
+    }
+    assert rows["coverage"]["by_surface"]["retrieval"] == len(anchored)
 
 
 def test_config_a_fail_fasts_on_missed_traces(tmp_path):

@@ -63,6 +63,7 @@ from .evalset import (  # noqa: E402 — the shared turn expansion and surface m
     evaluation_surface,
     turn_entries,
 )
+from .manifest import sha256_file, sha256_json  # noqa: E402 — the protocol's own digests (no import cycle)
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -211,8 +212,6 @@ def anchor_projection_sha256(cases: list[dict]) -> str:
     cases the chunk-level surface scores. Both are recorded, so an artifact
     says what it measured, not only what it was built from.
     """
-    from .manifest import sha256_json
-
     return sha256_json(anchor_projection(cases))
 
 
@@ -563,8 +562,6 @@ def run_config_a_capture(
 
     cases = entries if entries is not None else _load_entries(set_path)
     prior = _read_rows_file(rows_path)
-
-    from .manifest import sha256_file
 
     stamp = {
         "assessment_set_sha256": sha256_file(set_path),

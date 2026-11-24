@@ -276,8 +276,10 @@ def evaluation_surface(case: dict) -> str:
     * ``restricted_access`` — the case's sources live in a restricted graph:
       config A has no authorization surface (it is the legacy fixed RAG), so
       the case is an authorization case and is measured on the B/C legs'
-      document-level surface — its passages live in a graph that is not part
-      of the corpus the chunk-level surface scores.
+      document-level surface. It is also a MECHANICAL exclusion: the anchor's
+      key→hash map covers the public source collection only, so a restricted
+      chunk can never map — anchoring such a case would fail the run on
+      unmapped chunk keys instead of measuring anything.
     * ``retrieval`` — a retrieval-class case with public access and no
       security scenario: the chunk-level surface, the only one that consumes
       ``expected_chunks``.

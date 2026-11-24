@@ -625,6 +625,48 @@ the group's scope held — the repository under test did not claim either query
 about the excluded repository. The run was measured over the carrier's **13**
 repositories, and the pairing says so.
 
+### The SAST panel's five findings (2026-11-24) — none of them new, two of them answered
+
+The MR's security panel reported "5 new potential vulnerabilities (0 critical, 3 high, 2
+others)". **Every one of them exists on `main`** — the finding fingerprint carries the
+LINE number, so any edit above a flagged line makes a pre-existing finding look new.
+The evidence is the two semgrep reports side by side: the same rules fire in main's own
+pipeline, at the pre-branch line numbers.
+
+| finding | rule | where (MR pipeline → main) | disposition |
+|---|---|---|---|
+| weak PRNG | `node_insecure_random_generator` (Medium) | `head-suite-service.js:364` → `main:297` | **FIXED** |
+| SSRF | `node_ssrf` (High) | `ragas-suite-service.js:340` → `main:319` | **FIXED** (the guard) + the repo's own `nosemgrep` annotation |
+| assert | `bandit.B101` (Info) | `docs/presentations/.../build_deck.py:810` → `main:1027` | **FALSE POSITIVE** — a build script's assertions; not this branch's file |
+| assert | `bandit.B101` (Info) | `docs/presentations/.../build_deck.py:811` → `main:1028` | **FALSE POSITIVE** — the same |
+| urlopen | `bandit.B310-1` (Medium) | `docs/presentations/.../fetch_fonts.py:62` → `main:64` | **FALSE POSITIVE** — a font download in a build script; not this branch's file |
+
+**The two that were worth answering.**
+
+- **The egress guard had a real hole.** It checked for a scheme and nothing else, so a
+  path carrying the USERINFO separator reached the fetch: `base + '/jobs/@evil.com/x'`
+  parses as `userinfo@host`, which is a different host. The RED proof is in the test —
+  against the old guard the malicious path produced `ragas-service unreachable
+  (unexpected fetch http://ragas-service:8090/jobs/@evil.com/x)`. The guard now demands
+  a RELATIVE path (one leading slash, then only the characters a route name and a job id
+  need), and refuses everything else BEFORE any fetch. The new cases are pinned by a
+  test in `__tests__/ragas-suite-service.test.js`, and the SSRF sink carries the repo's
+  own `nosemgrep` annotation with the justification written out — the pattern the
+  crawler and the query routes already use.
+- **The topic sampler drew with `Math.random()`.** The draw is an INDEX into a fixed,
+  public topic pool and carries no secret, so this was never an exposure — but the
+  weak generator is exactly what the rule flags, and `crypto.randomInt` costs nothing.
+  The draw is now strong; the tests that pin a deterministic draw spy on the new seam
+  (the service holds the crypto module OBJECT, not a destructured binding, so the spy
+  lands on the live call).
+
+**The three that needed no change.** They are in the walkthrough's build scripts — files
+this branch never touches. They appeared because the merge ref that was scanned still
+carried the walkthrough branch's content, whose line numbers differ from the copy main
+holds today. Rebasing onto the current main (the walkthrough landed at 17:15) puts the
+same content in the merge ref, so the scan reports them at main's line numbers and they
+are no longer "new".
+
 ### The T7 ruling — the site page rides phase 4 (2026-11-23)
 
 `site/content/en/docs/knowledge-base/testing-lab.md` documents the Lab DIALOG, and the

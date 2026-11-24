@@ -52,7 +52,10 @@
 const { logger } = require('../shared-lib/logger');
 const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
-const { createHash } = require('node:crypto');
+// The module OBJECT, not a destructured binding: the topic draw below is
+// spied on in the tests, and a destructured copy would freeze the original
+// function before the spy is installed.
+const nodeCrypto = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
 const { AsyncJobGate } = require('./async-job-gate');
 // ONE query-normalization helper (review !622 round 9, #78698): see
@@ -361,7 +364,11 @@ function sampleTopics(n) {
   const pool = OFF_DOMAIN_TOPICS.slice();
   const picked = [];
   while (picked.length < n && pool.length) {
-    picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    // A cryptographically strong draw, not Math.random(): the draw is an
+    // INDEX into a fixed topic pool (it carries no secret), but the weak
+    // generator is what the SAST rule flags, and the strong one costs
+    // nothing here.
+    picked.push(pool.splice(nodeCrypto.randomInt(pool.length), 1)[0]);
   }
   let cursor = 0;
   while (picked.length < n && OFF_DOMAIN_TOPICS.length) {
@@ -512,7 +519,7 @@ function tagsetOf(repo) {
   const norm = forbidden.map((t) => t.toLowerCase()).sort();
   return {
     forbidden,
-    hash: norm.length ? createHash('sha1').update(norm.join('|')).digest('hex').slice(0, 8) : 'empty'
+    hash: norm.length ? nodeCrypto.createHash('sha1').update(norm.join('|')).digest('hex').slice(0, 8) : 'empty'
   };
 }
 

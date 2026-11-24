@@ -314,6 +314,12 @@ function ragasSecret() {
   return process.env.RAGAS_INTERNAL_SECRET || process.env.OKF_INTERNAL_SECRET || '';
 }
 
+// A sidecar path is a fixed RELATIVE path under the base: one leading '/'
+// (never two — that would be an authority), then segments built from the
+// characters a route name and a job id need. No scheme, no authority, no
+// userinfo, no query, no whitespace.
+const RELATIVE_SIDECAR_PATH = /^\/(?:[A-Za-z0-9._~-][A-Za-z0-9._~/-]*)?$/;
+
 /**
  * Call the ragas-service sidecar. Network-class failures map to a typed
  * RAGAS_UNAVAILABLE (503) — the panel says so honestly; nothing hangs.
@@ -322,7 +328,14 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
   // Egress guard (review 2026-10-29): `path` is a hard-coded constant at
   // every call site — reject anything that could turn the fixed-base
   // concatenation into an arbitrary URL, so a future caller cannot.
-  if (typeof path !== 'string' || path.includes('://')) {
+  //
+  // The scheme check alone did NOT say that: '@' is the userinfo separator
+  // (base + '@evil.com' parses as userinfo@host), a '//' prefix opens an
+  // authority, and a path with no leading '/' is not relative at all — all
+  // three reached the fetch. The path must now be a RELATIVE path under the
+  // fixed base: one leading '/', then segments of the characters a job id
+  // and a route name need. Everything else is refused BEFORE any fetch.
+  if (typeof path !== 'string' || !RELATIVE_SIDECAR_PATH.test(path)) {
     throw new Error(`ragas sidecar: rejected non-relative path: ${String(path).slice(0, 80)}`);
   }
   const headers = { 'X-RAGAS-Secret': ragasSecret() };
@@ -337,6 +350,13 @@ async function sidecar(path, { method = 'POST', json, body, contentType, timeout
   const budget = timeoutMs || RAGAS_TIMEOUT_MS;
   let resp;
   try {
+    // The sidecar base is deployment configuration (OKF_RAGAS_URL), never
+    // request data, and the path is a constant — or the sidecar's own job
+    // id — that the guard above has already proven relative. The SSRF rule
+    // cannot see either: it traces the path argument into the URL without
+    // reading the guard. The invariant is pinned by a test in
+    // __tests__/ragas-suite-service.test.js.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     resp = await fetch(`${RAGAS_URL()}${path}`, {
       method,
       headers,

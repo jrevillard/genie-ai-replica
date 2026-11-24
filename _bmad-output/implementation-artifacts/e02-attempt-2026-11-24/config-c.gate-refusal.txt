@@ -1,0 +1,10 @@
+# The gate's refusal — the gated config-C leg of the E02 attempt (the agent), verbatim
+# command: run_protocol.py assess --config C --set assessment-set.json --out-dir . --corpus-collection GRAPH_SOURCE --corpus-fingerprint 6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98
+# date: 2026-11-24; the corpus fingerprint is PINNED to the measured reference's (issue #2118) and the
+# assessment set is the reference's own file (digest 58850161afeb…). The reference manifest IS in
+# this directory — the refusal that remains is the SECOND predecessor: story 4.4's signed
+# thresholds file (the operator's 2026-11-23 signature covers M-1 only, so M-2..M-5 stay absent and
+# the promotion decision stays BLOCKED → no signed artifact is derived).
+
+REFUSED: gated run refused (config C): reference manifest 8dc67fa1804e covers corpus 6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98, but no signed thresholds file references it. Thresholds are signed after the reference is measured (story 4.4); the harness refuses to gate on an unsigned predecessor.
+exit=1

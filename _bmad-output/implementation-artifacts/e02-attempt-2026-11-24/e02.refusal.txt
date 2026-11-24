@@ -1,0 +1,7 @@
+# The E02 join's refusal — verbatim
+# command: run_protocol.py e02 --b-manifest config-b.manifest.json --c-manifest config-c.manifest.json --b-rows config-b.rows.json --c-rows config-c.rows.json --set assessment-set.json --out e02.report.json
+# date: 2026-11-24; the gated legs above were REFUSED, so their manifests and rows do not exist —
+# the join names the missing artifact instead of comparing against nothing.
+
+REFUSED: the B-leg gated manifest (_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/config-b.manifest.json): [Errno 2] No such file or directory: '_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/config-b.manifest.json'
+exit=1

@@ -9,18 +9,19 @@ This document provides a non-exhaustive list of third-party artefacts (software,
 ## Table of Contents
 
 1. [Core AI/ML Frameworks](#core-aiml-frameworks)
-2. [Databases & Data Storage](#databases--data-storage)
-3. [Backend Frameworks & Runtime](#backend-frameworks--runtime)
-4. [Frontend Frameworks](#frontend-frameworks)
-5. [API Gateway & Infrastructure](#api-gateway--infrastructure)
-6. [Container & Orchestration](#container--orchestration)
-7. [Security & Authentication](#security--authentication)
-8. [Document Processing & Search](#document-processing--search)
-9. [Mobile Development](#mobile-development)
-10. [Monitoring & Logging](#monitoring--logging)
-11. [Python Libraries](#python-libraries)
-12. [Node.js Libraries](#nodejs-libraries)
-13. [Vue.js Libraries](#vuejs-libraries)
+2. [AI Models](#ai-models)
+3. [Databases & Data Storage](#databases--data-storage)
+4. [Backend Frameworks & Runtime](#backend-frameworks--runtime)
+5. [Frontend Frameworks](#frontend-frameworks)
+6. [API Gateway & Infrastructure](#api-gateway--infrastructure)
+7. [Container & Orchestration](#container--orchestration)
+8. [Security & Authentication](#security--authentication)
+9. [Document Processing & Search](#document-processing--search)
+10. [Mobile Development](#mobile-development)
+11. [Monitoring & Logging](#monitoring--logging)
+12. [Python Libraries](#python-libraries)
+13. [Node.js Libraries](#nodejs-libraries)
+14. [Vue.js Libraries](#vuejs-libraries)
 
 ---
 
@@ -97,6 +98,56 @@ OPEA provides microservices for:
 **License URL:** https://github.com/xenova/transformers.js/blob/main/LICENSE
 
 **Usage:** Browser/Node.js transformer models for client-side ML inference.
+
+---
+
+## AI Models
+
+The models on the OPEA-free agent path (the pre-existing legacy model legs
+keep their own records). Licences per the repository's model-licence table
+(`site/content/en/docs/rag-pipeline/choosing-models.md`) and the upstream
+model cards; the full redistribution assessment is
+[`docs/baselines/v07b-license-assessment-2026-11-24.md`](docs/baselines/v07b-license-assessment-2026-11-24.md).
+
+### IBM Granite (granite-4.1-8b)
+**Component Type:** LLM model weights (served by vLLM)
+**Version:** ibm-granite/granite-4.1-8b (Hugging Face)
+**Repository:** https://huggingface.co/ibm-granite/granite-4.1-8b
+**License:** Apache 2.0
+**License URL:** https://huggingface.co/ibm-granite/granite-4.1-8b/blob/main/LICENSE
+
+**Usage:** The agent loop's language model on the OPEA-free path.
+
+---
+
+### BAAI bge family (bge-large-en-v1.5, bge-reranker-v2-m3)
+**Component Type:** Embedding and reranker model weights (served by TEI)
+**Version:** BAAI/bge-large-en-v1.5, BAAI/bge-reranker-v2-m3 (Hugging Face)
+**Repository:** https://huggingface.co/BAAI
+**License:** MIT
+**License URL:** https://huggingface.co/BAAI/bge-large-en-v1.5/blob/main/LICENSE
+
+**Usage:** The embedding and reranking models behind the document capability
+contract's retrieval adapters.
+
+---
+
+### Gemma (gemma-3-4b-it)
+**Component Type:** LLM model weights (served by vLLM — the translation leg)
+**Version:** google/gemma-3-4b-it (Hugging Face)
+**Repository:** https://huggingface.co/google/gemma-3-4b-it
+**License:** Gemma Terms of Use (NOT an open-source licence; use and
+  redistribution are subject to Google's terms and the Gemma prohibited-use
+  policy; deployments above 700M monthly active users must request a direct
+  licence from Google)
+**License URL:** https://huggingface.co/google/gemma-3-4b-it/blob/main/LICENSE
+
+**Usage:** The model the translation leg serves by default
+(`VLLM_TRANSLATION_MODEL_ID`) — answer translation and the agent loop's
+query-preparation translation. **Restricted terms:** a pilot/release serving
+this leg carries Google's terms acceptance; the redistribution consequence is
+recorded as a blocker owned by the licensing reviewer in
+[`docs/baselines/v07b-license-assessment-2026-11-24.md`](docs/baselines/v07b-license-assessment-2026-11-24.md).
 
 ---
 
@@ -588,7 +639,7 @@ a test-only dependency; it never reaches a runtime image).
 
 ### langdetect
 **Component Type:** Language Detection Library
-**Version:** ^0.2.1
+**Version:** 1.0.9 (the pinned version of the agent service and the overlay)
 **Repository:** https://github.com/Mimino666/langdetect
 **License:** Apache 2.0 (or BSD-like)
 **License URL:** https://github.com/Mimino666/langdetect/blob/master/LICENSE
@@ -647,6 +698,86 @@ the release channel are recorded in
 [`docs/dependencies/agent-service-dependency-evidence.json`](docs/dependencies/agent-service-dependency-evidence.json);
 the procedure that produced it is
 [`docs/dependencies/pre-adoption-checklist.md`](docs/dependencies/pre-adoption-checklist.md).
+
+---
+
+### python-arango
+**Component Type:** ArangoDB Python Driver
+**Version:** 8.3.7
+**Repository:** https://github.com/joowani/python-arango
+**License:** MIT License
+**License URL:** https://github.com/joowani/python-arango/blob/main/LICENSE
+
+**Usage:** The ArangoDB driver of the agent service's retrieval adapters
+(`search_knowledge`). The JavaScript driver above (arangojs) serves the Node
+services; this is the Python twin on the agent path.
+
+---
+
+### kneed
+**Component Type:** Knee-Point Detection
+**Version:** 0.9.0
+**Repository:** https://github.com/arlyon/kneed
+**License:** BSD 3-Clause
+**License URL:** `docs/dependencies/agent-service-dependency-evidence.json`
+(licence file sha256 recorded)
+
+**Usage:** The `knee_threshold` reranking-selection strategy of the agent
+service — the same pin the deployed reranker serves (behavior frozen to the
+recorded V02 semantics).
+
+---
+
+### NumPy
+**Component Type:** Numerical Library
+**Version:** 1.26.4
+**Repository:** https://github.com/numpy/numpy
+**License:** BSD 2-Clause
+**License URL:** https://github.com/numpy/numpy/blob/main/LICENSES/LICENSE_numpy_bsd2.txt
+
+**Usage:** The adaptive selection math of the agent service and the reranker.
+
+---
+
+### SciPy
+**Component Type:** Scientific Computing Library
+**Version:** 1.17.1
+**Repository:** https://github.com/scipy/scipy
+**License:** BSD 2-Clause
+**License URL:** https://github.com/scipy/scipy/blob/main/LICENSES_license.txt
+
+**Usage:** kneed's dependency tree on the agent service (the knee-detection math).
+
+---
+
+### setuptools
+**Component Type:** Python Packaging Runtime Dependency
+**Version:** 81.0.0
+**Repository:** https://github.com/pypa/setuptools
+**License:** MIT License
+**License URL:** https://github.com/pypa/setuptools/blob/main/LICENSE
+
+**Usage:** A RUNTIME dependency of the agent service: the OpenTelemetry
+instrumentation 0.48b0 line resolves its entry points through `pkg_resources`,
+which setuptools ships. 81.0.0 is the newest release that still carries it
+(setuptools 82 dropped `pkg_resources`).
+
+---
+
+### rag-benchmarks eval tree
+**Component Type:** Python dependency tree (eval-only, never in a runtime image)
+**Version:** the 7 top-level pins of `tests/rag-benchmarks/eval/requirements.txt`
+**License:** MIT and Apache 2.0 - per package, verified for the exact version
+**License URL:** `docs/dependencies/rag-benchmarks-eval-dependency-evidence.json`
+
+**Usage:** The evaluation harness's judge stack (ragas, the langchain
+integration packages, the OpenAI SDK, openpyxl). The per-package licence, its
+source (sha256 where the artifact licence file is the proof) and the defaults
+audit are recorded in
+[`docs/dependencies/rag-benchmarks-eval-dependency-evidence.json`](docs/dependencies/rag-benchmarks-eval-dependency-evidence.json).
+The TRANSITIVE trees of this file are unpinned and are recorded as an open
+supply-chain gap in
+[`docs/baselines/v07b-license-assessment-2026-11-24.md`](docs/baselines/v07b-license-assessment-2026-11-24.md).
 
 ---
 
@@ -1204,10 +1335,13 @@ the procedure that produced it is
 ## License Summary
 
 ### Permissive Licenses (Most Business-Friendly)
-- **MIT License**: Vue.js, Express, Axios, Socket.io,大多数Node.js库, Flutter, Dart
-- **Apache 2.0**: OPEA, vLLM, ArangoDB 3.12.x, Kong, Hugging Face libraries, Keycloak, Nginx, Kubernetes, ECharts
+- **MIT License**: Vue.js, Express, Axios, Socket.io,大多数Node.js库, Flutter, Dart; the BAAI bge models (bge-large-en-v1.5, bge-reranker-v2-m3)
+- **Apache 2.0**: OPEA, vLLM, ArangoDB 3.12.x, Kong, Hugging Face libraries, Keycloak, Nginx, Kubernetes, ECharts; IBM Granite (granite-4.1-8b)
 - **BSD 2-Clause/3-Clause**: Redis, PostgreSQL, NGINX, ioredis, geoip-lite, Flutter/Dart packages
 - **ISC License**: D3.js
+
+### Custom / Restricted-Terms Model Licences
+- **Gemma Terms of Use**: google/gemma-3-4b-it (the translation leg) — use and redistribution subject to Google's terms and the prohibited-use policy; >700M monthly active users need a direct licence from Google (see the AI Models section and `docs/baselines/v07b-license-assessment-2026-11-24.md`)
 
 ### Copyleft Licenses (Require Attribution/Derivative Works)
 - **GPL 2.0**: ClamAV - requires derivative works to be licensed under GPL

@@ -27,15 +27,21 @@ sign_off:
   owner: "jrevillard (ITU)"
   signed: true
   agreed_on: "2026-11-23"
-  signed_on: "2026-11-23"
+  signed_on: "2026-11-24"
   signatory: "jrevillard"
   basis: >-
-    the measured A reference (issue #2118 — MR !1056, the E01 live run on the
-    forge k3s, 2026-11-23): corpus fingerprint
-    6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98,
+    the measured A reference, re-anchored by the operator's 2026-11-24
+    re-signature (values UNCHANGED) onto the FINAL A reference (issue #2162 —
+    MR !1072, the forge k3s, 2026-11-24): corpus fingerprint
+    f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f,
     assessment-set digest
+    cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812,
+    67 cases (40 anchor-scored). The bounds were originally signed 2026-11-23
+    against the issue #2118 reference (MR !1056, corpus
+    6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98, set
     58850161afebad599234e5ef54b1122a17684e5de7b81e36b9b6c3867152a784,
-    6 evaluable cases
+    6 evaluable cases); the #2162 re-measurement on the acceptance-grade set
+    returned delta-0.0 on every scored M-1 metric.
   note: >-
     The signature covers the retrieval-quality thresholds (M-1) only: the
     other dimensions ship as explicitly absent, with their reason, and they

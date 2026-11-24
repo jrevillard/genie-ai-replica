@@ -667,6 +667,46 @@ holds today. Rebasing onto the current main (the walkthrough landed at 17:15) pu
 same content in the merge ref, so the scan reports them at main's line numbers and they
 are no longer "new".
 
+**The proof that the panel is clean.** The MR pipeline's reports were diffed against
+the target branch's, finding by finding (the same comparison the panel draws):
+
+| scanner | MR pipeline | main pipeline | NEW in the MR |
+|---|---|---|---|
+| semgrep | 113 | 115 | **0** |
+| kics (IaC SAST) | 191 | 191 | **0** |
+| secret detection | 0 | 0 | **0** |
+| gemnasium (dependency) | — | — | **0 by construction**: the branch changes no dependency file |
+
+The two findings that sat in this branch's own files are gone from the MR's report
+(the strong draw is not a weak one; the SSRF sink carries the annotation), and the
+three in the walkthrough's files are reported at main's own line numbers — so the
+panel counts none of them. The merge status followed: `security_policy_violations` →
+`mergeable`, and the approval the panel had demanded (`approvals_required: 1`) is
+gone with it (`approvals_required: 0`).
+
+### The live build, re-run against the rebased branch (2026-11-24)
+
+The branch was rebased onto the current main (the walkthrough merge), the local build
+was re-synced to it and `okf-server` was rebuilt and recreated — the tree's source
+matches the branch byte for byte, and `verify-local-build.sh` answers **47 pass, 0
+fail**. The phase-3 proof was then run again against the running service, with the
+hardening in place:
+
+```
+the minted suite:  context ec-1b4582a6…  version 1  ·  13 repositories
+                   intended_carrier='in': 16   intended_carrier='out': 2
+pairing:           status ok · comparable true · reasons [] · skipped_rows []
+                   pool_coverage 1
+                   suite_context_id == run_context_id
+summary:           n_queries 18 · n_skipped 0 · n_errors 0
+                   boundary { total 2, evaluatable 2, held 2, breached 0 }
+the cross-context run -> HTTP 409
+```
+
+The scope still holds, the pairing still pairs, and the cross-context refusal still
+refuses. The build tree was left clean: 0 evaluation contexts, ROPC off, the throwaway
+helper deleted.
+
 ### The T7 ruling — the site page rides phase 4 (2026-11-23)
 
 `site/content/en/docs/knowledge-base/testing-lab.md` documents the Lab DIALOG, and the

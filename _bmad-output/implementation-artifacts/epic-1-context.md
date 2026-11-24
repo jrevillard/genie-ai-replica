@@ -45,5 +45,5 @@ Give engineering and evaluation one GENIE-owned document capability contract —
 
 ## Cross-Story Dependencies
 
-- **Hard ordering inside the epic:** the behavioral record (1.1) precedes the contract (1.5) and the port (1.6, 1.8), and its fixtures are the expected values for the equivalence suite (1.9). Story 1.3 hosts the gate (1.4) and the implementations (1.6–1.8); 1.10 attests the chart identity of the deployed baseline and closes the epic.
+- **Hard ordering inside the epic:** the behavioral record (1.1) precedes the contract (1.5) and the port (1.6, 1.8), and its fixtures are the expected values for the equivalence suite (1.9). Story 1.3 hosts the gate (1.4) and the implementations (1.6–1.8); 1.10 closes the epic.
 - **Parallel and cross-epic:** the deployed-stack baseline (1.2) has no code dependency, starts day one, and feeds the evaluation epic's reference measurement. The activation-flag mechanism shipped here is what the activation/rollback epic drives, and the evaluation epic reuses this epic's equivalence suite as its fixed-configuration driver.

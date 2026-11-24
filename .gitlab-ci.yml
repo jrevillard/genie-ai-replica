@@ -4200,7 +4200,7 @@ docs:validate:
     # in the command OR the entrypoint (a pin in the entrypoint would
     # leave the command clean); assert both so a future pin cannot land
     # silently.
-    - python3 -c "import yaml; s=yaml.safe_load(open('docker-compose.gpu.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; assert not any('tool-call-parser' in str(x) or 'enable-auto-tool-choice' in str(x) for x in s.get('entrypoint', [])), s.get('entrypoint')"
+    - python3 -c "import yaml; s=yaml.safe_load(open('docker-compose.gpu.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; e=str(s.get('entrypoint') or ''); assert 'tool-call-parser' not in e and 'enable-auto-tool-choice' not in e, e"
     # #2119: the served-model ids are MANDATORY — a render without them must
     # FAIL, and the error must NAME the variable (never a silent default).
     # The runner script carries set -e: capture the expected failure with

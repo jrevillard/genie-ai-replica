@@ -121,7 +121,7 @@ context:
 - `protocol/e02.py` — the E02 comparison layer. The two-leg verification (presence → leg identity → lineage, with the E02-specific rule that both legs must have been gated against the SAME predecessor), M-1..M-5 for both legs with their surfaces named, the gains per query class, the thresholds applied or explicitly absent, the uncontrolled differences, the honest verdict, and the pure-function digest.
 - `protocol/coexistence.py` — the NFR-3 criterion. The controlled comparison (legacy alone vs legacy under concurrent agentic load), the agreed-limits application, the saturation/admission response and the resource consumption under load, and the computed verdict. The verdict vocabulary is `pass` / `fail` / `blocked` — an absent or unmeasurable limit blocks, it never passes.
 - `run_protocol.py` — the `e02` and `coexistence` subcommands (typed refusal → exit 1) and the two refusal classes in `main`'s except list.
-- `test_protocol_e02.py` (51 tests) + `test_protocol_coexistence.py` (33 tests) — every matrix row through fixture rows, synthetic manifests and a synthetic signed artifact; the counts grew through the review rounds the triage log below records. The whole protocol suite is green: **388 passed**.
+- `test_protocol_e02.py` (54 tests) + `test_protocol_coexistence.py` (33 tests) — every matrix row through fixture rows, synthetic manifests and a synthetic signed artifact; the counts grew through the review rounds the triage log below records. The whole protocol suite is green: **391 passed**.
 - `docs/baselines/s4-exit-checklist.md` — the S4 exit evidence bundle in the S3 checklist's form: E01, E02, bounded execution (V06), rollback demo (V08), the coexistence criterion — each with its evidence artifact and its state, plus the table of what the measured order still blocks on.
 - `_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/` — the E02 attempt's record: the two gated legs' verbatim refusals, the join's refusal, the reference manifest and the assessment set (byte-identical, digest `58850161afeb…`) the chain needs, and a note explaining each.
 - `.gitlab-ci.yml` — the protocol pytest line gains the two new test files.
@@ -267,7 +267,15 @@ Global review round 5 (on 184627aab, scoped to the MR diff): **0 important, 6 ni
 | 3 | the coexistence load record's cross-checks were asymmetric: an outcome tally EXCEEDING the request count was silently floored, and a declared n_admission_refusals overrode a higher tally | nit | applied — a tally exceeding the independent request count is refused (`invalid_measurement`); the declared refusal count can only RAISE over the tally, mirroring the vanished-request rule |
 | 4 | the #2145 hold's population was mischaracterized: "10 answerable cases carry no gold" — the set has 10 empty-gold cases, 7 answerable-class | nit | applied — restated in the checklist (both lines), attempt.md and this story |
 | 5 | the not_measurable reason blamed the measurement for a metric the harness does not define | nit | applied — an unknown metric name gets its own reason ("no legacy metric named … exists in this harness"), pinned by tests |
-| 6 | the story's delivered-suite-size claim was stale (19+16 tests, 334 passed) | nit | applied — 51 + 33 tests, 388 protocol tests green |
+| 6 | the story's delivered-suite-size claim was stale (19+16 tests, 334 passed) | nit | applied — 54 + 33 tests, 391 protocol tests green |
+
+FIX-REVIEW f=1 (chain 3, the diff 184627aab..96c926473, fresh context, mutation battery on every fix): all 6 round-5 findings VERIFIED-FIXED, every fix pinned by a failing test — and 3 NEW defects in the same one-name-per-row class, NOT CLEAN. All applied (54 e02 tests now):
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| D1 | the usage-record arm of the new M-3.B predicate was UNPINNED (deleting it left all 51 tests green) | new defect | applied — a test feeds the metadata.usage.outcome=budget_exhausted shape to M-3.B and pins n_limit_hit=1 |
+| D2 | M-3.B's n_limit_hit scanned ok rows only while the census scans ALL rows: a failure row carrying the marker was n_failure_rows on the surface, n_limit_hit in the census | new defect | applied — the marker outranks the failure flag on the surface too (the classified tallies exclude census-classified limit hits; n_limit_hit scans every row), pinned by a test |
+| D3 | M-3.C's n_answered_rows / n_admission_refused_rows / n_error_rows did not exclude limit-hit rows — a marked row was counted twice inside the surface | new defect | applied — the census's first-terminal-state rule applied to every tally on the surface (a marked row is n_limit_hit exactly once), pinned by a test |
 
 ## Design Notes
 

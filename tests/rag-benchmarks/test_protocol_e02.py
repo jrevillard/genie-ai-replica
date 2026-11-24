@@ -1016,3 +1016,50 @@ def test_e02_records_absent_for_a_null_signed_dimension_entry():
     record = report["dimensions"]["M-1"]["B"]["threshold"]
     assert record["status"] == "absent"
     assert "no agreed value" in record["reason"]
+
+
+def test_e02_m3_b_reads_the_usage_record_marker_too():
+    """The M-3.B predicate is the census's VERBATIM — both marker shapes are
+    limit hits on this surface as well (the usage-marker arm is pinned here:
+    deleting the arm must fail this test)."""
+    b_rows = _b_rows()
+    b_rows["c1"] = dict(
+        b_rows["c1"],
+        metadata={"usage": {"model_calls": 1, "outcome": "budget_exhausted"}},
+    )
+    report = _report(b_rows=b_rows)
+    assert report["dimensions"]["M-3"]["B"]["values"]["n_limit_hit"] == 1
+
+
+def test_e02_m3_b_names_a_marked_failure_row_a_limit_hit():
+    """The census names its terminal states in the counter-metrics order — the
+    marker outranks the failure flag — so a failure row carrying the marker is
+    n_limit_hit on this surface, not n_failure_rows."""
+    b_rows = _b_rows()
+    b_rows["c3"] = dict(b_rows["c3"], abstention_reason="result_budget_exhausted")
+    report = _report(b_rows=b_rows)
+    m3_b = report["dimensions"]["M-3"]["B"]["values"]
+    assert m3_b["n_limit_hit"] == 1
+    assert m3_b["n_failure_rows"] == 0
+    # the census agrees: one name for the row
+    assert sum(stats["B"]["n_limit_hit"] for stats in report["gains"]["per_class"].values()) == 1
+    assert sum(stats["B"]["n_failed"] for stats in report["gains"]["per_class"].values()) == 0
+
+
+def test_e02_m3_c_names_a_marked_row_a_limit_hit_exactly_once():
+    """A C row that reached ANY terminal outcome with a budget-exhausted
+    resource record is a limit hit exactly once: no other tally on the
+    surface claims it."""
+    c_rows = _c_rows()
+    c_rows["c1"] = dict(c_rows["c1"], usage_record={"model_calls": 3, "outcome": "budget_exhausted"})
+    c_rows["c3"] = dict(
+        c_rows["c3"], outcome="admission_refused", usage_record={"outcome": "budget_exhausted"}
+    )
+    report = _report(c_rows=c_rows)
+    m3_c = report["dimensions"]["M-3"]["C"]["values"]
+    assert m3_c["n_limit_hit"] == 2
+    assert m3_c["n_answered_rows"] == 1
+    assert m3_c["n_admission_refused_rows"] == 0
+    # the census agrees: one name per row
+    assert sum(stats["C"]["n_limit_hit"] for stats in report["gains"]["per_class"].values()) == 2
+    assert sum(stats["C"]["n_answered"] for stats in report["gains"]["per_class"].values()) == 1

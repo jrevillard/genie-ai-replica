@@ -455,6 +455,10 @@ def _b_m3(b_rows: dict) -> dict:
         usage = metadata.get("usage") if isinstance(metadata.get("usage"), dict) else {}
         return row.get("abstention_reason") == LIMIT_MARKER_B or usage.get("outcome") == LIMIT_MARKER_C
 
+    # The census scans EVERY row and names its terminal state FIRST — the
+    # marker outranks the failure flag — so the surface's classified tallies
+    # carry the census's names: a marker row is n_limit_hit wherever it sits,
+    # and no other tally on the surface claims it.
     return _surface_record(
         surface=B_M3_SURFACE,
         available=True,
@@ -464,9 +468,15 @@ def _b_m3(b_rows: dict) -> dict:
             "n_with_abstention_reason": sum(
                 1 for row in ok if row.get("abstention_reason") and not _limit_hit(row)
             ),
-            "n_not_abstained": sum(1 for row in ok if row.get("abstained") is False),
-            "n_limit_hit": sum(1 for row in ok if _limit_hit(row)),
-            "n_failure_rows": sum(1 for row in b_rows.values() if isinstance(row, dict) and row.get("status") == "failure"),
+            "n_not_abstained": sum(
+                1 for row in ok if row.get("abstained") is False and not _limit_hit(row)
+            ),
+            "n_limit_hit": sum(1 for row in b_rows.values() if isinstance(row, dict) and _limit_hit(row)),
+            "n_failure_rows": sum(
+                1
+                for row in b_rows.values()
+                if isinstance(row, dict) and row.get("status") == "failure" and not _limit_hit(row)
+            ),
         },
     )
 
@@ -480,12 +490,12 @@ def _c_m3(c_rows: dict) -> dict:
     never published as a zero (a zero would compare against a signed bound
     and deny the agent on a fact that was never recorded).
     """
-    answered = _c_answered_rows(c_rows)
 
     def _limit_hit(row: dict) -> bool:
         # The census's limit-hit predicate (the counter-metrics vocabulary's
-        # first terminal state): a cancelled row that exhausted its budget is
-        # a LIMIT HIT here exactly as it is in the gains census.
+        # first terminal state): a row that exhausted its budget is a LIMIT
+        # HIT here exactly as it is in the gains census — whichever terminal
+        # outcome it also carries, and exactly ONCE.
         usage = row.get("usage_record") if isinstance(row.get("usage_record"), dict) else {}
         return usage.get("outcome") == LIMIT_MARKER_C
 
@@ -493,7 +503,13 @@ def _c_m3(c_rows: dict) -> dict:
         surface=C_M3_SURFACE,
         available=True,
         values={
-            "n_answered_rows": len(answered),
+            "n_answered_rows": sum(
+                1
+                for row in c_rows.values()
+                if isinstance(row, dict)
+                and row.get("outcome") == "answered"
+                and not _limit_hit(row)
+            ),
             "n_limit_hit": sum(1 for row in c_rows.values() if isinstance(row, dict) and _limit_hit(row)),
             "n_cancelled_rows": sum(
                 1
@@ -503,13 +519,18 @@ def _c_m3(c_rows: dict) -> dict:
                 and not _limit_hit(row)
             ),
             "n_admission_refused_rows": sum(
-                1 for row in c_rows.values() if isinstance(row, dict) and row.get("outcome") == "admission_refused"
+                1
+                for row in c_rows.values()
+                if isinstance(row, dict)
+                and row.get("outcome") == "admission_refused"
+                and not _limit_hit(row)
             ),
             "n_error_rows": sum(
                 1
                 for row in c_rows.values()
                 if isinstance(row, dict)
                 and row.get("outcome") in FAILURE_STATES
+                and not _limit_hit(row)
             ),
         },
         notes=[

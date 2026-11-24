@@ -524,3 +524,75 @@ def build_thresholds_report(
     }
     body["digest"] = thresholds_report_digest(body)
     return body
+
+
+# ---------------------------------------------------------------------------
+# The signed-bound grammar — ONE home for the layer
+#
+# The E02 report and the coexistence criterion both APPLY signed bounds
+# (the thresholds artifact's dimensions, the limits artifact's legacy
+# limits). Both parse the same bound shapes and compare with the same
+# operators — the grammar lives here, beside the registry that signs those
+# bounds, so a new operator spelling or bound alias lands in one place and
+# the two reports can never interpret the same signed artifact differently.
+# ---------------------------------------------------------------------------
+
+# The comparison operators a signed bound may carry.
+OPERATORS = (">=", "<=", ">", "<", "==")
+
+
+def normalize_operator(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    return candidate if candidate in OPERATORS else None
+
+
+def numeric_bound(value):
+    """The numeric value of a bound's threshold — None when it is not one."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def bound_fields(bound) -> tuple[str | None, object]:
+    """The (operator, threshold) of one bound, whatever spelling it carries:
+    ``operator``/``op``/``comparison`` for the direction, ``threshold``/
+    ``value`` for the number, and the ``min``/``max`` inference when the
+    direction is implied by the field name."""
+    operator = normalize_operator(bound.get("operator") or bound.get("op") or bound.get("comparison"))
+    threshold = bound.get("threshold")
+    if threshold is None:
+        threshold = bound.get("value")
+    if operator is None:
+        if isinstance(bound.get("min"), (int, float)):
+            operator, threshold = ">=", bound.get("min")
+        elif isinstance(bound.get("max"), (int, float)):
+            operator, threshold = "<=", bound.get("max")
+    return operator, threshold
+
+
+def compare_bound(operator: str, measured, threshold) -> bool | None:
+    """The comparison itself.
+
+    ``None`` means NOT COMPARABLE (a missing measurement, a non-numeric
+    threshold) — it is distinct from ``False`` (the bound was breached) and
+    the caller records it as uninterpretable, never as a failure.
+    """
+    if not isinstance(measured, (int, float)) or isinstance(measured, bool):
+        return None
+    bound = numeric_bound(threshold)
+    if bound is None:
+        return None
+    value = float(measured)
+    if operator == ">=":
+        return value >= bound
+    if operator == "<=":
+        return value <= bound
+    if operator == ">":
+        return value > bound
+    if operator == "<":
+        return value < bound
+    if operator == "==":
+        return value == bound
+    return None

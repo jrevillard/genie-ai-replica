@@ -37,7 +37,7 @@ from protocol.e02 import (
     build_e02_report,
     e02_report_digest,
 )
-from protocol.manifest import build_manifest, manifest_digest, sha256_json
+from protocol.manifest import build_manifest, manifest_digest, sha256_file, sha256_json
 from protocol.run_protocol import cmd_e02
 
 CORPUS = "c" * 64
@@ -717,7 +717,7 @@ def _assessment_set(tmp_path):
 
 def test_e02_cli_writes_the_report(tmp_path, capsys):
     set_path = _assessment_set(tmp_path)
-    b_manifest, c_manifest = _legs(set_sha=_file_sha(set_path))
+    b_manifest, c_manifest = _legs(set_sha=sha256_file(set_path))
     args = argparse.Namespace(
         b_manifest=_write(tmp_path, "config-b.manifest.json", b_manifest),
         c_manifest=_write(tmp_path, "config-c.manifest.json", c_manifest),
@@ -737,11 +737,6 @@ def test_e02_cli_writes_the_report(tmp_path, capsys):
     assert written["digest"]
     assert "e02 verdict" in capsys.readouterr().out
 
-
-def _file_sha(path):
-    import hashlib
-
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def test_e02_cli_exits_1_on_a_refusal(tmp_path):

@@ -40,7 +40,16 @@ from datetime import UTC, datetime
 
 from . import PROTOCOL_VERSION
 from .counter_metrics import COST_COUNTERS
-from .manifest import sha256_json
+from .manifest import digest_without_embedded, sha256_json
+from .thresholds import (
+    bound_fields,
+)
+from .thresholds import (
+    compare_bound as _compare,
+)
+from .thresholds import (
+    numeric_bound as _numeric,
+)
 
 COEXISTENCE_REPORT_VERSION = "1.0.0"
 COEXISTENCE_REPORT_ARTIFACT = "coexistence-criterion-report"
@@ -55,9 +64,6 @@ LIMIT_PASS = "pass"
 LIMIT_FAIL = "fail"
 LIMIT_NOT_MEASURABLE = "not_measurable"
 LIMIT_UNINTERPRETABLE = "uninterpretable"
-
-# The comparison operators a limit may carry.
-OPERATORS = (">=", "<=", ">", "<", "==")
 
 # The legacy metrics a limit may bound, with the direction that is BETTER:
 # a lower latency and a lower error rate are better, a higher availability is
@@ -170,10 +176,9 @@ def _phase_stats(measurements: dict, phase: str) -> dict:
 def _median(ordered: list[float]) -> float | None:
     if not ordered:
         return None
-    middle = len(ordered) // 2
-    if len(ordered) % 2:
-        return ordered[middle]
-    return (ordered[middle - 1] + ordered[middle]) / 2
+    import capture_baseline  # local import: the capture module's median
+
+    return capture_baseline.median(ordered)
 
 
 def _percentile(ordered: list[float], percentile: float) -> float | None:
@@ -200,46 +205,6 @@ def _legacy_metrics(stats: dict) -> dict:
 # ---------------------------------------------------------------------------
 # The limits — applied, never authored
 # ---------------------------------------------------------------------------
-
-
-def _normalize_operator(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    candidate = value.strip()
-    return candidate if candidate in OPERATORS else None
-
-
-def _numeric(value):
-    """The numeric value of a threshold — None when it is not one."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    return None
-
-
-def _compare(operator: str, measured, threshold) -> bool | None:
-    """The comparison itself.
-
-    ``None`` means NOT COMPARABLE (a missing measurement, a non-numeric
-    threshold) — it is distinct from ``False`` (the limit was breached) and
-    the caller records it as uninterpretable, never as a breach.
-    """
-    if not isinstance(measured, (int, float)) or isinstance(measured, bool):
-        return None
-    bound = _numeric(threshold)
-    if bound is None:
-        return None
-    value = float(measured)
-    if operator == ">=":
-        return value >= bound
-    if operator == "<=":
-        return value <= bound
-    if operator == ">":
-        return value > bound
-    if operator == "<":
-        return value < bound
-    if operator == "==":
-        return value == bound
-    return None
 
 
 def _apply_limits(limits: dict | None, loaded_metrics: dict) -> dict:
@@ -282,15 +247,7 @@ def _apply_limits(limits: dict | None, loaded_metrics: dict) -> dict:
                 }
             )
             continue
-        operator = _normalize_operator(bound.get("operator") or bound.get("op") or bound.get("comparison"))
-        threshold = bound.get("threshold")
-        if threshold is None:
-            threshold = bound.get("value")
-        if operator is None:
-            if isinstance(bound.get("min"), (int, float)):
-                operator, threshold = ">=", bound.get("min")
-            elif isinstance(bound.get("max"), (int, float)):
-                operator, threshold = "<=", bound.get("max")
+        operator, threshold = bound_fields(bound)
         measured = loaded_metrics.get(name)
         if operator is None:
             outcome, reason = LIMIT_UNINTERPRETABLE, (
@@ -376,9 +333,10 @@ def _apply_regression(limits: dict | None, regression: dict, *, same_mix: bool) 
     for name in sorted(entries):
         bound = entries[name]
         tolerance = _numeric(bound.get("max_delta")) if isinstance(bound, dict) else _numeric(bound)
-        control = regression.get(name, {}).get("control")
-        loaded = regression.get(name, {}).get("loaded")
-        delta = regression.get(name, {}).get("delta")
+        observed = regression.get(name) or {}
+        control = observed.get("control")
+        loaded = observed.get("loaded")
+        delta = observed.get("delta")
         if tolerance is None:
             metrics.append(
                 {
@@ -526,25 +484,18 @@ def _agent_load_summary(agent_load: dict) -> dict:
     usage_records = agent_load.get("usage_records") or []
     if not isinstance(usage_records, list):
         raise CoexistenceRefusal("invalid_measurement", "the agentic load's usage_records are not a list")
-    totals = {
-        counter: {
-            "sum": sum(
-                float(record[counter])
-                for record in usage_records
-                if isinstance(record, dict)
-                and isinstance(record.get(counter), (int, float))
-                and not isinstance(record.get(counter), bool)
-            ),
-            "n_rows": sum(
-                1
-                for record in usage_records
-                if isinstance(record, dict)
-                and isinstance(record.get(counter), (int, float))
-                and not isinstance(record.get(counter), bool)
-            ),
-        }
-        for counter in COST_COUNTERS
-    }
+    # One pass over the records, inner loop over the counters: the numeric +
+    # bool-excluded guard is written ONCE (the bool-rejection rule's single
+    # home on this surface), not twice per counter.
+    totals = {counter: {"sum": 0.0, "n_rows": 0} for counter in COST_COUNTERS}
+    for record in usage_records:
+        if not isinstance(record, dict):
+            continue
+        for counter in COST_COUNTERS:
+            value = record.get(counter)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                totals[counter]["sum"] += float(value)
+                totals[counter]["n_rows"] += 1
     saturation_checked = requests_recorded
     return {
         "concurrency": agent_load.get("concurrency"),
@@ -597,8 +548,7 @@ def _agent_load_summary(agent_load: dict) -> dict:
 def coexistence_report_digest(report: dict) -> str:
     """The report's digest, recomputed over the body minus the embedded
     ``digest`` key — the verifiable identity a rebuild must reproduce."""
-    body = {key: value for key, value in report.items() if key != "digest"}
-    return sha256_json(body)
+    return digest_without_embedded(report)
 
 
 def build_coexistence_report(
@@ -675,14 +625,14 @@ def build_coexistence_report(
     control = _phase_stats(control_measurements, "control")
     loaded = _phase_stats(loaded_measurements, "loaded")
     load_summary = _agent_load_summary(agent_load)
-    applied = _apply_limits(limits, _legacy_metrics(loaded))
+    loaded_metrics = _legacy_metrics(loaded)
+    applied = _apply_limits(limits, loaded_metrics)
 
     # The legacy regression itself — the control against the loaded phase. It
     # is reported ALWAYS: the verdict comes from the agreed limits and the
     # agreed regression tolerance, but the reader must see the delta whatever
     # it is.
     control_metrics = _legacy_metrics(control)
-    loaded_metrics = _legacy_metrics(loaded)
     regression = {}
     for name in LEGACY_METRICS:
         before = control_metrics.get(name)

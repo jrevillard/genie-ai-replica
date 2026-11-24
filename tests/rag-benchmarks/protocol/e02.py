@@ -53,16 +53,38 @@ from .counter_metrics import (
     CounterMetricsRefusal,
     build_counter_metrics_report,
 )
+from .drivers import (
+    OUTCOME_ADMISSION_REFUSED,
+    OUTCOME_ANSWERED,
+    OUTCOME_CANCELLED,
+    OUTCOME_CONFIGURATION_ERROR,
+    OUTCOME_ERROR,
+    OUTCOME_HTTP_ERROR,
+    OUTCOME_INVALID_REQUEST,
+    OUTCOME_STREAM_ERROR,
+)
+from .e01 import (
+    ROW_STATUS_VOCABULARY,
+    _latency_stats,
+    _surface_record,
+)
+from .e01 import (
+    _ok_rows as _b_ok_rows,
+)
 from .evalset import base_case_id
-from .manifest import manifest_digest, manifest_lineage, sha256_json
+from .manifest import (
+    digest_without_embedded,
+    manifest_digest,
+    manifest_lineage,
+    sha256_json,
+)
 from .redaction import redact_deep
+from .thresholds import bound_fields
+from .thresholds import compare_bound as _compare
 
 E02_REPORT_VERSION = "1.0.0"
 E02_REPORT_ARTIFACT = "e02-report"
 E02_PAIR = "E02"
-
-# The configuration letters of the pair, in report order.
-E02_LEGS = ("B", "C")
 
 # The measurement surfaces of the E02 pair. B and C share them BY CONSTRUCTION
 # (the pair holds the retrieval backend, the preparation and the admission
@@ -87,16 +109,16 @@ AGENTIC_GAIN_CLASSES = ("multi_hop", "ambiguous")
 # The per-leg row vocabularies: config B's rows carry ``status``, config C's
 # rows carry ``outcome``. A rows file of another leg is refused, never
 # silently filtered down to an empty comparison leg.
-B_ROW_STATUS_VOCABULARY = ("ok", "failure")
+B_ROW_STATUS_VOCABULARY = ROW_STATUS_VOCABULARY["B"]
 C_ROW_OUTCOME_VOCABULARY = (
-    "answered",
-    "error",
-    "admission_refused",
-    "configuration_error",
-    "invalid_request",
-    "http_error",
-    "cancelled",
-    "stream_error",
+    OUTCOME_ANSWERED,
+    OUTCOME_ERROR,
+    OUTCOME_ADMISSION_REFUSED,
+    OUTCOME_CONFIGURATION_ERROR,
+    OUTCOME_INVALID_REQUEST,
+    OUTCOME_HTTP_ERROR,
+    OUTCOME_CANCELLED,
+    OUTCOME_STREAM_ERROR,
 )
 
 HONEST_EVIDENCE_STATEMENT = (
@@ -357,104 +379,84 @@ def _verify_legs(
 # ---------------------------------------------------------------------------
 
 
-def _surface_record(*, surface: str, available: bool, values=None, not_available_reason=None, notes=None) -> dict:
-    """One measurement surface's record — the E01 shape, reused verbatim."""
-    record: dict = {"measurement_surface": surface, "available": available}
-    if values is not None:
-        record["values"] = values
-    if not_available_reason is not None:
-        record["not_available_reason"] = not_available_reason
-    if notes:
-        record["notes"] = notes
-    return record
-
-
-def _b_ok_rows(rows: dict) -> list[dict]:
-    return [row for row in rows.values() if isinstance(row, dict) and row.get("status") == "ok"]
-
-
 def _c_answered_rows(rows: dict) -> list[dict]:
     """The C rows that reached an ANSWERED terminal — a cancelled or a dead
     stream carries no answer and is not an answer with an empty body."""
     return [row for row in rows.values() if isinstance(row, dict) and row.get("outcome") == "answered"]
 
 
-def _b_m1(b_rows: dict) -> dict:
-    ok = _b_ok_rows(b_rows)
-    with_sources = sum(1 for row in ok if row.get("source_documents"))
+# The doc-level-surface note both legs' M-1 records carry — one literal, not
+# two copies an edit could leave behind.
+_DOC_LEVEL_NOTE = [
+    "the E02 pair measures the doc-level surface on both legs (the retrieval backend is"
+    " held fixed) — the chunk-level anchor metrics of the E01 reference are NOT"
+    " re-measured here",
+]
+
+
+def _m1_surface(surface: str, rows: list[dict]) -> dict:
+    with_sources = sum(1 for row in rows if row.get("source_documents"))
     return _surface_record(
-        surface=B_M1_SURFACE,
+        surface=surface,
         available=True,
         values={
-            "n_rows": len(ok),
+            "n_rows": len(rows),
             "n_rows_with_source_documents": with_sources,
-            "n_rows_with_empty_source_documents": len(ok) - with_sources,
+            "n_rows_with_empty_source_documents": len(rows) - with_sources,
         },
-        notes=[
-            "the E02 pair measures the doc-level surface on both legs (the retrieval backend is"
-            " held fixed) — the chunk-level anchor metrics of the E01 reference are NOT"
-            " re-measured here",
-        ],
+        notes=_DOC_LEVEL_NOTE,
     )
 
 
+def _b_m1(b_rows: dict) -> dict:
+    return _m1_surface(B_M1_SURFACE, _b_ok_rows(b_rows))
+
+
 def _c_m1(c_rows: dict) -> dict:
-    ok = _c_answered_rows(c_rows)
-    with_sources = sum(1 for row in ok if row.get("source_documents"))
+    return _m1_surface(C_M1_SURFACE, _c_answered_rows(c_rows))
+
+
+def _m2_surface(surface: str, count_key: str, rows: list[dict]) -> dict:
     return _surface_record(
-        surface=C_M1_SURFACE,
+        surface=surface,
         available=True,
         values={
-            "n_rows": len(ok),
-            "n_rows_with_source_documents": with_sources,
-            "n_rows_with_empty_source_documents": len(ok) - with_sources,
+            count_key: len(rows),
+            "n_empty_answers": sum(1 for row in rows if not str(row.get("answer") or "").strip()),
+            "n_rows_with_source_documents": sum(1 for row in rows if row.get("source_documents")),
         },
-        notes=[
-            "the E02 pair measures the doc-level surface on both legs (the retrieval backend is"
-            " held fixed) — the chunk-level anchor metrics of the E01 reference are NOT"
-            " re-measured here",
-        ],
     )
 
 
 def _b_m2(b_rows: dict) -> dict:
-    ok = _b_ok_rows(b_rows)
-    return _surface_record(
-        surface=B_M2_SURFACE,
-        available=True,
-        values={
-            "n_ok_rows": len(ok),
-            "n_empty_answers": sum(1 for row in ok if not str(row.get("answer") or "").strip()),
-            "n_rows_with_source_documents": sum(1 for row in ok if row.get("source_documents")),
-        },
-    )
+    return _m2_surface(B_M2_SURFACE, "n_ok_rows", _b_ok_rows(b_rows))
 
 
 def _c_m2(c_rows: dict) -> dict:
-    ok = _c_answered_rows(c_rows)
-    return _surface_record(
-        surface=C_M2_SURFACE,
-        available=True,
-        values={
-            "n_answered_rows": len(ok),
-            "n_empty_answers": sum(1 for row in ok if not str(row.get("answer") or "").strip()),
-            "n_rows_with_source_documents": sum(1 for row in ok if row.get("source_documents")),
-        },
-    )
+    return _m2_surface(C_M2_SURFACE, "n_answered_rows", _c_answered_rows(c_rows))
+
+
+def _b_limit_hit(row: dict) -> bool:
+    """The B leg's limit-hit predicate — ONE home, consumed by the M-3
+    surface and the gains census alike: the marker is read on BOTH shapes the
+    vocabulary writes it to, so no surface ever calls a budget-exhausted row
+    an abstention, an answer or a failure while another calls it a limit
+    hit — one name per row, on every surface."""
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    usage = metadata.get("usage") if isinstance(metadata.get("usage"), dict) else {}
+    return row.get("abstention_reason") == LIMIT_MARKER_B or usage.get("outcome") == LIMIT_MARKER_C
+
+
+def _c_limit_hit(row: dict) -> bool:
+    """The C leg's limit-hit predicate — the census's first terminal state:
+    a row that exhausted its budget is a LIMIT HIT on every surface, whichever
+    terminal outcome it also carries, and exactly ONCE."""
+    usage = row.get("usage_record") if isinstance(row.get("usage_record"), dict) else {}
+    return usage.get("outcome") == LIMIT_MARKER_C
 
 
 def _b_m3(b_rows: dict) -> dict:
     ok = _b_ok_rows(b_rows)
-
-    def _limit_hit(row: dict) -> bool:
-        # The census's limit-hit predicate, verbatim: the marker is read on
-        # BOTH shapes the vocabulary writes it to, so M-3 never calls a
-        # budget-exhausted row an abstention while the gains census calls the
-        # same row a limit hit — one name per row, on every surface.
-        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
-        usage = metadata.get("usage") if isinstance(metadata.get("usage"), dict) else {}
-        return row.get("abstention_reason") == LIMIT_MARKER_B or usage.get("outcome") == LIMIT_MARKER_C
-
     # The census scans EVERY row and names its terminal state FIRST — the
     # marker outranks the failure flag — so the surface's classified tallies
     # carry the census's names: a marker row is n_limit_hit wherever it sits,
@@ -464,18 +466,22 @@ def _b_m3(b_rows: dict) -> dict:
         available=True,
         values={
             "n_ok_rows": len(ok),
-            "n_abstained": sum(1 for row in ok if row.get("abstained") is True and not _limit_hit(row)),
+            "n_abstained": sum(
+                1 for row in ok if row.get("abstained") is True and not _b_limit_hit(row)
+            ),
             "n_with_abstention_reason": sum(
-                1 for row in ok if row.get("abstention_reason") and not _limit_hit(row)
+                1 for row in ok if row.get("abstention_reason") and not _b_limit_hit(row)
             ),
             "n_not_abstained": sum(
-                1 for row in ok if row.get("abstained") is False and not _limit_hit(row)
+                1 for row in ok if row.get("abstained") is False and not _b_limit_hit(row)
             ),
-            "n_limit_hit": sum(1 for row in b_rows.values() if isinstance(row, dict) and _limit_hit(row)),
+            "n_limit_hit": sum(
+                1 for row in b_rows.values() if isinstance(row, dict) and _b_limit_hit(row)
+            ),
             "n_failure_rows": sum(
                 1
                 for row in b_rows.values()
-                if isinstance(row, dict) and row.get("status") == "failure" and not _limit_hit(row)
+                if isinstance(row, dict) and row.get("status") == "failure" and not _b_limit_hit(row)
             ),
         },
     )
@@ -490,15 +496,6 @@ def _c_m3(c_rows: dict) -> dict:
     never published as a zero (a zero would compare against a signed bound
     and deny the agent on a fact that was never recorded).
     """
-
-    def _limit_hit(row: dict) -> bool:
-        # The census's limit-hit predicate (the counter-metrics vocabulary's
-        # first terminal state): a row that exhausted its budget is a LIMIT
-        # HIT here exactly as it is in the gains census — whichever terminal
-        # outcome it also carries, and exactly ONCE.
-        usage = row.get("usage_record") if isinstance(row.get("usage_record"), dict) else {}
-        return usage.get("outcome") == LIMIT_MARKER_C
-
     return _surface_record(
         surface=C_M3_SURFACE,
         available=True,
@@ -507,30 +504,32 @@ def _c_m3(c_rows: dict) -> dict:
                 1
                 for row in c_rows.values()
                 if isinstance(row, dict)
-                and row.get("outcome") == "answered"
-                and not _limit_hit(row)
+                and row.get("outcome") == OUTCOME_ANSWERED
+                and not _c_limit_hit(row)
             ),
-            "n_limit_hit": sum(1 for row in c_rows.values() if isinstance(row, dict) and _limit_hit(row)),
+            "n_limit_hit": sum(
+                1 for row in c_rows.values() if isinstance(row, dict) and _c_limit_hit(row)
+            ),
             "n_cancelled_rows": sum(
                 1
                 for row in c_rows.values()
                 if isinstance(row, dict)
-                and row.get("outcome") == "cancelled"
-                and not _limit_hit(row)
+                and row.get("outcome") == OUTCOME_CANCELLED
+                and not _c_limit_hit(row)
             ),
             "n_admission_refused_rows": sum(
                 1
                 for row in c_rows.values()
                 if isinstance(row, dict)
-                and row.get("outcome") == "admission_refused"
-                and not _limit_hit(row)
+                and row.get("outcome") == OUTCOME_ADMISSION_REFUSED
+                and not _c_limit_hit(row)
             ),
             "n_error_rows": sum(
                 1
                 for row in c_rows.values()
                 if isinstance(row, dict)
                 and row.get("outcome") in FAILURE_STATES
-                and not _limit_hit(row)
+                and not _c_limit_hit(row)
             ),
         },
         notes=[
@@ -543,53 +542,30 @@ def _c_m3(c_rows: dict) -> dict:
     )
 
 
-def _latency_values(rows: dict, config: str) -> tuple[list[float], int]:
-    """The leg's wall_ms values + the count of the non-answered rows excluded
-    from them (a failed case's latency is not the answer latency)."""
-    if config == "B":
-        answered = _b_ok_rows(rows)
-        excluded = sum(
-            1 for row in rows.values() if isinstance(row, dict) and row.get("status") != "ok"
-        )
-    else:
-        answered = _c_answered_rows(rows)
-        excluded = sum(
-            1
-            for row in rows.values()
-            if isinstance(row, dict) and row.get("outcome") not in (None, "answered")
-        )
+def _latency_values(rows: dict, config: str) -> tuple[list[float], int, int]:
+    """The leg's wall_ms values + the answered-row count + the count of the
+    non-answered rows excluded from them (a failed case's latency is not the
+    answer latency). The row vocabulary is verified before this runs, so the
+    exclusion is the answered subset's complement — one arithmetic line, not
+    a second scan."""
+    answered = _b_ok_rows(rows) if config == "B" else _c_answered_rows(rows)
+    excluded = len(rows) - len(answered)
     walls = [
         float(row["wall_ms"])
         for row in answered
         if isinstance(row.get("wall_ms"), (int, float)) and not isinstance(row.get("wall_ms"), bool)
     ]
-    return walls, excluded
-
-
-def _latency_stats(values: list[float]) -> dict:
-    """min / median / max / MAD in the metric's OWN unit (milliseconds)."""
-    import capture_baseline  # local import: the capture module's median/MAD
-
-    ordered = sorted(float(value) for value in values)
-    return {
-        "n": len(ordered),
-        "min": ordered[0],
-        "median": capture_baseline.median(ordered),
-        "max": ordered[-1],
-        "mad": capture_baseline.mad(ordered),
-        "unit": "ms",
-    }
+    return walls, len(answered), excluded
 
 
 def _latency_surface(rows: dict, config: str, surface: str) -> dict:
-    walls, excluded = _latency_values(rows, config)
+    walls, n_answered, excluded = _latency_values(rows, config)
     if not walls:
         return _surface_record(
             surface=surface,
             available=False,
             not_available_reason="no answered row carries wall_ms",
         )
-    n_answered = len(_b_ok_rows(rows)) if config == "B" else len(_c_answered_rows(rows))
     return _surface_record(
         surface=surface,
         available=True,
@@ -695,23 +671,6 @@ def _c_m5(c_rows: dict) -> dict:
 # The thresholds — applied, never authored
 # ---------------------------------------------------------------------------
 
-# The comparison operators a signed bound may carry.
-OPERATORS = (">=", "<=", ">", "<", "==")
-
-
-def _normalize_operator(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    candidate = value.strip()
-    return candidate if candidate in OPERATORS else None
-
-
-def _numeric(value):
-    """The numeric value of a bound's threshold — None when it is not one."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    return None
-
 
 def _bound_records(value) -> list[dict]:
     """The signed bounds of one dimension, whatever shape the registry gave
@@ -728,15 +687,7 @@ def _bound_records(value) -> list[dict]:
         records = []
         for name, bound in sorted(metrics.items()):
             if isinstance(bound, dict):
-                operator = _normalize_operator(bound.get("operator") or bound.get("op") or bound.get("comparison"))
-                threshold = bound.get("threshold")
-                if threshold is None:
-                    threshold = bound.get("value")
-                if operator is None:
-                    if isinstance(bound.get("min"), (int, float)):
-                        operator, threshold = ">=", bound.get("min")
-                    elif isinstance(bound.get("max"), (int, float)):
-                        operator, threshold = "<=", bound.get("max")
+                operator, threshold = bound_fields(bound)
                 records.append(
                     {"metric": str(name), "operator": operator, "threshold": threshold, "shape": "metric"}
                 )
@@ -745,15 +696,7 @@ def _bound_records(value) -> list[dict]:
                     {"metric": str(name), "operator": None, "threshold": bound, "shape": "metric"}
                 )
         return records
-    operator = _normalize_operator(value.get("operator") or value.get("op") or value.get("comparison"))
-    threshold = value.get("threshold")
-    if threshold is None:
-        threshold = value.get("value")
-    if operator is None:
-        if isinstance(value.get("min"), (int, float)):
-            operator, threshold = ">=", value.get("min")
-        elif isinstance(value.get("max"), (int, float)):
-            operator, threshold = "<=", value.get("max")
+    operator, threshold = bound_fields(value)
     # A single bound names the metric it bounds — without the name it cannot
     # be looked up on any surface, and reporting it as "scoped elsewhere"
     # would blame the surface for a bound that names nothing.
@@ -766,32 +709,6 @@ def _bound_records(value) -> list[dict]:
             "shape": "single",
         }
     ]
-
-
-def _compare(operator: str, measured, threshold) -> bool | None:
-    """The comparison itself.
-
-    ``None`` means NOT COMPARABLE (a missing measurement, a non-numeric
-    threshold) — it is distinct from ``False`` (the bound was breached) and
-    the caller records it as uninterpretable, never as a failure.
-    """
-    if not isinstance(measured, (int, float)) or isinstance(measured, bool):
-        return None
-    bound = _numeric(threshold)
-    if bound is None:
-        return None
-    value = float(measured)
-    if operator == ">=":
-        return value >= bound
-    if operator == "<=":
-        return value <= bound
-    if operator == ">":
-        return value > bound
-    if operator == "<":
-        return value < bound
-    if operator == "==":
-        return value == bound
-    return None
 
 
 def _lookup_metric(values: dict, metric: str | None):
@@ -882,9 +799,11 @@ def _apply_threshold(thresholds: dict | None, code: str, surface: dict, config: 
         }
     values = surface.get("values") if surface.get("available") else None
     bounds = []
+    # The scope names a configuration — a property of the ARTIFACT, not of
+    # the bound: parsed once, outside the per-bound loop.
+    named_configurations = _scope_configuration(scope)
     for record in records:
         measured = _lookup_metric(values, record["metric"])
-        named_configurations = _scope_configuration(scope)
         if record["metric"] is None:
             outcome = THRESHOLD_UNINTERPRETABLE
             comparison = None
@@ -1017,9 +936,7 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
             # reason and the resource record), and an abstention is NOT an
             # answer: the fixed pipeline refused to answer, and counting it as
             # one inflates its coverage and can deny the agent a measured gain.
-            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
-            usage = metadata.get("usage") if isinstance(metadata.get("usage"), dict) else {}
-            if row.get("abstention_reason") == LIMIT_MARKER_B or usage.get("outcome") == LIMIT_MARKER_C:
+            if _b_limit_hit(row):
                 stats["n_limit_hit"] += 1
                 continue
             if row.get("status") == "failure":
@@ -1032,21 +949,20 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
                 stats["n_answered"] += 1
             continue
         outcome = row.get("outcome")
-        usage = row.get("usage_record") if isinstance(row.get("usage_record"), dict) else {}
         # The same order the counter-metrics vocabulary reads: the limit
         # marker first, then the deliberate refusals, then the failures — so
         # a cancelled row that exhausted its budget is a LIMIT HIT on both
         # sides of this report.
-        if usage.get("outcome") == LIMIT_MARKER_C:
+        if _c_limit_hit(row):
             stats["n_limit_hit"] += 1
             continue
-        if outcome == "cancelled":
+        if outcome == OUTCOME_CANCELLED:
             stats["n_cancelled"] += 1
             continue
-        if outcome == "admission_refused":
+        if outcome == OUTCOME_ADMISSION_REFUSED:
             stats["n_admission_refused"] += 1
             continue
-        if outcome != "answered":
+        if outcome != OUTCOME_ANSWERED:
             stats["n_failed"] += 1
             continue
         stats["n_answered"] += 1
@@ -1091,9 +1007,14 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
     # assessment-set entry is nobody's class. The exclusion is symmetric
     # across the legs, and it is named: a comparison that silently shrank is
     # a comparison a reader cannot weigh.
+    # One base-id pass per leg: every later consumer (the exclusion list, the
+    # per-class buckets) reads the map instead of re-deriving the base id per
+    # row per class.
+    b_base = {cid: base_case_id(cid) for cid in b_rows}
+    c_base = {cid: base_case_id(cid) for cid in c_rows}
     excluded_rows = {
-        "B": sorted(cid for cid in b_rows if base_case_id(cid) not in class_of),
-        "C": sorted(cid for cid in c_rows if base_case_id(cid) not in class_of),
+        "B": sorted(cid for cid in b_rows if b_base[cid] not in class_of),
+        "C": sorted(cid for cid in c_rows if c_base[cid] not in class_of),
     }
 
     per_class = {}
@@ -1104,20 +1025,24 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
         # only way a turn row lands in its case's class. Matching the raw row
         # ids would silently drop every turn row from the census and from the
         # coverage comparison.
-        b_class = {cid: row for cid, row in b_rows.items() if base_case_id(cid) in case_ids}
-        c_class = {cid: row for cid, row in c_rows.items() if base_case_id(cid) in case_ids}
+        b_class = {cid: row for cid, row in b_rows.items() if b_base[cid] in case_ids}
+        c_class = {cid: row for cid, row in c_rows.items() if c_base[cid] in case_ids}
         b_stats = _leg_class_stats(b_class, "B")
         c_stats = _leg_class_stats(c_class, "C")
         b_walls = _class_latency(b_class, "B")
         c_walls = _class_latency(c_class, "C")
+        # One stats derivation per leg per class: the stored latency block and
+        # the delta's median read the SAME derivation, never a recomputation.
+        b_latency = _latency_stats(b_walls) if b_walls else None
+        c_latency = _latency_stats(c_walls) if c_walls else None
         per_class[name] = {
             "n_cases_in_set": len(case_ids),
             "n_rows_recorded": {
                 "B": b_stats["n_rows"],
                 "C": c_stats["n_rows"],
             },
-            "B": {**b_stats, "latency": _latency_stats(b_walls) if b_walls else None},
-            "C": {**c_stats, "latency": _latency_stats(c_walls) if c_walls else None},
+            "B": {**b_stats, "latency": b_latency},
+            "C": {**c_stats, "latency": c_latency},
             "delta": {
                 "answered": c_stats["n_answered"] - b_stats["n_answered"],
                 "abstained": c_stats["n_abstained"] - b_stats["n_abstained"],
@@ -1126,9 +1051,7 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
                 "failed": c_stats["n_failed"] - b_stats["n_failed"],
                 "cancelled": c_stats["n_cancelled"] - b_stats["n_cancelled"],
                 "median_latency_ms": (
-                    _latency_stats(c_walls)["median"] - _latency_stats(b_walls)["median"]
-                    if b_walls and c_walls
-                    else None
+                    c_latency["median"] - b_latency["median"] if b_latency and c_latency else None
                 ),
             },
             "note": (
@@ -1283,8 +1206,7 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
 def e02_report_digest(report: dict) -> str:
     """The report's digest, recomputed over the body minus the embedded
     ``digest`` key — the verifiable identity a rebuild must reproduce."""
-    body = {key: value for key, value in report.items() if key != "digest"}
-    return sha256_json(body)
+    return digest_without_embedded(report)
 
 
 def _shared_metrics(b_surface: dict, c_surface: dict) -> dict:
@@ -1466,19 +1388,6 @@ def build_e02_report(
     from .e01 import M_DIMENSIONS  # the canonical dimension enumeration — one home
 
     dimensions = {}
-    # The report-level scope is read defensively on purpose: an entry the
-    # registry would never write (a null dimension, a null or non-mapping
-    # value) yields None — the shape validation in _verify_legs already
-    # refused the malformed ARTIFACTS, and this read must never crash on a
-    # shape that slips through.
-    _threshold_scope = None
-    if isinstance(thresholds, dict):
-        _m1_entry = thresholds.get("thresholds") or {}
-        if isinstance(_m1_entry, dict):
-            _m1_value = _m1_entry.get("M-1") or {}
-            if isinstance(_m1_value, dict):
-                _m1_value = _m1_value.get("value")
-                _threshold_scope = _m1_value.get("scope") if isinstance(_m1_value, dict) else None
     for code, dimension in M_DIMENSIONS.items():
         b_surface, c_surface = surfaces[code]
         dimensions[code] = {
@@ -1486,6 +1395,12 @@ def build_e02_report(
             "B": {**b_surface, "threshold": _apply_threshold(thresholds, code, b_surface, "B")},
             "C": {**c_surface, "threshold": _apply_threshold(thresholds, code, c_surface, "C")},
         }
+    # The report-level scope is the SAME scope _apply_threshold read — one
+    # parse of the artifact, not two. On every shape where the M-1 entry
+    # carries no comparable scope (absent, null entry, non-mapping value)
+    # the threshold record carries no ``scope`` key either, and ``.get``
+    # yields the same None the artifact reader would have.
+    _threshold_scope = dimensions["M-1"]["B"]["threshold"].get("scope")
 
     gains = _build_gains(entries or [], b_rows, c_rows)
 

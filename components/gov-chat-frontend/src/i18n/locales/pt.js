@@ -3333,6 +3333,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ membro(s) — a leitura é limitada',
         noMemberships:
           'Ainda sem associação — sem nenhuma, o contexto resolve para toda a implantação (o contexto aberto).',
         preview: 'Pré-visualizar o que isto alcança',

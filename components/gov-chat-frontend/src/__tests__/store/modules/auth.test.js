@@ -92,6 +92,18 @@ describe('Vuex Auth Module', () => {
       expect(authModule.getters.currentUser(state)).toEqual({ name: 'Test' });
     });
 
+    // #2061 phase 4: the OKF-superadmin predicate the Lab's context surfaces
+    // gate on — the role OR the wildcard scope (both populations the okf
+    // server serves).
+    it('isOkfSuperadmin matches the role OR the wildcard scope', () => {
+      const g = authModule.getters.isOkfSuperadmin;
+      expect(g(createState())).toBe(false);
+      expect(g({ user: { roles: [], okf_scopes: [] } })).toBe(false);
+      expect(g({ user: { roles: ['tools-admin'], okf_scopes: [] } })).toBe(true);
+      expect(g({ user: { roles: [], okf_scopes: ['okf:*:*:admin'] } })).toBe(true);
+      expect(g({ user: { roles: ['other'], okf_scopes: ['okf:t:r-1:read'] } })).toBe(false);
+    });
+
     it('accessToken returns state.accessToken', () => {
       const state = createState();
       expect(authModule.getters.accessToken(state)).toBeNull();

@@ -3348,6 +3348,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ membre(s) — la lecture est plafonnée',
         noMemberships:
           'Aucune appartenance pour l’instant — sans aucune, le contexte se résout au déploiement entier (le contexte ouvert).',
         preview: 'Prévisualiser ce que cela atteint',

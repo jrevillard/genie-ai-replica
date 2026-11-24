@@ -3355,6 +3355,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ Mitglied(er) — der Lesevorgang ist gedeckelt',
         noMemberships:
           'Noch keine Mitgliedschaft — ohne welche löst sich der Kontext zur gesamten Bereitstellung auf (der offene Kontext).',
         preview: 'Vorschau, was dies erreicht',

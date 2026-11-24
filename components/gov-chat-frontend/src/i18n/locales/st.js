@@ -3331,6 +3331,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ litho — ho koaletsoa ho bala',
         noMemberships:
           'Ha ho bomamelistene hajoale — ntle le eona, tikollo e rarolla ho tsamaiso eohle (tikollo ea buloang).',
         preview: 'Bonahatsa pele hore e fihla kae',

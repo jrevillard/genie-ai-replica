@@ -3278,6 +3278,7 @@ export default {
         remove: 'นำ {n} ออก',
         grants: '{n} สิทธิ์',
         members: '{n} สมาชิก',
+        membersTruncated: '{n}+ สมาชิก — การอ่านถูกจำกัด',
         noMemberships: 'ยังไม่มีการเป็นสมาชิก — หากไม่มี บริบทจะแก้ไขเป็นทั้งระบบ (บริบทเปิด)',
         preview: 'ดูว่าครอบคลุมอะไร',
         previewRepos: 'ครอบคลุม',

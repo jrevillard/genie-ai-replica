@@ -105,7 +105,7 @@ describe("#2061 E-5: the composer's source — the deployment's groups", () => {
     keycloakAccess.groupMembers.mockClear();
   });
 
-  test('a group carries its GRANTS and its MEMBERS — the composer shows both', async () => {
+  test('a group carries its GRANTS and its MEMBER COUNT — the composer shows both', async () => {
     const groups = await evalCtx.listGroups('');
 
     const a = groups.find((g) => g.name === 'group-a');
@@ -114,8 +114,11 @@ describe("#2061 E-5: the composer's source — the deployment's groups", () => {
     // tools-admin marker is not a scope, it is the privileged flag.
     expect(a.grants).toEqual(['okf:t:r-a:read']);
     expect(a.privileged).toBe(false);
-    // The members are the people the membership stands for.
-    expect(a.members).toEqual(['alice']);
+    // The members cross the boundary as a COUNT (the composer renders
+    // numbers, not names — a 1000-member group costs one integer, not an
+    // array of sorted usernames).
+    expect(a.member_count).toBe(1);
+    expect(a.members).toBeUndefined();
   });
 
   test('a group that carries tools-admin is marked privileged, and the role is not a grant', async () => {
@@ -142,9 +145,20 @@ describe("#2061 E-5: the composer's source — the deployment's groups", () => {
     const groups = await evalCtx.listGroups('');
     const a = groups.find((g) => g.name === 'group-a');
     expect(a.members_truncated).toBe(true);
-    expect(a.members).toEqual(['alice']);
+    expect(a.member_count).toBe(1);
     const b = groups.find((g) => g.name === 'group-b');
     expect(b.members_truncated).toBe(false);
+  });
+
+  test('a group whose members cannot be read still composes — the grants decide the reach', async () => {
+    keycloakAccess.groupMembers.mockRejectedValueOnce(new Error('realm read failed'));
+    const groups = await evalCtx.listGroups('');
+    const a = groups.find((g) => g.name === 'group-a');
+    // The read failed; the membership is still offered, with a zero count
+    // and NO truncation claim (an unknown population is not a truncated one).
+    expect(a.grants).toEqual(['okf:t:r-a:read']);
+    expect(a.member_count).toBe(0);
+    expect(a.members_truncated).toBe(false);
   });
 });
 

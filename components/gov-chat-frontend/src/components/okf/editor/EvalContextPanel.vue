@@ -149,22 +149,24 @@
                 String((m.grants || []).length)
               )
             }}
-            <template v-if="(m.members || []).length">
+            <template v-if="m.member_count">
               ·
-              <!-- A paged membership read that hit its cap says so: "200+"
-                   never lets a truncation read as the whole population. -->
+              <!-- A paged membership read that hit its cap says so in its
+                   OWN sentence — per-locale phrasable, never a locale-blind
+                   "+" glued to a number. -->
               {{
-                translate('okf.testingLab.contexts.members', '{n} member(s)').replace(
-                  '{n}',
-                  String(m.members.length) + (m.members_truncated ? '+' : '')
-                )
+                m.members_truncated
+                  ? translate('okf.testingLab.contexts.membersTruncated', '{n}+ member(s) — the read is capped', {
+                      n: String(m.member_count)
+                    })
+                  : translate('okf.testingLab.contexts.members', '{n} member(s)', { n: String(m.member_count) })
               }}
             </template>
           </span>
           <DsButton
             variant="ghost"
             small
-            :aria-label="translate('okf.testingLab.contexts.remove', 'Remove').replace('{n}', m.name)"
+            :aria-label="translate('okf.testingLab.contexts.remove', 'Remove {n}', { n: m.name })"
             @click="onRemoveMembership(m.name)"
           >
             ×
@@ -232,7 +234,7 @@ import DsCombobox from '@/components/ds/Combobox.vue';
 import DsInput from '@/components/ds/Input.vue';
 import DsSpinner from '@/components/ds/Spinner.vue';
 import DsStatusTag from '@/components/ds/StatusTag.vue';
-import translateMixin from '@/mixins/translateMixin';
+import evalContextSurfaceMixin from '@/mixins/evalContextSurfaceMixin';
 import evalContextService from '@/services/evalContextService';
 
 /**
@@ -243,7 +245,7 @@ import evalContextService from '@/services/evalContextService';
 export default {
   name: 'EvalContextPanel',
   components: { DsButton, DsCombobox, DsInput, DsSpinner, DsStatusTag },
-  mixins: [translateMixin],
+  mixins: [evalContextSurfaceMixin],
   data() {
     return {
       contexts: [],
@@ -259,24 +261,21 @@ export default {
     };
   },
   computed: {
-    /** The combobox's options: the realm's groups, minus the chosen ones. */
+    /** The combobox's options: the realm's groups, minus the chosen ones.
+     *  DsCombobox reads only label/value — the grants and member counts
+     *  render on the CHOSEN rows, not in the dropdown. */
     groupOptions() {
       const chosen = new Set(this.memberships.map((m) => m.name));
-      return this.groups
-        .filter((g) => !chosen.has(g.name))
-        .map((g) => ({
-          value: g.name,
-          label: g.name,
-          grants: (g.grants || []).length,
-          members: (g.members || []).length
-        }));
+      return this.groups.filter((g) => !chosen.has(g.name)).map((g) => ({ value: g.name, label: g.name }));
     }
   },
   async mounted() {
     await this.loadAll();
   },
   methods: {
-    /** The catalogue + the composer's source, in one pass. */
+    /** The catalogue + the composer's source, in one pass (mount only —
+     *  the groups read fans out server-side, so a create or a refresh must
+     *  not re-trigger it: groups do not change when contexts do). */
     async loadAll() {
       this.loading = true;
       this.error = '';
@@ -294,11 +293,13 @@ export default {
       }
     },
 
-    /** The server's envelope, mapped to one honest sentence. */
-    errorText(err) {
-      const data = err && err.data;
-      if (data && data.message) return data.message;
-      return (err && err.message) || 'the request failed';
+    /** Reload ONLY the catalogue (after a write changed it). */
+    async loadContexts() {
+      try {
+        this.contexts = await evalContextService.listContexts();
+      } catch (err) {
+        this.error = this.errorText(err);
+      }
     },
 
     onAddMembership(name) {
@@ -307,7 +308,7 @@ export default {
       if (!ref) return;
       if (this.memberships.some((m) => m.name === ref)) return;
       const found = this.groups.find((g) => g.name === ref);
-      this.memberships.push(found ? { ...found } : { name: ref, grants: [], members: [] });
+      this.memberships.push(found ? { ...found } : { name: ref, grants: [], member_count: 0 });
       this.preview = null;
     },
 
@@ -333,7 +334,9 @@ export default {
       }
     },
 
-    /** CREATE: the server resolves, freezes and audits it. */
+    /** CREATE: the server resolves, freezes and audits it. Only the
+     *  CATALOGUE changed — the groups list is untouched, so it is not
+     *  re-fetched (its read is the expensive one). */
     async onCreate() {
       this.busy = true;
       this.error = '';
@@ -346,7 +349,8 @@ export default {
         this.name = '';
         this.memberships = [];
         this.preview = null;
-        await this.loadAll();
+        evalContextService.invalidateContexts();
+        await this.loadContexts();
         this.note = this.translate('okf.testingLab.contexts.created', 'The context was created and frozen.');
         if (created && created.name) this.note += ` ${created.name}`;
       } catch (err) {
@@ -363,7 +367,8 @@ export default {
       this.note = '';
       try {
         await evalContextService.refreshContext(c._key);
-        await this.loadAll();
+        evalContextService.invalidateContexts();
+        await this.loadContexts();
         this.note = this.translate('okf.testingLab.contexts.refreshed', 'The context was re-resolved.');
       } catch (err) {
         this.error = this.errorText(err);

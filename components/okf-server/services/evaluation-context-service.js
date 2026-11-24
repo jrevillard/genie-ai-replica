@@ -40,6 +40,8 @@ const keycloakAccess = require('./keycloak-access-service');
 const { writeAudit } = require('./audit-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
+// The ONE worker-pool implementation (new callers require it).
+const { runPool } = require('./run-pool');
 
 const COLLECTION = 'okf_evaluation_contexts';
 const SUPERADMIN_REALM_ROLE = 'tools-admin';
@@ -72,6 +74,32 @@ async function ensureCollection(db) {
     }
   }
   return col;
+}
+
+/**
+ * The STORED resolution projection — ONE field list for the create, the
+ * refresh and the preview (the preview's whole job is showing exactly what
+ * the create would freeze; a field list that lives in three places drifts
+ * to two the next time the resolution grows one).
+ */
+function resolvedSnapshot(resolved) {
+  return {
+    // The EFFECTIVE scopes — the union the authority actually resolved
+    // from — not the input list. A context that names only groups has an
+    // empty INPUT scope list, and storing that alone would under-report
+    // the principal the snapshot was measured against.
+    scopes: resolved.scopes,
+    graph_names: resolved.graph_names,
+    repos: resolved.repos,
+    scope_mode: resolved.scope_mode,
+    resolved_at: resolved.resolved_at,
+    hash: resolved.hash,
+    // Whether THIS resolution is the open posture. The snapshot records it
+    // because the question "is this the open context?" is asked later, by a
+    // gate that reads a STORED document — and an answer that lives only in
+    // memory can never satisfy a stored gate.
+    open_context: resolved.open_context
+  };
 }
 
 /**
@@ -357,23 +385,7 @@ async function createContext(payload = {}, opts = {}) {
     principal_refs: input.principal_refs,
     tenant: input.tenant,
     filters: input.filters,
-    resolved: {
-      // The EFFECTIVE scopes — the union the authority actually resolved
-      // from — not the input list. A context that names only groups has an
-      // empty INPUT scope list, and storing that alone would under-report
-      // the principal the snapshot was measured against.
-      scopes: resolved.scopes,
-      graph_names: resolved.graph_names,
-      repos: resolved.repos,
-      scope_mode: resolved.scope_mode,
-      resolved_at: resolved.resolved_at,
-      hash: resolved.hash,
-      // Whether THIS resolution is the open posture. The snapshot records it
-      // because the question "is this the open context?" is asked later, by a
-      // gate that reads a STORED document — and an answer that lives only in
-      // memory can never satisfy a stored gate.
-      open_context: resolved.open_context
-    },
+    resolved: resolvedSnapshot(resolved),
     warnings,
     version: 1,
     // The snapshot is immutable: the ONLY way to change what a context
@@ -449,22 +461,28 @@ async function listGroups(term = '') {
   const groups = await keycloakAccess.searchGroups(term, 100);
   // Per-group enrichment is TWO Keycloak round-trips (roles + members); a
   // serial loop over a ~100-group realm is ~200 sequential calls, each with
-  // its own timeout. A small worker pool keeps the fan-out polite without
-  // serializing it — the pool preserves nothing about ORDER, so the realm's
-  // search order is re-applied at the end.
-  const CONCURRENCY = 8;
-  const queue = [...(groups || [])];
-  const enriched = [];
-  const enrichOne = async (g) => {
+  // its own timeout. runPool (the one implementation) keeps the fan-out
+  // polite without serializing it, and preserves result positions. The
+  // composer renders COUNTS, not member names, so the members cross the
+  // boundary as `member_count` (+ the truncation flag), never as arrays.
+  return runPool(groups || [], 8, async (g) => {
+    // The two reads are independent — overlap them rather than paying the
+    // members read's latency after the roles read's.
+    const [rolesOrError, membersOrError] = await Promise.all([
+      keycloakAccess.groupRealmRoles(g.id).catch((err) => {
+        logger.warn('eval_context.group_grants_unreadable', { group: g.name, error: err.message });
+        return null;
+      }),
+      keycloakAccess.groupMembers(g.id).catch((err) => {
+        // A group whose members cannot be read is still a membership an
+        // operator may compose — it is the GRANTS that decide what it reaches.
+        logger.warn('eval_context.group_members_unreadable', { group: g.name, error: err.message });
+        return null;
+      })
+    ]);
     const grants = [];
     let privileged = false;
-    let roles = [];
-    try {
-      roles = await keycloakAccess.groupRealmRoles(g.id);
-    } catch (err) {
-      logger.warn('eval_context.group_grants_unreadable', { group: g.name, error: err.message });
-    }
-    for (const role of roles || []) {
+    for (const role of rolesOrError || []) {
       const name = role && role.name;
       if (!name) continue;
       if (name === SUPERADMIN_REALM_ROLE) {
@@ -475,34 +493,17 @@ async function listGroups(term = '') {
       // exactly as it would in a token.
       if (parseOkfScope(name)) grants.push(name);
     }
-    let members = [];
-    let membersTruncated = false;
-    try {
-      const raw = await keycloakAccess.groupMembers(g.id);
-      members = ((raw && raw.members) || []).map((u) => u.username).filter(Boolean);
-      membersTruncated = Boolean(raw && raw.truncated);
-    } catch (err) {
-      // A group whose members cannot be read is still a membership an
-      // operator may compose — it is the GRANTS that decide what it reaches.
-      logger.warn('eval_context.group_members_unreadable', { group: g.name, error: err.message });
-    }
-    enriched.push({
+    const raw = membersOrError;
+    const memberNames = ((raw && raw.members) || []).map((u) => u.username).filter(Boolean);
+    return {
       id: g.id,
       name: g.name,
       grants: grants.sort(),
       privileged,
-      members: members.sort(),
-      members_truncated: membersTruncated
-    });
-  };
-  const workers = Array.from({ length: Math.min(CONCURRENCY, Math.max(queue.length, 1)) }, () =>
-    (async () => {
-      for (let g = queue.shift(); g; g = queue.shift()) await enrichOne(g);
-    })()
-  );
-  await Promise.all(workers);
-  const byId = new Map(enriched.map((r) => [r.id, r]));
-  return (groups || []).map((g) => byId.get(g.id)).filter(Boolean);
+      member_count: memberNames.length,
+      members_truncated: Boolean(raw && raw.truncated)
+    };
+  });
 }
 
 /** READ one context. */
@@ -563,15 +564,7 @@ async function refreshContext(id, opts = {}) {
   }
   const next = {
     ...doc,
-    resolved: {
-      scopes: resolved.scopes,
-      graph_names: resolved.graph_names,
-      repos: resolved.repos,
-      scope_mode: resolved.scope_mode,
-      resolved_at: resolved.resolved_at,
-      hash: resolved.hash,
-      open_context: resolved.open_context
-    },
+    resolved: resolvedSnapshot(resolved),
     warnings: resolved.warnings,
     version: (doc.version || 1) + 1,
     refreshed_at: new Date().toISOString(),

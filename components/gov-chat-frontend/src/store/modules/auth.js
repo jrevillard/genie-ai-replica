@@ -75,6 +75,17 @@ const getters = {
   isAuthenticated: (state) => state.isAuthenticated,
   currentUser: (state) => state.user,
   accessToken: (state) => state.accessToken,
+  /**
+   * #2061 phase 4: is this caller an OKF superadmin? The SAME predicate the
+   * okf-server's isSuperadminCaller enforces — the tools-admin realm role OR
+   * the wildcard okf:*:*:admin scope. Presentation gates consume this; the
+   * server still enforces every read on its own.
+   */
+  isOkfSuperadmin: (state) => {
+    const roles = (state.user && state.user.roles) || [];
+    const scopes = (state.user && state.user.okf_scopes) || [];
+    return roles.includes('tools-admin') || scopes.includes('okf:*:*:admin');
+  },
   authError: (state) => {
     // Backward compatibility: return message string if error is object
     if (state.error && typeof state.error === 'object') {

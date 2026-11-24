@@ -608,7 +608,7 @@
                here; a suite minted without one says THAT (the open context),
                because "minted for the deployment" and "minted for nobody" are
                different claims. -->
-          <p v-if="suiteBindingLabel" class="okf-headtest__binding" role="status">{{ suiteBindingLabel }}</p>
+          <DsStatusTag v-if="suiteBindingLabel" small>{{ suiteBindingLabel }}</DsStatusTag>
           <div class="okf-headtest__pane-actions">
             <DsButton variant="secondary" small :disabled="busy !== null" @click="onRunSuite">
               {{ translate('okf.testingLab.suites.run', 'Run all queries') }}
@@ -771,35 +771,13 @@
             <!-- #2061 phase 4 (E-5): the BOUNDARY READOUT — the evidence a
                  scoped evaluation exists to produce. "Held" is the scope
                  holding; "breached" is the group seeing content it must
-                 not. NULL is not "held": the boundary was NOT MEASURED. -->
-            <span v-if="lastRunSummary.boundary" class="okf-headtest__boundary">
-              {{ translate('okf.testingLab.suites.boundary', 'Scope boundary') }}:
-              <strong>{{
-                translate('okf.testingLab.suites.boundaryHeld', '{held} held').replace(
-                  '{held}',
-                  String(lastRunSummary.boundary.held || 0)
-                )
-              }}</strong>
-              ·
-              {{
-                translate('okf.testingLab.suites.boundaryBreached', '{n} breached').replace(
-                  '{n}',
-                  String(lastRunSummary.boundary.breached || 0)
-                )
-              }}
-              <!-- The HOLE: boundary rows that errored are neither held nor
-                   breached — a partial measurement must say so, or "2 held ·
-                   0 breached" reads as a clean verdict over 5 rows. -->
-              <em
-                v-if="Number(lastRunSummary.boundary.evaluatable) < Number(lastRunSummary.boundary.total)"
-                class="okf-headtest__muted"
-              >
-                {{
-                  translate('okf.testingLab.suites.boundaryPartial', '({measured} of {total} measured)')
-                    .replace('{measured}', String(lastRunSummary.boundary.evaluatable || 0))
-                    .replace('{total}', String(lastRunSummary.boundary.total || 0))
-                }}
-              </em>
+                 not. NULL is not "held": the boundary was NOT MEASURED.
+                 The labels are computeds (boundaryLabel/boundaryPartialLabel):
+                 the partial-hole rule is a fact about the data, testable
+                 without mounting the DOM. -->
+            <span v-if="lastRunSummary.boundary">
+              {{ boundaryLabel }}
+              <em v-if="boundaryPartialLabel" class="okf-headtest__muted">{{ boundaryPartialLabel }}</em>
             </span>
             <span v-else-if="lastRunSummary" class="okf-headtest__muted">
               {{ translate('okf.testingLab.suites.boundaryNotMeasured', 'Scope boundary: not measured') }}
@@ -1457,7 +1435,15 @@
            one is measured over that principal's scope, never the whole
            deployment. Self-contained: the panel owns the catalogue, the
            composer and the preview. -->
-      <div v-show="tab === 'contexts'" class="okf-headtest__pane" data-test-id="okf-lab-pane-contexts">
+      <!-- v-if, not just v-show: a non-superadmin must not MOUNT the composer
+           at all — its loads would be two guaranteed 403s per dialog open,
+           churning error state inside a pane they can never see. -->
+      <div
+        v-if="canUseContexts"
+        v-show="tab === 'contexts'"
+        class="okf-headtest__pane"
+        data-test-id="okf-lab-pane-contexts"
+      >
         <EvalContextPanel />
       </div>
       <!-- 1-8g-t (David): suite deletion MUST be confirmed with a dialog —
@@ -1511,6 +1497,7 @@ import DsSelect from '../../ds/Select.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsTag from '../../ds/Tag.vue';
 import DsSpinner from '../../ds/Spinner.vue';
+import DsStatusTag from '../../ds/StatusTag.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsProgress from '../../ds/Progress.vue';
 // #2061 phase 4 (E-5): the Evaluation Context surfaces — the composer tab
@@ -1540,6 +1527,7 @@ export default {
     DsPill,
     DsTag,
     DsSpinner,
+    DsStatusTag,
     DsInfoTip,
     DsProgress,
     OkfRagasPanel,
@@ -1988,6 +1976,29 @@ export default {
         return this.translate('okf.testingLab.suites.noCompetitors', 'n/a — no competing heads yet');
       }
       return `${s.negative_passed}/${s.negative_evaluatable}`;
+    },
+    /** #2061 phase 4 (E-5): the boundary verdict as ONE sentence — held and
+     *  breached counts over what the boundary actually measured. */
+    boundaryLabel() {
+      const b = this.lastRunSummary && this.lastRunSummary.boundary;
+      if (!b) return '';
+      const held = this.translate('okf.testingLab.suites.boundaryHeld', '{held} held', { held: String(b.held || 0) });
+      const breached = this.translate('okf.testingLab.suites.boundaryBreached', '{n} breached', {
+        n: String(b.breached || 0)
+      });
+      return `${this.translate('okf.testingLab.suites.boundary', 'Scope boundary')}: ${held} · ${breached}`;
+    },
+    /** The HOLE: boundary rows that errored are neither held nor breached —
+     *  a partial measurement must say so, or "2 held · 0 breached" reads as
+     *  a clean verdict over 5 rows. Empty string when fully measured. */
+    boundaryPartialLabel() {
+      const b = this.lastRunSummary && this.lastRunSummary.boundary;
+      if (!b) return '';
+      if (!(Number(b.evaluatable) < Number(b.total))) return '';
+      return this.translate('okf.testingLab.suites.boundaryPartial', '({measured} of {total} measured)', {
+        measured: String(b.evaluatable || 0),
+        total: String(b.total || 0)
+      });
     },
     /** #2061 phase 1c (F7): the positives the run lost with NO winner at
      * all — the answer vanished, and the pass rate alone cannot show it. */
@@ -3876,21 +3887,6 @@ export default {
 }
 .okf-headtest__steal {
   color: var(--danger);
-}
-/* #2061 E-5: the binding badge rides the summary strip — a bordered pill
-   like the run-status badges, so WHICH principal was measured reads as a
-   fact, not body text. The boundary readout keeps the summary's own
-   weight; its partial-hole note is muted. */
-.okf-headtest__binding {
-  display: inline-block;
-  padding: 2px var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--fg);
-}
-.okf-headtest__boundary {
-  font-size: var(--text-sm);
 }
 /* #2061 phase 1d (E-3) — the pair-level matrix. It sits BESIDE the pass
    rate, not in place of it: the aggregate hides the pairs, and a pair

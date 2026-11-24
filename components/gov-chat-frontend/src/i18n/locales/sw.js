@@ -3314,6 +3314,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ wanachama — usomaji umekomezwa',
         noMemberships:
           'Hakuna uanachama bado — bila wowote, muktadha unatatuliwa kuwa upelekaji mzima (muktadha wazi).',
         preview: 'Onyesha awali inachofikia',

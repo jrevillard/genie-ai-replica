@@ -450,7 +450,7 @@
            measures) and, once a run lands, the attribution the carrier
            enabled (which repository answered; how often outside the carrier). -->
       <div class="okf-ragas__evidence">
-        <span class="okf-ragas__binding">{{ suiteBindingLabel }}</span>
+        <DsPill variant="neutral">{{ suiteBindingLabel }}</DsPill>
         <span v-if="runAttribution" class="okf-ragas__attribution">
           {{ translate('okf.ragas.results.attributionBy', 'Answered by') }}: {{ attributionByLabel }} ·
           {{ attributionOutsideLabel }}
@@ -3078,9 +3078,9 @@ export default {
   margin-bottom: 10px;
 }
 
-/* #2061 E-5: the evidence line — the binding badge (a small status pill,
-   like the summary pills above it) and the attribution sentence beside
-   it, muted like the other secondary facts. */
+/* #2061 E-5: the evidence line — the binding badge renders as DsPill (the
+   same status pill the results header uses); the attribution sentence sits
+   beside it, muted like the other secondary facts. */
 .okf-ragas__evidence {
   display: flex;
   align-items: baseline;
@@ -3088,15 +3088,6 @@ export default {
   flex-wrap: wrap;
   margin-bottom: var(--space-sm);
   font-size: var(--text-sm);
-}
-
-.okf-ragas__binding {
-  display: inline-block;
-  padding: 2px var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--fg);
 }
 
 .okf-ragas__attribution {

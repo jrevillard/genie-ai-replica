@@ -3269,6 +3269,7 @@ export default {
         remove: 'إزالة {n}',
         grants: '{n} صلاحية',
         members: '{n} عضو',
+        membersTruncated: '{n}+ عضوًا — القراءة محدودة',
         noMemberships: 'لا عضوية بعد — بدون عضويات يُحلّ السياق إلى كامل النشر (السياق المفتوح).',
         preview: 'اعرض ما يصل إليه',
         previewRepos: 'يصل إلى',

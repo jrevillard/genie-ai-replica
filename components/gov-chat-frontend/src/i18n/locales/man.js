@@ -3271,6 +3271,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ memberolu — kanko dong gbe',
         noMemberships:
           'Uwanama si men na — a ti bɛɛ a ma, kontextoo be a tarandi deploymentoo bɛɛ la (kontext a buka).',
         preview: 'A ye fin ye min be se',

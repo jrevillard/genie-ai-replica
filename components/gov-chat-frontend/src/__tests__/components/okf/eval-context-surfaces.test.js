@@ -27,9 +27,9 @@ jest.mock('@/services/evalContextService', () => ({
   __esModule: true,
   default: {
     listContexts: jest.fn(),
-    getContext: jest.fn(),
     createContext: jest.fn(),
     refreshContext: jest.fn(),
+    invalidateContexts: jest.fn(),
     listGroups: jest.fn(),
     previewContext: jest.fn()
   }
@@ -59,8 +59,22 @@ const CONTEXTS = [
 ];
 
 const GROUPS = [
-  { id: 'g-a', name: 'group-a', grants: ['okf:t:r-1:read'], members: ['alice'], privileged: false },
-  { id: 'g-b', name: 'group-b', grants: ['okf:t:r-2:read'], members: ['bob'], privileged: false }
+  {
+    id: 'g-a',
+    name: 'group-a',
+    grants: ['okf:t:r-1:read'],
+    member_count: 1,
+    members_truncated: false,
+    privileged: false
+  },
+  {
+    id: 'g-b',
+    name: 'group-b',
+    grants: ['okf:t:r-2:read'],
+    member_count: 1,
+    members_truncated: false,
+    privileged: false
+  }
 ];
 
 describe('#2061 E-5: the picker names the context a suite is minted for', () => {
@@ -214,6 +228,7 @@ describe('#2061 E-5: the client maps every call to its route', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    realClient.invalidateContexts();
   });
 
   test('the catalogue reads the items envelope', async () => {
@@ -229,11 +244,7 @@ describe('#2061 E-5: the client maps every call to its route', () => {
     await expect(realClient.listGroups('')).resolves.toEqual([]);
   });
 
-  test('one context, create and refresh carry the id and the payload verbatim', async () => {
-    httpService.get.mockResolvedValue({ data: CONTEXTS[0] });
-    await realClient.getContext('ec-1');
-    expect(httpService.get).toHaveBeenCalledWith('/okf/eval-contexts/ec-1');
-
+  test('create and refresh carry the id and the payload verbatim', async () => {
     httpService.post.mockResolvedValue({ data: { _key: 'ec-2' } });
     await realClient.createContext({ name: 'n', principal_refs: ['g'] });
     expect(httpService.post).toHaveBeenCalledWith('/okf/eval-contexts', { name: 'n', principal_refs: ['g'] });
@@ -241,6 +252,19 @@ describe('#2061 E-5: the client maps every call to its route', () => {
     await realClient.refreshContext('ec 1');
     // the id is encoded — a space cannot break the path
     expect(httpService.post).toHaveBeenCalledWith('/okf/eval-contexts/ec%201/refresh');
+  });
+
+  test('the catalogue is memoised between the Lab surfaces, and a write invalidates it', async () => {
+    httpService.get.mockResolvedValue({ data: { items: CONTEXTS } });
+    await realClient.listContexts();
+    await realClient.listContexts();
+    // Two consumers (picker + composer) — ONE read: the Lab renders three
+    // catalogue-hungry surfaces behind one fetch.
+    expect(httpService.get).toHaveBeenCalledTimes(1);
+
+    realClient.invalidateContexts();
+    await realClient.listContexts();
+    expect(httpService.get).toHaveBeenCalledTimes(2);
   });
 
   test('the groups search carries the term; the preview posts the memberships', async () => {
@@ -258,11 +282,16 @@ describe('#2061 E-5: the Lab gates the context surfaces on the superadmin role',
   const OkfTestingLabDialog = require('@/components/okf/editor/TestingLabDialog.vue').default;
 
   function mountLab(user) {
+    // The gate consumes the auth store's isOkfSuperadmin getter (the
+    // role-OR-wildcard predicate) — mirror it from the fixture user.
+    const isOkfSuperadmin = Boolean(
+      user && ((user.roles || []).includes('tools-admin') || (user.okf_scopes || []).includes('okf:*:*:admin'))
+    );
     return mount(OkfTestingLabDialog, {
       global: {
         mocks: {
           $store: {
-            getters: { currentUser: user || null },
+            getters: { currentUser: user || null, isOkfSuperadmin },
             commit() {},
             dispatch: jest.fn().mockResolvedValue({ ok: true, runs: [] })
           }
@@ -321,7 +350,8 @@ describe('#2061 E-5: the Lab gates the context surfaces on the superadmin role',
           id: 'ec-1',
           name: 'ministry-a readers',
           version: 2,
-          resolved: { repos: [{ repo_id: 'r-1' }, { repo_id: 'r-2' }] }
+          // The server's ONE frozen-snapshot shape: repos flat.
+          repos: [{ repo_id: 'r-1' }, { repo_id: 'r-2' }]
         }
       }
     };

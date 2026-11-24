@@ -1859,6 +1859,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ member(s) — the read is capped',
         noMemberships: 'No membership yet — with none, the context resolves to the deployment (the open context).',
         preview: 'Preview what this reaches',
         previewRepos: 'Reaches',

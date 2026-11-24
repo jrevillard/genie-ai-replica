@@ -3317,6 +3317,7 @@ export default {
         remove: 'Remove {n}',
         grants: '{n} grant(s)',
         members: '{n} member(s)',
+        membersTruncated: '{n}+ anggota — pembacaan dibatasi',
         noMemberships:
           'Belum ada keanggotaan — tanpa keanggotaan apa pun, konteks menyelesaikan ke seluruh deployment (konteks terbuka).',
         preview: 'Pratinjau jangkauannya',

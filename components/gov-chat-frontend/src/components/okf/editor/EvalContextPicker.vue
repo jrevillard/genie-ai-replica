@@ -39,13 +39,13 @@
 
 <script>
 import DsSelect from '@/components/ds/Select.vue';
-import translateMixin from '@/mixins/translateMixin';
+import evalContextSurfaceMixin from '@/mixins/evalContextSurfaceMixin';
 import evalContextService from '@/services/evalContextService';
 
 export default {
   name: 'EvalContextPicker',
   components: { DsSelect },
-  mixins: [translateMixin],
+  mixins: [evalContextSurfaceMixin],
   props: {
     modelValue: {
       type: String,
@@ -76,17 +76,16 @@ export default {
       try {
         this.contexts = await evalContextService.listContexts();
       } catch (err) {
-        const data = err && err.data;
-        this.error = (data && data.message) || (err && err.message) || 'the contexts could not be read';
+        this.error = this.errorText(err, 'the contexts could not be read');
       }
     },
 
     /** "ministry-a readers — v2 · 13 repositories": the name, the version
-     *  and the reach. A name alone says nothing about what is measured. */
+     *  and the reach — the SAME derivation the binding badge uses, so the
+     *  two surfaces cannot disagree. */
     label(c) {
-      const repos = ((c.resolved && c.resolved.repos) || []).length;
-      const version = c.version || 1;
-      return `${c.name} — v${version} · ${repos} ${this.translate('okf.testingLab.contexts.reposShort', 'repos')}`;
+      const reach = this.contextReach(c);
+      return `${c.name} — v${reach.version} · ${reach.repos} ${this.translate('okf.testingLab.contexts.reposShort', 'repos')}`;
     }
   }
 };

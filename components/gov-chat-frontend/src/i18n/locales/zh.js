@@ -3218,6 +3218,7 @@ export default {
         remove: '移除 {n}',
         grants: '{n} 项授权',
         members: '{n} 名成员',
+        membersTruncated: '{n}+ 位成员 — 读取已封顶',
         noMemberships: '尚无成员关系——没有成员关系时，上下文解析为整个部署（开放上下文）。',
         preview: '预览其覆盖范围',
         previewRepos: '覆盖',

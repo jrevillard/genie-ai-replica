@@ -99,7 +99,7 @@ from protocol.drivers import (  # noqa: E402
 from protocol.coexistence import CoexistenceRefusal, build_coexistence_report  # noqa: E402
 from protocol.e01 import E01Refusal, build_e01_report  # noqa: E402
 from protocol.e02 import E02Refusal, build_e02_report  # noqa: E402
-from protocol.evalset import SetValidationError, load_set  # noqa: E402
+from protocol.evalset import SetValidationError, coverage_census, load_set  # noqa: E402
 from protocol.findings import build_findings_report, report_digest  # noqa: E402
 from protocol.gate import GateRefusal, check_gated_run  # noqa: E402
 from protocol.manifest import (  # noqa: E402
@@ -290,6 +290,11 @@ def cmd_reference(args: argparse.Namespace) -> int:
         Path(args.out_dir), "A", entries, result.get("rows") or {}, absent_rows="skipped"
     )
     _print_findings_summary(report)
+    census = coverage_census(entries)
+    print(
+        f"reference run: coverage {census['n_evaluable']}/{census['n_cases']} case(s) evaluable — "
+        + ", ".join(f"{surface} {count}" for surface, count in census["by_surface"].items())
+    )
     print(f"reference run: report {result['report_path']}")
     print(f"reference manifest: {path}")
     print(f"findings report: {report_path}")
@@ -470,6 +475,12 @@ def cmd_capture_a(args: argparse.Namespace) -> int:
     print(f"captured rows: {result['rows_path']}")
     stamp = result["capture"]
     print(f"capture stamp: set {stamp['assessment_set_sha256'][:12]}, corpus {stamp['corpus_fingerprint'][:12]}")
+    census = stamp.get("coverage") or {}
+    if census:
+        print(
+            f"capture coverage: {census['n_evaluable']}/{census['n_cases']} case(s) evaluable — "
+            + ", ".join(f"{surface} {count}" for surface, count in census["by_surface"].items())
+        )
     return 0
 
 

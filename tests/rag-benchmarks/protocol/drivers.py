@@ -57,7 +57,12 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from harness import exec_in_container, write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
 
-from .evalset import as_label_list, turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
+from .evalset import (  # noqa: E402 — the shared turn expansion and surface model (no import cycle)
+    as_label_list,
+    coverage_census,
+    evaluation_surface,
+    turn_entries,
+)
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -207,12 +212,62 @@ def run_config_a(
     an interrupted run continues where it died. Fail-fast on missed traces
     (the anchor's existing behavior): a reference measurement with missed
     traces is a zero baseline in disguise.
+
+    The anchor is fed the set's RETRIEVAL-SURFACE cases only (written to
+    ``config-a.gold.json``): the anchor scores passages against gold, and
+    the other surfaces are measured by the capture and the verdict layer. A
+    gold-less case would score vacuously — recall 1.0 by construction — so
+    anchoring it measured nothing while counting as measured.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "config-a.report.json"
     runner = runner or _default_a_runner
-    report = runner(Path(set_path).resolve(), report_path.resolve(), seed, env_extra)
+    cases = entries if entries is not None else _load_entries(set_path)
+    # The anchor is the CHUNK-LEVEL instrument: it scores passages against a
+    # case's gold, so it is fed exactly the retrieval-surface cases. The other
+    # surfaces are measured by the capture (answers, outcomes) and the verdict
+    # layer (security); feeding them to the anchor produced vacuous rows — a
+    # gold-less query scores recall 1.0 by construction and every retrieved
+    # chunk as noise — and that is how cases the protocol declares
+    # inapplicable to config A came to be counted as unevaluated.
+    census = coverage_census(cases)
+    if census["retrieval_cases_without_gold"]:
+        raise DriverError(
+            "the config-A anchor refuses a set whose retrieval-surface cases carry no gold"
+            f" ({', '.join(census['retrieval_cases_without_gold'])}) — the anchor scores passages"
+            " against gold, so an unannotated case would score vacuously (recall 1.0 by"
+            " construction) and count as measured while carrying no expectation"
+        )
+    anchor_cases = [
+        case for case in cases if evaluation_surface(case) == "retrieval"
+    ]
+    unanchorable = [
+        str(case.get("id"))
+        for case in anchor_cases
+        if case.get("turns") or not str(case.get("query", "")).strip()
+    ]
+    if unanchorable:
+        raise DriverError(
+            "the config-A anchor refuses a retrieval case it cannot drive as ONE query"
+            f" ({', '.join(unanchorable)}) — a multi-turn case's queries are its turns (the"
+            " capture's rows) and a case without a query has nothing to drive, so such a case"
+            " is measured by nothing"
+        )
+    gold_path = out_dir / "config-a.gold.json"
+    write_json(
+        gold_path,
+        {
+            "_doc": (
+                "the config-A anchor's input: the set's retrieval-surface cases, derived from"
+                f" {Path(set_path).name} — the anchor scores passages, so only the cases whose"
+                " surface is the chunk-level one are anchored"
+            ),
+            "entries": anchor_cases,
+        },
+        ensure_ascii=False,
+    )
+    report = runner(gold_path.resolve(), report_path.resolve(), seed, env_extra)
     if not isinstance(report, dict):
         raise DriverError(f"config A runner returned {type(report).__name__}, not a report dict")
     n_missed = int(report.get("n_missed_traces", 0))
@@ -225,9 +280,19 @@ def run_config_a(
     # The security cases: A has no agent surface — the skipped rows
     # record the reason so the pair's report shows an intentional difference,
     # never a silent absence.
-    skip_rows = security_skip_rows(entries if entries is not None else _load_entries(set_path))
+    skip_rows = security_skip_rows(cases)
     rows_path = out_dir / "config-a.rows.json"
-    write_json(rows_path, {"cases": skip_rows}, ensure_ascii=False)
+    write_json(
+        rows_path,
+        {
+            "cases": skip_rows,
+            # What the run covered: the census per evaluation surface. The
+            # anchor report carries rows for the retrieval surface only, so
+            # this is where the reader learns why.
+            "coverage": census,
+        },
+        ensure_ascii=False,
+    )
     return {"report": report, "report_path": str(report_path), "rows": skip_rows, "rows_path": str(rows_path)}
 
 
@@ -454,6 +519,10 @@ def run_config_a_capture(
         # "computed" = the fingerprint was measured from the corpus content
         # hashes; "pinned" = the operator's declaration. The report says so.
         "corpus_fingerprint_source": corpus_fingerprint_source,
+        # What the set covers, per evaluation surface: the capture is the
+        # artifact that says which cases run on which surface, so the census
+        # rides the stamp rather than being reconstructed by every reader.
+        "coverage": coverage_census(cases),
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set

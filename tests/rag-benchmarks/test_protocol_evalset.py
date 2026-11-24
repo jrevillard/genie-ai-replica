@@ -339,3 +339,67 @@ def test_multiturn_nonlatin_case_is_detected_from_its_turns():
     assert es.case_is_non_latin(case)
     data = {"_meta": {"provenance": "tuning"}, "entries": [case]}
     assert es.validate_set(data, "tuning") == []
+
+
+# ---------------------------------------------------------------------------
+# Evaluation surfaces — which surface measures which case
+# ---------------------------------------------------------------------------
+
+
+def test_evaluation_surface_names_the_surface_per_case_shape():
+    """ONE place decides the surface: a security scenario executes on the
+    pair's B/C legs, an outcome class is judged from the recorded outcome, a
+    restricted-access case's passages are unreachable on config A, and the
+    rest are the chunk-level retrieval surface — the only one that consumes
+    gold."""
+    assert es.evaluation_surface({"security_scenario": "restricted_repo", "case_class": "answerable"}) == "security"
+    assert es.evaluation_surface({"case_class": "unanswerable"}) == "outcome"
+    assert es.evaluation_surface({"case_class": "failure"}) == "outcome"
+    assert es.evaluation_surface({"case_class": "cancellation"}) == "outcome"
+    assert (
+        es.evaluation_surface({"case_class": "answerable", "access_scenario": "restricted"}) == "restricted_access"
+    )
+    assert es.evaluation_surface({"case_class": "answerable", "access_scenario": "public"}) == "retrieval"
+    assert es.evaluation_surface({"case_class": "citation_check", "access_scenario": "public"}) == "retrieval"
+    assert (
+        es.evaluation_surface({"case_class": "representative_language", "access_scenario": "public"}) == "retrieval"
+    )
+    assert es.evaluation_surface({"case_class": "not-a-class"}) == "unknown"
+
+
+def test_security_scenario_wins_over_the_class_it_carries():
+    """A security case is an answerable case too — the security surface decides
+    it, or the case would be anchored on a surface the protocol declares
+    inapplicable to config A."""
+    case = {
+        "case_class": "answerable",
+        "access_scenario": "public",
+        "security_scenario": "injection_document",
+    }
+    assert es.evaluation_surface(case) == "security"
+
+
+def test_coverage_census_counts_every_case_on_its_surface(assessment_data):
+    """The census is the set's coverage statement: every case lands on exactly
+    one surface, and a valid set has a resolved surface for all of them."""
+    census = es.coverage_census(assessment_data["entries"])
+    assert census["n_cases"] == 16
+    assert census["n_evaluable"] == census["n_cases"]
+    assert census["retrieval_cases_without_gold"] == []
+    assert census["by_surface"]["retrieval"] == 4
+    assert census["by_surface"]["restricted_access"] == 2
+    assert census["by_surface"]["outcome"] == 3
+    assert census["by_surface"]["security"] == 7
+    assert sum(census["by_surface"].values()) == census["n_cases"]
+
+
+def test_coverage_census_names_a_retrieval_case_without_gold(assessment_data):
+    """A retrieval case without gold is measured by nothing — the census says
+    so, and the case drops out of the evaluable count."""
+    data = copy.deepcopy(assessment_data)
+    for case in data["entries"]:
+        if case["id"] == "sample-ans-pub-1":
+            case["expected_chunks"] = []
+    census = es.coverage_census(data["entries"])
+    assert census["retrieval_cases_without_gold"] == ["sample-ans-pub-1"]
+    assert census["n_evaluable"] == census["n_cases"] - 1

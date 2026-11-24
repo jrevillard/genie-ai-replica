@@ -103,6 +103,17 @@ def parse_args() -> argparse.Namespace:
         help="Skip matching previews shorter than this many chars (too noisy; default: %(default)s)",
     )
     p.add_argument(
+        "--keep-duplicate-passages",
+        action="store_true",
+        help="Keep previews that resolve to a chunk-key set another entry "
+        "already resolved to. The default drops them (the F7 invariant: two "
+        "annotations of one passage inflate passage-level recall). Sets whose "
+        "duplicate gold is the MEASUREMENT DESIGN — phrasing twins, language "
+        "variants, paraphrase probes over a small fixture corpus — are gutted "
+        "by that default (33 of 67 cases on the #2151 acceptance-grade set): "
+        "the flag keeps every entry's own resolution.",
+    )
+    p.add_argument(
         "--mode",
         choices=["in-place", "in-place-new", "report-only"],
         default="in-place",
@@ -262,33 +273,38 @@ def main() -> int:
     # retrieved set). Drop duplicates across the WHOLE payload, keeping the
     # first passage_id seen. Operates at the passage_id level (a passage
     # that was split into N chunks is a single unit, not N).
-    seen_passage_keys: set[frozenset[str]] = set()
-    deduped_entries: list[dict[str, Any]] = []
-    for entry in entries:
-        new_expected: list[dict[str, Any]] = []
-        for ec in entry.get("expected_chunks", []):
-            pid = ec.get("passage_id")
-            if pid is None:
-                # Unresolved / skipped rows have no passage; pass through.
+    # --keep-duplicate-passages skips this block: a set whose duplicate gold
+    # is deliberate (phrasing twins, language variants) measures per case,
+    # and the cross-entry drop empties those cases instead of protecting
+    # anything.
+    if not args.keep_duplicate_passages:
+        seen_passage_keys: set[frozenset[str]] = set()
+        for entry in entries:
+            new_expected: list[dict[str, Any]] = []
+            for ec in entry.get("expected_chunks", []):
+                pid = ec.get("passage_id")
+                if pid is None:
+                    # Unresolved / skipped rows have no passage; pass through.
+                    new_expected.append(ec)
+                    continue
+                keys = frozenset(
+                    c["chunk_key"] for c in entry["expected_chunks"]
+                    if c.get("passage_id") == pid and c.get("chunk_key")
+                )
+                if not keys:
+                    new_expected.append(ec)
+                    continue
+                if keys in seen_passage_keys:
+                    stats["deduped_passages"] += 1
+                    continue
+                seen_passage_keys.add(keys)
                 new_expected.append(ec)
-                continue
-            keys = frozenset(
-                c["chunk_key"] for c in entry["expected_chunks"]
-                if c.get("passage_id") == pid and c.get("chunk_key")
-            )
-            if not keys:
-                new_expected.append(ec)
-                continue
-            if keys in seen_passage_keys:
-                stats["deduped_passages"] += 1
-                continue
-            seen_passage_keys.add(keys)
-            new_expected.append(ec)
-        entry["expected_chunks"] = new_expected
+            entry["expected_chunks"] = new_expected
 
     payload["match_run"] = {
         "ran_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "graph_source": args.graph_source,
+        "duplicate_passages_kept": bool(args.keep_duplicate_passages),
         "stats": stats,
     }
 

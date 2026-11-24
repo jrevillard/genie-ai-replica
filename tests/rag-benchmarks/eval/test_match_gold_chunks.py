@@ -376,3 +376,42 @@ class TestPassageDedup:
         ]
         assert len(kept) == 2  # both distinct passages survive
         assert payload["match_run"]["stats"]["deduped_passages"] == 0
+
+    def test_keep_duplicate_passages_flag_preserves_twin_entries(
+        self, tmp_path, monkeypatch
+    ):
+        """--keep-duplicate-passages skips the F7 block: a set whose duplicate
+        gold is deliberate (phrasing twins, language variants over a small
+        fixture corpus) keeps every entry's own resolution (#2162 campaign:
+        the default gutted 33 of 67 cases)."""
+        import match_gold_chunks as mgc
+        import json
+
+        gold = tmp_path / "gold.json"
+        gold.write_text(json.dumps(self.GOLD))
+        monkeypatch.setattr(mgc, "source_chunks", lambda *a, **k: [self.CHUNK])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "match_gold_chunks.py",
+                "--gold-dataset", str(gold),
+                "--mode", "in-place",
+                "--keep-duplicate-passages",
+            ],
+        )
+        rc = mgc.main()
+        assert rc == 0
+        payload = json.loads(gold.read_text())
+        kept = [
+            (entry["id"], ec["chunk_key"])
+            for entry in payload["entries"]
+            for ec in entry["expected_chunks"]
+            if ec.get("chunk_key")
+        ]
+        # BOTH twin entries keep their own resolved passage.
+        assert kept == [("q1", "ck1"), ("q2", "ck1")], kept
+        stats = payload["match_run"]["stats"]
+        assert stats["deduped_passages"] == 0
+        # the run record states the dedup was skipped
+        assert payload["match_run"]["duplicate_passages_kept"] is True

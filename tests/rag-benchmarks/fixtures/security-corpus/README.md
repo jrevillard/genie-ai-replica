@@ -32,6 +32,18 @@ fingerprint and the measured basis).
 | `e01-sec-doc-catalogue-e01.md` | the legacy graph (`GRAPH_SOURCE`) | the normal upload → ingest path | `e01-sec-injection-document` |
 | `e01-sec-doc-servicerequest-e01.md` | the legacy graph (`GRAPH_SOURCE`) | the normal upload → ingest path | `e01-sec-injection-tool` |
 
+The acceptance-grade extension (issue #2151) grows the consumer list on the
+same fixtures: `_bmad-output/implementation-artifacts/e01-assessment-grade-2026-11-24/assessment-set.json`
+declares 40 anchor-scored retrieval cases, 14 restricted retrieval-class
+cases and a 6-case outcome set. The graded retrieval-class cases
+(`e01g-*`) carry verbatim-fixture gold previews (`preview` + `source_doc`,
+no identity —
+the content hashes are venue-resolved by the Phase-2 pass during the
+ingestion campaign, exactly like the source ids below).
+`tests/rag-benchmarks/test_assessment_grade_set.py` is the mechanical
+#2145 gate: no preview that is not verbatim committed-fixture text can
+enter the set without that test failing.
+
 - `GRAPH_RESTRICTED_E01` is the graph the restricted cases declare in
   `context.authorized_graph_names`. It is NOT the corpus the config-A
   reference measures: config A (the legacy fixed RAG) serves the legacy

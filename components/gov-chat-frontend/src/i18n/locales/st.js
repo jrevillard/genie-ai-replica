@@ -3534,6 +3534,7 @@ export default {
         boundary: 'Scope boundary',
         boundaryHeld: '{held} held',
         boundaryBreached: '{n} breached',
+        boundaryPartial: '(e lekantsoe {measured} ea {total})',
         boundaryNotMeasured: 'Moeli oa wigo: o sa lekantsoa'
       },
       error: {

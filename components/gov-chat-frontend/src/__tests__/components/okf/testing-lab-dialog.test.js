@@ -948,7 +948,14 @@ it('1-8d: tripwire — a same-suite positive-pass-rate drop raises the strip and
 it('1-8e: Apply owns ONE busy token across save → rebuild → re-run and never stops silently', async () => {
   const w = mountDialog({ initialTab: 'suites' });
   await w.vm.$nextTick();
-  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  w.vm.suite = {
+    suite_key: 's1',
+    payload: {
+      positive: [],
+      negative: [],
+      context: { id: 'ec-1', name: 'ministry-a readers', version: 2, repos: [{ repo_id: 'r-1' }] }
+    }
+  };
   w.vm.advisor = { changes: { add: ['new-tag'], remove: [] }, add_eval: [], remove_eval: [] };
   // Dispatch order: saveFrontmatter → headRebuild → headSuiteRun → listRuns.
   dispatch.mockResolvedValueOnce({ ok: true });
@@ -973,6 +980,11 @@ it('1-8e: Apply owns ONE busy token across save → rebuild → re-run and never
   await w.vm.onAdvisorApply();
   const calls = dispatch.mock.calls.map((c) => c[0]);
   expect(calls).toEqual(expect.arrayContaining(['okf/saveFrontmatter', 'okf/headRebuild', 'okf/headSuiteRun']));
+  // #2061 phase 4: the re-run names the suite's OWN context too — the
+  // advisor path posted no contextId, so a context-bound suite's re-run
+  // was refused 409 CROSS_CONTEXT_BLOCKED every time.
+  const rerun = dispatch.mock.calls.find((c) => c[0] === 'okf/headSuiteRun');
+  expect(rerun[1]).toMatchObject({ repoId: 'r-1', suiteKey: 's1', contextId: 'ec-1' });
   // The whole leg completed: busy released, no error, summary refreshed.
   expect(w.vm.busy).toBeNull();
   expect(w.vm.error).toBe('');

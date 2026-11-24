@@ -3469,6 +3469,7 @@ export default {
         boundary: 'Scope boundary',
         boundaryHeld: '{held} held',
         boundaryBreached: '{n} breached',
+        boundaryPartial: '(a test {measured} fo {total})',
         boundaryNotMeasured: 'Kontextoo ji so: a ma test'
       },
       error: {

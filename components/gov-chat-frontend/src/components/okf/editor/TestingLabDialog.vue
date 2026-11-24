@@ -787,6 +787,19 @@
                   String(lastRunSummary.boundary.breached || 0)
                 )
               }}
+              <!-- The HOLE: boundary rows that errored are neither held nor
+                   breached — a partial measurement must say so, or "2 held ·
+                   0 breached" reads as a clean verdict over 5 rows. -->
+              <em
+                v-if="Number(lastRunSummary.boundary.evaluatable) < Number(lastRunSummary.boundary.total)"
+                class="okf-headtest__muted"
+              >
+                {{
+                  translate('okf.testingLab.suites.boundaryPartial', '({measured} of {total} measured)')
+                    .replace('{measured}', String(lastRunSummary.boundary.evaluatable || 0))
+                    .replace('{total}', String(lastRunSummary.boundary.total || 0))
+                }}
+              </em>
             </span>
             <span v-else-if="lastRunSummary" class="okf-headtest__muted">
               {{ translate('okf.testingLab.suites.boundaryNotMeasured', 'Scope boundary: not measured') }}
@@ -1486,6 +1499,7 @@
 
 <script>
 import translateMixin from '../../../mixins/translateMixin';
+import evalContextSurfaceMixin from '../../../mixins/evalContextSurfaceMixin';
 import { translateLabError, isLabelsStale } from '../../../services/okfRepoOps';
 import { toEpochMs } from '../piiReview.js';
 import DsDialog from '../../ds/Dialog.vue';
@@ -1532,7 +1546,7 @@ export default {
     EvalContextPanel,
     EvalContextPicker
   },
-  mixins: [translateMixin],
+  mixins: [translateMixin, evalContextSurfaceMixin],
   props: {
     visible: { type: Boolean, default: false },
     repo: { type: Object, default: null },
@@ -1724,37 +1738,9 @@ export default {
       }
       return tabs;
     },
-    /**
-     * The tools-admin realm role — the SAME role the context API's
-     * superadmin gate enforces server-side. The Lab is repo-scoped and the
-     * catalogue it would host is deployment-wide: a curator without the
-     * role never sees the tab, and the server would refuse the read anyway.
-     */
-    canUseContexts() {
-      const getters = (this.$store && this.$store.getters) || {};
-      const user = getters.currentUser || null;
-      const roles = (user && user.roles) || [];
-      return roles.includes('tools-admin');
-    },
-    /** #2061 phase 4 (E-5): the BINDING BADGE — which principal this suite
-     *  is measured over. A suite minted for a context names it; a suite
-     *  minted without one says THAT (the open context), because "minted
-     *  for the deployment" and "minted for nobody" are different claims. */
-    suiteBindingLabel() {
-      const s = this.suite;
-      if (!s) return '';
-      const ctx = (s.payload && s.payload.context) || s.context || null;
-      if (!ctx) {
-        return this.translate('okf.testingLab.suites.bindingOpen', 'Minted for the deployment — no evaluation context');
-      }
-      return this.translate(
-        'okf.testingLab.suites.binding',
-        'Measured over “{name}” (v{version} · {repos} repositories)'
-      )
-        .replace('{name}', ctx.name || ctx.id)
-        .replace('{version}', String(ctx.version || 1))
-        .replace('{repos}', String((ctx.repos || []).length));
-    },
+    // canUseContexts / suiteBindingLabel / suiteContextIdFor live in
+    // evalContextSurfaceMixin — ONE authority for all three members, so the
+    // dialog and the RAGAS panel cannot drift apart.
     /** Story 8-6: the unified saved-suites list — head suites and RAGAS
      * benchmark suites in ONE table (David: integrated but visually
      * differentiated), newest first. */
@@ -2881,7 +2867,11 @@ export default {
       const t2 = Date.now();
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
-        suiteKey: this.suite.suite_key
+        suiteKey: this.suite.suite_key,
+        // #2061 phase 4: the re-run names the suite's OWN context too —
+        // the advisor path used to post none, so a context-bound suite's
+        // re-run was refused 409 CROSS_CONTEXT_BLOCKED every time.
+        contextId: this.suiteContextIdFor(this.suite)
       });
       this.legTiming('advisor-rerun', t2);
       this.legTiming('advisor-total', t0);
@@ -3043,13 +3033,7 @@ export default {
       }
       return null;
     },
-    /** #2061 phase 4 (E-5): the context id a run must name — the suite's
-     *  OWN binding. A suite minted for a context may only be measured over
-     *  THAT context; the server refuses a run that names none. */
-    suiteContextIdFor(suite) {
-      const ctx = suite && ((suite.payload && suite.payload.context) || suite.context);
-      return (ctx && ctx.id) || '';
-    },
+    // suiteContextIdFor: evalContextSurfaceMixin
     async onRunSuite() {
       if (!this.suite) return;
       this.busy = 'run';
@@ -3892,6 +3876,21 @@ export default {
 }
 .okf-headtest__steal {
   color: var(--danger);
+}
+/* #2061 E-5: the binding badge rides the summary strip — a bordered pill
+   like the run-status badges, so WHICH principal was measured reads as a
+   fact, not body text. The boundary readout keeps the summary's own
+   weight; its partial-hole note is muted. */
+.okf-headtest__binding {
+  display: inline-block;
+  padding: 2px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+}
+.okf-headtest__boundary {
+  font-size: var(--text-sm);
 }
 /* #2061 phase 1d (E-3) — the pair-level matrix. It sits BESIDE the pass
    rate, not in place of it: the aggregate hides the pairs, and a pair

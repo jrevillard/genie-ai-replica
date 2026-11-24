@@ -3537,6 +3537,7 @@ export default {
         boundary: 'Scope boundary',
         boundaryHeld: '{held} held',
         boundaryBreached: '{n} breached',
+        boundaryPartial: '({measured} de {total} medidas)',
         boundaryNotMeasured: 'Limite de âmbito: não medido'
       },
       error: {

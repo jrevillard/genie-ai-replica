@@ -3515,6 +3515,7 @@ export default {
         boundary: 'Scope boundary',
         boundaryHeld: '{held} held',
         boundaryBreached: '{n} breached',
+        boundaryPartial: '(kupimwa {measured} kati ya {total})',
         boundaryNotMeasured: 'Mipaka ya wigo: haijapimwa'
       },
       error: {

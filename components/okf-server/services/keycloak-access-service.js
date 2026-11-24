@@ -259,14 +259,27 @@ async function findGroupByName(name) {
  * membership stands for, and the email is not that.
  */
 async function groupMembers(groupId) {
-  const members = await jsonOrThrow(
-    await adminApi('GET', `/groups/${encodeURIComponent(groupId)}/members?max=200`),
-    'group members'
-  );
-  return (Array.isArray(members) ? members : []).map((u) => ({
-    id: u.id,
-    username: u.username || null
-  }));
+  // PAGED, and capped: Keycloak's admin API returns at most `max` rows per
+  // call with no server-side "there are more" marker. Five pages of 200 is
+  // far beyond any membership a composer pass needs to reason about — and
+  // when even that is not enough, the caller is TOLD (`truncated`) instead
+  // of being shown a smaller population as if it were the whole one.
+  const PAGE = 200;
+  const MAX_PAGES = 5;
+  const members = [];
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const rows = await jsonOrThrow(
+      await adminApi('GET', `/groups/${encodeURIComponent(groupId)}/members?max=${PAGE}&first=${page * PAGE}`),
+      'group members'
+    );
+    const mapped = (Array.isArray(rows) ? rows : []).map((u) => ({
+      id: u.id,
+      username: u.username || null
+    }));
+    members.push(...mapped);
+    if (mapped.length < PAGE) return { members, truncated: false };
+  }
+  return { members, truncated: true };
 }
 
 /** Create the group if missing; return its representation. */

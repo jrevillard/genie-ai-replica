@@ -447,8 +447,15 @@ async function previewContext(payload = {}) {
  */
 async function listGroups(term = '') {
   const groups = await keycloakAccess.searchGroups(term, 100);
-  const out = [];
-  for (const g of groups || []) {
+  // Per-group enrichment is TWO Keycloak round-trips (roles + members); a
+  // serial loop over a ~100-group realm is ~200 sequential calls, each with
+  // its own timeout. A small worker pool keeps the fan-out polite without
+  // serializing it — the pool preserves nothing about ORDER, so the realm's
+  // search order is re-applied at the end.
+  const CONCURRENCY = 8;
+  const queue = [...(groups || [])];
+  const enriched = [];
+  const enrichOne = async (g) => {
     const grants = [];
     let privileged = false;
     let roles = [];
@@ -469,23 +476,33 @@ async function listGroups(term = '') {
       if (parseOkfScope(name)) grants.push(name);
     }
     let members = [];
+    let membersTruncated = false;
     try {
       const raw = await keycloakAccess.groupMembers(g.id);
-      members = (raw || []).map((u) => u.username).filter(Boolean);
+      members = ((raw && raw.members) || []).map((u) => u.username).filter(Boolean);
+      membersTruncated = Boolean(raw && raw.truncated);
     } catch (err) {
       // A group whose members cannot be read is still a membership an
       // operator may compose — it is the GRANTS that decide what it reaches.
       logger.warn('eval_context.group_members_unreadable', { group: g.name, error: err.message });
     }
-    out.push({
+    enriched.push({
       id: g.id,
       name: g.name,
       grants: grants.sort(),
       privileged,
-      members: members.sort()
+      members: members.sort(),
+      members_truncated: membersTruncated
     });
-  }
-  return out;
+  };
+  const workers = Array.from({ length: Math.min(CONCURRENCY, Math.max(queue.length, 1)) }, () =>
+    (async () => {
+      for (let g = queue.shift(); g; g = queue.shift()) await enrichOne(g);
+    })()
+  );
+  await Promise.all(workers);
+  const byId = new Map(enriched.map((r) => [r.id, r]));
+  return (groups || []).map((g) => byId.get(g.id)).filter(Boolean);
 }
 
 /** READ one context. */

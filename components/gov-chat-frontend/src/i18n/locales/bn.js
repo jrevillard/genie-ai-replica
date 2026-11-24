@@ -3508,6 +3508,7 @@ export default {
         boundary: 'পরিধির সীমানা',
         boundaryHeld: '{held}টি ধরে রাখা হয়েছে',
         boundaryBreached: '{n}টি লঙ্ঘিত',
+        boundaryPartial: '(পরিমাপ করা {measured}/{total})',
         boundaryNotMeasured: 'পরিধির সীমানা: পরিমাপ করা হয়নি'
       },
       error: {

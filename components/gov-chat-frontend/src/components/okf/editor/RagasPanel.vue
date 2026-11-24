@@ -926,6 +926,7 @@ import RagasGuideDialog from './RagasGuideDialog.vue';
 // benchmark is minted FOR and measured over.
 import EvalContextPicker from './EvalContextPicker.vue';
 import translateMixin from '../../../mixins/translateMixin';
+import evalContextSurfaceMixin from '../../../mixins/evalContextSurfaceMixin';
 import { translateLabError } from '../../../services/okfRepoOps';
 import { useChartTheme } from '@/composables/useChartTheme';
 
@@ -984,7 +985,7 @@ export default {
     RagasGuideDialog,
     EvalContextPicker
   },
-  mixins: [translateMixin],
+  mixins: [translateMixin, evalContextSurfaceMixin],
   props: {
     repo: { type: Object, default: null },
     readOnly: { type: Boolean, default: false },
@@ -1076,19 +1077,8 @@ export default {
     };
   },
   computed: {
-    /**
-     * The tools-admin realm role — the SAME role the context API's
-     * superadmin gate enforces server-side. A context may name ANY
-     * repository, so its catalogue is a deployment-wide fact: a curator
-     * without the role never sees the picker (and the server would refuse
-     * the read anyway).
-     */
-    canUseContexts() {
-      const getters = (this.$store && this.$store.getters) || {};
-      const user = getters.currentUser || null;
-      const roles = (user && user.roles) || [];
-      return roles.includes('tools-admin');
-    },
+    // canUseContexts / suiteBindingLabel: evalContextSurfaceMixin (ONE
+    // authority — the gate mirrors the server's superadmin predicate).
     /** DsDialog emits the action KEY (RepoEditor's piiBulkAsk discipline). */
     runDeleteActions() {
       return [
@@ -1248,27 +1238,6 @@ export default {
     },
     runRows() {
       return (this.runDoc && this.runDoc.payload && this.runDoc.payload.results) || [];
-    },
-    /**
-     * #2061 phase 4 (E-5, #2103): the BINDING — which principal this suite
-     * was minted for. The engine froze the snapshot on the suite doc
-     * (payload.context) at generation; the badge just states it. Reuses the
-     * Lab's binding keys so the two surfaces cannot drift apart.
-     */
-    suiteBindingLabel() {
-      const ctx = this.suite && this.suite.payload && this.suite.payload.context;
-      if (!ctx) {
-        return this.translate('okf.testingLab.suites.bindingOpen', 'Minted for the deployment — no evaluation context');
-      }
-      const repos =
-        (ctx.repos && ctx.repos.length) || (ctx.resolved && ctx.resolved.repos ? ctx.resolved.repos.length : 0);
-      return this.translate(
-        'okf.testingLab.suites.binding',
-        'Measured over “{name}” (v{version} · {repos} repositories)'
-      )
-        .replace('{name}', ctx.name || ctx.id)
-        .replace('{version}', String(ctx.version || 1))
-        .replace('{repos}', String(repos));
     },
     /** The run's attribution roll-up (E-4): which repo answered, how often
      *  grounded outside the carrier. Null until a run carries it. */
@@ -2378,10 +2347,7 @@ export default {
     /** #2061 phase 4 (E-5): the context id a run must name — the suite's
      *  OWN binding (a benchmark minted for a context may only be measured
      *  over THAT context). */
-    suiteContextIdFor(suite) {
-      const ctx = suite && ((suite.payload && suite.payload.context) || suite.context);
-      return (ctx && ctx.id) || '';
-    },
+    // suiteContextIdFor: evalContextSurfaceMixin
     async onRun() {
       this.error = '';
       this.runBusy = true;
@@ -3110,6 +3076,31 @@ export default {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 10px;
+}
+
+/* #2061 E-5: the evidence line — the binding badge (a small status pill,
+   like the summary pills above it) and the attribution sentence beside
+   it, muted like the other secondary facts. */
+.okf-ragas__evidence {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-sm);
+}
+
+.okf-ragas__binding {
+  display: inline-block;
+  padding: 2px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.okf-ragas__attribution {
+  color: var(--muted);
 }
 
 .okf-ragas__muted {

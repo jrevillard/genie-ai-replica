@@ -3466,6 +3466,7 @@ export default {
         boundary: 'حدود النطاق',
         boundaryHeld: '{held} محفوظة',
         boundaryBreached: '{n} مخترقة',
+        boundaryPartial: '({measured} من {total} تم قياسها)',
         boundaryNotMeasured: 'حدود النطاق: لم تُقَس'
       },
       error: {

@@ -3518,6 +3518,7 @@ export default {
         boundary: 'Scope boundary',
         boundaryHeld: '{held} held',
         boundaryBreached: '{n} breached',
+        boundaryPartial: '({measured} dari {total} terukur)',
         boundaryNotMeasured: 'Batas cakupan: tidak diukur'
       },
       error: {

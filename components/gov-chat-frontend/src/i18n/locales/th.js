@@ -3474,6 +3474,7 @@ export default {
         boundary: 'ขอบเขตของขอบเขต',
         boundaryHeld: 'ยึดไว้ {held}',
         boundaryBreached: 'ฝ่าฝืน {n}',
+        boundaryPartial: '(วัดได้ {measured} จาก {total})',
         boundaryNotMeasured: 'ขอบเขต: ไม่ได้วัด'
       },
       error: {

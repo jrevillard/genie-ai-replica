@@ -64,7 +64,7 @@ jest.mock('../services/keycloak-access-service', () => ({
       'g-none': [],
       'g-admin': [{ id: 'u3', username: 'root' }]
     };
-    return members[groupId] || [];
+    return { members: members[groupId] || [], truncated: false };
   })
 }));
 
@@ -129,6 +129,22 @@ describe("#2061 E-5: the composer's source — the deployment's groups", () => {
     const groups = await evalCtx.listGroups('group-b');
     expect(groups.map((g) => g.name)).toEqual(['group-b']);
     expect(keycloakAccess.searchGroups).toHaveBeenCalledWith('group-b', 100);
+  });
+
+  test('a truncated membership is MARKED, never shown as the whole population', async () => {
+    // The paged read reports truncation — the composer must say "there is
+    // more", not render 200 as if it were everyone.
+    keycloakAccess.groupMembers.mockImplementation(async (groupId) =>
+      groupId === 'g-a'
+        ? { members: [{ id: 'u1', username: 'alice' }], truncated: true }
+        : { members: [], truncated: false }
+    );
+    const groups = await evalCtx.listGroups('');
+    const a = groups.find((g) => g.name === 'group-a');
+    expect(a.members_truncated).toBe(true);
+    expect(a.members).toEqual(['alice']);
+    const b = groups.find((g) => g.name === 'group-b');
+    expect(b.members_truncated).toBe(false);
   });
 });
 

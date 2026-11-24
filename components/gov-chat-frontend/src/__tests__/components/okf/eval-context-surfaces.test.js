@@ -257,12 +257,12 @@ describe('#2061 E-5: the client maps every call to its route', () => {
 describe('#2061 E-5: the Lab gates the context surfaces on the superadmin role', () => {
   const OkfTestingLabDialog = require('@/components/okf/editor/TestingLabDialog.vue').default;
 
-  function mountLab(roles) {
+  function mountLab(user) {
     return mount(OkfTestingLabDialog, {
       global: {
         mocks: {
           $store: {
-            getters: { currentUser: roles ? { roles } : null },
+            getters: { currentUser: user || null },
             commit() {},
             dispatch: jest.fn().mockResolvedValue({ ok: true, runs: [] })
           }
@@ -285,13 +285,22 @@ describe('#2061 E-5: the Lab gates the context surfaces on the superadmin role',
     evalContextService.listContexts.mockResolvedValue(CONTEXTS);
     evalContextService.listGroups.mockResolvedValue(GROUPS);
 
-    const admin = mountLab(['tools-admin']);
+    const admin = mountLab({ roles: ['tools-admin'], okf_scopes: [] });
     await new Promise((r) => setTimeout(r, 0));
     await admin.vm.$nextTick();
     expect(admin.vm.canUseContexts).toBe(true);
     expect(admin.vm.tabDefs.map((t) => t.value)).toContain('contexts');
 
-    const scoped = mountLab(['okf-some-repo']);
+    // The server's SECOND superadmin population: the wildcard scope without
+    // the realm role. Hiding the tab from them was a gate drift the backend
+    // test already pins the other side of.
+    const wildcard = mountLab({ roles: [], okf_scopes: ['okf:*:*:admin'] });
+    await new Promise((r) => setTimeout(r, 0));
+    await wildcard.vm.$nextTick();
+    expect(wildcard.vm.canUseContexts).toBe(true);
+    expect(wildcard.vm.tabDefs.map((t) => t.value)).toContain('contexts');
+
+    const scoped = mountLab({ roles: ['okf-some-repo'], okf_scopes: ['okf:t:r-1:read'] });
     await new Promise((r) => setTimeout(r, 0));
     await scoped.vm.$nextTick();
     expect(scoped.vm.canUseContexts).toBe(false);

@@ -3530,6 +3530,7 @@ export default {
         boundary: 'Граница области',
         boundaryHeld: 'удержано {held}',
         boundaryBreached: 'нарушено {n}',
+        boundaryPartial: '(измерено {measured} из {total})',
         boundaryNotMeasured: 'Граница области: не измерялась'
       },
       error: {

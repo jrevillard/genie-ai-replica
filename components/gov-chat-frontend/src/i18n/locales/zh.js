@@ -3407,6 +3407,7 @@ export default {
         boundary: '范围边界',
         boundaryHeld: '{held} 项守住',
         boundaryBreached: '{n} 项被突破',
+        boundaryPartial: '（已测量 {measured}/{total}）',
         boundaryNotMeasured: '范围边界：未度量'
       },
       error: {

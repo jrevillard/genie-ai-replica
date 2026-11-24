@@ -759,6 +759,30 @@ describe('Vuex Auth Module', () => {
       expect(state.user.roles).toEqual(['user', 'admin']);
     });
 
+    // #2061 phase 4: the OKF scope claim rides the access token beside the
+    // roles — the Lab's context surfaces gate on it (the wildcard
+    // okf:*:*:admin population has no tools-admin role).
+    it('carries the okf_scopes claim through, and degrades to [] without it', async () => {
+      mockGetAccessTokenClaims.mockImplementationOnce(() => ({
+        realm_access: { roles: ['user'] },
+        okf_scopes: ['okf:*:*:admin']
+      }));
+      mockInitialize.mockResolvedValue(createMockOidcUser());
+      const state = createState();
+      const commit = createCommit(state);
+      await authModule.actions.initialize({ commit });
+      expect(state.user.okf_scopes).toEqual(['okf:*:*:admin']);
+
+      // No claim at all (a realm without the mapper): [] — never undefined,
+      // so every `[].includes()` gate downstream stays safe.
+      mockGetAccessTokenClaims.mockImplementationOnce(() => ({ realm_access: { roles: ['user'] } }));
+      mockInitialize.mockResolvedValue(createMockOidcUser());
+      const state2 = createState();
+      const commit2 = createCommit(state2);
+      await authModule.actions.initialize({ commit: commit2 });
+      expect(state2.user.okf_scopes).toEqual([]);
+    });
+
     it('defaults roles to empty array when realm_access missing', async () => {
       mockGetAccessTokenClaims.mockImplementationOnce(() => null);
       mockInitialize.mockResolvedValue(

@@ -3552,6 +3552,7 @@ export default {
         boundary: 'Scope boundary',
         boundaryHeld: '{held} held',
         boundaryBreached: '{n} breached',
+        boundaryPartial: '({measured} sur {total} mesurées)',
         boundaryNotMeasured: 'Limite de portée : non mesurée'
       },
       error: {

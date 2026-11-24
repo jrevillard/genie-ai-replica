@@ -62,7 +62,10 @@
             <DsStatusTag variant="neutral" small>
               {{ translate('okf.testingLab.contexts.version', 'v{n}').replace('{n}', String(c.version || 1)) }}
             </DsStatusTag>
-            <DsStatusTag v-if="(c.resolved && c.resolved.open_context) || isOpen(c)" variant="warning" small>
+            <!-- The STORED verdict is the authority: a context with explicit
+                 scopes but no group refs is NOT the open context, and the
+                 client must not relabel it from a shape guess. -->
+            <DsStatusTag v-if="c.resolved && c.resolved.open_context" variant="warning" small>
               {{ translate('okf.testingLab.contexts.open', 'open context') }}
             </DsStatusTag>
           </div>
@@ -148,8 +151,13 @@
             }}
             <template v-if="(m.members || []).length">
               ·
+              <!-- A paged membership read that hit its cap says so: "200+"
+                   never lets a truncation read as the whole population. -->
               {{
-                translate('okf.testingLab.contexts.members', '{n} member(s)').replace('{n}', String(m.members.length))
+                translate('okf.testingLab.contexts.members', '{n} member(s)').replace(
+                  '{n}',
+                  String(m.members.length) + (m.members_truncated ? '+' : '')
+                )
               }}
             </template>
           </span>
@@ -291,11 +299,6 @@ export default {
       const data = err && err.data;
       if (data && data.message) return data.message;
       return (err && err.message) || 'the request failed';
-    },
-
-    /** The OPEN context is the one with no memberships. */
-    isOpen(c) {
-      return !c || !(c.principal_refs || []).length;
     },
 
     onAddMembership(name) {

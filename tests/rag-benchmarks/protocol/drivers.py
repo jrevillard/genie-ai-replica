@@ -222,23 +222,30 @@ def _gold_without_identity(cases: list[dict]) -> list[str]:
 
     The anchor's own rule (``eval/run_eval.py::score_anchor``): the gold list
     is every entry's content hash, and ONLY when no entry carries one does it
-    fall back to the chunk keys. An entry with neither identity is dropped
-    under both branches — and so is an entry that carries only a chunk key
-    beside hashed siblings, because the hash branch wins. Such an entry
-    matches against nothing while the case counts as annotated, so the case
-    is listed here (the anchor would score it against fewer gold chunks than
-    the set declares).
+    fall back to the chunk keys. An entry that carries neither identity is
+    dropped under both branches — and so is an entry that carries only a
+    chunk key beside hashed siblings, because the hash branch wins. Such an
+    entry matches against nothing while the case counts as annotated, so the
+    case is listed here (the anchor would score it against fewer gold chunks
+    than the set declares).
+
+    A gold entry that is not an object is listed too: the anchor reads
+    ``c.get(...)`` on every entry, so it would die on one with an
+    AttributeError instead of refusing the set. The index is the entry's
+    position in the set's own list.
     """
     unmatched: list[str] = []
     for case in cases:
-        chunks = [chunk for chunk in (case.get("expected_chunks") or []) if isinstance(chunk, dict)]
-        hashes = [chunk for chunk in chunks if _has_text(chunk.get("content_hash"))]
-        keys = [chunk for chunk in chunks if _has_text(chunk.get("chunk_key"))]
-        effective = hashes or keys
-        if len(effective) != len(chunks):
-            for index, chunk in enumerate(chunks):
-                if chunk not in effective:
-                    unmatched.append(f"{case.get('id')}#gold{index}")
+        chunks = case.get("expected_chunks") or []
+        entries = [chunk for chunk in chunks if isinstance(chunk, dict)]
+        hash_branch = any(_has_text(chunk.get("content_hash")) for chunk in entries)
+        for index, chunk in enumerate(chunks):
+            if not isinstance(chunk, dict):
+                unmatched.append(f"{case.get('id')}#gold{index}")
+                continue
+            identity = chunk.get("content_hash") if hash_branch else chunk.get("chunk_key")
+            if not _has_text(identity):
+                unmatched.append(f"{case.get('id')}#gold{index}")
     return unmatched
 
 

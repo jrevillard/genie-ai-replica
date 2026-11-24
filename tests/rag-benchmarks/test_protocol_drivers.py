@@ -151,6 +151,24 @@ def test_config_a_refuses_a_gold_entry_with_no_identity(tmp_path):
     assert "sample-ans-pub-1#gold0" in str(failed.value)
 
 
+def test_config_a_refuses_a_gold_entry_that_is_not_an_object(tmp_path):
+    """The anchor reads ``c.get(...)`` on every gold entry, so an entry that is
+    not an object would kill it with an AttributeError instead of a refusal.
+    The refusal names the entry by its position in the set's own list."""
+    def bare_string(case):
+        case["expected_chunks"] = [
+            {"chunk_key": "sample-ans-pub-1-chunk-1", "content_hash": "a1b2c3d4e5f60718"},
+            "a bare string where a gold object belongs",
+        ]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", bare_string)
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "cannot match" in str(failed.value)
+    assert "sample-ans-pub-1#gold1" in str(failed.value)
+
+
 def test_config_a_records_the_identity_of_the_anchor_input(tmp_path):
     """The set's digest identifies the set; the projection's digest identifies
     WHICH of its cases the chunk-level surface scores. Both are recorded, so

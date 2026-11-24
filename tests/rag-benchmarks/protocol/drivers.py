@@ -259,10 +259,9 @@ def run_config_a(
     traces is a zero baseline in disguise.
 
     The anchor is fed the set's RETRIEVAL-SURFACE cases only (written to
-    ``config-a.gold.json``): the anchor scores passages against gold, and
-    the other surfaces are measured by the capture and the verdict layer. A
-    gold-less case would score vacuously — recall 1.0 by construction — so
-    anchoring it measured nothing while counting as measured.
+    ``config-a.gold.json``) and REFUSES a set it cannot measure: a retrieval
+    case with no gold, one it cannot drive as one query, or a gold entry with
+    no matchable identity.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

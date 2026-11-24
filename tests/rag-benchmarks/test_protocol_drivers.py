@@ -68,16 +68,26 @@ def test_config_a_runs_the_anchor_pattern_and_records_the_report(tmp_path):
     assert Path(result["report_path"]).exists()
 
 
+def _sample_set_with(tmp_path, case_id, mutate):
+    """The CI sample set with ONE case mutated — the setup the anchor's
+    refusal tests share."""
+    set_path = _a_set_file(tmp_path)
+    data = json.loads(set_path.read_text(encoding="utf-8"))
+    for case in data["entries"]:
+        if case["id"] == case_id:
+            mutate(case)
+    set_path.write_text(json.dumps(data), encoding="utf-8")
+    return set_path
+
+
 def test_config_a_refuses_a_set_whose_retrieval_cases_carry_no_gold(tmp_path):
     """A retrieval case without gold is measured by nothing: the anchor would
     score it vacuously (recall 1.0 by construction) and count it as measured
     while carrying no expectation. The driver refuses instead."""
-    set_path = _a_set_file(tmp_path)
-    data = json.loads(set_path.read_text(encoding="utf-8"))
-    for case in data["entries"]:
-        if case["id"] == "sample-ans-pub-1":
-            case["expected_chunks"] = []
-    set_path.write_text(json.dumps(data), encoding="utf-8")
+    def drop_gold(case):
+        case["expected_chunks"] = []
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", drop_gold)
 
     def runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
         raise AssertionError("the anchor must not run on an unmeasurable set")
@@ -92,13 +102,11 @@ def test_config_a_refuses_a_retrieval_case_the_anchor_cannot_drive_as_one_query(
     """A multi-turn case's queries are its turns — the capture drives them. The
     anchor drives one query per case, so a retrieval case it cannot drive that
     way is measured by nothing."""
-    set_path = _a_set_file(tmp_path)
-    data = json.loads(set_path.read_text(encoding="utf-8"))
-    for case in data["entries"]:
-        if case["id"] == "sample-ans-pub-1":
-            case.pop("query")
-            case["turns"] = [{"query": "first turn"}, {"query": "second turn"}]
-    set_path.write_text(json.dumps(data), encoding="utf-8")
+    def turns_only(case):
+        case.pop("query")
+        case["turns"] = [{"query": "first turn"}, {"query": "second turn"}]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", turns_only)
 
     def runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
         raise AssertionError("the anchor must not run on an unmeasurable set")
@@ -113,12 +121,10 @@ def test_config_a_refuses_a_gold_entry_with_no_identity(tmp_path):
     """The anchor matches a gold chunk on its content hash (or its chunk key).
     An entry with neither matches against nothing, and the case would drop out
     of the aggregate without a word."""
-    set_path = _a_set_file(tmp_path)
-    data = json.loads(set_path.read_text(encoding="utf-8"))
-    for case in data["entries"]:
-        if case["id"] == "sample-ans-pub-1":
-            case["expected_chunks"] = [{"preview": "the quarterly service report is submitted…"}]
-    set_path.write_text(json.dumps(data), encoding="utf-8")
+    def preview_only(case):
+        case["expected_chunks"] = [{"preview": "the quarterly service report is submitted…"}]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", preview_only)
 
     def runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
         raise AssertionError("the anchor must not run on an unmeasurable set")

@@ -170,6 +170,20 @@ def run_cases(cases: list[dict], pipeline) -> dict:
     return rows
 
 
+def resolve_model_id(generation):
+    """The generation client's model id, in whatever spelling the deployed
+    client carries (the deployed client reads it ASYNC; a property-shaped
+    client returns the value directly). The sync assembly resolves the async
+    read in its own loop — a bound method JSON-encoded by mistake is the bug
+    that killed the B leg's rows file on its first live run."""
+    reader = getattr(generation, "model_id", None)
+    if reader is None:
+        return None
+    if callable(reader):
+        return asyncio.run(reader())
+    return reader
+
+
 def build_pipeline():
     """The in-container assembly — the ONLY place the agent-service imports happen.
 
@@ -196,7 +210,7 @@ def build_pipeline():
 
     pipeline = NoAgentPipeline.create(noagent_config, capability, budget, env)
     generation = getattr(pipeline, "_generation", None)
-    model_id = getattr(generation, "model_id", None)
+    model_id = resolve_model_id(generation)
     return pipeline, model_id
 
 

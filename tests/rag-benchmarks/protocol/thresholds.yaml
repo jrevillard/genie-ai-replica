@@ -4,13 +4,13 @@
 # EXPLICITLY recorded absence. An absence BLOCKS promotion — it is never a
 # default, never a silent pass, never a value the loader invents.
 #
-# The measured A reference has landed (issue #2118 — MR !1056, the E01 live
-# run on the forge k3s, 2026-11-23) and the operator has signed the
-# retrieval-quality thresholds against it (M-1, signed 2026-11-23). The other
-# measured dimensions still ship as explicitly absent, with their reason:
-# the signature covers M-1 only, and an absent dimension keeps blocking the
-# promotion — a signature never manufactures a pass for a dimension nobody
-# agreed a threshold for.
+# The operator has signed the retrieval-quality thresholds (M-1, agreed
+# 2026-11-23 against the issue #2118 reference, re-signed 2026-11-24 onto the
+# FINAL A reference of issue #2162 — the basis below is the single home of
+# that history). The other measured dimensions still ship as explicitly
+# absent, with their reason: the signature covers M-1 only, and an absent
+# dimension keeps blocking the promotion — a signature never manufactures a
+# pass for a dimension nobody agreed a threshold for.
 #
 # This file is versioned with the protocol package. The gate-compatible
 # thresholds artifact is DERIVED from it (protocol/thresholds.py) — it is

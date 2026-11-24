@@ -150,10 +150,12 @@ SIGNED_SCOPE = "config A — the chunk/passage-level anchor metrics"
 # The reference the signature is bound to: the corpus fingerprint and the
 # assessment-set digest of the FINAL measured A run (issue #2162 / MR !1072)
 # the operator's 2026-11-24 re-signature re-anchored the 2026-11-23 bounds
-# onto, values unchanged. The registry's basis names them — the pins live
-# here so a typo in either digest goes red instead of shipping as free prose.
+# onto. The registry's basis is the single home of that history — the pins
+# live here so a typo in either digest goes red instead of shipping as free
+# prose.
 SIGNED_CORPUS_FINGERPRINT = "f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f"
 SIGNED_ASSESSMENT_SET_SHA256 = "cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812"
+SIGNED_ON = "2026-11-24"
 
 
 def _ABSENT_DIMENSIONS() -> list[str]:
@@ -259,11 +261,11 @@ def test_the_shipped_registry_exposes_the_signed_sign_off():
     decision = thresholds_mod.promotion_decision(registry)
     assert decision["sign_off"]["owner"] == OWNER
     assert decision["sign_off"]["signed"] is True
-    assert decision["sign_off"]["signed_on"] == "2026-11-24"
+    assert decision["sign_off"]["signed_on"] == SIGNED_ON
     report = thresholds_mod.build_thresholds_report(registry, created_utc=CREATED)
     assert report["sign_off"]["owner"] == OWNER
     assert report["sign_off"]["signed"] is True
-    assert report["sign_off"]["signed_on"] == "2026-11-24"
+    assert report["sign_off"]["signed_on"] == SIGNED_ON
 
 
 def test_the_shipped_registry_records_who_signed_it():

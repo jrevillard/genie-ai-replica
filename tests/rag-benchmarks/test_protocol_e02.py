@@ -348,10 +348,12 @@ def test_e02_report_publishes_the_same_cost_shape_on_both_legs():
     report = _report()
     b_values = report["dimensions"]["M-5"]["B"]["values"]
     c_values = report["dimensions"]["M-5"]["C"]["values"]
-    assert set(b_values) == set(c_values) == {"model_calls", "prompt_tokens"}
+    assert set(b_values) == set(c_values) == {"model_calls", "prompt_tokens", "n_rows_contributing"}
     # The RUN's cost, not one case's spend.
     assert b_values["model_calls"] == 1
     assert c_values["model_calls"] == 5
+    assert b_values["n_rows_contributing"] == 1
+    assert c_values["n_rows_contributing"] == 2
 
 
 def test_e02_report_compares_the_two_legs_on_the_shared_metrics():
@@ -716,3 +718,85 @@ def test_e02_cli_exits_1_on_a_refusal(tmp_path):
         seed=None,
     )
     assert cmd_e02(args) == 1
+
+
+# ---------------------------------------------------------------------------
+# Round 2 — the corrections the FIX-REVIEW validated
+# ---------------------------------------------------------------------------
+
+
+def test_e02_counts_multi_turn_rows_in_their_case_class():
+    """A multi-turn case's rows are keyed <case_id>#t<n>: dropping the turn
+    suffix is the only way a turn row lands in its case's class — dropping the
+    rows would silently shrink the census and the coverage comparison."""
+    entries = _entries() + [
+        {"id": "m1", "case_class": "answerable", "expectations": {"query_class": "multi_hop"}, "turns": [{"query": "t1"}, {"query": "t2"}]}
+    ]
+    c_rows = _c_rows()
+    c_rows["m1#t1"] = {"case_id": "m1#t1", "outcome": "answered", "answer": "a", "wall_ms": 10.0}
+    c_rows["m1#t2"] = {"case_id": "m1#t2", "outcome": "answered", "answer": "a", "wall_ms": 10.0}
+    report = _report(entries=entries, c_rows=c_rows)
+    multi_hop = report["gains"]["per_class"]["multi_hop"]
+    assert multi_hop["n_cases_in_set"] == 2
+    assert multi_hop["n_rows_recorded"]["C"] == 3  # c1 + the two turn rows
+    assert multi_hop["delta"]["answered"] == 2
+
+
+def test_e02_does_not_count_a_budget_exhausted_row_as_answered():
+    """A row whose terminal state is a limit hit is not an answer — counting
+    it as one inflates the fixed pipeline's coverage and can deny the agent a
+    measured regression it did not earn."""
+    b_rows = _b_rows()
+    b_rows["c1"] = dict(b_rows["c1"], abstention_reason="result_budget_exhausted")
+    report = _report(b_rows=b_rows)
+    # c1 is the multi_hop class in the fixture; the fixed pipeline's answer
+    # there is now a limit hit.
+    multi_hop = report["gains"]["per_class"]["multi_hop"]
+    assert multi_hop["B"]["n_limit_hit"] == 1
+    assert multi_hop["B"]["n_answered"] == 0
+    assert multi_hop["delta"]["answered"] == 1
+
+
+def test_e02_fails_closed_on_a_scope_spelling_it_cannot_parse():
+    """A scope that mentions a configuration in a spelling the harness cannot
+    parse names NO leg: the bound is not applied to any leg — an unapplied
+    bound blocks, a wrongly applied one would compare two surfaces."""
+    for scope in ("configuration: A — chunk metrics", "config (A) — chunk metrics"):
+        thresholds = _thresholds(scope=scope)
+        report = _report(thresholds=thresholds)
+        for leg in ("B", "C"):
+            threshold = report["dimensions"]["M-1"][leg]["threshold"]
+            assert threshold["status"] == "uninterpretable", scope
+            assert threshold["bounds"][0]["outcome"] == "uninterpretable"
+
+
+def test_e02_records_a_bound_failure_masked_by_a_sibling_bound():
+    """A measured breach must not be masked by a sibling bound the surface
+    cannot measure: the failure is read off the bounds, not the status."""
+    thresholds = _thresholds(
+        scope="the E02 doc-level surface",
+        metrics={
+            "n_rows_with_source_documents": {"operator": ">=", "threshold": 9},
+            "retrieval_recall": {"operator": ">=", "threshold": 0.95},
+        },
+    )
+    report = _report(thresholds=thresholds)
+    threshold = report["dimensions"]["M-1"]["C"]["threshold"]
+    assert threshold["status"] == "not_measurable"
+    assert report["verdict"]["agent_bound_failures"] == [{"dimension": "M-1", "leg": "C"}]
+    assert report["verdict"]["state"] == "not_supported"
+
+
+def test_e02_recognizes_the_canonical_scope_spelling():
+    """The recognized spellings (config A / config-A / configuration A /
+    Config. A) all name the configuration and transfer to NO other leg."""
+    for scope in (
+        "config A — the chunk/passage-level anchor metrics",
+        "config-A — the chunk/passage-level anchor metrics",
+        "configuration A — the chunk/passage-level anchor metrics",
+        "Config. A — the chunk/passage-level anchor metrics",
+    ):
+        thresholds = _thresholds(scope=scope)
+        report = _report(thresholds=thresholds)
+        for leg in ("B", "C"):
+            assert report["dimensions"]["M-1"][leg]["threshold"]["status"] == "not_applicable", scope

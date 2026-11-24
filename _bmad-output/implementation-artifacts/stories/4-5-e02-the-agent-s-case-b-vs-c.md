@@ -203,6 +203,21 @@ Global review round 1 (the implementation commit, 2026-11-24): 16 important, 2 n
 | 18 | the S4 checklist claimed M-1 was agreed while the branch's registry records it absent | nit | applied — the row now names MR !1063 as the pending carrier |
 | 19 | three suite failures (`pydantic` missing in the reviewer's venv) | pre-existing | not a code defect — the suites are green with `pydantic` installed (353 + 214 + 24 tests) |
 
+FIX-REVIEW round 1 (f=0, the correction diff only, fresh context): 12 of 19 verified fixed end-to-end, 5 partially fixed, 4 NEW defects (two able to flip the E02 verdict) — **NOT CLEAN**. All applied:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| D1 | multi-turn rows silently dropped from the census and the coverage comparison (the class members were matched by raw row id; a turn row is keyed `<case_id>#t<n>`) | new defect | applied — the per-class row subsets are matched BY BASE ID, so a turn row lands in its case's class |
+| D2 | the B leg counted a limit-hit row (`result_budget_exhausted`) as ANSWERED, inverting the coverage verdict | new defect | applied — a limit-hit row is counted apart (`continue`), matching the counter-metrics terminal state |
+| D3 | the scope rule failed open on spelling ("config-A", "configuration A", "Config. A" were read as surface-neutral and applied to the wrong leg) | new defect / finding 3 | applied — the recognized spellings all name the configuration and transfer to NO other leg; a scope that mentions a configuration in a spelling the harness cannot parse names NO leg (UNINTERPRETABLE, the bound is not applied) |
+| D4 | a regression FAIL computed over mismatched populations outranked the mix-mismatch BLOCK | new defect / finding 16 | applied — the regression verdict is BLOCKED when the phases cover different request mixes (the limits' own FAIL on the loaded phase's numbers still fails, correctly) |
+| P2 | a measured C-leg bound FAIL was masked by a sibling bound the surface could not measure (the dimension status collapsed, and the verdict gated on the status) | partially fixed | applied — the failure is read off the BOUNDS, never off the dimension's status |
+| P11 | the B branch still counted a limit-hit row as answered | partially fixed | applied (D2) |
+| P15 | the record's own `n_without_terminal_outcome: 0` could mask a derived vanished-request count | partially fixed | applied — the derived count is the floor; a declared value can only raise it |
+| P16 | the mismatch BLOCK sat in the last `elif`, so a FAIL won | partially fixed | applied (D4) |
+| N1 | `_aggregate_cost` computed a per-counter `n_rows` it never published (the docstring promised it) | nit | applied — the aggregated surface publishes `n_rows_contributing` |
+| N2 | e01 imported `CREDENTIAL_MARKERS`/`MEASUREMENT_KEY_NAMES` it no longer used after the move to `redaction.py` | nit | applied — the dead imports are gone |
+
 ## Design Notes
 
 **Why the live E02 legs are refused, and what that does NOT mean.** The partial-order gate (story 4.1) refuses a gated B/C run until a SIGNED thresholds artifact exists, and story 4.4's `promotion_decision` produces that artifact only when every measured dimension (M-1..M-5) carries an agreed value. The operator's 2026-11-23 signature covers M-1 alone; M-2..M-5 stay explicitly absent. So the gate keeps refusing — and that refusal is the protocol working as designed (PRD §8: "an absent threshold blocks promotion rather than defaulting"), not a defect to route around. The live outcome of this story is therefore: the machinery ships, the refusal is recorded verbatim, and the live measurement waits on an operator decision nobody but the operator can make.

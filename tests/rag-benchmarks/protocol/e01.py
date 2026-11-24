@@ -60,8 +60,6 @@ from . import pairs as pairs_mod
 from .evalset import as_label_list, base_case_id
 from .manifest import manifest_digest, sha256_json
 from .redaction import (
-    CREDENTIAL_MARKERS,
-    MEASUREMENT_KEY_NAMES,
     is_credential_key as _is_credential_key,
     redact_deep as _redact_deep,
 )

@@ -380,3 +380,46 @@ def test_coexistence_cli_exits_1_on_a_refusal(tmp_path):
     assert cmd_coexistence(args) == 0
     args.control = _write(tmp_path, "broken.json", {})
     assert cmd_coexistence(args) == 1
+
+
+# ---------------------------------------------------------------------------
+# Round 2 — the corrections the FIX-REVIEW validated
+# ---------------------------------------------------------------------------
+
+
+def test_coexistence_derived_vanished_request_overrides_a_stale_zero():
+    """A record that claims zero vanished requests while its own tally shows
+    requests missing would mask the silent failure: the derived count is the
+    floor, a declared value can only raise it."""
+    load = _agent_load()
+    load["requests"] = 5
+    load["n_without_terminal_outcome"] = 0
+    report = _report(control=_control(), loaded=_control(), agent_load=load)
+    assert report["agentic_load"]["n_without_terminal_outcome"] == 1
+    assert report["verdict"]["verdict"] == "fail"
+    assert any("never queues it" in reason for reason in report["verdict"]["reasons"])
+
+
+def test_coexistence_blocks_the_regression_over_a_mismatched_mix_even_when_it_breaches():
+    """The regression is the comparison: over two different populations it is
+    invalid, so its verdict is BLOCKED — never a FAIL whose evidentiary basis
+    the report itself calls invalid."""
+    loaded = {case_id: dict(measurement) for case_id, measurement in _control().items()}
+    loaded.pop("q4")
+    report = _report(control=_control(), loaded=loaded)
+    assert report["phase_coverage"]["same_request_mix"] is False
+    assert report["regression_verdict"]["verdict"] == "blocked"
+    assert report["verdict"]["verdict"] == "blocked"
+
+
+def test_coexistence_absolute_limit_failure_still_fails_over_a_mismatched_mix():
+    """The limits apply to the LOADED phase's own numbers — a measured breach
+    there is a fact about that phase whatever the control covered."""
+    limits = _limits(error_rate={"operator": "<=", "threshold": 0.0})
+    loaded = {case_id: dict(measurement) for case_id, measurement in _control().items()}
+    loaded.pop("q4")
+    loaded["q1"] = {"http_status": 503}
+    report = _report(control=_control(), loaded=loaded, limits=limits)
+    assert report["phase_coverage"]["same_request_mix"] is False
+    assert report["verdict"]["verdict"] == "fail"
+    assert report["regression_verdict"]["verdict"] == "blocked"

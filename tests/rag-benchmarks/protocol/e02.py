@@ -129,8 +129,13 @@ VERDICT_UNASSESSABLE = "unassessable"
 # configuration only. The signed M-1 bounds are scoped to "config A — the
 # chunk/passage-level anchor metrics"; the E02 legs measure the doc-level
 # surface, so those bounds are NOT APPLICABLE here — whatever metric names
-# they happen to carry.
-_SCOPE_CONFIG = re.compile(r"config\s*([abc])\b", re.IGNORECASE)
+# they happen to carry. The rule FAILS CLOSED: a scope that mentions a
+# configuration in a spelling the harness cannot parse names NO leg, so the
+# bound is not applied to any leg (an unapplied bound blocks; a wrongly
+# applied one would compare two different surfaces and call it a breach).
+_SCOPE_CONFIG = re.compile(r"config(?:uration)?[\s._-]*([abc])\b", re.IGNORECASE)
+_SCOPE_CONFIG_WORD = re.compile(r"config", re.IGNORECASE)
+_SCOPE_AMBIGUOUS = "ambiguous"
 
 
 class E02Refusal(RuntimeError):
@@ -538,18 +543,21 @@ def _aggregate_cost(usage_records: list[dict]) -> dict:
     RUN's cost, not one arbitrary case's spend.
     """
     totals: dict = {}
+    n_contributing = 0
     for record in usage_records:
         if not isinstance(record, dict):
             continue
+        contributed = False
         for counter in COST_COUNTERS:
             value = record.get(counter)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                entry = totals.setdefault(counter, {"sum": 0.0, "n_rows": 0})
-                entry["sum"] += float(value)
-                entry["n_rows"] += 1
+                totals[counter] = totals.get(counter, 0.0) + float(value)
+                contributed = True
+        if contributed:
+            n_contributing += 1
     if not totals:
         return {}
-    return {counter: entry["sum"] for counter, entry in sorted(totals.items())}
+    return {**{counter: value for counter, value in sorted(totals.items())}, "n_rows_contributing": n_contributing}
 
 
 def _b_m5(b_rows: dict) -> dict:
@@ -710,22 +718,20 @@ def _lookup_metric(values: dict, metric: str | None):
     return None
 
 
-def _scope_applies_to(scope, config: str) -> bool:
-    """Whether a signed scope applies to a leg.
+def _scope_configuration(scope):
+    """The configuration a signed scope names — None when it names none.
 
-    A scope that names a configuration applies to THAT configuration only:
-    the signed M-1 bounds are scoped to "config A — the chunk/passage-level
-    anchor metrics", and the E02 legs measure the doc-level surface, so those
-    bounds do not apply here — whatever metric names they happen to carry.
-    A scope that names no configuration is surface-neutral: the metric lookup
-    decides.
-    """
+    ``_SCOPE_AMBIGUOUS`` means the scope mentions a configuration in a
+    spelling this harness cannot parse (or names more than one): the bound
+    names NO leg, and no leg may apply it."""
     if not isinstance(scope, str):
-        return True
+        return None
     named = {match.group(1).upper() for match in _SCOPE_CONFIG.finditer(scope)}
-    if not named:
-        return True
-    return config in named
+    if len(named) == 1:
+        return next(iter(named))
+    if named or _SCOPE_CONFIG_WORD.search(scope):
+        return _SCOPE_AMBIGUOUS
+    return None
 
 
 def _apply_threshold(thresholds: dict | None, code: str, surface: dict, config: str) -> dict:
@@ -773,16 +779,26 @@ def _apply_threshold(thresholds: dict | None, code: str, surface: dict, config: 
     bounds = []
     for record in records:
         measured = _lookup_metric(values, record["metric"])
+        named_configuration = _scope_configuration(scope)
         if record["metric"] is None:
             outcome = THRESHOLD_UNINTERPRETABLE
             comparison = None
             reason = "the signed bound names no metric — it cannot be looked up on any surface"
-        elif not _scope_applies_to(scope, config):
+        elif named_configuration == _SCOPE_AMBIGUOUS:
+            outcome = THRESHOLD_UNINTERPRETABLE
+            comparison = None
+            reason = (
+                f"the signed scope ({scope}) mentions a configuration in a spelling this harness"
+                " cannot parse — the bound names no leg and is not applied (an unapplied bound"
+                " blocks; a wrongly applied one would compare two different surfaces)"
+            )
+        elif named_configuration is not None and named_configuration != config:
             outcome = THRESHOLD_NOT_APPLICABLE
             comparison = None
             reason = (
-                f"the signed scope ({scope}) does not name this leg's configuration ({config}) —"
-                " the bound is scoped elsewhere and does not transfer"
+                f"the signed scope ({scope}) names configuration {named_configuration}, not this"
+                f" leg's configuration ({config}) — the bound is scoped elsewhere and does not"
+                " transfer"
             )
         elif record["operator"] is None:
             outcome = THRESHOLD_UNINTERPRETABLE
@@ -892,10 +908,15 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
             if row.get("status") == "failure":
                 stats["n_failed"] += 1
                 continue
+            if row.get("abstention_reason") == LIMIT_MARKER_B:
+                # The row's own terminal state is a LIMIT HIT, not an answer —
+                # the counter-metrics vocabulary says so (answered=False,
+                # hit_kind="limit"), and counting it as answered would inflate
+                # the fixed pipeline's coverage and invert the verdict.
+                stats["n_limit_hit"] += 1
+                continue
             if row.get("abstained") is True:
                 stats["n_abstained"] += 1
-            if row.get("abstention_reason") == LIMIT_MARKER_B:
-                stats["n_limit_hit"] += 1
             if row.get("status") == "ok":
                 stats["n_answered"] += 1
             continue
@@ -917,10 +938,9 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
     return stats
 
 
-def _class_latency(rows: dict, config: str, case_ids: set[str]) -> list[float]:
+def _class_latency(rows: dict, config: str) -> list[float]:
     walls = []
-    for case_id in case_ids:
-        row = rows.get(case_id)
+    for row in rows.values():
         if not isinstance(row, dict):
             continue
         if config == "B" and row.get("status") != "ok":
@@ -955,13 +975,20 @@ def _build_gains(entries: list[dict], b_rows: dict, c_rows: dict) -> dict:
     per_class = {}
     for name in sorted(set_classes):
         case_ids = set_classes[name]
-        b_stats = _leg_class_stats({cid: b_rows[cid] for cid in case_ids if cid in b_rows}, "B")
-        c_stats = _leg_class_stats({cid: c_rows[cid] for cid in case_ids if cid in c_rows}, "C")
-        b_walls = _class_latency(b_rows, "B", case_ids)
-        c_walls = _class_latency(c_rows, "C", case_ids)
+        # The rows of the class are matched BY BASE ID: a multi-turn case's
+        # rows are keyed <case_id>#t<n>, and dropping the turn suffix is the
+        # only way a turn row lands in its case's class. Matching the raw row
+        # ids would silently drop every turn row from the census and from the
+        # coverage comparison.
+        b_class = {cid: row for cid, row in b_rows.items() if base_case_id(cid) in case_ids}
+        c_class = {cid: row for cid, row in c_rows.items() if base_case_id(cid) in case_ids}
+        b_stats = _leg_class_stats(b_class, "B")
+        c_stats = _leg_class_stats(c_class, "C")
+        b_walls = _class_latency(b_class, "B")
+        c_walls = _class_latency(c_class, "C")
         per_class[name] = {
             "n_cases_in_set": len(case_ids),
-            "n_cases_recorded": {
+            "n_rows_recorded": {
                 "B": b_stats["n_rows"],
                 "C": c_stats["n_rows"],
             },
@@ -1179,14 +1206,18 @@ def _verdict(dimensions: dict, gains: dict) -> dict:
             "comparison": _shared_metrics(record["B"], record["C"]),
         }
         for leg, threshold in (("C", c_threshold), ("B", b_threshold)):
-            if threshold["status"] == THRESHOLD_APPLIED:
-                if any(bound["outcome"] == COMPARISON_FAIL for bound in threshold.get("bounds") or []):
-                    (agent_failures if leg == "C" else fixed_failures).append(
-                        {"dimension": code, "leg": leg}
-                    )
-                elif leg == "C":
-                    agent_bounds_applied.append(code)
-            else:
+            bounds = threshold.get("bounds") or []
+            # The failure is read off the BOUNDS, not off the dimension's
+            # status: a dimension whose sibling bound is not measurable
+            # collapses to not_measurable, and gating on the status would
+            # mask a measured breach behind it.
+            if any(bound["outcome"] == COMPARISON_FAIL for bound in bounds):
+                (agent_failures if leg == "C" else fixed_failures).append(
+                    {"dimension": code, "leg": leg}
+                )
+            elif leg == "C" and threshold["status"] == THRESHOLD_APPLIED:
+                agent_bounds_applied.append(code)
+            if threshold["status"] != THRESHOLD_APPLIED:
                 unassessed.append(
                     {
                         "dimension": code,

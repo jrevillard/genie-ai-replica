@@ -341,7 +341,7 @@ def _apply_limits(limits: dict | None, loaded_metrics: dict) -> dict:
     }
 
 
-def _apply_regression(limits: dict | None, regression: dict) -> dict:
+def _apply_regression(limits: dict | None, regression: dict, *, same_mix: bool) -> dict:
     """Apply the agreed regression tolerance between the control and the
     loaded phases.
 
@@ -349,7 +349,10 @@ def _apply_regression(limits: dict | None, regression: dict) -> dict:
     under the agentic load?" — and that needs a TOLERANCE, which is the
     operator's decision like every other bound. Without one the regression is
     NOT MEASURABLE and the verdict blocks; it is never scored against a
-    tolerance nobody agreed.
+    tolerance nobody agreed. And when the two phases do not cover the same
+    request mix, the regression is computed over different populations — the
+    comparison is invalid, so its verdict is BLOCKED, never a FAIL whose
+    evidentiary basis the report itself calls invalid.
     """
     entries = limits.get("regression") if isinstance(limits, dict) else None
     if not isinstance(entries, dict) or not entries:
@@ -418,7 +421,9 @@ def _apply_regression(limits: dict | None, regression: dict) -> dict:
             }
         )
     outcomes = {metric["outcome"] for metric in metrics}
-    if LIMIT_FAIL in outcomes:
+    if not same_mix:
+        verdict = VERDICT_BLOCKED
+    elif LIMIT_FAIL in outcomes:
         verdict = VERDICT_FAIL
     elif LIMIT_NOT_MEASURABLE in outcomes or LIMIT_UNINTERPRETABLE in outcomes:
         verdict = VERDICT_BLOCKED
@@ -428,6 +433,7 @@ def _apply_regression(limits: dict | None, regression: dict) -> dict:
         "present": True,
         "verdict": verdict,
         "metrics": metrics,
+        "same_request_mix": same_mix,
         "reason": None,
         "note": (
             "a regression is measured against the CONTROL phase: the loaded phase may not be worse"
@@ -458,9 +464,17 @@ def _agent_load_summary(agent_load: dict) -> dict:
     requests_recorded = isinstance(n_requests, int) and not isinstance(n_requests, bool)
     if not requests_recorded:
         n_requests = n_terminal
+    # The vanished-request count is DERIVED from the record's own numbers
+    # (a request that was sent but reached no terminal outcome), and a
+    # DECLARED value can only RAISE it: a record that claims zero while its
+    # own tally shows requests missing would mask the silent failure the
+    # saturation rule exists to catch.
+    derived_without_terminal = max(0, n_requests - n_terminal)
     n_without_terminal = agent_load.get("n_without_terminal_outcome")
     if not isinstance(n_without_terminal, int) or isinstance(n_without_terminal, bool):
-        n_without_terminal = max(0, n_requests - n_terminal)
+        n_without_terminal = derived_without_terminal
+    else:
+        n_without_terminal = max(n_without_terminal, derived_without_terminal)
     n_refusals = agent_load.get("n_admission_refusals")
     if not isinstance(n_refusals, int) or isinstance(n_refusals, bool):
         n_refusals = int(outcomes.get("admission_refused") or 0)
@@ -613,14 +627,15 @@ def build_coexistence_report(
             "loaded": after,
             "delta": (after - before) if isinstance(before, (int, float)) and isinstance(after, (int, float)) else None,
         }
-    applied_regression = _apply_regression(limits, regression)
-
     # The two phases must cover the SAME request mix: a comparison over two
-    # different populations is not a comparison.
+    # different populations is not a comparison — and the regression is the
+    # comparison, so it is computed (and recorded) but never scored until the
+    # mix is the same.
     control_ids = set(control_measurements)
     loaded_ids = set(loaded_measurements)
     mismatched_ids = sorted(control_ids ^ loaded_ids)
     same_mix = not mismatched_ids
+    applied_regression = _apply_regression(limits, regression, same_mix=same_mix)
 
     # The saturation criterion: the lane refuses a saturated run, it never
     # queues it. A request that reached no terminal outcome is a silent

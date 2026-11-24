@@ -4,12 +4,13 @@
 # EXPLICITLY recorded absence. An absence BLOCKS promotion — it is never a
 # default, never a silent pass, never a value the loader invents.
 #
-# The measured reference is still being produced (issue #2118 — the E01 live
-# run on the forge k3s). Until it lands EVERY dimension ships as explicitly
-# absent, and the sign-off is UNSIGNED: the owner is recorded here, but the
-# operator has signed nothing yet. The agreed VALUES land in a separate
-# follow-up MR — the thresholds are agreed AFTER the reference is measured and
-# BEFORE the first gated B/C run (PRD §8), never before.
+# The measured A reference has landed (issue #2118 — MR !1056, the E01 live
+# run on the forge k3s, 2026-11-23) and the operator has signed the
+# retrieval-quality thresholds against it (M-1, signed 2026-11-23). The other
+# measured dimensions still ship as explicitly absent, with their reason:
+# the signature covers M-1 only, and an absent dimension keeps blocking the
+# promotion — a signature never manufactures a pass for a dimension nobody
+# agreed a threshold for.
 #
 # This file is versioned with the protocol package. The gate-compatible
 # thresholds artifact is DERIVED from it (protocol/thresholds.py) — it is
@@ -19,38 +20,68 @@ registry_version: "1.0.0"
 artifact: "evaluation-threshold-registry"
 
 description: >-
-  The agreed thresholds of the measured dimensions M-1..M-5 — one entry per
+  The agreed thresholds of the measured dimensions — one entry per
   dimension, each an agreed value or an explicit absence with its reason.
 
 sign_off:
   owner: "jrevillard (ITU)"
-  signed: false
-  agreed_on: null
-  signed_on: null
+  signed: true
+  agreed_on: "2026-11-23"
+  signed_on: "2026-11-23"
+  signatory: "jrevillard"
+  basis: >-
+    the measured A reference (issue #2118 — MR !1056, the E01 live run on the
+    forge k3s, 2026-11-23): corpus fingerprint
+    6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98,
+    assessment-set digest
+    58850161afebad599234e5ef54b1122a17684e5de7b81e36b9b6c3867152a784,
+    6 evaluable cases
   note: >-
-    The E01/E02 gate sign-off owner is the operator. No sign-off has been
-    given: the thresholds are agreed after the measured reference lands
-    (issue #2118), and until then no dimension carries an agreed value. A
-    missing or unsigned sign-off blocks promotion exactly like an absent
-    threshold.
+    The signature covers the retrieval-quality thresholds (M-1) only: the
+    other dimensions ship as explicitly absent, with their reason, and they
+    keep blocking the promotion until their own thresholds are agreed.
 
 dimensions:
   M-1:
     dimension: retrieval_quality
     surface: >-
       config A: the chunk-level anchor metrics (recall, precision,
-      complete_recall, noise, retrieval_recall, recall@k, ndcg@k); config B:
-      the doc-level source_documents — the surfaces differ by construction
-      (pair E01), so the threshold applies per surface and never across them.
-    status: absent
-    value: null
-    absent_reason: >-
-      the measured reference is pending (issue #2118 — the E01 live run on the
-      forge k3s); no retrieval-quality threshold is agreed yet
+      complete_recall, noise, retrieval_recall, passage_recall, recall@k,
+      ndcg@k); config B: the doc-level source_documents — the surfaces differ
+      by construction (pair E01), so the threshold applies per surface and
+      never across them.
+    status: agreed
+    value:
+      scope: "config A — the chunk/passage-level anchor metrics"
+      metrics:
+        retrieval_recall:
+          operator: ">="
+          threshold: 0.95
+        recall_at_10:
+          operator: ">="
+          threshold: 0.95
+        ndcg_at_10:
+          operator: ">="
+          threshold: 0.90
+        passage_recall:
+          operator: ">="
+          threshold: 0.95
+        noise:
+          operator: "<="
+          threshold: 0.80
+    absent_reason: null
     rationale: >-
-      the threshold is agreed against the measured A-only reference, after that
-      reference lands and before the first gated B/C run (PRD §8)
-    agreement_date: null
+      the operator signed these bounds on 2026-11-23 against the measured
+      A-only reference (issue #2118 / MR !1056 — 6 evaluable cases:
+      retrieval_recall 1.0, recall_at_10 1.0, ndcg_at_10 1.0, passage_recall
+      1.0, noise 0.667). Every bound is a line the reference satisfies and a
+      later run must keep satisfying: a regression past it is visible instead
+      of averaged away (PRD §8). The reference rests on a 3-chunk corpus (one
+      document, the venue's upload-validation fixture) over 6 evaluable cases,
+      where recall and ndcg sit at their ceiling — the bounds are a floor the
+      later runs must keep, not a fine-grained regression detector on that
+      corpus
+    agreement_date: "2026-11-23"
 
   M-2:
     dimension: answer_grounding
@@ -61,12 +92,13 @@ dimensions:
     status: absent
     value: null
     absent_reason: >-
-      the measured reference is pending (issue #2118 — the E01 live run on the
-      forge k3s); no answer-grounding threshold is agreed yet
+      no grounding threshold is agreed: the operator's signature of 2026-11-23
+      covers the retrieval-quality thresholds (M-1) only — the judged
+      grounding agreement rate has no agreed bound yet
     rationale: >-
       grounding is a judged dimension — the threshold bounds the judged
-      agreement rate, so it can only be agreed once the judged reference
-      exists (PRD §8)
+      agreement rate. The judged reference exists (issue #2118) and the bound
+      on it is the operator's to agree; none is agreed yet (PRD §8)
     agreement_date: null
 
   M-3:
@@ -78,12 +110,15 @@ dimensions:
     status: absent
     value: null
     absent_reason: >-
-      the measured reference is pending (issue #2118 — the E01 live run on the
-      forge k3s); no abstention-correctness threshold is agreed yet
+      no abstention-correctness threshold is agreed: the operator's signature
+      of 2026-11-23 covers the retrieval-quality thresholds (M-1) only — the
+      correctness baseline is a judge-layer fact and no bound is agreed yet
     rationale: >-
-      the threshold separates the correct abstentions from the excessive ones;
-      the correctness baseline is a judge-layer fact, so the number is agreed
-      only after the judged reference exists (PRD §8)
+      the threshold separates the correct abstentions from the excessive ones.
+      The measured reference records the config-A behaviour — the legacy path
+      answers the unanswerable and the cancellation case instead of abstaining
+      (issue #2118) — and the bound that separates them is the operator's to
+      agree; none is agreed yet (PRD §8)
     agreement_date: null
 
   M-4:
@@ -94,12 +129,14 @@ dimensions:
     status: absent
     value: null
     absent_reason: >-
-      the measured reference is pending (issue #2118 — the E01 live run on the
-      forge k3s); no latency threshold is agreed yet
+      no latency threshold is agreed: the operator's signature of 2026-11-23
+      covers the retrieval-quality thresholds (M-1) only — the reference
+      published its latency distribution, but no band is agreed
     rationale: >-
       the threshold is agreed against the measured reference's own latency
-      distribution — a band sized on another deployment's hardware would
-      approve a regression (PRD §8)
+      distribution (issue #2118: 5850 ms min, 8932 ms median, 11443 ms max over
+      the 9 answered cases) — a band sized on another deployment's hardware
+      would approve a regression (PRD §8)
     agreement_date: null
 
   M-5:
@@ -111,9 +148,13 @@ dimensions:
     status: absent
     value: null
     absent_reason: >-
-      the measured reference is pending (issue #2118 — the E01 live run on the
-      forge k3s); no resource-consumption threshold is agreed yet
+      no resource-consumption threshold is agreed, and the measured reference
+      records no resource surface at all (issue #2118: the A rows carry no
+      resource record, and the B leg never ran — the gate refused it as an
+      unsigned predecessor) — an explicit absence, not a zero
     rationale: >-
-      the agent earns its cost within an agreed limit — the limit is agreed
-      against the measured reference, never invented here (PRD §8)
+      the agent earns its cost within an agreed limit. The limit needs a
+      surface to be agreed against and the reference carries none yet; the
+      operator's signature of 2026-11-23 covers the retrieval-quality
+      thresholds only (PRD §8)
     agreement_date: null

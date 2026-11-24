@@ -17,7 +17,8 @@ re-run's record.
   (the re-run emits the renamed producer string, as the 2026-11-21 record's
   rename note predicted)
 - **Machine record:** `_bmad-output/implementation-artifacts/v06-rerun-2026-11-24/`
-  (`harness-matrix.json`, `probe-as-found.json`, `probe-window-override.json`)
+  (`harness-matrix.json`, `probe-as-found.json`, `probe-window-override.json`,
+`probe-window-override.stderr.txt`)
 - **"Before" evidence:** `v06-runtime-verification-2026-11-21.md` (kept
   verbatim, unchanged)
 
@@ -148,7 +149,7 @@ serving, loop mechanics, budget accounting, tool dispatch, honest answer.
 The 3 `search_knowledge` calls did NOT serve results — each reported
 `transient_failure: the embedding stage failed: [SSL:
 CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed
-certificate` (see `probe-window-override.stderr.log`), and the model
+certificate` (see `probe-window-override.stderr.txt`), and the model
 completed with the corpus-unreachable answer the system prompt's honesty
 clause demands. `answered` here proves the RUNTIME path, not corpus
 retrieval.

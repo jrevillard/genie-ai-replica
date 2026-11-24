@@ -236,12 +236,13 @@ class FakeBTransport:
     row — the run must continue anyway; a shipped per-turn entry's ``turn``
     index rides the row like the real driver writes it)."""
 
-    def __init__(self, failure_ids=()):
+    def __init__(self, failure_ids=(), resolved_env=None):
         self.cmds: list[str] = []
         self.failure_ids = set(failure_ids)
         self.shipped_driver: bytes | None = None
         self.cases_seen: list[list[str]] = []
         self.shipped_cases: list[dict] = []
+        self.resolved_env = resolved_env or {"AGENT_X": "1"}
 
     def exec_cmd(self, container, cmd, timeout=600, pass_env=()):
         self.cmds.append(cmd)
@@ -270,7 +271,7 @@ class FakeBTransport:
             for case_id, turn in turn_by_id.items():
                 if case_id in rows and turn is not None:
                     rows[case_id]["turn"] = turn
-            payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b", "env": {"AGENT_X": "1"}}})
+            payload = json.dumps({"cases": rows, "resolved": {"model_id": "granite-4.1-8b", "env": self.resolved_env}})
             return base64.b64encode(payload.encode("utf-8")).decode("ascii")
         quoted = re.findall(r"printf %s '([^']+)'", cmd)
         if "python3" in cmd:
@@ -382,6 +383,54 @@ def test_config_b_ships_the_driver_and_consumes_rows(tmp_path):
     assert written["cases"]["c2"]["status"] == "ok"
 
 
+def test_config_b_redacts_credential_named_keys_at_the_rows_write(tmp_path):
+    """The container's resolved snapshot rides verbatim, but the rows file
+    is the committed artifact: a credential-named key captured by the
+    prefix list (VLLM_API_KEY rode VLLM_ into the #2167 campaign's
+    committed copy) is redacted at the write boundary — dropped, not
+    stored — while configuration keys survive."""
+    set_path = _b_set(tmp_path, ("c1",))
+    transport = FakeBTransport(resolved_env={"AGENT_X": "1", "VLLM_API_KEY": "raw-venue-key"})
+    result = drivers.run_config_b(set_path, tmp_path / "out", transport=transport)
+    assert result["resolved"]["env"]["AGENT_X"] == "1"
+    assert "VLLM_API_KEY" not in result["resolved"]["env"]
+    written = json.loads((tmp_path / "out" / "config-b.rows.json").read_text(encoding="utf-8"))
+    assert "VLLM_API_KEY" not in written["resolved"]["env"]
+    assert written["resolved"]["env"]["AGENT_X"] == "1"
+
+
+def test_config_b_resume_redacts_a_legacy_rows_snapshot_at_load(tmp_path):
+    """A rows file written by the pre-redaction code carries the raw
+    snapshot. The CONVERGED resume is the discriminating path: every set
+    entry is already done, so the container loop never runs (pinned by
+    transport.cmds == []) and the returned snapshot IS the loaded prior —
+    only the load-boundary redaction guards it. Code that redacts only at
+    the write boundary fails here: the merge-replace never fires, the raw
+    key rides the return. (With pending cases the re-written artifact is
+    covered by the merge-replace of the new redacted snapshot; the earlier
+    redact test pins that side.)"""
+    set_path = _b_set(tmp_path, ("c1",))
+    out = tmp_path / "out"
+    out.mkdir()
+    entries = json.loads(set_path.read_text(encoding="utf-8"))["entries"]
+    entry_ids = [
+        e["id"]
+        for entry in entries
+        for e in (drivers.turn_entries(entry) if entry.get("turns") else [entry])
+    ]
+    legacy = {
+        "cases": {
+            cid: {"case_id": cid, "status": "ok", "answer": "a", "abstained": False} for cid in entry_ids
+        },
+        "resolved": {"model_id": "granite-4.1-8b", "env": {"VLLM_API_KEY": "raw-venue-key"}},
+    }
+    (out / "config-b.rows.json").write_text(json.dumps(legacy), encoding="utf-8")
+    transport = FakeBTransport()
+    result = drivers.run_config_b(set_path, out, transport=transport)
+    assert transport.cmds == []  # the converged premise, enforced not assumed
+    assert "VLLM_API_KEY" not in result["resolved"]["env"]
+
+
 def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch):
     """The in-container driver's helpers are importable WITHOUT the
     agent-service tree, and against a fake pipeline they prove the row
@@ -390,13 +439,10 @@ def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch
     (``build_context``) touches the component tree — pydantic is in the test
     env; ``noagent`` itself stays unimported (the driver's own docstring
     contract)."""
+    # The graph fallback reads the ambient env — pin the default shape.
+    monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
     import asyncio
-    import importlib.util
-
-    driver_path = Path(drivers.__file__).parent / "config_b_driver.py"
-    spec = importlib.util.spec_from_file_location("config_b_driver_under_test", driver_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_driver("under_test")
 
     agent_service = Path(__file__).resolve().parents[2] / "components" / "agent-service"
     monkeypatch.syspath_prepend(str(agent_service))
@@ -412,7 +458,7 @@ def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch
         async def run(self, history, context, source_language=None, target_language=None, user_context=""):
             assert history == [{"role": "user", "content": "q"}]
             assert context.user_id == "eval-config-b"
-            assert context.authorized_graph_names == ()
+            assert context.authorized_graph_names == ("GRAPH",)
             return FakeResult()
 
     class ExplodingPipeline:
@@ -669,7 +715,8 @@ def _answered_events():
     ]
 
 
-def test_config_c_answered_case_carries_answer_and_usage_record(tmp_path):
+def test_config_c_answered_case_carries_answer_and_usage_record(tmp_path, monkeypatch):
+    monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
     case = {"id": "q1", "query": "What?", "case_class": "answerable"}
     transport = FakeCTransport(FakeRunStream(events=_answered_events()))
     row = drivers.run_one_case_c(case, base_url="http://agent:8000", transport=transport)
@@ -682,7 +729,7 @@ def test_config_c_answered_case_carries_answer_and_usage_record(tmp_path):
     sent = transport.requests[0]["payload"]
     assert sent["question"] == "What?"
     assert sent["context"]["user_id"]
-    assert sent["context"]["authorized_graph_names"] == []
+    assert sent["context"]["authorized_graph_names"] == ["GRAPH"]
     assert sent["deadline_ms"] > 0
 
 
@@ -1062,3 +1109,81 @@ def test_c_payload_drops_malformed_repo_entries():
     }
     payload = drivers.c_payload_for_case(case, deadline_ms=1000)
     assert payload["context"]["authorized_repos"] == [{"repo_id": "r", "graph_name": "G"}]
+
+
+# ---------------------------------------------------------------------
+# The venue-gap fixes this campaign shipped (issue #2167) — the graph-less
+# case's default graph and the generation client's model-id spellings.
+# ---------------------------------------------------------------------
+
+
+def _load_driver(unique_name: str):
+    """Load the shipped in-container driver by path (its file name carries
+    dashes; the unique module name keeps repeated loads independent)."""
+    import importlib.util
+
+    driver_path = Path(drivers.__file__).parent / "config_b_driver.py"
+    spec = importlib.util.spec_from_file_location(unique_name, driver_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_default_graph_reads_the_eval_env(monkeypatch):
+    """The public-access default graph's NAME rides ``EVAL_DEFAULT_GRAPH``
+    (the venue's legacy graph; GRAPH on the campaign venue) — unset falls
+    back to GRAPH."""
+    module = _load_driver("default_graph")
+    monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
+    assert module.default_graph() == "GRAPH"
+    monkeypatch.setenv("EVAL_DEFAULT_GRAPH", "GRAPH_VENUE")
+    assert module.default_graph() == "GRAPH_VENUE"
+
+
+def test_b_context_uses_the_env_graph_for_a_graphless_case(monkeypatch):
+    """A case declaring no graph set assembles the env-named default (never
+    an empty set — the capability refuses one); a declared set survives."""
+    module = _load_driver("ctx_graph")
+    # build_context imports the CallerContext contract — the component tree
+    # rides sys.path (the same seam the driver-exec tests use).
+    agent_service = Path(__file__).resolve().parents[2] / "components" / "agent-service"
+    monkeypatch.syspath_prepend(str(agent_service))
+    monkeypatch.setenv("EVAL_DEFAULT_GRAPH", "GRAPH_VENUE")
+    graphless = module.build_context({"id": "c1", "query": "q"})
+    assert graphless.authorized_graph_names == ("GRAPH_VENUE",)
+    declared = module.build_context(
+        {"id": "c2", "query": "q", "context": {"authorized_graph_names": ["RESTRICTED"]}}
+    )
+    assert declared.authorized_graph_names == ("RESTRICTED",)
+
+
+def test_c_payload_uses_the_env_graph_for_a_graphless_case(monkeypatch):
+    """The C driver's payload carries the same default — one setting, both
+    legs."""
+    monkeypatch.setenv("EVAL_DEFAULT_GRAPH", "GRAPH_VENUE")
+    payload = drivers.c_payload_for_case({"id": "c1", "query": "q"}, deadline_ms=1000)
+    assert payload["context"]["authorized_graph_names"] == ["GRAPH_VENUE"]
+
+
+def test_resolve_model_id_reads_both_client_spellings():
+    """The deployed generation client reads its model id ASYNC (a bound
+    coroutine method); a property-shaped client returns the value directly.
+    A client with neither carries no id — None, never a crash (the bug that
+    JSON-encoded a bound method into the resolved-env snapshot and killed
+    the B leg's rows write)."""
+    module = _load_driver("model_id")
+
+    class AsyncClient:
+        async def model_id(self):
+            return "granite-4.1-8b"
+
+    class PropertyClient:
+        model_id = "granite-4.1-8b"
+
+    class NoIdClient:
+        pass
+
+    assert module.resolve_model_id(AsyncClient()) == "granite-4.1-8b"
+    assert module.resolve_model_id(PropertyClient()) == "granite-4.1-8b"
+    assert module.resolve_model_id(NoIdClient()) is None
+    assert module.resolve_model_id(None) is None

@@ -3,7 +3,9 @@
 """The TEI reranking and evidence-selection adapter (V02 §4.13, §4.14).
 
 Ports the recorded reranking stage: the TEI ``/rerank`` call (recorded shape,
-timeouts, no Authorization header, no retry), the five selection strategies
+timeouts, no retry — the recorded no-Authorization call stays the shape for
+an internal TEI; a configured deployment credential rides a bearer header,
+the V08-venue fix), the five selection strategies
 (``slice`` deployed; ``threshold``, ``slice_threshold``, ``knee_threshold``,
 ``adaptive``), the failure-mode mapping (one behavior per failure mode), and
 the confidence-time score calibration. The selected passages keep the
@@ -202,6 +204,8 @@ class TeiRerankingAdapter:
         config: RerankingConfig,
         transport: httpx.AsyncBaseTransport | None = None,
         adaptive_config: AdaptiveConfig | None = None,
+        tls_verify: bool = True,
+        bearer: str = "",
     ):
         self._endpoint = endpoint.rstrip("/")
         self._config = config
@@ -209,6 +213,10 @@ class TeiRerankingAdapter:
         # Injectable for the tests (httpx.MockTransport); production uses
         # the default connection pool.
         self._transport = transport
+        # Both knobs ride the deployment's conventions — see the
+        # ModelEndpointConfig docstring (env_config.py) for the full story.
+        self._tls_verify = tls_verify
+        self._bearer = bearer
 
     async def rerank(self, query: str, texts: list[str], chunk_embeddings=None, query_embedding=None) -> RerankOutcome:
         """Score the candidates with TEI and select per the configured strategy.
@@ -233,10 +241,12 @@ class TeiRerankingAdapter:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(self._config.rerank_timeout_seconds, connect=self._config.connect_timeout_seconds),
             transport=self._transport,
+            verify=self._tls_verify,
         ) as client:
             response = await client.post(
                 f"{self._endpoint}/rerank",
                 json={"query": query, "texts": texts, "truncate": False},
+                headers={"Authorization": f"Bearer {self._bearer}"} if self._bearer else {},
             )
         decoded = response.json()
         if response.status_code == 422 and isinstance(decoded, dict) and decoded.get("error_type") == "Validation":

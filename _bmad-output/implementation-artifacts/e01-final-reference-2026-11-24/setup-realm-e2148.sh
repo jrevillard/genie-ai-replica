@@ -20,6 +20,9 @@ echo "master admin token ok (${#AT} chars)"
 # --- the eval user (realm role: admin) ---
 EXISTING=$(curl -s -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/$REALM/users?username=e01-sec-eval&exact=true" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d[0]['id'] if d else '')")
 if [ -z "$EXISTING" ]; then
+  # The user's credential is SYNTHETIC — an eval-only user in the campaign's
+  # own throwaway realm, created and deleted by this script; it opens nothing
+  # outside the run's lifetime.
   curl -s -X POST -H "Authorization: Bearer $AT" -H "Content-Type: application/json" \
     -d '{"username":"e01-sec-eval","email":"e01-sec-eval@eval.invalid","emailVerified":true,"firstName":"E01Sec","lastName":"Eval","enabled":true,"credentials":[{"type":"password","value":"e01-sec-eval-PASS_f3a9c2d1","temporary":false}]}' \
     "$KCURL/auth/admin/realms/$REALM/users" -o /dev/null -w "user create http=%{http_code}\n"

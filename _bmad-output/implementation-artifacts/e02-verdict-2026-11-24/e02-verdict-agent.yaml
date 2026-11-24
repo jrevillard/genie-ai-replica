@@ -1,0 +1,113 @@
+# The #2167 phase-2 run-scoped agent deployment — the B/C verdict legs'
+# execution surface (the #2148/#2162 campaign method: rendered manifests,
+# run-prefixed names, full restore behind the ownership guard).
+#
+# The V08 rehearsal's deployment shape (docs/rollouts/v08-rollout.md),
+# adapted for this run:
+#   - dedicated run-prefixed names (e02-verdict-agent / -hl) — deleted with
+#     the run's cleanup;
+#   - the agent binds 8080 (the venue netpol's egress allow-list port; V08
+#     wire fact 2) via a command override — the shipped image default is 8010;
+#   - a HEADLESS Service (the venue netpol rejects pod→ClusterIP egress —
+#     V08 wire fact 2; DNS resolves to the pod IP);
+#   - AGENT_RUN_MAX_TOTAL_TOKENS=30000 — the SIGNED M-5 ceiling (the
+#     deployment declares the exact quantity the threshold binds; the knob
+#     is fail-closed);
+#   - the image is this branch's CI build (tmp/ pending- tag, the tag
+#     pipeline rehearsal-e02-f08dcf1af, canceled after the build went green
+#     per the V08 method — a non-prerelease tag's promote stage would retag
+#     latest).
+# The legacy stack (chatqna/retriever/embedding/reranker/translation/
+# ArangoDB/Keycloak/the external GPU gateway) is SHARED, untouched — the
+# deployment wires to the venue's deployed values (read live from the pods'
+# env, the #2162 method).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e02-verdict-agent
+  namespace: genieai
+  labels:
+    app.kubernetes.io/name: e02-verdict-agent
+    app.kubernetes.io/component: agent-service
+    e02-verdict.run: "e2167-phase2"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: e02-verdict-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: e02-verdict-agent
+        app.kubernetes.io/component: agent-service
+        # genieai.io/component=backend: the chart's per-component
+        # NetworkPolicies trust THIS label at the legacy services' ingress
+        # (document-repository:3001, translation:8888) and the backend
+        # egress allowlist covers every hop this run needs (DNS, arango
+        # 8529, doc-repo 3001, translation 8888, the GPU gateway 444,
+        # external 443). Run-scoped only — deleted with the run. The
+        # pod-resolution label for the eval harness stays
+        # app.kubernetes.io/component=agent-service.
+        genieai.io/component: backend
+        e02-verdict.run: "e2167-phase2"
+    spec:
+      containers:
+        - name: agent-service
+          image: registry.opensource.unicc.org/un/itu/genie-ai/tmp/genie-ai-agent-server:pending-414bd980
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8080"]
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            # --- the SIGNED budget knobs (fail-closed; M-5's declared ceiling)
+            - { name: AGENT_RUN_MAX_STEPS, value: "8" }
+            - { name: AGENT_RUN_MAX_MODEL_CALLS, value: "12" }
+            - { name: AGENT_RUN_MAX_TOOL_CALLS, value: "12" }
+            - { name: AGENT_RUN_MAX_TOTAL_TOKENS, value: "30000" }
+            - { name: AGENT_RUN_MAX_EVIDENCE_BYTES, value: "200000" }
+            - { name: AGENT_RUN_MAX_WALL_CLOCK_SECONDS, value: "240" }
+            - { name: AGENT_TOOL_TIMEOUT_MS, value: "30000" }
+            - { name: AGENT_TOOL_MAX_RESULTS, value: "10" }
+            - { name: AGENT_TOOL_MAX_RESULT_BYTES, value: "50000" }
+            - { name: AGENT_VERDICT_JUDGE_TIMEOUT_MS, value: "30000" }
+            # --- the model legs (the venue's external GPU gateway)
+            - { name: VLLM_LLM_ENDPOINT, value: "https://ai.assembly.govstack.global:444/llm" }
+            - { name: VLLM_TRANSLATION_ENDPOINT, value: "https://ai.assembly.govstack.global:444/translation" }
+            - { name: VLLM_TRANSLATION_MODEL_ID, value: "google/gemma-3-4b-it" }
+            - { name: VLLM_API_KEY, valueFrom: { secretKeyRef: { name: vllm-api-key, key: VLLM_API_KEY } } }
+            - { name: OPEA_SSL_SKIP_VERIFY, value: "1" }
+            # --- the capabilities layer (search_knowledge: doc-repo +
+            #     retriever/embedding/reranker wiring; the noagent pipeline
+            #     and the agent loop share it)
+            - { name: AGENT_DOCREPO_URL, value: "http://document-repository.genieai.svc.cluster.local" }
+            - { name: AGENT_OKF_URL, value: "http://okf-server:3002" }
+            - { name: AGENT_AUTHORIZED_GRAPHS, value: "GRAPH" }
+            - { name: TEI_EMBEDDING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/embed" }
+            - { name: TEI_RERANKING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/rerank" }
+            - { name: ARANGO_URL, value: "http://arangodb-single.genieai.svc.cluster.local:8529" }
+            - { name: ARANGO_DB, value: "_system" }
+            - { name: ARANGO_USERNAME, value: "root" }
+            - { name: ARANGO_PASSWORD, valueFrom: { secretKeyRef: { name: arango-root-secret, key: password } } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e02-verdict-agent-hl
+  namespace: genieai
+  labels:
+    e02-verdict.run: "e2167-phase2"
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: e02-verdict-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

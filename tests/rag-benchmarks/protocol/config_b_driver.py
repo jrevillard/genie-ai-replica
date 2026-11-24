@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """Config B driver — executed INSIDE the agent-service environment.
@@ -54,9 +53,12 @@ import time
 AGENT_SERVICE_HOME = os.environ.get("AGENT_SERVICE_HOME", "/app")
 
 # The resolved-env keys the driver records in ``resolved`` — the noagent /
-# port knobs (NOT the credentials; the recorder redacts by name elsewhere,
-# and these keys are configuration, never secrets).
-RESOLVED_ENV_PREFIXES = ("AGENT_", "NOAGENT_", "RERANKER_", "EMBEDDING_", "VLLM_")
+# port knobs plus the eval knobs (EVAL_DEFAULT_GRAPH: the two legs'
+# graph agreement must be visible in the snapshot). The prefix list DOES
+# capture credential-named keys (VLLM_API_KEY rides VLLM_): the harness
+# redacts credential-named keys at the rows-file write (the protocol's
+# redaction rule) — this snapshot is never trusted secret-free.
+RESOLVED_ENV_PREFIXES = ("AGENT_", "NOAGENT_", "RERANKER_", "EMBEDDING_", "VLLM_", "EVAL_")
 
 _ERROR_PREVIEW_CHARS = 300
 
@@ -75,16 +77,27 @@ def atomic_write_json(path: str, obj) -> None:
     os.replace(tmp, path)
 
 
+def default_graph() -> str:
+    """The public-access caller's graph — the legacy graph the case's
+    silence means (the restricted and security cases declare their own
+    sets and never read this default). The venue's legacy graph name rides
+    the eval env (the same GRAPH the corpus fingerprint collects)."""
+    return os.environ.get("EVAL_DEFAULT_GRAPH", "GRAPH")
+
+
 def build_context(case: dict):
     """The case's trusted caller context (the shape ``RunRequestBody.context``
     carries on the C seam — the same fields, so B and C run under the same
-    authorization shape)."""
+    authorization shape). A case that declares NO graph set is a
+    public-access caller over the default graph — the capability refuses an
+    empty set, so the silence means the default, never nothing."""
     from capabilities.contract import CallerContext
 
     raw = case.get("context") or {}
+    graphs = tuple(raw.get("authorized_graph_names") or ()) or (default_graph(),)
     return CallerContext(
         user_id=str(raw.get("user_id") or "eval-config-b"),
-        authorized_graph_names=tuple(raw.get("authorized_graph_names") or ()),
+        authorized_graph_names=graphs,
         # The repo→graph mapping the contract carries — the OKF read scope
         # (dicts coerce into the pydantic AuthorizedRepo; a mapping naming a
         # graph outside the authorized set fails the model's own validator).
@@ -170,6 +183,20 @@ def run_cases(cases: list[dict], pipeline) -> dict:
     return rows
 
 
+def resolve_model_id(generation):
+    """The generation client's model id, in whatever spelling the deployed
+    client carries (the deployed client reads it ASYNC; a property-shaped
+    client returns the value directly). The sync assembly resolves the async
+    read in its own loop — a bound method JSON-encoded by mistake is the bug
+    that killed the B leg's rows file on its first live run."""
+    reader = getattr(generation, "model_id", None)
+    if reader is None:
+        return None
+    if callable(reader):
+        return asyncio.run(reader())
+    return reader
+
+
 def build_pipeline():
     """The in-container assembly — the ONLY place the agent-service imports happen.
 
@@ -196,7 +223,7 @@ def build_pipeline():
 
     pipeline = NoAgentPipeline.create(noagent_config, capability, budget, env)
     generation = getattr(pipeline, "_generation", None)
-    model_id = getattr(generation, "model_id", None)
+    model_id = resolve_model_id(generation)
     return pipeline, model_id
 
 

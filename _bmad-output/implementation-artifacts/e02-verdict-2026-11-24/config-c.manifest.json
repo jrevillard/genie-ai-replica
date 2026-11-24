@@ -1,0 +1,48 @@
+{
+  "artifact": "run-manifest",
+  "version": "1.0.0",
+  "protocol_version": "1.0.0",
+  "kind": "gated",
+  "config": "C",
+  "created_utc": "2026-11-24T19:55:34+00:00",
+  "corpus": {
+    "source_collection": "GRAPH_SOURCE",
+    "arango_graph_name": "GRAPH",
+    "fingerprint": "f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f"
+  },
+  "sets": {
+    "assessment": {
+      "path": "/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2167/_bmad-output/implementation-artifacts/e02-verdict-2026-11-24/assessment-set.json",
+      "sha256": "cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812"
+    }
+  },
+  "configuration": {
+    "C": {
+      "resolved_env": {},
+      "model_ids": {},
+      "prompt_digests": {}
+    }
+  },
+  "evaluator_instructions": {
+    "path": "/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2167/tests/rag-benchmarks/protocol/evaluator-instructions.md",
+    "sha256": "d629ff99e6273f3fafa4ddf1967b4404f62b559ef854a74795815a25696e9d22"
+  },
+  "pair": {
+    "pair": "E02",
+    "compares": [
+      "B",
+      "C"
+    ],
+    "held_fixed": [
+      "retrieval_backend",
+      "preparation",
+      "admission_policy"
+    ],
+    "intentional_difference": "orchestration",
+    "notes": "B and C share the retrieval backend (the same port adapters), identical query preparation and the same orchestrator admission lane and budgets, so the E02 delta attributes to the agent loop — nothing else."
+  },
+  "lineage": {
+    "reference_manifest_sha256": "668e2136a4dc106f00fc56bee319e99f171511aafcf729d885a12314324ebe06",
+    "thresholds_sha256": "262e057f8522e6aaeb750ea7ed18e3f3bb873a22fe6e78199a07f74176ee7219"
+  }
+}

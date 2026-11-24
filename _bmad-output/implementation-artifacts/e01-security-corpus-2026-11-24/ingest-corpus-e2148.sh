@@ -92,15 +92,14 @@ print("ledger uploads:", json.dumps(ledger["uploads"], indent=1))
 PYEOF
 
 # ------------------------------------------------- restricted ingests (dataprep direct)
-dataprep_ingest() {  # <file> <fileId>
-  local f="$1" fid="$2"
+dataprep_ingest() {  # <file> <fileId> [labels-json]
+  local f="$1" fid="$2" labels="${3:-[]}"
   local name; name=$(basename "$f")
   echo "--- dataprep ingest $name -> GRAPH_RESTRICTED_E01"
   # the payload is exactly the shape the document repository itself POSTs
   # (fileId/fileName/fileBase64/fileType/fileLabels/storagePath) plus the
-  # graphName the doc-repo route cannot carry for a legacy file.
-  local labels="[]"
-  if [[ "$name" == *forestry* ]]; then labels='["Natural Resources"]'; fi
+  # graphName the doc-repo route cannot carry for a legacy file. The labels
+  # ride the same parameter the upload used — one source, not a re-derivation.
   local b64
   b64=$(python3 - "$f" "$fid" "$name" "$labels" <<'PYEOF'
 import base64, json, sys
@@ -144,7 +143,7 @@ dataprep_ingest "$FIXTURES/e01-sec-doc-restricted-e01.md" "$FID_RESTRICTED"
 dataprep_ingest "$FIXTURES/e01-sec-doc-shared-e01.md" "$FID_SHARED"
 dataprep_ingest "$FIXTURES/e01-sec-doc-wide-e01.md" "$FID_WIDE"
 dataprep_ingest "$FIXTURES/e01-sec-doc-revoked-e01.md" "$FID_REVOKED"
-dataprep_ingest "$FIXTURES/e01-sec-doc-forestry-e01.md" "$FID_FORESTRY"
+dataprep_ingest "$FIXTURES/e01-sec-doc-forestry-e01.md" "$FID_FORESTRY" '["Natural Resources"]'
 
 # ------------------------------------------------- legacy ingests (doc-repo route)
 echo "=== legacy ingests (doc-repo /ingest, default graph)"

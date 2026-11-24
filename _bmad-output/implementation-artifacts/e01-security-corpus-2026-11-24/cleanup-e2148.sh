@@ -11,7 +11,8 @@ LEDGER="$STATE/ingestion-ledger.json"
 
 say() { printf '\n=== %s\n' "$*"; }
 
-BEARER=$(curl -s -X POST "http://127.0.0.1:18082/auth/realms/genie/protocol/openid-connect/token" \
+KCURL="${KCURL:-http://127.0.0.1:18082}"
+BEARER=$(curl -s -X POST "$KCURL/auth/realms/genie/protocol/openid-connect/token" \
   -d "client_id=e01-sec-eval" -d "grant_type=password" \
   --data-urlencode "username=e01-sec-eval" --data-urlencode "password=e01-sec-eval-PASS_f3a9c2d1" \
   | python3 -c "import sys,json;print(json.load(sys.stdin).get('access_token',''))")
@@ -26,11 +27,7 @@ for key in doc-restricted-e01 doc-shared-e01 doc-wide-e01 doc-revoked-e01 doc-fo
   # (G5: wrong-graph retract), WITHOUT one for the legacy two (the payload's
   # None falls back to the env default graph). The doc-repo DELETE below
   # 409s on an ingested file, so this retract is load-bearing for BOTH groups.
-  if [ -n "$GRAPH" ]; then
-    PAYLOAD=$(python3 -c "import json;print(json.dumps({'fileId': '$FID', 'graphName': 'GRAPH_RESTRICTED_E01'}))")
-  else
-    PAYLOAD=$(python3 -c "import json;print(json.dumps({'fileId': '$FID', 'graphName': None}))")
-  fi
+  PAYLOAD=$(python3 -c "import json;print(json.dumps({'fileId': '$FID', 'graphName': '$GRAPH' or None}))")
   B64=$(printf %s "$PAYLOAD" | base64 -w0)
   RC=$(kubectl -n genieai exec -i deploy/genieai-genieai-umbrella-dataprep -- \
     sh -c "printf %s '$B64' | base64 -d > /tmp/e2148-retract.json && curl -s -o /tmp/e2148-retract-resp.json -w '%{http_code}' -X POST http://127.0.0.1:5000/v1/dataprep/retract_file -H 'Content-Type: application/json' -d @/tmp/e2148-retract.json")

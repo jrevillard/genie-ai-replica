@@ -60,23 +60,18 @@ def remap_context(context):
     return n
 
 for case in data["entries"]:
-    context = case.get("context")
-    if isinstance(context, dict):
-        n_remapped += remap_context(context)
-        case["context"] = context
+    if isinstance(case.get("context"), dict):
+        n_remapped += remap_context(case["context"])
     for turn in case.get("turns") or []:
-        turn_context = turn.get("context")
-        if isinstance(turn_context, dict):
-            n_remapped += remap_context(turn_context)
-            turn["context"] = turn_context
-    context = case.get("context") or {}
+        if isinstance(turn.get("context"), dict):
+            n_remapped += remap_context(turn["context"])
     if case.get("id") == "e01-sec-narrowed":
+        context = case.setdefault("context", {})
         old = context.get("requested_labels")
         context["requested_labels"] = ["Natural Resources"]
-        case["context"] = context
         print(f"narrowed_scope requested_labels: {old} -> ['Natural Resources']")
     if case.get("id") == "e01-sec-restricted":
-        print("restricted authorized ids:", context["authorized_source_ids"])
+        print("restricted authorized ids:", (case.get("context") or {}).get("authorized_source_ids"))
 
 data["_doc"] = (
     "E01 assessment set — the security-corpus regeneration (issue #2148, "

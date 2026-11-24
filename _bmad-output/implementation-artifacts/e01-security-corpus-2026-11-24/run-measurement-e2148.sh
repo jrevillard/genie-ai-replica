@@ -21,6 +21,12 @@ export CHATQNA_CONTAINER=chatqna
 export CHATQNA_SERVICE_NAME=genieai-chatqna
 export VICTORIATRACES_SVC=vtsingle-vtraces
 export GRAPH_SOURCE=GRAPH_SOURCE
+# The run-defining pin: the eval's default hashes `chunk_text` (the
+# display-only verbatim field) while the gold identities and the retrieval
+# contract live on the served `text` field — with the default this venue's
+# anchor scored recall 0.0 on every gold query (see rejected-chunktext-field-run/
+# and extracted finding #2153; the default's real fix is that issue's scope).
+export ARANGO_TEXT_FIELD=text
 export ARANGO_URL=http://127.0.0.1:8529
 export ARANGO_DB=_system
 export ARANGO_USER=root

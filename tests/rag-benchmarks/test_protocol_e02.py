@@ -1052,14 +1052,18 @@ def test_e02_m3_c_names_a_marked_row_a_limit_hit_exactly_once():
     surface claims it."""
     c_rows = _c_rows()
     c_rows["c1"] = dict(c_rows["c1"], usage_record={"model_calls": 3, "outcome": "budget_exhausted"})
+    c_rows["c2"] = dict(
+        c_rows["c2"], outcome="error", usage_record={"outcome": "budget_exhausted"}
+    )
     c_rows["c3"] = dict(
         c_rows["c3"], outcome="admission_refused", usage_record={"outcome": "budget_exhausted"}
     )
     report = _report(c_rows=c_rows)
     m3_c = report["dimensions"]["M-3"]["C"]["values"]
-    assert m3_c["n_limit_hit"] == 2
-    assert m3_c["n_answered_rows"] == 1
+    assert m3_c["n_limit_hit"] == 3
+    assert m3_c["n_answered_rows"] == 0
     assert m3_c["n_admission_refused_rows"] == 0
+    assert m3_c["n_error_rows"] == 0
     # the census agrees: one name per row
-    assert sum(stats["C"]["n_limit_hit"] for stats in report["gains"]["per_class"].values()) == 2
-    assert sum(stats["C"]["n_answered"] for stats in report["gains"]["per_class"].values()) == 1
+    assert sum(stats["C"]["n_limit_hit"] for stats in report["gains"]["per_class"].values()) == 3
+    assert sum(stats["C"]["n_answered"] for stats in report["gains"]["per_class"].values()) == 0

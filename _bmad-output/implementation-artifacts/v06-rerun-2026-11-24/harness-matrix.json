@@ -1,0 +1,318 @@
+{
+  "producer": "agent.v06_harness",
+  "venue": "GPU node ai.assembly.govstack.global (V03 baseline venue), reached from the forge k3s dev cluster host",
+  "captured_at_utc": "2026-11-24T13:58:39+00:00",
+  "identity": {
+    "generation_endpoint": "https://ai.assembly.govstack.global:444/llm",
+    "version_raw": "{\"version\": \"0.29.0\"}",
+    "version_note": null,
+    "model_id": "ibm-granite/granite-4.1-8b",
+    "max_model_len": 65536,
+    "served_at_utc": "2026-11-24T13:58:29+00:00",
+    "venue": "GPU node ai.assembly.govstack.global (V03 baseline venue), reached from the forge k3s dev cluster host"
+  },
+  "cells": [
+    {
+      "tool_choice_mode": "auto",
+      "schema_strictness": "strict",
+      "streaming": false,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 1132.3535810224712,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-8f4a5288d432e639",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy",
+            "max_results": 5
+          }
+        }
+      ],
+      "delta_count": 0,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "auto",
+      "schema_strictness": "strict",
+      "streaming": true,
+      "valid": false,
+      "reasons": [
+        "only 1 tool-call delta(s) arrived; the call did not stream as tool-call deltas (a single-blob call is not a streamed call)"
+      ],
+      "latency_ms": 1069.8454650118947,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-92a8a04ca5f5f79e",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy",
+            "max_results": 5
+          }
+        }
+      ],
+      "delta_count": 3,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "auto",
+      "schema_strictness": "permissive",
+      "streaming": false,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 830.8245108928531,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-9133521d7a079e8a",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy"
+          }
+        }
+      ],
+      "delta_count": 0,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "auto",
+      "schema_strictness": "permissive",
+      "streaming": true,
+      "valid": false,
+      "reasons": [
+        "only 1 tool-call delta(s) arrived; the call did not stream as tool-call deltas (a single-blob call is not a streamed call)"
+      ],
+      "latency_ms": 656.1710280366242,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-9203ddc9ad134711",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy"
+          }
+        }
+      ],
+      "delta_count": 3,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "named",
+      "schema_strictness": "strict",
+      "streaming": false,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 625.433606095612,
+      "finish_reason": "stop",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-9f76d50bc2dd4a5b",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy",
+            "max_results": 5
+          }
+        }
+      ],
+      "delta_count": 0,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "named",
+      "schema_strictness": "strict",
+      "streaming": true,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 577.9268350452185,
+      "finish_reason": "stop",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-99319b07c7c9c5d0",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy",
+            "max_results": 5
+          }
+        }
+      ],
+      "delta_count": 23,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "named",
+      "schema_strictness": "permissive",
+      "streaming": false,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 414.10492616705596,
+      "finish_reason": "stop",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-bae99de0f6fb1ada",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy"
+          }
+        }
+      ],
+      "delta_count": 0,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "named",
+      "schema_strictness": "permissive",
+      "streaming": true,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 557.1702958550304,
+      "finish_reason": "stop",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-9dc98dc9f6035785",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy"
+          }
+        }
+      ],
+      "delta_count": 15,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "required",
+      "schema_strictness": "strict",
+      "streaming": false,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 982.0378348231316,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-86c22caba5f3679a",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy",
+            "max_results": 5
+          }
+        }
+      ],
+      "delta_count": 0,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "required",
+      "schema_strictness": "strict",
+      "streaming": true,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 936.6239428054541,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-920cb3aca96e5b09",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy",
+            "max_results": 5
+          }
+        }
+      ],
+      "delta_count": 19,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "required",
+      "schema_strictness": "permissive",
+      "streaming": false,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 611.4091060589999,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-b8e4d872c2a318a2",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy"
+          }
+        }
+      ],
+      "delta_count": 0,
+      "error": null
+    },
+    {
+      "tool_choice_mode": "required",
+      "schema_strictness": "permissive",
+      "streaming": true,
+      "valid": true,
+      "reasons": [],
+      "latency_ms": 613.5236960835755,
+      "finish_reason": "tool_calls",
+      "content_preview": null,
+      "tool_calls": [
+        {
+          "id": "chatcmpl-tool-bd99fbf560ddd6c5",
+          "name": "search_knowledge",
+          "arguments": {
+            "query": "organization's remote-work policy"
+          }
+        }
+      ],
+      "delta_count": 12,
+      "error": null
+    }
+  ],
+  "first_call_latency_ms": {
+    "strict": 1132.3535810224712,
+    "permissive": 830.8245108928531
+  },
+  "first_call_cell": {
+    "strict": "auto/strict/streaming=False",
+    "permissive": "auto/permissive/streaming=False"
+  },
+  "streaming_cancel": {
+    "deltas_received": 1,
+    "cancelled_error_raised": true,
+    "connection_aborted": true,
+    "completion_delivered": false,
+    "wait_seconds": 0.9392504449933767,
+    "error": null
+  },
+  "loop_cancel": {
+    "cancelled_error_propagated": true,
+    "in_flight_model_call_cancelled": true,
+    "model_post_dispatched": true,
+    "terminal_events_emitted": [],
+    "steps": 1,
+    "model_calls": 1,
+    "tool_calls": 0,
+    "wall_clock_seconds": 0.0034258700907230377,
+    "error": null
+  },
+  "plain_control": {
+    "status_ok": true,
+    "content_present": true,
+    "detail": null
+  },
+  "notes": [],
+  "acceptance": {
+    "passed": false,
+    "reasons": [
+      "cell auto/strict/streaming=True invalid: only 1 tool-call delta(s) arrived; the call did not stream as tool-call deltas (a single-blob call is not a streamed call)",
+      "cell auto/permissive/streaming=True invalid: only 1 tool-call delta(s) arrived; the call did not stream as tool-call deltas (a single-blob call is not a streamed call)"
+    ]
+  }
+}

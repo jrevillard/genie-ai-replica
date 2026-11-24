@@ -1,0 +1,16 @@
+{
+  "runtime_id": "custom-minimal-loop",
+  "toolset": [
+    "search_knowledge",
+    "read_source"
+  ],
+  "question_id": "probe-multihop-001",
+  "outcome": "error",
+  "steps": 1,
+  "model_calls": 1,
+  "tool_calls": 0,
+  "wall_clock_seconds": 0.35614434303715825,
+  "prompt_tokens": null,
+  "completion_tokens": null,
+  "error": "ProbeTransientError: the generation endpoint answered 400: {'error': {'message': \"This model's maximum context length is 65536 tokens. However, you requested 65269 output tokens and your prompt contai"
+}

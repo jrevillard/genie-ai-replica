@@ -1,0 +1,16 @@
+{
+  "runtime_id": "custom-minimal-loop",
+  "toolset": [
+    "search_knowledge",
+    "read_source"
+  ],
+  "question_id": "probe-multihop-001",
+  "outcome": "answered",
+  "steps": 4,
+  "model_calls": 4,
+  "tool_calls": 3,
+  "wall_clock_seconds": 5.555521365022287,
+  "prompt_tokens": 2189,
+  "completion_tokens": 184,
+  "error": null
+}

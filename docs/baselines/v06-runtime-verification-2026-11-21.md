@@ -1,5 +1,11 @@
 # V06 runtime verification - 2026-11-21
 
+> **Re-run 2026-11-24:** the venue remediation below landed (issue #2052)
+> and the matrix re-ran —
+> [`v06-runtime-verification-2026-11-24.md`](v06-runtime-verification-2026-11-24.md)
+> is the after record; this document stays verbatim as the "before"
+> evidence.
+
 The V06 evidence record: the runtime verification the D03 decision (ADR
 `docs/adr/agentic-002-first-agent-runtime-d03.md`) cites, run against the
 DEPLOYED combination. The harness is

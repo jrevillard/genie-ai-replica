@@ -35,8 +35,9 @@ fingerprint and the measured basis).
 The acceptance-grade extension (issue #2151) grows the consumer list on the
 same fixtures: `_bmad-output/implementation-artifacts/e01-assessment-grade-2026-11-24/assessment-set.json`
 declares 40 anchor-scored retrieval cases, 14 restricted retrieval-class
-cases and a 6-case outcome set whose graded cases (`e01g-*`) carry
-verbatim-fixture gold previews (`preview` + `source_doc`, no identity —
+cases and a 6-case outcome set. The graded retrieval-class cases
+(`e01g-*`) carry verbatim-fixture gold previews (`preview` + `source_doc`,
+no identity —
 the content hashes are venue-resolved by the Phase-2 pass during the
 ingestion campaign, exactly like the source ids below).
 `tests/rag-benchmarks/test_assessment_grade_set.py` is the mechanical

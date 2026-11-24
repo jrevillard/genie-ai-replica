@@ -254,11 +254,20 @@ def test_the_ci_job_watches_every_gate_input():
 
 
 def test_the_readme_states_the_set_digest():
-    """The artifact README's digest is pinned to the file: a set edit that
-    does not update the stated digest (or vice versa) fails here, keeping
-    the campaign's identity trail honest."""
+    """The artifact README's digest is pinned to the files: the current
+    set's digest must be stated, and every digest-shaped token the README
+    carries must be this set's or the inherited source's (computed, never
+    hardcoded) — a stale digest line fails here, keeping the campaign's
+    identity trail honest."""
+    import re
+
     digest = sha256_file(GRADED_SET)[:12]
+    inherited = sha256_file(INHERITED_SOURCE)[:12]
     readme = (ARTIFACT_DIR / "README.md").read_text(encoding="utf-8")
-    assert digest in readme, (
+    tokens = set(re.findall(r"\b[0-9a-f]{12}\b", readme))
+    assert digest in tokens, (
         f"the artifact README does not state the set's file digest {digest}"
+    )
+    assert tokens <= {digest, inherited}, (
+        f"the artifact README states unknown digest token(s): {tokens - {digest, inherited}}"
     )

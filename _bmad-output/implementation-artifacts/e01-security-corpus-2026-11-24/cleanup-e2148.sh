@@ -74,7 +74,7 @@ case "$TIER_STATE" in
 esac
 kubectl -n genieai delete networkpolicy e2148-chatqna-vt-egress --ignore-not-found
 kubectl -n genieai delete opentelemetrycollector genieai-collector --ignore-not-found
-kubectl -n genieai delete networkpolicy collector-gateway collector-agent --ignore-not-found
+kubectl -n genieai delete networkpolicy collector-gateway --ignore-not-found
 # the collector workload is operator-derived: the CR deletion cascades the
 # Deployment; the VT workload (vm-operator-derived) goes with its CR.
 kubectl -n genieai delete vtsingle vtraces --ignore-not-found
@@ -91,12 +91,11 @@ kubectl -n genieai rollout status deploy/genieai-genieai-umbrella-dataprep --tim
 say "6. the realm entities go"
 KC_ADMIN_USER=$(kubectl -n genieai get secret keycloak-admin-credentials -o jsonpath='{.data.username}' | base64 -d)
 KC_ADMIN_PWD=$(kubectl -n genieai get secret keycloak-admin-credentials -o jsonpath='{.data.password}' | base64 -d)
-AT=$(curl -s -X POST "http://127.0.0.1:18082/auth/realms/master/protocol/openid-connect/token" \
+AT=$(curl -s -X POST "$KCURL/auth/realms/master/protocol/openid-connect/token" \
   --data-urlencode "client_id=admin-cli" --data-urlencode "username=$KC_ADMIN_USER" \
   --data-urlencode "password=$KC_ADMIN_PWD" --data-urlencode "grant_type=password" \
   | python3 -c "import sys,json;print(json.load(sys.stdin).get('access_token',''))")
 [ -n "$AT" ] || { echo "REFUSED: no master admin token — realm revert cannot run"; exit 1; }
-KCURL="http://127.0.0.1:18082"
 for what in users clients; do
   case $what in users) URL="users?username=e01-sec-eval&exact=true";; clients) URL="clients?clientId=e01-sec-eval&exact=true";; esac
   ID=$(curl -s -H "Authorization: Bearer $AT" "$KCURL/auth/admin/realms/genie/$URL" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d[0]['id'] if d else '')")

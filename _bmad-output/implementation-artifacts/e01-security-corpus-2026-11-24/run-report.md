@@ -88,9 +88,10 @@ all run-scoped and reverted:
    the storage block written in the PVC-spec shape the served CRD expects,
    `storageClassName: local-path` — a disk class, per the !1056 mmap lesson —
    and `extraArgs: {fs.disableMmap: "true"}`), all labeled
-   `e2148.genieai.io/run: "2148"`; plus the run-scoped NetworkPolicy
+   `e2148.genieai.io/run: "2148"`; plus the run-scoped NetworkPolicies
    `e2148-chatqna-vt-egress` (chatqna → VictoriaTraces 10428; the release's
-   own policy already allows 4318);
+   own policy already allows 4318) and `collector-gateway` (collector
+   ingress, genieai);
 4. **chatqna `ENABLE_OBSERVABILITY=1`** (deployment env set; the baseline
    render had flipped it to 0 with the observability tiers off). The
    original env is recorded in `before-chatqna-env.json`; the trace chain was

@@ -305,6 +305,21 @@ So that equivalence is proven continuously and config B generates complete answe
 **And** the V05 inventory documents the actual API/SSE/error contract surface with current regression coverage, listing gaps as pre-S3-exit work items
 **And** the S3 exit checklist (contract + authorization + compatibility checks; V02/V04/V05 evidence recorded) is completable from this epic's artifacts
 
+### Story 1.10: Attest the chart identity of the deployed baseline
+
+As an evaluator,
+I want the baseline capture to attest which chart the deployed release was rendered from — the chart version, the rendered chart content, and the commit of this repository that carries it,
+So that the V03 record reconciles against the chart the deployment actually runs, not against a moving source ref.
+
+**Acceptance Criteria:**
+
+**Given** a deployed release whose chart this repository carries
+**When** the baseline capture runs
+**Then** the record states the attested chart version, the source it was rendered from, the commit locator of this repository that carries it, and whether the local chart tree is identical to the attested chart
+**And** a local chart source that differs from the attested chart yields a per-difference list, each difference a dispositioned row
+**And** a comparison that cannot be established (a source that is not a GitRepository, an attested chart with no template, a commit this checkout does not know, or a release secret missing or unreadable) is UNRESOLVED and fails the capture
+**And** the non-retrieval tiers the chart deploys (PII sidecar, OKF server, RAGAS judge) have their operator environment compared against the chart source like the retrieval tier's
+
 ## Epic 2: Governed document-QA agent with visible work (S4a)
 
 Users receive source-grounded agentic answers or explicit insufficiency — with a visible activity line (started/completed/failed per operation), honest tri-state verdicts, bounded execution, working cancellation, and full version attribution; the runtime (D03) closes at epic entry from V06+V07a.

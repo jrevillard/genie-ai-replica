@@ -17,6 +17,7 @@ Give engineering and evaluation one GENIE-owned document capability contract —
 - Story 1.7: Implement `read_source` and the authorization executor
 - Story 1.8: Implement the input-preparation module
 - Story 1.9: Behavioral equivalence suite (E01 runway) and V05 inventory
+- Story 1.10: Attest the chart identity of the deployed baseline
 
 ## Requirements & Constraints
 
@@ -44,5 +45,5 @@ Give engineering and evaluation one GENIE-owned document capability contract —
 
 ## Cross-Story Dependencies
 
-- **Hard ordering inside the epic:** the behavioral record (1.1) precedes the contract (1.5) and the port (1.6, 1.8), and its fixtures are the expected values for the equivalence suite (1.9). Story 1.3 hosts the gate (1.4) and the implementations (1.6–1.8); 1.9 closes the epic.
+- **Hard ordering inside the epic:** the behavioral record (1.1) precedes the contract (1.5) and the port (1.6, 1.8), and its fixtures are the expected values for the equivalence suite (1.9). Story 1.3 hosts the gate (1.4) and the implementations (1.6–1.8); 1.10 closes the epic.
 - **Parallel and cross-epic:** the deployed-stack baseline (1.2) has no code dependency, starts day one, and feeds the evaluation epic's reference measurement. The activation-flag mechanism shipped here is what the activation/rollback epic drives, and the evaluation epic reuses this epic's equivalence suite as its fixed-configuration driver.

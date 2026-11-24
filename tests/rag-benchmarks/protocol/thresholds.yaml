@@ -51,9 +51,11 @@ sign_off:
     config A's chunk-level surface; on the B/C doc-level legs they are
     recorded NOT APPLICABLE.
   note: >-
-    The signature covers the retrieval-quality thresholds (M-1) only: the
-    other dimensions ship as explicitly absent, with their reason, and they
-    keep blocking the promotion until their own thresholds are agreed.
+    The signature covers ALL measured dimensions (M-1..M-5): M-1 on its
+    2026-11-23/24 basis, M-2..M-5 by the consolidated signature of
+    2026-11-24 (issue #2167). The promotion decision is therefore ALLOWED
+    and the gate-compatible thresholds artifact derives against the
+    measured reference.
 
 dimensions:
   M-1:

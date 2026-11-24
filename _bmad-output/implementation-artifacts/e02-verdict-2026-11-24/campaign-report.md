@@ -30,6 +30,28 @@ nothing here signs, gates or promotes a release.
 - **`e02.report.json` composed by the protocol layer** — digest
   `15d538d8d300`, reproducible under pinned `created_utc`.
 
+## Post-run repairs (the fix-review round)
+
+- **The venue credential was redacted from `config-b.rows.json`** — the
+  B driver fix un-crashed the rows write and its resolved-env snapshot
+  carried the raw `VLLM_API_KEY`. The committed copy now carries a
+  `[redacted]` marker; the credential lives only in the cluster secret.
+  The e02 report's digest is UNCHANGED by the redaction (the protocol's
+  depth-aware rule had already redacted the key on the report's own
+  write — verified by re-deriving under the pinned `created_utc`).
+  **The credential history on this branch must be purged and the venue
+  key rotated** (operator-owned).
+- **The signed thresholds artifact was re-derived** after the registry's
+  `sign_off.note` was rewritten (it still described the pre-signature
+  state): the live artifact digest is `ad0dc5bbdf8a89d0`; the legs ran
+  gated under `262e057f8522e6aa`. The delta is note prose only — the
+  five dimensions' agreed values are byte-identical. Both digests are
+  documented in `README-artifacts.md`.
+- **`findings-b.report.json` re-composed** from the committed rows
+  (61 pass / 7 fail — identical counts; digest `3695623e9bb5` vs the
+  assess-time `19b46678614e`: the report digest covers `created_utc`,
+  the inputs are identical).
+
 ## The per-dimension verdict — B/C vs the A reference and the signed floors
 
 | dimension | signed floor | A reference (#2162) | B (fixed pipeline) | C (agent) | verdict per the floors |

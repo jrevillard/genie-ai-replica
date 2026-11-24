@@ -33,7 +33,9 @@ def main() -> int:
     results = []
     for index, (case_id, row) in enumerate(sorted(rows.items()), 1):
         entry = entries.get(case_id.split("#")[0])
-        if entry is None or row.get("outcome") not in (None, "answered") and row.get("status") not in ("ok",):
+        if entry is None or (
+            row.get("outcome") not in (None, "answered") and row.get("status") not in ("ok",)
+        ):
             continue
         try:
             verdict = judge_call(

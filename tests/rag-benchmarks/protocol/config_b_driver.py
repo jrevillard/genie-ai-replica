@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """Config B driver — executed INSIDE the agent-service environment.

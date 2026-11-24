@@ -2,19 +2,19 @@
   "artifact": "threshold-registry-report",
   "version": "1.0.0",
   "protocol_version": "1.0.0",
-  "created_utc": "2026-11-24T17:59:45+00:00",
+  "created_utc": "2026-11-24T20:49:04+00:00",
   "honest_evidence": "Threshold registry honest evidence: this record states which measured dimensions carry an agreed threshold and which carry an EXPLICIT absence. An absent dimension is never reported as satisfied and never defaulted to a value — it blocks promotion, because a default would silently manufacture a pass. The agreed values are bound to the measured reference they were agreed against (PRD §8).",
   "registry": {
     "artifact": "evaluation-threshold-registry",
     "version": "1.0.0",
-    "sha256": "676a44cc0f9330d26371ce08903a49916e41a8adcd4b069b1f9b02e2855813a6"
+    "sha256": "6bedd3ac90a4387e9311229108c5a0b2a738743af0c35197254944232bfe2518"
   },
   "sign_off": {
     "owner": "jrevillard (ITU)",
     "signed": true,
     "agreed_on": "2026-11-23",
     "signed_on": "2026-11-24",
-    "note": "The signature covers the retrieval-quality thresholds (M-1) only: the other dimensions ship as explicitly absent, with their reason, and they keep blocking the promotion until their own thresholds are agreed."
+    "note": "The signature covers ALL measured dimensions (M-1..M-5): M-1 on its 2026-11-23/24 basis, M-2..M-5 by the consolidated signature of 2026-11-24 (issue #2167). The promotion decision is therefore ALLOWED and the gate-compatible thresholds artifact derives against the measured reference."
   },
   "promotion": "allowed",
   "blocking_reasons": [],
@@ -232,8 +232,8 @@
       "owner": "jrevillard (ITU)",
       "signed_on": "2026-11-24"
     },
-    "registry_sha256": "676a44cc0f9330d26371ce08903a49916e41a8adcd4b069b1f9b02e2855813a6"
+    "registry_sha256": "6bedd3ac90a4387e9311229108c5a0b2a738743af0c35197254944232bfe2518"
   },
-  "derived_thresholds_sha256": "262e057f8522e6aaeb750ea7ed18e3f3bb873a22fe6e78199a07f74176ee7219",
-  "digest": "4cd130d0b2b674a63fdebf9d81e35b0044c1320b92effd1b37e7922a57c3f661"
+  "derived_thresholds_sha256": "bf6ca692720e9ff77dbcbba933a2f151713749721deccdad4e24255585602f88",
+  "digest": "ecba3964dac8aa9751dff4747b355834f3247b01107b14f58487b72cd00d3ba1"
 }

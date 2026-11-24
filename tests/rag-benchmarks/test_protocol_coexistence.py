@@ -423,3 +423,26 @@ def test_coexistence_absolute_limit_failure_still_fails_over_a_mismatched_mix():
     assert report["phase_coverage"]["same_request_mix"] is False
     assert report["verdict"]["verdict"] == "fail"
     assert report["regression_verdict"]["verdict"] == "blocked"
+
+
+def test_coexistence_rejects_boolean_outcome_and_usage_values():
+    """A boolean tally entry is not a request and a boolean counter is not a
+    cost: the numeric readers reject bool like every other reader in the
+    module — pinning the rejection so it cannot regress silently."""
+    load = _agent_load()
+    load["requests"] = 5
+    load["outcomes"] = {"answered": 3, "admission_refused": True}
+    load.pop("n_admission_refusals")  # the tally alone must decide
+    report = _report(control=_control(), loaded=_control(), agent_load=load)
+    load_summary = report["agentic_load"]
+    # The bool is not a terminal: 5 requests, 3 terminals, 2 vanished.
+    assert load_summary["n_without_terminal_outcome"] == 2
+    assert load_summary["outcomes"]["admission_refused"] is True
+    # And it is not a refusal either: the tally alone decides.
+    assert load_summary["n_admission_refusals"] == 0
+    load["usage_records"] = [{"model_calls": True, "prompt_tokens": 10}]
+    report = _report(control=_control(), loaded=_control(), agent_load=load)
+    totals = report["agentic_load"]["resource_consumption_under_load"]["totals"]
+    assert totals["model_calls"]["sum"] == 0.0
+    assert totals["model_calls"]["n_rows"] == 0
+    assert totals["prompt_tokens"]["sum"] == 10.0

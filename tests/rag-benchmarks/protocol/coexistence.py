@@ -459,11 +459,14 @@ def _agent_load_summary(agent_load: dict) -> dict:
     outcomes = agent_load.get("outcomes") or {}
     if not isinstance(outcomes, dict):
         raise CoexistenceRefusal("invalid_measurement", "the agentic load's outcomes are not a mapping")
-    n_terminal = sum(
-        int(count)
-        for count in outcomes.values()
+    # One numeric tally, read once: a boolean outcome value is not a request,
+    # and every count derived from the tally must agree with it.
+    numeric_outcomes = {
+        name: count
+        for name, count in outcomes.items()
         if isinstance(count, int) and not isinstance(count, bool)
-    )
+    }
+    n_terminal = sum(numeric_outcomes.values())
     n_requests = agent_load.get("requests")
     requests_recorded = isinstance(n_requests, int) and not isinstance(n_requests, bool)
     if not requests_recorded:
@@ -481,7 +484,7 @@ def _agent_load_summary(agent_load: dict) -> dict:
         n_without_terminal = max(n_without_terminal, derived_without_terminal)
     n_refusals = agent_load.get("n_admission_refusals")
     if not isinstance(n_refusals, int) or isinstance(n_refusals, bool):
-        n_refusals = int(outcomes.get("admission_refused") or 0)
+        n_refusals = int(numeric_outcomes.get("admission_refused") or 0)
     usage_records = agent_load.get("usage_records") or []
     if not isinstance(usage_records, list):
         raise CoexistenceRefusal("invalid_measurement", "the agentic load's usage_records are not a list")

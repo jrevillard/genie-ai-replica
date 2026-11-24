@@ -843,3 +843,19 @@ def test_e02_recognizes_the_canonical_scope_spelling():
         report = _report(thresholds=thresholds)
         for leg in ("B", "C"):
             assert report["dimensions"]["M-1"][leg]["threshold"]["status"] == "not_applicable", scope
+
+
+def test_e02_counts_a_budget_exhausted_cancelled_row_as_a_limit_hit():
+    """The gains census reads the terminal states in the counter-metrics
+    vocabulary's order on BOTH legs: a cancelled row that exhausted its budget
+    is a limit hit here and a limit hit in CM-3 — one row, one name."""
+    c_rows = _c_rows()
+    c_rows["c3"] = dict(
+        c_rows["c3"],
+        outcome="cancelled",
+        usage_record={"model_calls": 1, "prompt_tokens": 5, "outcome": "budget_exhausted"},
+    )
+    report = _report(c_rows=c_rows)
+    failure_class = report["gains"]["per_class"]["failure"]
+    assert failure_class["C"]["n_limit_hit"] == 1
+    assert failure_class["C"]["n_cancelled"] == 0

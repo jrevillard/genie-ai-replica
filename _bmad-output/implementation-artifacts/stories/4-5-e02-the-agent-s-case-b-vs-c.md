@@ -234,6 +234,14 @@ Global review round 2 (on 58c0672f0, after the clean FIX-REVIEW): 3 important, 6
 | 8 | boolean outcome values counted as requests in the coexistence load tally | nit | applied — the numeric readers reject bool, mirroring the rest of the module |
 | 9 | the M-4 latency surface's counts did not reconcile (an answered row with a missing wall_ms appeared in neither count) | nit | applied — `n_answered_rows_missing_wall_ms` makes the population visible |
 
+FIX-REVIEW f=0 (chain 2, the diff 58c0672f0..484066a29, fresh context): all 9 round-2 fixes VERIFIED-FIXED, the merge clean (no branch protocol code touched by conflict resolution), the evidence records truthful, the suites green — and 2 new defects, NOT CLEAN. Both applied:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| D1 | `_aggregate_cost` was defined TWICE (the fix ADDED a new def instead of replacing — the first fully shadowed, with a contradictory docstring) | new defect | applied — the shadowed copy is deleted |
+| D2 | the bool-rejection fix was UNPINNED (no test fed a bool outcome/usage value; reverting it left the suites green) | new defect | applied — a test feeds a bool outcome and a bool counter value and pins both rejections; it exposed a third reader (`n_admission_refusals`'s tally derivation) still accepting bool, which is fixed too |
+| obs | the C-side ordering divergence (cancelled checked before the limit marker), the mirror of the resolved B-side item | pre-existing | applied — the C branch reads the terminal states in the counter-metrics vocabulary's order (the limit marker first), pinned by a test |
+
 ## Design Notes
 
 **Why the live E02 legs are refused, and what that does NOT mean.** The partial-order gate (story 4.1) refuses a gated B/C run until a SIGNED thresholds artifact exists, and story 4.4's `promotion_decision` produces that artifact only when every measured dimension (M-1..M-5) carries an agreed value. The operator's 2026-11-23 signature covers M-1 alone; M-2..M-5 stay explicitly absent. So the gate keeps refusing — and that refusal is the protocol working as designed (PRD §8: "an absent threshold blocks promotion rather than defaulting"), not a defect to route around. The live outcome of this story is therefore: the machinery ships, the refusal is recorded verbatim, and the live measurement waits on an operator decision nobody but the operator can make.

@@ -545,32 +545,6 @@ def _latency_surface(rows: dict, config: str, surface: str) -> dict:
 
 def _aggregate_cost(usage_records: list[dict]) -> dict:
     """The run's cost surface: the counters of the cost vocabulary, summed
-    over the leg's rows, with the number of contributing rows named.
-
-    The shape is the SAME on both legs (the same counter names, the same
-    aggregation) so a signed bound compares like with like — and it is the
-    RUN's cost, not one arbitrary case's spend.
-    """
-    totals: dict = {}
-    n_contributing = 0
-    for record in usage_records:
-        if not isinstance(record, dict):
-            continue
-        contributed = False
-        for counter in COST_COUNTERS:
-            value = record.get(counter)
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                totals[counter] = totals.get(counter, 0.0) + float(value)
-                contributed = True
-        if contributed:
-            n_contributing += 1
-    if not totals:
-        return {}
-    return {**{counter: value for counter, value in sorted(totals.items())}, "n_rows_contributing": n_contributing}
-
-
-def _aggregate_cost(usage_records: list[dict]) -> dict:
-    """The run's cost surface: the counters of the cost vocabulary, summed
     over EVERY row that carries a usage record, with the number of
     contributing rows named.
 
@@ -977,14 +951,18 @@ def _leg_class_stats(rows: dict, config: str) -> dict:
             continue
         outcome = row.get("outcome")
         usage = row.get("usage_record") if isinstance(row.get("usage_record"), dict) else {}
+        # The same order the counter-metrics vocabulary reads: the limit
+        # marker first, then the deliberate refusals, then the failures — so
+        # a cancelled row that exhausted its budget is a LIMIT HIT on both
+        # sides of this report.
+        if usage.get("outcome") == LIMIT_MARKER_C:
+            stats["n_limit_hit"] += 1
+            continue
         if outcome == "cancelled":
             stats["n_cancelled"] += 1
             continue
         if outcome == "admission_refused":
             stats["n_admission_refused"] += 1
-            continue
-        if usage.get("outcome") == LIMIT_MARKER_C:
-            stats["n_limit_hit"] += 1
             continue
         if outcome != "answered":
             stats["n_failed"] += 1

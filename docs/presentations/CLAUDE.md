@@ -29,15 +29,33 @@ in one HTML file: English, French, Spanish, Russian, Arabic and Chinese.
 - **Read `src/GLOSSARY.md`** before translating or reviewing a translation.
   Product names stay in Latin script in every language, including Arabic.
 - **Regenerate the fonts** after a translation changes:
-  `PATH=.venv/bin:$PATH python3 src/fetch_fonts.py --code <lang>`. The Arabic
-  and Chinese faces are cut down to the characters the deck prints; without
-  that step those languages render in squares or in a system font.
+  `PATH=.venv/bin:$PATH python3 src/fetch_fonts.py --code <lang>`. The
+  Arabic and Chinese faces are cut down to the characters the deck prints; a
+  face that fell behind fails the build, which names the characters it lacks.
 - **The layout adapts at runtime.** Titles are measured, not counted, and the
   blocks of a slide shrink when a translation needs more room. Do not "fix" a
   long translation by shortening it — the deck handles the length.
 - **The browser check covers every language.** It switches each one and
   checks that nothing overflows the slide. A change to the CSS or the
   runtime can break one language without touching the others.
+
+## The two lengths of the walkthrough
+
+The walkthrough is built in two lengths from one set of sources: the full
+60 minute deck and a 30 minute one. A slide names the variants that show it
+— `@layout|Title|+light` is in both — so a slide keeps its place in the file
+whichever length is built.
+
+- **Do not delete slides from the slide files to change the short deck.**
+  Remove the `|+light` mark instead. The field is machine data, so every
+  language must carry the same one; the build refuses a file that drifted.
+- **A slide keeps its number in both decks.** The short deck does not
+  renumber what it keeps, so the brand marks, the Mermaid diagrams, the
+  translation slots and the source links keep their keys.
+- **The short deck names OKF once.** A slide it keeps, the ingestion slide,
+  names the format as the second way knowledge enters the assistant; the
+  tooling is never presented there. Keep it that way in every language.
+- **`npm run build` writes both decks** and `npm run check` checks both.
 
 ## Existing Marp decks
 

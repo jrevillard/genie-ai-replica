@@ -499,6 +499,43 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+      // #2019 half two (2026-11-19 emulator evidence: the query's refresh
+      // failed with zero AuthNotifier logs and the app hung on
+      // "processing your request" — the interceptor swallowed the thrown
+      // cause, so logcat could not say WHY Keycloak refused). The thrown
+      // cause must surface in the failure log, not vanish.
+      'a thrown refresh logs its CAUSE before the session-expired failure',
+      () async {
+        tokenStorage.accessToken = 'stale-token';
+
+        interceptor = makeInterceptor(
+          responseFn: (_) => streamedResponse(401, 'Unauthorized'),
+          onRefreshToken: () async {
+            tokenStorage.accessToken = null; // refresh consumed the tokens
+            throw StateError('invalid_grant — refresh token rejected');
+          },
+        );
+
+        final request = http.Request(
+          'GET',
+          Uri.parse('https://api.example.com/data'),
+        );
+        try {
+          await interceptor.send(request);
+        } catch (_) {}
+
+        expect(
+          logger.failures.any(
+            (e) =>
+                e.contains('INTERCEPTOR_REFRESH_THROWN') &&
+                e.contains('invalid_grant'),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 
   // --- AuthException ---

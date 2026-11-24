@@ -1019,6 +1019,8 @@ const Map<String, dynamic> ruLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Связанные источники ({n})",
+    "sourceUnavailable": "Этот источник недоступен для просмотра.",
     "aiGeneratedNoDocs":
         "Сгенерировано ИИ — не основано на документах библиотеки",
     "translationUnavailable":
@@ -1200,4 +1202,23 @@ const Map<String, dynamic> ruLocale = {
     "copyright": "Все права защищены.",
   },
   'welcomeMessage': 'Добро пожаловать! Чем я могу помочь вам сегодня?',
+  "okfBrowser": {
+    "title": "Обзор репозитория",
+    "currentNotice":
+        "Показано то, что проиндексировано сейчас, — не обязательно та версия, на которую была ссылка.",
+    "selectHint": "Выберите концепт в дереве, чтобы прочитать его здесь.",
+    "showMore": "Показать больше",
+    "back": "Назад",
+    "forward": "Вперёд",
+    "backToList": "К списку",
+    "conceptUnavailable": "Эта концепция недоступна.",
+    "unavailable": "Этот репозиторий сейчас нельзя просмотреть.",
+    "download": "Скачать",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "Не удалось скачать.",
+    "close": "Закрыть",
+    "filesLabel": "Файлы",
+    "filterHint": "Фильтровать файлы",
+    "indexBadge": "index",
+  },
 };

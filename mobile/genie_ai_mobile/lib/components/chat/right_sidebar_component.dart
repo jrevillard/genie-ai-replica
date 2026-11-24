@@ -15,11 +15,10 @@ import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
-import 'package:genie_ai_mobile/design_system/components/ds_modal.dart';
-import 'package:genie_ai_mobile/design_system/components/ds_spinner.dart';
+import 'package:genie_ai_mobile/okf/okf_citation_open.dart';
+import 'package:genie_ai_mobile/utils/okf_citation.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
-import 'package:genie_ai_mobile/utils/okf_citation.dart';
 
 // --- CONDITIONAL IMPORT ---
 import 'package:genie_ai_mobile/components/chat/stub_file_utils.dart'
@@ -48,10 +47,6 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   // presented as a translated one is the failure this flag exists to prevent.
   bool _faqTranslationFailed = false;
   String _currentLangCode = 'en';
-
-  /// The concepts whose open is in flight — their card shows the spinner and
-  /// a second tap on them is ignored.
-  final Set<String> _openingConcepts = <String>{};
 
   @override
   void initState() {
@@ -324,20 +319,21 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
 
   // RESTORED: Original File Opening Logic
   Future<void> _openDocument(Map<String, dynamic> doc) async {
+    // CAP-3 (chat-source resolution): the OKF action lives in the ONE
+    // shared opener (`openOkfCitation` — browse push + the themed
+    // unavailable notice, the /simplify review's unified ladder; an OKF
+    // row without repo identity or a restricted one gets the notice, never
+    // a dead link). What remains here is this surface's own legacy
+    // external-URL rung (with the `<HOST>` placeholder guard) and the
+    // doc-repository file resolution.
+    if (openOkfCitation(context, doc, logTag: 'sidebar.citation')) {
+      return;
+    }
+
     final String url = _getDocValue(doc, ['url'])?.toString() ?? "";
 
     if (url.startsWith('http') && !url.contains('<HOST>')) {
       launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      return;
-    }
-
-    // An OKF concept is NOT a repository document: its markdown never becomes
-    // a doc-repo file (content-only chunking), so the `/api/files/<id>/view`
-    // URL is a 404 by construction. A concept citation opens through
-    // okf-server under the caller's own scope — the way the web frontend's
-    // translateSources branch does. Legacy document rows keep the path below.
-    if (isOkfConceptCitation(doc)) {
-      await _openOkfConcept(doc);
       return;
     }
 
@@ -349,13 +345,31 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     ])?.toString();
 
     if (fileId == null) {
-      _showNotice(tr('sidebar.docIdNotFound'));
+      final tokens = ThemeManager().tokens;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: tokens.surface,
+          content: Text(
+            tr('sidebar.docIdNotFound'),
+            style: TextStyle(color: tokens.fg),
+          ),
+        ),
+      );
       return;
     }
 
     final String? token = widget.accessToken;
     if (token == null || token.isEmpty) {
-      _showNotice(tr('sidebar.authError'));
+      final tokens = ThemeManager().tokens;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: tokens.surface,
+          content: Text(
+            tr('sidebar.authError'),
+            style: TextStyle(color: tokens.fg),
+          ),
+        ),
+      );
       return;
     }
 
@@ -374,108 +388,24 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         if (!mounted) return;
-        _showNotice(tr('sidebar.launchError'));
-      }
-    }
-  }
-
-  /// Opens an OKF concept citation: the concept's markdown, rendered in a
-  /// modal. The concept resolves through okf-server (repo_id, concept_id) —
-  /// never through the document repository.
-  ///
-  /// A citation that lost its repo identity (a pre-CAP-1 saved row) resolves
-  /// it live; a concept that cannot be served degrades to an honest notice,
-  /// never a dead link.
-  Future<void> _openOkfConcept(Map<String, dynamic> doc) async {
-    final OkfConceptRef? conceptRef = okfConceptRef(doc);
-    if (conceptRef == null) {
-      if (!mounted) return;
-      _showNotice(tr('sidebar.okfSourceUnavailable'));
-      return;
-    }
-    // One fetch per concept at a time: a second tap while the first is in
-    // flight would open a second modal on top of the first. The key carries
-    // the repository — the same concept id can live in two of them.
-    final String openKey = conceptRef.openKey;
-    if (_openingConcepts.contains(openKey)) return;
-
-    setState(() => _openingConcepts.add(openKey));
-    final service = ref.read(okfConceptServiceProvider);
-    try {
-      // The service owns the whole open: it resolves the repository when the
-      // citation lost that identity, and it bounds the body the renderer
-      // shows. Null = the concept cannot be served.
-      final concept = await service.openConcept(
-        conceptRef.repoId,
-        conceptRef.conceptId,
-      );
-      if (concept == null) {
-        if (!mounted) return;
-        _showNotice(tr('sidebar.okfSourceUnavailable'));
-        return;
-      }
-      if (!mounted) return;
-
-      final tokens = ThemeManager().tokens;
-      await DsModal.show<void>(
-        context: context,
-        title: concept.title,
-        size: DsModalSize.lg,
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            MarkdownBody(
-              data: concept.body,
-              styleSheet: _markdownStyle(tokens),
+        final tokens = ThemeManager().tokens;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: tokens.surface,
+            content: Text(
+              tr('sidebar.launchError'),
+              style: TextStyle(color: tokens.fg),
             ),
-            if (concept.truncated) ...[
-              const SizedBox(height: DsSpacing.sm),
-              Text(
-                tr('sidebar.okfConceptTruncated'),
-                style: TextStyle(
-                  fontSize: tokens.textXs,
-                  color: tokens.mutedSoft,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    } catch (e) {
-      debugPrint("[SIDEBAR] Could not open the OKF concept: $e");
-      if (!mounted) return;
-      _showNotice(tr('sidebar.documentOpenError'));
-    } finally {
-      if (mounted) {
-        setState(() => _openingConcepts.remove(openKey));
+          ),
+        );
       }
     }
-  }
-
-  /// The markdown style the sidebar renders prose with — the concept body
-  /// and the FAQ answer read the same.
-  static MarkdownStyleSheet _markdownStyle(AppTokens tokens) {
-    return MarkdownStyleSheet(
-      p: TextStyle(fontSize: tokens.textSm, color: tokens.fg70, height: 1.4),
-    );
-  }
-
-  /// A one-line notice in the interface language.
-  void _showNotice(String message) {
-    final tokens = ThemeManager().tokens;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: tokens.surface,
-        content: Text(message, style: TextStyle(color: tokens.fg)),
-      ),
-    );
   }
 
   // ===========================================================================
   // CONTENT BUILDER (Abstracted to support Drawer vs Panel)
   // ===========================================================================
+
   Widget _buildRightSidebarContent(
     BuildContext context,
     ThemeData theme,
@@ -510,6 +440,10 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
               ),
             ),
 
+            // #1939: the browser's entries are the CITATION paths — the
+            // answer's sources bar and the sidebar's citation rows (the Vue
+            // citizen surface's own entries; the typed-repo-id prompt that
+            // stood in for them is gone with them landed).
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(DsSpacing.md),
@@ -721,10 +655,6 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     final String id =
         _getDocValue(doc, ['id', '_id', 'document_id', 'fileId'])?.toString() ??
         "";
-    // A concept whose open is in flight shows the spinner in place of its
-    // icon — the sidebar's own idiom for "loading" (the FAQ does the same).
-    final String openKey = okfConceptRef(doc)?.openKey ?? '';
-    final bool isOpening = _openingConcepts.contains(openKey);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: DsSpacing.md),
@@ -743,10 +673,7 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (isOpening)
-                    const DsSpinner(size: DsSpinnerSize.sm)
-                  else
-                    Icon(_getDocumentIcon(doc), size: 20, color: tokens.accent),
+                  Icon(_getDocumentIcon(doc), size: 20, color: tokens.accent),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -825,9 +752,10 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        // The tile paints its ink on the nearest Material ancestor; the
-        // decorated card above is opaque, so without this Material the tile's
-        // ripple is invisible (and the framework flags the pair in debug).
+        // The ExpansionTile paints its ListTiles on the nearest Material —
+        // this Container's colored decoration would hide them (the framework
+        // flags it: "ListTile background color or ink splashes may be
+        // invisible"). Own transparent Material restores the tile chrome.
         child: Material(
           type: MaterialType.transparency,
           child: ExpansionTile(
@@ -853,7 +781,13 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
             children: [
               MarkdownBody(
                 data: item['answer'] ?? '',
-                styleSheet: _markdownStyle(tokens),
+                styleSheet: MarkdownStyleSheet(
+                  p: TextStyle(
+                    fontSize: tokens.textSm,
+                    color: tokens.fg70,
+                    height: 1.4,
+                  ),
+                ),
                 onTapLink: (text, href, title) {
                   if (href != null) {
                     launchUrl(

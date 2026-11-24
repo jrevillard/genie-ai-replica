@@ -1025,6 +1025,8 @@ const Map<String, dynamic> stLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "MeHLAHLOBI e amanang ({n})",
+    "sourceUnavailable": "Mohloli ona ha o fumanehe ho shebella.",
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "translationUnavailable":
         "Translation unavailable — this answer may contain untranslated text.",
@@ -1206,4 +1208,23 @@ const Map<String, dynamic> stLocale = {
     "copyright": "Litokelo tsohle li sirelelitsoe.",
   },
   'welcomeMessage': 'Welcome! Ho jo ka u thusa joang kajeno?',
+  "okfBrowser": {
+    "title": "Sheba polokelo",
+    "currentNotice":
+        "E bontša se ngolotsoeng kaharano hona joale — e se mofuta o ntseng o boleloa.",
+    "selectHint": "Khetha kgopolo sehlareng ho e bala mona.",
+    "showMore": "Bontša e eng",
+    "back": "Morao",
+    "forward": "Pele",
+    "backToList": "Boela lethathamong",
+    "conceptUnavailable": "Kgopolo ena ha e fumanehe.",
+    "unavailable": "Polokelo ena ha e khone ho shejwa ka nako ena.",
+    "download": "Jarolla",
+    "downloadEmpty": "This concept has no content to download.",
+    "downloadFailed": "Ho hlolehile ho jarolla.",
+    "close": "Koala",
+    "filesLabel": "Lifaele",
+    "filterHint": "Sesefa lifaele",
+    "indexBadge": "index",
+  },
 };

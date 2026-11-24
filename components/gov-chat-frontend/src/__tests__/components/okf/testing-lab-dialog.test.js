@@ -204,7 +204,9 @@ it('runs a suite and renders the honest summary + steal rows', async () => {
           negative_evaluatable: 3,
           negative_pass_rate: 1,
           avg_margin: 0.3,
-          steals: [{ by_repo: 'Sibling 0', count: 1 }]
+          // #2061 phase 1c: the steal is keyed by the repo_id; the display
+          // name rides alongside it.
+          steals: [{ by_repo: 'sib-1', by_name: 'Sibling 0', count: 1 }]
         },
         results: [
           {
@@ -225,11 +227,87 @@ it('runs a suite and renders the honest summary + steal rows', async () => {
   await w.vm.onRunSuite();
   await w.vm.$nextTick();
   expect(w.vm.lastRunSummary.pass_rate).toBeCloseTo(5 / 6, 5);
-  expect(w.vm.lastRunSummary.steals).toEqual([{ by_repo: 'Sibling 0', count: 1 }]);
+  expect(w.vm.lastRunSummary.steals).toEqual([{ by_repo: 'sib-1', by_name: 'Sibling 0', count: 1 }]);
   const rows = w.vm.lastRunSummaryRows;
   expect(rows[0].pass).toBe(false); // positive lost → fail row
   expect(rows[1].pass).toBe(true); // negative lost-to-sibling → pass
   expect(rows[2].pass).toBeNull(); // negative in a one-repo race → honest null
+});
+
+// #2061 phase 1c/1d: the summary must say WHAT HAPPENED, not only the
+// aggregate. The universe (the score's denominator), the two counters a
+// pass rate cannot express, and the PAIR-level matrix beside the rate.
+it('renders the universe, the F7 counters and the pair matrix beside the pass rate', async () => {
+  const w = mountDialog({ initialTab: 'suites' });
+  await w.vm.$nextTick();
+  w.vm.suite = { suite_key: 's1', payload: { positive: [], negative: [] } };
+  dispatch.mockResolvedValueOnce({
+    ok: true,
+    result: {
+      payload: {
+        summary: {
+          pass_rate: 0.5,
+          sibling_count: 4,
+          positive_passed: 1,
+          positive_total: 2,
+          negative_passed: 1,
+          negative_evaluatable: 2,
+          negative_pass_rate: 0.5,
+          avg_margin: 0.3,
+          avg_margin_n: 2,
+          steals: [{ by_repo: 'sib-1', by_name: 'Sibling 0', count: 1 }],
+          lost_no_winner: 2,
+          negative_wrongly_claimed: 3,
+          parity: { production_equivalent: false, reasons: ['routing_disabled'] },
+          confusion: {
+            n_queries: 3,
+            claim_accuracy: 1 / 3,
+            rows: [{ key: 'repo-a', repo_id: 'repo-a', label: 'Repo A', total: 2 }],
+            columns: [
+              { key: 'repo-a', repo_id: 'repo-a', label: 'Repo A', total: 1 },
+              { key: 'sib-1', repo_id: 'sib-1', label: 'Sibling 0', total: 1 },
+              { key: 'none', repo_id: null, label: 'no winner', total: 1 }
+            ],
+            cells: [
+              { intended: 'repo-a', actual: 'repo-a', count: 1, rate: 0.5, correct: true },
+              { intended: 'repo-a', actual: 'sib-1', count: 1, rate: 0.5, correct: false },
+              { intended: 'repo-a', actual: 'none', count: 1, rate: 0.5, correct: false }
+            ]
+          }
+        },
+        results: []
+      }
+    }
+  });
+  dispatch.mockResolvedValueOnce({ ok: true, runs: [] });
+  await w.vm.onRunSuite();
+  await w.vm.$nextTick();
+
+  // The universe — the score's denominator.
+  expect(w.text()).toContain('Universe: 4 competing heads');
+  // The counters a single pass rate cannot express.
+  expect(w.text()).toContain('2 positive(s) lost with no winner');
+  expect(w.text()).toContain('3 negative(s) were taken by another repository');
+  // The steal is labelled by its DISPLAY name, not its id.
+  expect(w.text()).toContain('Sibling 0 stole 1 queries');
+  // The matrix, beside the rate (not instead of it).
+  const matrix = w.find('.okf-headtest__confusion');
+  expect(matrix.exists()).toBe(true);
+  expect(matrix.text()).toContain('Where the answers came from');
+  expect(matrix.text()).toContain('Repo A');
+  expect(matrix.text()).toContain('Sibling 0');
+  // The "nobody answered" column is named by the UI, not by the server.
+  expect(matrix.text()).toContain('no winner');
+  expect(matrix.text()).toContain('1 (50%)');
+  expect(w.text()).toContain('Claim accuracy');
+  // The mean states its own denominator — a mean over 2 and a mean over
+  // 200 must not render identically.
+  expect(w.text()).toContain('Avg margin (2)');
+  // A run that does NOT stand for production says so.
+  const parity = w.find('.okf-headtest__parity');
+  expect(parity.exists()).toBe(true);
+  expect(parity.text()).toContain('This run does not stand for production');
+  expect(parity.text()).toContain('Routing is disabled in this deployment');
 });
 
 it('dispatches headRebuild with the repo id and emits changed on success', async () => {

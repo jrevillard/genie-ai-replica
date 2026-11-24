@@ -22,7 +22,13 @@ const auditService = require('./audit-service');
 const { logger } = require('../shared-lib/logger');
 const { isArangoNotFound } = require('./arango-errors');
 const { withSpan } = require('../shared-lib/tracing');
-const { workingGraphName, slugFor } = require('./graph-lifecycle-service');
+const { workingGraphName } = require('./graph-lifecycle-service');
+// slugFor comes from ./slug — graph-lifecycle-service IMPORTS it but does not
+// re-export it, so the destructuring import here yielded `undefined` and the
+// sweep's `slugFor(repo.name)` threw into its best-effort catch, leaving the
+// slug empty and the sweep skipped. Measured 2026-11-22: the orphan sweep had
+// TWO independent reasons never to run (this and the unbound `@@collections`).
+const { slugFor } = require('./slug');
 
 const GRAPH_SUFFIXES = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'];
 
@@ -78,16 +84,22 @@ async function dropRepoGraphsForRepo(repo_id) {
     if (slug) {
       const prefix = `OKF_${slug}_`;
       try {
-        const orphans = await db.query(
-          aql`FOR c IN @@collections FILTER STARTS_WITH(c.name, ${prefix}) RETURN c.name`,
-          { '@collections': '_collections' }
-        );
-        for (const orphanName of await orphans.all()) {
-          if (orphanName === '_collections') continue;
-          candidates.add(orphanName);
+        // The GRAPHS, by name — through the driver's own listing. The old
+        // AQL (`FOR c IN @@collections ...` with an `aql` template) was
+        // refused by ArangoDB: an `aql` template takes its bind variables
+        // from the template, NOT from the second argument, so `@@collections`
+        // was never bound and the engine answered "no value specified for
+        // declared bind parameter '@collections'" (measured live, 2026-11-22).
+        // The error was swallowed, so the orphan sweep silently never ran.
+        // `listGraphs` is the same route the teardown drops through
+        // (`_api/gharial`), so the names it returns ARE droppable here.
+        const graphs = await db.listGraphs();
+        for (const graph of graphs || []) {
+          const name = typeof graph === 'string' ? graph : graph && graph.name;
+          if (name && String(name).startsWith(prefix)) candidates.add(name);
         }
       } catch (err) {
-        logger.warn('Graph teardown: orphan sweep query failed', {
+        logger.warn('Graph teardown: orphan sweep listing failed', {
           repo_id,
           prefix,
           error: err.message

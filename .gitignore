@@ -215,6 +215,14 @@ bash.exe.stackdump
 
 # OKF smoke tokens (host-side mint output — never commit)
 okf-smoke-tokens.json
+# OKF lab scenario credentials (host-side principal passwords — never commit)
+okf-scenario-credentials.json
+
+# Per-worktree jest config (LOCAL SCRATCH — never commit). The stock
+# testMatch glob finds ZERO tests under a dot-segment path (.claude/worktrees
+# is one), so each worktree carries a regex-based config of its own. It is
+# scratch: the stock config applies in CI and in the dev tree.
+jest.worktree.config.js
 
 # Story 8-6 smoke exports (host-side xlsx output — never commit)
 smoke-*.xlsx

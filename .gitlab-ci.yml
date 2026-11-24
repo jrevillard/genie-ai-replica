@@ -864,7 +864,7 @@ workflow:
             # end the job green with zero tests run. Fall through instead.
             echo "ROPC refusal verified at the token endpoint (HTTP ${ROPC_STATUS} ${ROPC_ERROR}) — direct access grants rejected"
           elif [ "$ROPC_ERROR" = "invalid_grant" ]; then
-            # Verified on Keycloak 26.7: the direct-grants gate runs before
+            # Verified on Keycloak 26.8.2: the direct-grants gate runs before
             # credential validation, so invalid_grant here means the grant
             # was accepted and the credentials rejected — i.e. drift. If a
             # Keycloak upgrade ever reverses that order, a healthy realm
@@ -6072,6 +6072,16 @@ config:validate:
         - "genie-ai-overlay/chatqna/**/*"
         - "deploy/ansible/**/*"
         - "tests/config-validator/**/*"
+        # The route-knob parity gate (tests/config-validator/__tests__/
+        # route-knob-parity.test.js) reads the Lab's loader, the retriever's
+        # config.py, the compose delivery and the Helm chart + values.yaml:
+        # an MR that retunes a threshold on ANY of those sides must fail
+        # the pin in its own pipeline, not as a red main pipeline after the
+        # merge.
+        - "components/okf-server/services/route-knobs.js"
+        - "charts/genieai-umbrella/values.yaml"
+        - "charts/genieai-umbrella/templates/opea/okf-server.yaml"
+        - "charts/genieai-umbrella/templates/opea/retriever.yaml"
         # The e2e handle gate (tests/config-validator/__tests__/e2e-handle-locators.test.js)
         # reads the specs: a spec that reintroduces a class locator must fail
         # the gate in the same pipeline, so a change under tests/e2e/ triggers

@@ -11,6 +11,10 @@ deployment.
 
 [Open the animated presentation](/presentations/genie-ai/index.html)
 
+A 30-minute version tells the same story in 27 slides.
+
+[Open the 30-minute presentation](/presentations/genie-ai-30/index.html)
+
 Use the arrow keys to navigate and advance diagram animations. Select
 **Speaker notes** or press **S** to open the presenter view, which shows the
 current slide, the next one, the notes and a clock.

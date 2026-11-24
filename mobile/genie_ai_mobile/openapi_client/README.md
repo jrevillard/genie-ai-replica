@@ -116,6 +116,9 @@ Class | Method | HTTP request | Description
 *CurrentUserApi* | [**apiMeResetDataPost**](doc//CurrentUserApi.md#apimeresetdatapost) | **POST** /api/me/reset-data | Reset user profile data
 *DatabaseOperationsApi* | [**apiDatabaseBackupPost**](doc//DatabaseOperationsApi.md#apidatabasebackuppost) | **POST** /api/database/backup | Backup Database
 *DatabaseOperationsApi* | [**apiDatabaseOptimizePost**](doc//DatabaseOperationsApi.md#apidatabaseoptimizepost) | **POST** /api/database/optimize | Optimize Database
+*OkfApi* | [**apiOkfConceptsResolveRepoGet**](doc//OkfApi.md#apiokfconceptsresolverepoget) | **GET** /api/okf/concepts/resolve-repo | Resolve the serving repository holding a concept
+*OkfApi* | [**apiOkfReposRepoIdConceptTreeGet**](doc//OkfApi.md#apiokfreposrepoidconcepttreeget) | **GET** /api/okf/repos/{repo_id}/concept-tree | Browse the repository's paginated concept-tree index
+*OkfApi* | [**apiOkfReposRepoIdConceptsConceptIdGet**](doc//OkfApi.md#apiokfreposrepoidconceptsconceptidget) | **GET** /api/okf/repos/{repo_id}/concepts/{concept_id} | Fetch a concept's citizen card
 *QueriesApi* | [**apiQueriesGet**](doc//QueriesApi.md#apiqueriesget) | **GET** /api/queries | Search queries
 *QueriesApi* | [**apiQueriesPost**](doc//QueriesApi.md#apiqueriespost) | **POST** /api/queries | Create a new query
 *QueriesApi* | [**apiQueriesQueryIdAnsweredPatch**](doc//QueriesApi.md#apiqueriesqueryidansweredpatch) | **PATCH** /api/queries/{queryId}/answered | Mark query as answered
@@ -237,6 +240,11 @@ Class | Method | HTTP request | Description
  - [ApiWeatherPostRequest](doc//ApiWeatherPostRequest.md)
  - [CategoryTree](doc//CategoryTree.md)
  - [CategoryTreeChildrenInner](doc//CategoryTreeChildrenInner.md)
+ - [ConceptCard](doc//ConceptCard.md)
+ - [ConceptCardLink](doc//ConceptCardLink.md)
+ - [ConceptCardSource](doc//ConceptCardSource.md)
+ - [ConceptTreePage](doc//ConceptTreePage.md)
+ - [ConceptTreeRow](doc//ConceptTreeRow.md)
  - [Conversation](doc//Conversation.md)
  - [ConversationListResponse](doc//ConversationListResponse.md)
  - [ConversationStats](doc//ConversationStats.md)
@@ -251,6 +259,7 @@ Class | Method | HTTP request | Description
  - [MessageListResponse](doc//MessageListResponse.md)
  - [Query](doc//Query.md)
  - [QueryContext](doc//QueryContext.md)
+ - [ResolveRepoResponse](doc//ResolveRepoResponse.md)
  - [SearchResponse](doc//SearchResponse.md)
  - [SearchResponseResultsInner](doc//SearchResponseResultsInner.md)
  - [Session](doc//Session.md)

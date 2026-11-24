@@ -82,12 +82,15 @@ class KeycloakService {
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
 
-      _cachedEndpoints = OidcEndpoints(
+      final discovered = OidcEndpoints(
         authorizationEndpoint: json['authorization_endpoint'] as String,
         tokenEndpoint: json['token_endpoint'] as String,
         userinfoEndpoint: json['userinfo_endpoint'] as String,
         endSessionEndpoint: json['end_session_endpoint'] as String,
       );
+      _cachedEndpoints = keycloakConfig.rewriteAdvertisedOrigins
+          ? _rewriteAdvertisedOrigins(discovered)
+          : discovered;
       _logger?.logAuthEvent(
         message: 'Endpoint discovery successful',
         source: 'KeycloakService.discoverEndpoints',
@@ -127,6 +130,26 @@ class KeycloakService {
       );
       return null;
     }
+  }
+
+  /// Replaces each advertised endpoint's origin with [KeycloakConfig.keycloakUrl]'s
+  /// origin, keeping path and query (the emulator harness contract — see
+  /// [KeycloakConfig.rewriteAdvertisedOrigins]).
+  OidcEndpoints _rewriteAdvertisedOrigins(OidcEndpoints e) {
+    final discoveryOrigin = Uri.parse(keycloakConfig.keycloakUrl).origin;
+    String fix(String url) {
+      final u = Uri.parse(url);
+      if (u.origin == discoveryOrigin) return url;
+      final query = u.query.isEmpty ? '' : '?${u.query}';
+      return '$discoveryOrigin${u.path}$query';
+    }
+
+    return OidcEndpoints(
+      authorizationEndpoint: fix(e.authorizationEndpoint),
+      tokenEndpoint: fix(e.tokenEndpoint),
+      userinfoEndpoint: fix(e.userinfoEndpoint),
+      endSessionEndpoint: fix(e.endSessionEndpoint),
+    );
   }
 
   Future<bool> endSession({String? idTokenHint}) async {

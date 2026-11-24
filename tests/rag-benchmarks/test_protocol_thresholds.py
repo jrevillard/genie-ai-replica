@@ -5,9 +5,10 @@
 Every registry/promotion row of the module's matrix through fixtures — temp
 registries, fake reference manifests, no live venue:
 
-* the shipped registry loads, reports every measured dimension (M-1..M-5) as
-  EXPLICITLY absent with its reason, and BLOCKS the promotion — no value is
-  defaulted and no threshold is invented;
+* the shipped registry loads, carries the operator's SIGNED retrieval-quality
+  bounds (M-1) with their basis, reports every other measured dimension as
+  EXPLICITLY absent with its reason, and BLOCKS the promotion —
+  no value is defaulted and no threshold is invented;
 * the gate sign-off owner is exposed, and a missing or unsigned sign-off
   blocks promotion exactly like an absent threshold;
 * an incomplete registry, a malformed one, an unknown dimension and a registry
@@ -20,6 +21,7 @@ registries, fake reference manifests, no live venue:
 import argparse
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -128,20 +130,90 @@ def _args(registry: Path, **overrides) -> argparse.Namespace:
 
 
 # ---------------------------------------------------------------------------
-# The shipped registry — every dimension absent, the promotion blocked
+# The shipped registry — M-1 signed, the others absent, the promotion blocked
 # ---------------------------------------------------------------------------
 
+# The operator's signed bounds (issue #1980, the operator's approval of
+# 2026-11-23 against the measured A reference of issue #2118 / MR !1056).
+SIGNED_RETRIEVAL_BOUNDS = {
+    "retrieval_recall": {"operator": ">=", "threshold": 0.95},
+    "recall_at_10": {"operator": ">=", "threshold": 0.95},
+    "ndcg_at_10": {"operator": ">=", "threshold": 0.90},
+    "passage_recall": {"operator": ">=", "threshold": 0.95},
+    "noise": {"operator": "<=", "threshold": 0.80},
+}
 
-def test_the_shipped_registry_loads_and_reports_every_dimension_absent():
+# The scope the signature covers — the chunk/passage-level anchor metrics of
+# config A (config B measures the doc-level sources: the surfaces differ).
+SIGNED_SCOPE = "config A — the chunk/passage-level anchor metrics"
+
+# The reference the signature is bound to: the corpus fingerprint and the
+# assessment-set digest of the measured A run (issue #2118 / MR !1056). The
+# registry's basis names them — the pins live here so a typo in either
+# digest goes red instead of shipping as free prose.
+SIGNED_CORPUS_FINGERPRINT = "6c9f73719c0451cdcbca19e86bc38476ade96be9945811133c5a23071377eb98"
+SIGNED_ASSESSMENT_SET_SHA256 = "58850161afebad599234e5ef54b1122a17684e5de7b81e36b9b6c3867152a784"
+
+
+def _ABSENT_DIMENSIONS() -> list[str]:
+    """Every measured dimension the signature does NOT cover — derived, so a
+    dimension added to the protocol later is covered here too."""
+    return [code for code in thresholds_mod.MEASURED_DIMENSIONS if code != "M-1"]
+
+
+def test_the_shipped_registry_carries_the_signed_retrieval_thresholds():
+    """M-1 carries exactly the operator's signed bounds — no more, no less."""
     registry = thresholds_mod.load_registry(REGISTRY)
     decision = thresholds_mod.promotion_decision(registry)
-    assert decision["promotion"] == "blocked"
+    record = decision["dimensions"]["M-1"]
+    assert record["status"] == thresholds_mod.STATUS_AGREED
+    assert record["value"]["metrics"] == SIGNED_RETRIEVAL_BOUNDS
+    assert record["agreement_date"] == "2026-11-23"
+
+
+def test_the_shipped_registry_pins_the_shape_of_the_signed_value():
+    """The loader takes any non-null value, so the SHIPPED value's shape is
+    pinned here: the scope it applies to, and each metric entry — an operator
+    and a threshold. A typo in a key or an operator goes red."""
+    registry = thresholds_mod.load_registry(REGISTRY)
+    value = registry["dimensions"]["M-1"]["value"]
+    assert set(value) == {"scope", "metrics"}
+    assert value["scope"] == SIGNED_SCOPE
+    for name, bound in value["metrics"].items():
+        assert set(bound) == {"operator", "threshold"}, name
+        assert bound["operator"] in (">=", "<="), name
+        assert isinstance(bound["threshold"], (int, float)), name
+        assert not isinstance(bound["threshold"], bool), name
+
+
+def test_the_shipped_registry_binds_the_signature_to_the_measured_reference():
+    """The signature names the reference it is bound to: the corpus
+    fingerprint and the assessment-set digest of the measured A run, each under
+    its own label. The basis is not free prose — a typo, a swapped label or an
+    extended digest goes red."""
+    registry = thresholds_mod.load_registry(REGISTRY)
+    basis = registry["sign_off"]["basis"]
+    for label, digest in (
+        ("corpus fingerprint", SIGNED_CORPUS_FINGERPRINT),
+        ("assessment-set digest", SIGNED_ASSESSMENT_SET_SHA256),
+    ):
+        assert re.search(
+            rf"{re.escape(label)} {re.escape(digest)}(?![0-9a-f])", basis
+        ), label
+
+
+def test_the_shipped_registry_reports_every_other_dimension_absent():
+    """Every measured dimension the signature does not cover stays EXPLICITLY
+    absent with its reason, and each one blocks the promotion."""
+    registry = thresholds_mod.load_registry(REGISTRY)
+    decision = thresholds_mod.promotion_decision(registry)
     assert set(decision["dimensions"]) == set(thresholds_mod.MEASURED_DIMENSIONS)
-    for code in thresholds_mod.MEASURED_DIMENSIONS:
+    for code in _ABSENT_DIMENSIONS():
         record = decision["dimensions"][code]
         assert record["status"] == thresholds_mod.STATUS_ABSENT
         assert record["value"] is None
         assert record["absent_reason"]
+        assert record["agreement_date"] is None
         blocking = [
             reason
             for reason in decision["blocking_reasons"]
@@ -150,18 +222,56 @@ def test_the_shipped_registry_loads_and_reports_every_dimension_absent():
         assert blocking, f"{code} does not block the promotion"
 
 
+def test_the_shipped_registry_blocks_the_promotion_on_the_absent_dimensions():
+    """The signature covers M-1 only: the absent dimensions keep the promotion
+    blocked — a signed dimension never unblocks an absent one."""
+    registry = thresholds_mod.load_registry(REGISTRY)
+    decision = thresholds_mod.promotion_decision(registry)
+    assert decision["promotion"] == "blocked"
+    assert decision["sign_off"]["signed"] is True
+    blocked_by_absence = {
+        reason["dimension"]
+        for reason in decision["blocking_reasons"]
+        if reason["code"] == thresholds_mod.BLOCK_DIMENSION_ABSENT
+    }
+    assert blocked_by_absence == set(_ABSENT_DIMENSIONS())
+    assert not [
+        reason
+        for reason in decision["blocking_reasons"]
+        if reason["code"] == thresholds_mod.BLOCK_SIGNOFF_UNSIGNED
+    ]
+
+
 def test_the_shipped_registry_invents_no_threshold_value():
+    """No dimension carries a value the operator did not sign: the absent ones
+    carry none at all, and the agreed one carries the signed bounds only."""
     registry = thresholds_mod.load_registry(REGISTRY)
     for code in thresholds_mod.MEASURED_DIMENSIONS:
-        assert registry["dimensions"][code]["value"] is None
+        entry = registry["dimensions"][code]
+        if entry["status"] == thresholds_mod.STATUS_ABSENT:
+            assert entry["value"] is None
+    assert registry["dimensions"]["M-1"]["value"]["metrics"] == SIGNED_RETRIEVAL_BOUNDS
 
 
-def test_the_shipped_registry_exposes_the_sign_off_owner():
+def test_the_shipped_registry_exposes_the_signed_sign_off():
     registry = thresholds_mod.load_registry(REGISTRY)
     decision = thresholds_mod.promotion_decision(registry)
     assert decision["sign_off"]["owner"] == OWNER
+    assert decision["sign_off"]["signed"] is True
+    assert decision["sign_off"]["signed_on"] == "2026-11-23"
     report = thresholds_mod.build_thresholds_report(registry, created_utc=CREATED)
     assert report["sign_off"]["owner"] == OWNER
+    assert report["sign_off"]["signed"] is True
+    assert report["sign_off"]["signed_on"] == "2026-11-23"
+
+
+def test_the_shipped_registry_records_who_signed_it():
+    """The signatory and the agreement date are the signature's own record —
+    they are asserted on the registry, since the report's sign-off record
+    omits ``signatory``."""
+    registry = thresholds_mod.load_registry(REGISTRY)
+    assert registry["sign_off"]["signatory"] == "jrevillard"
+    assert registry["sign_off"]["agreed_on"] == "2026-11-23"
 
 
 def test_the_report_digest_is_reproducible_under_a_pinned_created_utc():

@@ -19,7 +19,8 @@ import pytest
 
 from protocol import drivers
 from protocol import gate as gate_mod
-from protocol.manifest import manifest_digest
+from protocol.evalset import evaluation_surface
+from protocol.manifest import manifest_digest, sha256_json
 from protocol.run_protocol import cmd_assess, cmd_reference
 
 CORPUS = "c" * 64
@@ -51,21 +52,160 @@ def test_config_a_runs_the_anchor_pattern_and_records_the_report(tmp_path):
 
     result = drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=fake_runner)
     assert calls[0]["seed"] == 7
-    assert calls[0]["gold"].endswith("set.json")
+    # The anchor is fed the DERIVED gold file: the set's retrieval-surface
+    # cases only — the anchor scores passages, and a gold-less case would
+    # score vacuously.
+    assert calls[0]["gold"].endswith("config-a.gold.json")
     assert calls[0]["out"].endswith("config-a.report.json")
+    anchored = json.loads(Path(calls[0]["gold"]).read_text(encoding="utf-8"))["entries"]
+    assert {case["id"] for case in anchored} == {
+        "sample-ans-pub-1",
+        "sample-cite-pub-1",
+        "sample-lang-ru-1",
+        "sample-lang-es-1",
+    }
     assert result["report"]["aggregate"]["recall"] == 0.9
     assert Path(result["report_path"]).exists()
+
+
+def _refusing_runner(gold, out, seed, env_extra=None):  # pragma: no cover — the run must not happen
+    """The runner a refusal test installs: the anchor must NOT run on a set it
+    cannot measure, so reaching it fails the test."""
+    raise AssertionError("the anchor must not run on an unmeasurable set")
+
+
+def _sample_set_with(tmp_path, case_id, mutate):
+    """The CI sample set with ONE case mutated — the setup the anchor's
+    refusal tests share."""
+    set_path = _a_set_file(tmp_path)
+    data = json.loads(set_path.read_text(encoding="utf-8"))
+    for case in data["entries"]:
+        if case["id"] == case_id:
+            mutate(case)
+    set_path.write_text(json.dumps(data), encoding="utf-8")
+    return set_path
+
+
+def test_config_a_refuses_a_set_whose_retrieval_cases_carry_no_gold(tmp_path):
+    """A retrieval case without gold is measured by nothing: the anchor would
+    score it vacuously (recall 1.0 by construction) and count it as measured
+    while carrying no expectation. The driver refuses instead."""
+    def drop_gold(case):
+        case["expected_chunks"] = []
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", drop_gold)
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "carry no gold" in str(failed.value)
+    assert "sample-ans-pub-1" in str(failed.value)
+
+
+def test_config_a_refuses_a_retrieval_case_the_anchor_cannot_drive_as_one_query(tmp_path):
+    """A multi-turn case's queries are its turns — the capture drives them. The
+    anchor drives one query per case, so a retrieval case it cannot drive that
+    way is measured by nothing."""
+    def turns_only(case):
+        case.pop("query")
+        case["turns"] = [{"query": "first turn"}, {"query": "second turn"}]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", turns_only)
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "ONE query" in str(failed.value)
+    assert "sample-ans-pub-1" in str(failed.value)
+
+
+def test_config_a_refuses_a_gold_entry_the_anchor_cannot_match(tmp_path):
+    """The anchor's gold rule: the content hashes, and only when no entry
+    carries one does it fall back to the chunk keys. So an entry that carries
+    only a chunk key BESIDE hashed siblings is dropped — it matches against
+    nothing while the case counts as annotated."""
+    def mixed_identities(case):
+        case["expected_chunks"] = [
+            {"chunk_key": "sample-ans-pub-1-chunk-1", "content_hash": "a1b2c3d4e5f60718"},
+            {"chunk_key": "sample-ans-pub-1-chunk-2"},
+        ]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", mixed_identities)
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "cannot match" in str(failed.value)
+    assert "sample-ans-pub-1#gold1" in str(failed.value)
+
+
+def test_config_a_refuses_a_gold_entry_with_no_identity(tmp_path):
+    """The anchor matches a gold chunk on its content hash (or its chunk key).
+    An entry with neither matches against nothing, and the case would drop out
+    of the aggregate without a word."""
+    def preview_only(case):
+        case["expected_chunks"] = [{"preview": "the quarterly service report is submitted…"}]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", preview_only)
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "cannot match" in str(failed.value)
+    assert "sample-ans-pub-1#gold0" in str(failed.value)
+
+
+def test_config_a_refuses_a_gold_entry_that_is_not_an_object(tmp_path):
+    """The anchor reads ``c.get(...)`` on every gold entry, so an entry that is
+    not an object would kill it with an AttributeError instead of a refusal.
+    The refusal names the entry by its position in the set's own list."""
+    def bare_string(case):
+        case["expected_chunks"] = [
+            {"chunk_key": "sample-ans-pub-1-chunk-1", "content_hash": "a1b2c3d4e5f60718"},
+            "a bare string where a gold object belongs",
+        ]
+
+    set_path = _sample_set_with(tmp_path, "sample-ans-pub-1", bare_string)
+
+    with pytest.raises(drivers.DriverError) as failed:
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=_refusing_runner)
+    assert "cannot match" in str(failed.value)
+    assert "sample-ans-pub-1#gold1" in str(failed.value)
+
+
+def test_config_a_records_the_identity_of_the_anchor_input(tmp_path):
+    """The set's digest identifies the set; the projection's digest identifies
+    WHICH of its cases the chunk-level surface scores. Both are recorded, so
+    an artifact says what it measured."""
+    set_path = _a_set_file(tmp_path)
+    calls = []
+
+    def runner(gold, out, seed, env_extra=None):
+        calls.append(gold)
+        out.write_text(json.dumps({"aggregate": {}, "n_missed_traces": 0}), encoding="utf-8")
+        return {"aggregate": {}, "n_missed_traces": 0}
+
+    result = drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner)
+    rows = json.loads(Path(result["rows_path"]).read_text(encoding="utf-8"))
+    # The recorded identity is the digest of the file the anchor ACTUALLY read.
+    anchored = json.loads(Path(calls[0]).read_text(encoding="utf-8"))["entries"]
+    assert rows["anchor_projection_sha256"] == sha256_json(anchored)
+    # The anchored cases are the retrieval-surface ones, and the census agrees.
+    assert {case["id"] for case in anchored} == {
+        "sample-ans-pub-1",
+        "sample-cite-pub-1",
+        "sample-lang-ru-1",
+        "sample-lang-es-1",
+    }
+    assert rows["coverage"]["by_surface"]["retrieval"] == len(anchored)
 
 
 def test_config_a_fail_fasts_on_missed_traces(tmp_path):
     """The anchor's existing behavior, reused: a reference with missed traces
     is a zero baseline in disguise."""
+    set_path = _a_set_file(tmp_path)
 
     def runner_with_misses(gold, out, seed, env_extra=None):
         return {"aggregate": {"recall": 0.0}, "n_missed_traces": 3, "n_unmapped_chunk_keys": 0}
 
     with pytest.raises(drivers.DriverError) as failed:
-        drivers.run_config_a("set.json", tmp_path, seed=7, runner=runner_with_misses)
+        drivers.run_config_a(set_path, tmp_path / "out", seed=7, runner=runner_with_misses)
     assert "3 trace(s)" in str(failed.value)
 
 
@@ -145,7 +285,7 @@ class FakeBTransport:
 
 
 def _case(id_, query, case_class, access="public", **extra):
-    return {
+    case = {
         "id": id_,
         "query": query,
         "categoryLabels": [],
@@ -158,6 +298,12 @@ def _case(id_, query, case_class, access="public", **extra):
         "provenance": "assessment",
         **extra,
     }
+    # A retrieval-surface case carries gold: the chunk-level surface is the
+    # only one that consumes it, and the anchor driver refuses a set whose
+    # retrieval cases carry none.
+    if "expected_chunks" not in extra and evaluation_surface(case) == "retrieval":
+        case["expected_chunks"] = [{"chunk_key": f"{id_}-chunk-1", "content_hash": "a1b2c3d4e5f60718"}]
+    return case
 
 
 def _b_set(tmp_path, ids):

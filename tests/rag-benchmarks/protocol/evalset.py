@@ -41,6 +41,13 @@ at least one NON-LATIN case), plus the access axis (public AND restricted) and
 the failure and cancellation classes. A missing class fails validation NAMING
 the class and its required minimum; a complete set passes.
 
+Evaluation surfaces — which surface measures which case: the gold
+(``expected_chunks``) is consumed by ONE surface only, the chunk-level
+retrieval surface; every other surface is judged from what the run RECORDED.
+The surfaces and their consequences are documented in
+``tests/rag-benchmarks/CLAUDE.md``; the rules live in
+:func:`evaluation_surface` and :func:`coverage_census`.
+
 TUNING sets are composition-free (they exist to tune, not to assess) but keep
 the schema and the provenance symmetry: a tuning set refuses an
 assessment-provenance case.
@@ -104,6 +111,26 @@ SECURITY_SCENARIOS = AUTHORIZATION_SCENARIOS + INJECTION_SCENARIOS
 # classes: an operator may raise them, never lower them below 1 — presence is
 # the invariant.
 DEFAULT_SECURITY_MINIMUMS = {scenario: 1 for scenario in SECURITY_SCENARIOS}
+
+# The evaluation surface a case is measured on. The chunk-level RETRIEVAL
+# surface is the only consumer of ``expected_chunks``: the protocol's gold
+# identity is the chunk's content hash, and the config-A anchor is the only
+# instrument that scores passages. The other three surfaces are judged from
+# what the run RECORDED — the answer, its outcome, the retrieved document ids
+# — so a case on one of them carries no gold BY DESIGN, and a case on the
+# retrieval surface without gold is measured by NOTHING (the anchor driver
+# refuses it — see :func:`evaluation_surface` and :func:`coverage_census`).
+SURFACES = ("retrieval", "outcome", "security", "restricted_access", "unknown")
+
+# The classes measured on the chunk-level retrieval surface.
+RETRIEVAL_CLASSES = ("answerable", "citation_check", "representative_language")
+
+# The classes judged from the recorded OUTCOME (abstention, typed failure,
+# cancellation) — never from passages. DERIVED from the composition classes,
+# so a new class lands on exactly one of the two surfaces.
+OUTCOME_CLASSES = tuple(
+    case_class for case_class in COMPOSITION_CLASSES if case_class not in RETRIEVAL_CLASSES
+)
 
 # The minimum of non-Latin cases inside the representative_language class.
 DEFAULT_NON_LATIN_MINIMUM = 1
@@ -234,6 +261,70 @@ def turn_entries(case: dict) -> list[dict]:
         entry["turn"] = index
         entries.append(entry)
     return entries
+
+
+def evaluation_surface(case: dict) -> str:
+    """The surface this case is measured on — the ONE place that decides it.
+
+    * ``security`` — the case carries a ``security_scenario``: the protocol
+      runs security scenarios on the pair's B/C legs only (the surfaces with
+      an authorization executor and a steerable agent), and the verdict layer
+      judges them from the retrieved document ids, never from passages.
+    * ``outcome`` — the case's class asserts an outcome (abstention, typed
+      failure, cancellation): judged from the recorded outcome.
+    * ``restricted_access`` — the case's sources live in a restricted graph:
+      config A has no authorization surface (it is the legacy fixed RAG), so
+      the case is an authorization case and is measured on the B/C legs'
+      document-level surface. It is also a MECHANICAL exclusion: the anchor's
+      key→hash map covers the public source collection only, so a restricted
+      chunk can never map — anchoring such a case would fail the run on
+      unmapped chunk keys instead of measuring anything.
+    * ``retrieval`` — a retrieval-class case with public access and no
+      security scenario: the chunk-level surface, the only one that consumes
+      ``expected_chunks``.
+    * ``unknown`` — a malformed case (its class is not one of the six); the
+      validator already names that offense.
+    """
+    if case.get("security_scenario"):
+        return "security"
+    case_class = case.get("case_class")
+    if case_class in OUTCOME_CLASSES:
+        return "outcome"
+    if case_class in RETRIEVAL_CLASSES:
+        return "restricted_access" if case.get("access_scenario") == "restricted" else "retrieval"
+    return "unknown"
+
+
+def coverage_census(entries: list[dict]) -> dict:
+    """What the set covers, per evaluation surface.
+
+    A SET-level statement, not a run-level one: ``n_set_cases`` counts the
+    set's CASES (a multi-turn case is one case; its turns are rows), and
+    ``n_cases_with_a_resolved_surface`` counts the cases whose surface is
+    RESOLVED — a retrieval case without gold has no resolved surface (it is
+    measured by nothing), every other case is resolved by construction. It
+    says NOTHING about how many cases a run answered: the rows file carries
+    that (answered / skipped), and the two numbers must not be read as one.
+
+    For a set the anchor can measure, every case has a resolved surface — the
+    invariant the anchor driver enforces.
+    """
+    by_surface = {surface: 0 for surface in SURFACES}
+    unresolved: list[str] = []
+    for case in entries:
+        if not isinstance(case, dict):
+            continue
+        surface = evaluation_surface(case)
+        by_surface[surface] = by_surface.get(surface, 0) + 1
+        if surface == "retrieval" and not case.get("expected_chunks"):
+            unresolved.append(str(case.get("id")))
+    n_cases = sum(by_surface.values())
+    return {
+        "n_set_cases": n_cases,
+        "n_cases_with_a_resolved_surface": n_cases - len(unresolved),
+        "by_surface": by_surface,
+        "retrieval_cases_without_gold": unresolved,
+    }
 
 
 def _validate_case(index: int, case: dict, errors: list[str]) -> None:

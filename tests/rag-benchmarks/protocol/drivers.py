@@ -57,7 +57,13 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
 from harness import exec_in_container, write_json  # noqa: E402 — the eval toolchain's atomic JSON IO
 
-from .evalset import as_label_list, turn_entries  # noqa: E402 — the shared turn expansion (no import cycle)
+from .evalset import (  # noqa: E402 — the shared turn expansion and surface model (no import cycle)
+    as_label_list,
+    coverage_census,
+    evaluation_surface,
+    turn_entries,
+)
+from .manifest import sha256_file, sha256_json  # noqa: E402 — the protocol's own digests (no import cycle)
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -187,6 +193,67 @@ def _default_a_runner(gold: Path, out: Path, seed: int, env_extra: dict | None =
     return capture_baseline._run_anchor_eval(gold, out, seed, env_extra)
 
 
+def anchor_projection(cases: list[dict]) -> list[dict]:
+    """The anchor's INPUT: the set's retrieval-surface cases.
+
+    One function, so the projection the anchor runs on and the projection the
+    capture stamps are the same projection — and its digest (see
+    :func:`anchor_projection_sha256`) identifies the anchor's input in the
+    artifacts. A change to the surface model moves that digest; it never
+    moves silently.
+    """
+    return [case for case in cases if evaluation_surface(case) == "retrieval"]
+
+
+def anchor_projection_sha256(projection: list[dict]) -> str:
+    """The digest of the anchor's input — the projection's identity.
+
+    The set's own digest identifies the set; this identifies WHICH of its
+    cases the chunk-level surface scores. Both are recorded, so an artifact
+    says what it measured, not only what it was built from. The projection is
+    the argument (not the cases): the caller already holds it, and deriving
+    it twice would digest two lists that can only differ by accident.
+    """
+    return sha256_json(projection)
+
+
+def _gold_without_identity(cases: list[dict]) -> list[str]:
+    """The retrieval cases whose gold the anchor cannot match.
+
+    The anchor's own rule (``eval/run_eval.py::score_anchor``): the gold list
+    is every entry's content hash, and ONLY when no entry carries one does it
+    fall back to the chunk keys. An entry that carries neither identity is
+    dropped under both branches — and so is an entry that carries only a
+    chunk key beside hashed siblings, because the hash branch wins. Such an
+    entry matches against nothing while the case counts as annotated, so the
+    case is listed here (the anchor would score it against fewer gold chunks
+    than the set declares).
+
+    A gold entry that is not an object is listed too: the anchor reads
+    ``c.get(...)`` on every entry, so it would die on one with an
+    AttributeError instead of refusing the set. The index is the entry's
+    position in the set's own list.
+    """
+    unmatched: list[str] = []
+    for case in cases:
+        chunks = case.get("expected_chunks") or []
+        entries = [chunk for chunk in chunks if isinstance(chunk, dict)]
+        hash_branch = any(_has_text(chunk.get("content_hash")) for chunk in entries)
+        for index, chunk in enumerate(chunks):
+            if not isinstance(chunk, dict):
+                unmatched.append(f"{case.get('id')}#gold{index}")
+                continue
+            identity = chunk.get("content_hash") if hash_branch else chunk.get("chunk_key")
+            if not _has_text(identity):
+                unmatched.append(f"{case.get('id')}#gold{index}")
+    return unmatched
+
+
+def _has_text(value) -> bool:
+    """True for a non-empty string — the shape check the gold identities use."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def run_config_a(
     set_path: str | Path,
     out_dir: str | Path,
@@ -207,12 +274,62 @@ def run_config_a(
     an interrupted run continues where it died. Fail-fast on missed traces
     (the anchor's existing behavior): a reference measurement with missed
     traces is a zero baseline in disguise.
+
+    The anchor is fed the set's RETRIEVAL-SURFACE cases only (written to
+    ``config-a.gold.json``) and REFUSES a set it cannot measure: a retrieval
+    case with no gold, one it cannot drive as one query, or a gold entry with
+    no matchable identity.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "config-a.report.json"
     runner = runner or _default_a_runner
-    report = runner(Path(set_path).resolve(), report_path.resolve(), seed, env_extra)
+    cases = entries if entries is not None else _load_entries(set_path)
+    # The anchor is the CHUNK-LEVEL instrument: it scores passages against a
+    # case's gold, so it is fed exactly the retrieval-surface cases. The other
+    # surfaces are measured by the capture (answers, outcomes) and the verdict
+    # layer (security); feeding them to the anchor produced vacuous rows — a
+    # gold-less query scores recall 1.0 by construction and every retrieved
+    # chunk as noise — and that is how cases the protocol declares
+    # inapplicable to config A came to be counted as unevaluated.
+    census = coverage_census(cases)
+    if census["retrieval_cases_without_gold"]:
+        raise DriverError(
+            "the config-A anchor refuses a set whose retrieval-surface cases carry no gold"
+            f" ({', '.join(census['retrieval_cases_without_gold'])}) — the anchor scores passages"
+            " against gold, so an unannotated case would score vacuously (recall 1.0 by"
+            " construction) and count as measured while carrying no expectation"
+        )
+    anchor_cases = anchor_projection(cases)
+    unanchorable = [str(case.get("id")) for case in anchor_cases if case.get("turns")]
+    if unanchorable:
+        raise DriverError(
+            "the config-A anchor refuses a retrieval case it cannot drive as ONE query"
+            f" ({', '.join(unanchorable)}) — a multi-turn case's queries are its turns (the"
+            " capture's rows), so the chunk-level surface measures nothing on it"
+        )
+    shapeless = _gold_without_identity(anchor_cases)
+    if shapeless:
+        raise DriverError(
+            "the config-A anchor refuses gold it cannot match"
+            f" ({', '.join(shapeless)}) — the anchor matches on the content hashes and only"
+            " falls back to the chunk keys when no entry carries one, so an entry dropped by"
+            " that rule would match against nothing while the case counts as annotated"
+        )
+    gold_path = out_dir / "config-a.gold.json"
+    write_json(
+        gold_path,
+        {
+            "_doc": (
+                "the config-A anchor's input: the set's retrieval-surface cases, derived from"
+                f" {Path(set_path).name} — the anchor scores passages, so only the cases whose"
+                " surface is the chunk-level one are anchored"
+            ),
+            "entries": anchor_cases,
+        },
+        ensure_ascii=False,
+    )
+    report = runner(gold_path.resolve(), report_path.resolve(), seed, env_extra)
     if not isinstance(report, dict):
         raise DriverError(f"config A runner returned {type(report).__name__}, not a report dict")
     n_missed = int(report.get("n_missed_traces", 0))
@@ -225,10 +342,28 @@ def run_config_a(
     # The security cases: A has no agent surface — the skipped rows
     # record the reason so the pair's report shows an intentional difference,
     # never a silent absence.
-    skip_rows = security_skip_rows(entries if entries is not None else _load_entries(set_path))
+    skip_rows = security_skip_rows(cases)
     rows_path = out_dir / "config-a.rows.json"
-    write_json(rows_path, {"cases": skip_rows}, ensure_ascii=False)
-    return {"report": report, "report_path": str(report_path), "rows": skip_rows, "rows_path": str(rows_path)}
+    write_json(
+        rows_path,
+        {
+            "cases": skip_rows,
+            # What the run covered: the census per evaluation surface, and the
+            # identity of the anchor's input. The anchor report carries rows
+            # for the retrieval surface only, so this is where the reader
+            # learns why.
+            "coverage": census,
+            "anchor_projection_sha256": anchor_projection_sha256(anchor_projection(cases)),
+        },
+        ensure_ascii=False,
+    )
+    return {
+        "report": report,
+        "report_path": str(report_path),
+        "rows": skip_rows,
+        "rows_path": str(rows_path),
+        "coverage": census,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -446,14 +581,19 @@ def run_config_a_capture(
     cases = entries if entries is not None else _load_entries(set_path)
     prior = _read_rows_file(rows_path)
 
-    from .manifest import sha256_file
-
     stamp = {
         "assessment_set_sha256": sha256_file(set_path),
         "corpus_fingerprint": corpus_fingerprint,
         # "computed" = the fingerprint was measured from the corpus content
         # hashes; "pinned" = the operator's declaration. The report says so.
         "corpus_fingerprint_source": corpus_fingerprint_source,
+        # What the set covers, per evaluation surface: the capture is the
+        # artifact that says which cases run on which surface, so the census
+        # rides the stamp rather than being reconstructed by every reader.
+        "coverage": coverage_census(cases),
+        # The identity of the ANCHOR's input — which of the set's cases the
+        # chunk-level surface scores. A change to the surface model moves it.
+        "anchor_projection_sha256": anchor_projection_sha256(anchor_projection(cases)),
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set

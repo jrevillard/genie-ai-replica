@@ -1,5 +1,5 @@
 {
-  "_doc": "Assessment-set SAMPLE — a CI fixture proving the composition validator (stories 4.1 and 4.2), NOT deployment case content. Every composition class is present and countable: answerable (10), unanswerable (1), citation_check (1), representative_language (2, one non-Latin), failure (1), cancellation (1); access public (9) + restricted (7). The security floor (story 4.2) is demonstrated too: restricted_repo (1), cross_user_id (a pair — 2 cases differing only in user_id), narrowed_scope (1), permission_change (1, a two-turn case whose second turn narrows the authorized set), injection_document (1), injection_tool_output (1). The restricted cases declare graphs — and `context.authorized_source_ids` (the SUITE's stricter assertion: a source inside an authorized graph but outside the ids is a legal service answer) only when the test demands that narrower citation set. Deployment sets follow the same shape with real corpus queries (see protocol/evalset.py).",
+  "_doc": "Assessment-set SAMPLE — a CI fixture proving the composition validator (stories 4.1 and 4.2), NOT deployment case content. Every composition class is present and countable: answerable (10), unanswerable (1), citation_check (1), representative_language (2, one non-Latin), failure (1), cancellation (1); access public (9) + restricted (7). The security floor (story 4.2) is demonstrated too: restricted_repo (1), cross_user_id (a pair — 2 cases differing only in user_id), narrowed_scope (1), permission_change (1, a two-turn case whose second turn narrows the authorized set), injection_document (1), injection_tool_output (1). The restricted cases declare graphs — and `context.authorized_source_ids` (the SUITE's stricter assertion: a source inside an authorized graph but outside the ids is a legal service answer) only when the test demands that narrower citation set. Deployment sets follow the same shape with real corpus queries (see protocol/evalset.py). The four RETRIEVAL-surface cases (sample-ans-pub-1, sample-cite-pub-1, sample-lang-ru-1, sample-lang-es-1) carry gold: the chunk-level surface is the only one that scores passages, so a retrieval case without gold is measured by nothing and the config-A anchor driver refuses such a set. The other cases carry none BY DESIGN — the outcome and security surfaces are judged from the recorded outcome and the retrieved document ids, never from passages. The gold entries here are synthetic (no corpus, no hash matches anything).",
   "_meta": {
     "provenance": "assessment"
   },
@@ -11,7 +11,13 @@
       "serviceLabels": [],
       "language": "en",
       "reference_answer": "The quarterly report is submitted through the ministry portal with the case number attached.",
-      "expected_chunks": [],
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-ans-pub-1-chunk-1",
+          "content_hash": "a1b2c3d4e5f60718",
+          "preview": "The quarterly service report is submitted through the ministry portal with the case number attached."
+        }
+      ],
       "case_class": "answerable",
       "access_scenario": "public",
       "provenance": "assessment",
@@ -70,7 +76,13 @@
       "serviceLabels": [],
       "language": "en",
       "reference_answer": "The complaint-filing deadline is defined in the procedural guide, section 4.",
-      "expected_chunks": [],
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-cite-pub-1-chunk-1",
+          "content_hash": "b2c3d4e5f6071829",
+          "preview": "The complaint-filing deadline is defined in the procedural guide, section 4."
+        }
+      ],
       "case_class": "citation_check",
       "access_scenario": "public",
       "provenance": "assessment",
@@ -83,7 +95,13 @@
       "serviceLabels": [],
       "language": "ru",
       "reference_answer": "Заявление подаётся в министерство с подтверждением права на землю.",
-      "expected_chunks": [],
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-lang-ru-1-chunk-1",
+          "content_hash": "c3d4e5f607182930",
+          "preview": "Заявление на сельскохозяйственную субсидию подаётся в министерство с подтверждением права на землю."
+        }
+      ],
       "case_class": "representative_language",
       "access_scenario": "public",
       "provenance": "assessment",
@@ -96,7 +114,13 @@
       "serviceLabels": [],
       "language": "es",
       "reference_answer": "La solicitud se presenta en la oficina regional con el formulario completo.",
-      "expected_chunks": [],
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-lang-es-1-chunk-1",
+          "content_hash": "d4e5f60718293041",
+          "preview": "La solicitud de apoyo agrícola se presenta en la oficina regional con el formulario completo."
+        }
+      ],
       "case_class": "representative_language",
       "access_scenario": "public",
       "provenance": "assessment"

@@ -290,6 +290,7 @@ def cmd_reference(args: argparse.Namespace) -> int:
         Path(args.out_dir), "A", entries, result.get("rows") or {}, absent_rows="skipped"
     )
     _print_findings_summary(report)
+    _print_coverage("reference run", result.get("coverage") or {})
     print(f"reference run: report {result['report_path']}")
     print(f"reference manifest: {path}")
     print(f"findings report: {report_path}")
@@ -449,6 +450,19 @@ def _load_rows_refusing(path: str, what: str):
     return cases
 
 
+def _print_coverage(prefix: str, census: dict) -> None:
+    """The coverage statement, in ONE format: the set's cases per evaluation
+    surface, and how many of them carry a resolved surface. It says nothing
+    about how many cases a run answered — the rows file carries that."""
+    if not census:
+        return
+    surfaces = ", ".join(f"{surface} {count}" for surface, count in census["by_surface"].items())
+    print(
+        f"{prefix}: {census['n_cases_with_a_resolved_surface']}/{census['n_set_cases']}"
+        f" case(s) with a resolved surface — {surfaces}"
+    )
+
+
 def cmd_capture_a(args: argparse.Namespace) -> int:
     """The per-case config-A answer capture: the E01 judgment
     inputs the anchor path cannot carry. The reference command is untouched."""
@@ -470,6 +484,7 @@ def cmd_capture_a(args: argparse.Namespace) -> int:
     print(f"captured rows: {result['rows_path']}")
     stamp = result["capture"]
     print(f"capture stamp: set {stamp['assessment_set_sha256'][:12]}, corpus {stamp['corpus_fingerprint'][:12]}")
+    _print_coverage("capture coverage", stamp.get("coverage") or {})
     return 0
 
 

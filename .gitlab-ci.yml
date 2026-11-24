@@ -4532,6 +4532,9 @@ test:rag-benchmarks:
         # The graded assessment set is artifact content this suite gates
         # (#2145 verbatim gold) — a set-only edit must run the job too.
         - "_bmad-output/implementation-artifacts/e01-assessment-grade-2026-11-24/**/*"
+        # The gate also reads the #2148 source set (the inherited cases'
+        # byte-identity baseline) — an edit there must run the job too.
+        - "_bmad-output/implementation-artifacts/e01-security-corpus-2026-11-24/**/*"
         # The protocol mirrors the server's label rule and pins itself
         # against it — a change to the server's rule must run this job.
         - "genie-ai-overlay/core/label_contract.py"

@@ -110,10 +110,10 @@ def test_graded_set_census_is_acceptance_grade():
 
 
 def test_inherited_measurement_instrument_is_unchanged():
-    """The 16 inherited cases are byte-identical to the #2148 campaign set —
-    the measurement instrument the signed M-1 binds, compared entry-by-entry
-    against the committed source, so no rewrite (query, gold, expectations)
-    can drift it while keeping its id."""
+    """The 16 inherited cases have identical entries to the #2148 campaign
+    set — the measurement instrument the signed M-1 binds, compared
+    entry-by-entry against the committed source, so no rewrite (query, gold,
+    expectations) can drift it while keeping its id."""
     inherited_source = (
         REPO_ROOT
         / "_bmad-output"

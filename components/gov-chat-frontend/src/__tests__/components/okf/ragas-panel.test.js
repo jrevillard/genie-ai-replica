@@ -1786,4 +1786,26 @@ describe('#2061 E-5: the scoped benchmark states its binding and its attribution
     expect(w.text()).toContain('not measurable');
     expect(w.text()).not.toContain('0%');
   });
+
+  // Live 2026-11-25: a regenerate created a NEW suite while the OLD suite's
+  // run stayed on screen; Explain then fired old-run/new-suite and the
+  // server rightly refused — after two minutes of dead polling. A run
+  // belongs to ONE suite: when the loaded suite's key changes, the previous
+  // suite's run and advisor travel off.
+  it('changing the loaded suite clears the stale run and its advisor', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    const before = suiteFixture();
+    w.vm.suite = before;
+    w.vm.runDoc = Object.assign(runFixture(), { suite_key: before.suite_key });
+    w.vm.explainDoc = { payload: { advice: {} } };
+    await w.vm.$nextTick();
+
+    const regenerated = suiteFixture();
+    regenerated.suite_key = 'rs-new-suite';
+    w.vm.suite = regenerated;
+    await w.vm.$nextTick();
+    expect(w.vm.runDoc).toBeNull();
+    expect(w.vm.explainDoc).toBeNull();
+  });
 });

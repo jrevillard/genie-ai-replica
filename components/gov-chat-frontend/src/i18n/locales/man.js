@@ -3282,7 +3282,14 @@ export default {
         refreshed: 'Kontextoo tarandi kura.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'Kontext si — deploymentoo bɛɛ',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'I be kontextoo labɛm {name} — a mara a be gulu uwanamaw tarandi kura.',
+        updated: 'Kontextoo labɛnna, a tarandi kura.',
+        deleted: 'Kontextoo bɔra.'
       },
       head: {
         dim: 'Dimensions',

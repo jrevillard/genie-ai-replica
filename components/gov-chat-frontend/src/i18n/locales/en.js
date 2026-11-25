@@ -1869,7 +1869,14 @@ export default {
         refreshed: 'The context was re-resolved.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'No context — the whole deployment',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Editing {name} — saving re-resolves the union and bumps the version.',
+        updated: 'The context was updated and re-resolved.',
+        deleted: 'The context was removed.'
       },
       head: {
         dim: 'Dimensions',

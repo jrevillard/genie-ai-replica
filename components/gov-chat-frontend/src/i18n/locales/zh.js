@@ -3228,7 +3228,14 @@ export default {
         refreshed: '上下文已重新解析。',
         pickerLabel: '评估上下文',
         pickerNone: '无上下文——整个部署',
-        reposShort: '个仓库'
+        reposShort: '个仓库',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: '正在编辑 {name} — 保存时会重新解析并集并提升版本号。',
+        updated: '上下文已更新并重新解析。',
+        deleted: '上下文已删除。'
       },
       head: {
         dim: '维度',

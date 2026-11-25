@@ -3318,7 +3318,14 @@ export default {
         refreshed: 'প্রসঙ্গটি পুনরায় সমাধান করা হয়েছে।',
         pickerLabel: 'মূল্যায়ন প্রসঙ্গ',
         pickerNone: 'কোনো প্রসঙ্গ নেই — পুরো মোতায়েন',
-        reposShort: 'রিপোজিটরি'
+        reposShort: 'রিপোজিটরি',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: '{name} সম্পাদনা হচ্ছে — সংরক্ষণ করলে ইউনিয়ন পুনরায় নির্ধারিত হয় এবং সংস্করণ বাড়ে।',
+        updated: 'প্রসঙ্গটি আপডেট হয়েছে এবং পুনরায় নির্ধারিত হয়েছে।',
+        deleted: 'প্রসঙ্গটি মুছে ফেলা হয়েছে।'
       },
       head: {
         dim: 'মাত্রা',

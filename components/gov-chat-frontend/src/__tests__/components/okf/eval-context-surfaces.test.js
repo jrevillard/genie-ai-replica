@@ -29,6 +29,8 @@ jest.mock('@/services/evalContextService', () => ({
     listContexts: jest.fn(),
     createContext: jest.fn(),
     refreshContext: jest.fn(),
+    updateContext: jest.fn(),
+    deleteContext: jest.fn(),
     invalidateContexts: jest.fn(),
     listGroups: jest.fn(),
     previewContext: jest.fn()
@@ -36,7 +38,7 @@ jest.mock('@/services/evalContextService', () => ({
 }));
 jest.mock('@/services/httpService', () => ({
   __esModule: true,
-  default: { get: jest.fn(), post: jest.fn() }
+  default: { get: jest.fn(), post: jest.fn(), delete: jest.fn() }
 }));
 
 const evalContextService = require('@/services/evalContextService').default;
@@ -198,6 +200,49 @@ describe('#2061 E-5: the composer composes memberships and previews before it co
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain('the name is already taken');
   });
+
+  // #2061 phase-4 amendment (David, 2026-11-25): contexts are MANAGEABLE.
+  test('EDIT loads an existing context into the composer, and saving posts the update', async () => {
+    evalContextService.updateContext.mockResolvedValue({ _key: 'ec-1', version: 3, name: 'ministry-a readers' });
+    const wrapper = mount(EvalContextPanel);
+    await new Promise((r) => setTimeout(r, 0));
+    await wrapper.vm.$nextTick();
+
+    await wrapper.vm.onEdit(CONTEXTS[0]);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.editingKey).toBe('ec-1');
+    expect(wrapper.vm.name).toBe('ministry-a readers');
+    expect(wrapper.vm.memberships.map((m) => m.name)).toEqual(['group-a', 'group-b']);
+    // The GROUPS of an existing context are VISIBLE in the composer with
+    // their grants — the operator sees what each membership carries.
+    expect(wrapper.vm.memberships[0].grants).toEqual(['okf:t:r-1:read']);
+
+    wrapper.vm.onRemoveMembership('group-a');
+    await wrapper.vm.onSaveEdit();
+    expect(evalContextService.updateContext).toHaveBeenCalledWith('ec-1', {
+      name: 'ministry-a readers',
+      principal_refs: ['group-b']
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.editingKey).toBeNull();
+  });
+
+  test('a REFUSED delete names the suites that hold the context', async () => {
+    evalContextService.deleteContext.mockRejectedValue({
+      data: {
+        message:
+          'evaluation context ministry-a readers is bound to 2 test suite(s): Head suite A, Benchmark B. Delete or re-mint those suites first.'
+      }
+    });
+    const wrapper = mount(EvalContextPanel);
+    await new Promise((r) => setTimeout(r, 0));
+    await wrapper.vm.$nextTick();
+
+    await wrapper.vm.onDelete(CONTEXTS[0]);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('Head suite A');
+    expect(wrapper.text()).toContain('Benchmark B');
+  });
 });
 
 describe('#2061 E-5: the run carries the context id', () => {
@@ -275,6 +320,21 @@ describe('#2061 E-5: the client maps every call to its route', () => {
     httpService.post.mockResolvedValue({ data: { resolved: { repos: [] } } });
     await realClient.previewContext({ principal_refs: ['g'] });
     expect(httpService.post).toHaveBeenCalledWith('/okf/eval-contexts/preview', { principal_refs: ['g'] });
+  });
+
+  test('update and delete carry the id — and a write drops the catalogue memo', async () => {
+    httpService.post.mockResolvedValue({ data: { _key: 'ec-1', version: 2 } });
+    await realClient.updateContext('ec-1', { name: 'renamed', principal_refs: ['g'] });
+    expect(httpService.post).toHaveBeenCalledWith('/okf/eval-contexts/ec-1/update', {
+      name: 'renamed',
+      principal_refs: ['g']
+    });
+    // The memo is dropped: the next catalogue read reflects the write.
+    expect(evalContextService.invalidateContexts).toBeTruthy();
+
+    httpService.delete.mockResolvedValue({ data: { deleted: true } });
+    await realClient.deleteContext('ec 1');
+    expect(httpService.delete).toHaveBeenCalledWith('/okf/eval-contexts/ec%201');
   });
 });
 

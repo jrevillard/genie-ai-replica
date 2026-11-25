@@ -16,9 +16,12 @@
   a real multi-group token gets, computed by the one authority
   (resolveGraphSet) and FROZEN at a version. It is NOT a Keycloak role and
   NOT a Keycloak user you can log in as: it is an OKF-side snapshot of what
-  such a principal would resolve to. A context is immutable and has no
-  delete route — so the composer PREVIEWS the resolution before it commits
-  to a name, and a refresh is the only way to change what it resolves to.
+  such a principal would resolve to. A context is MANAGEABLE (David,
+  2026-11-25): it can be renamed, its memberships added/removed (each
+  change re-resolves and bumps the version), and deleted — a delete is
+  REFUSED while any test suite is bound to the context, because a suite's
+  frozen snapshot must not outlive its principal's catalogue entry
+  silently. The composer still PREVIEWS a resolution before it commits.
 
   THE THREE FACTS THE OPERATOR MUST SEE, or the number is not evidence:
     1. WHICH memberships it holds (the groups) — a run must say which
@@ -101,6 +104,15 @@
           <div class="okf-evalctx__item-actions">
             <DsButton variant="secondary" small :disabled="busy" @click="onRefresh(c)">
               {{ translate('okf.testingLab.contexts.refresh', 'Refresh') }}
+            </DsButton>
+            <DsButton variant="secondary" small :disabled="busy" @click="onEdit(c)">
+              {{ translate('okf.testingLab.contexts.edit', 'Edit') }}
+            </DsButton>
+            <!-- The delete is refused SERVER-side while any suite is bound
+                 to the context — the refusal names the suites, so the
+                 button is honest even when it fails. -->
+            <DsButton variant="secondary" small :disabled="busy" @click="onDelete(c)">
+              {{ translate('okf.testingLab.contexts.delete', 'Delete') }}
             </DsButton>
           </div>
         </li>
@@ -216,9 +228,36 @@
         </div>
       </div>
 
+      <!-- The EDIT banner (David, 2026-11-25): the composer doubles as the
+           editor — an edit loads the stored name + memberships (with their
+           grants) into these same controls, and saving re-resolves. -->
+      <p v-if="editingKey" class="okf-evalctx__edit-banner" role="status">
+        {{
+          translate(
+            'okf.testingLab.contexts.editing',
+            'Editing {name} — saving re-resolves the union and bumps the version.',
+            {
+              name
+            }
+          )
+        }}
+        <DsButton variant="ghost" small :disabled="busy" @click="onCancelEdit">
+          {{ translate('okf.testingLab.contexts.cancelEdit', 'Cancel') }}
+        </DsButton>
+      </p>
+
       <div class="okf-evalctx__actions">
-        <DsButton variant="primary" small :disabled="busy || !name.trim()" @click="onCreate">
-          {{ translate('okf.testingLab.contexts.create', 'Create the context') }}
+        <DsButton
+          variant="primary"
+          small
+          :disabled="busy || !name.trim()"
+          @click="editingKey ? onSaveEdit() : onCreate()"
+        >
+          {{
+            editingKey
+              ? translate('okf.testingLab.contexts.save', 'Save the changes')
+              : translate('okf.testingLab.contexts.create', 'Create the context')
+          }}
         </DsButton>
         <DsSpinner v-if="busy" size="sm" />
       </div>
@@ -254,6 +293,9 @@ export default {
       name: '',
       pickedGroup: '',
       preview: null,
+      /** The composer doubles as the EDITOR: null = composing a new
+       *  context; a key = the loaded context the controls are editing. */
+      editingKey: null,
       busy: false,
       loading: false,
       error: '',
@@ -375,6 +417,80 @@ export default {
       } finally {
         this.busy = false;
       }
+    },
+
+    /**
+     * EDIT (David, 2026-11-25): load a stored context into the composer.
+     * The stored refs are NAMES; they are grafted onto the loaded groups
+     * so the operator sees the GRANTS each membership carries — the groups
+     * of an existing context are visible here, not just their count.
+     */
+    onEdit(c) {
+      this.editingKey = c._key;
+      this.name = c.name;
+      this.memberships = (c.principal_refs || []).map((name) => {
+        const found = this.groups.find((g) => g.name === name);
+        return found ? { ...found } : { name, grants: [], member_count: 0 };
+      });
+      this.preview = null;
+      this.error = '';
+      this.note = '';
+    },
+
+    onCancelEdit() {
+      this.editingKey = null;
+      this.name = '';
+      this.memberships = [];
+      this.preview = null;
+    },
+
+    /**
+     * SAVE the edit: the name and the memberships go as ONE update — the
+     * server re-resolves a changed membership set and bumps the version.
+     */
+    async onSaveEdit() {
+      if (!this.editingKey) return;
+      this.busy = true;
+      this.error = '';
+      this.note = '';
+      try {
+        await evalContextService.updateContext(this.editingKey, {
+          name: this.name.trim(),
+          principal_refs: this.memberships.map((m) => m.name)
+        });
+        this.editingKey = null;
+        this.name = '';
+        this.memberships = [];
+        this.preview = null;
+        evalContextService.invalidateContexts();
+        await this.loadContexts();
+        this.note = this.translate('okf.testingLab.contexts.updated', 'The context was updated and re-resolved.');
+      } catch (err) {
+        this.error = this.errorText(err);
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    /**
+     * DELETE: refused server-side (409, naming the bound suites) while any
+     * test suite is minted for the context — that refusal renders here via
+     * errorText, so the operator learns WHICH suites hold it in place.
+     */
+    async onDelete(c) {
+      this.busy = true;
+      this.error = '';
+      this.note = '';
+      try {
+        await evalContextService.deleteContext(c._key);
+        evalContextService.invalidateContexts();
+        await this.loadContexts();
+        this.note = this.translate('okf.testingLab.contexts.deleted', 'The context was removed.');
+      } catch (err) {
+        this.error = this.errorText(err);
+      } finally {
+        this.busy = false;
+      }
     }
   }
 };
@@ -457,7 +573,22 @@ export default {
 }
 
 .okf-evalctx__item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   margin-top: 0.35rem;
+}
+
+.okf-evalctx__edit-banner {
+  margin: 0.6rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .okf-evalctx__chosen {

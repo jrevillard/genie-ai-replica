@@ -3328,7 +3328,14 @@ export default {
         refreshed: 'Konteks telah diselesaikan ulang.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'Tanpa konteks — seluruh deployment',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Menyunting {name} — menyimpan me-resolve ulang gabungan dan menaikkan versi.',
+        updated: 'Konteks diperbarui dan di-resolve ulang.',
+        deleted: 'Konteks dihapus.'
       },
       head: {
         dim: 'Dimensions',

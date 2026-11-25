@@ -3411,6 +3411,18 @@ async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
     err.status = 409;
     throw err;
   }
+  // Live 2026-11-25: the panel held a run from the OLD suite after a
+  // regenerate, and this begin ACCEPTED the impossible pairing — the 202
+  // answered, the async job died writing nothing, and the poll hammered
+  // "no explain found" for minutes. The pairing is validated HERE, before
+  // the job exists, so the impossible request gets its honest 404 now.
+  const pairingDoc = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`).catch(() => null);
+  if (!pairingDoc || pairingDoc.repo_id !== repoId || pairingDoc.suite_key !== suiteKey || pairingDoc.kind !== 'ragas_run') {
+    const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
+    err.code = 'RUN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
   const inflight = explainInFlight.get(suiteKey);
   if (inflight) {
     const err = new Error('an explain is already running for this suite');
@@ -3420,9 +3432,42 @@ async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
     throw err;
   }
   const explainKey = `rx${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  // The placeholder is the poll's anchor (the head-suite flow's shape): a
+  // job that fails mid-flight updates IT to a terminal failed state, so
+  // getExplainFailures always has something honest to answer — the poll
+  // can never hang on a doc that was never written.
+  await db.collection(COLLECTION).save({
+    _key: explainKey,
+    repo_id: repoId,
+    kind: 'ragas_explain',
+    suite_key: suiteKey,
+    status: 'running',
+    created_at: new Date().toISOString(),
+    created_by: (opts.actor && opts.actor.user_id) || 'system',
+    payload: { run_key: runKey }
+  });
   explainInFlight.set(suiteKey, { explain_key: explainKey, run_key: runKey });
+  const failTerminal = async (e) => {
+    const code = typeof e.code === 'string' && e.code ? e.code : 'EXPLAIN_FAILED';
+    try {
+      await db
+        .collection(COLLECTION)
+        .update(explainKey, { status: 'failed', error: { code, message: e.message } });
+    } catch (updateErr) {
+      logger.error('ragas-suite.explain.failed_doc_unwritable', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        explain_key: explainKey,
+        error: updateErr.message
+      });
+    }
+  };
   const done = explainFailures(repoId, suiteKey, runKey, { ...opts, explainKey })
     .then((doc) => doc)
+    .catch(async (e) => {
+      await failTerminal(e);
+      throw e;
+    })
     .finally(() => explainInFlight.delete(suiteKey));
   done.catch((e) =>
     logger.error('ragas-suite.explain.async_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message })
@@ -5070,7 +5115,12 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
           advice
         }
       };
-      await db.collection(COLLECTION).save(doc);
+      await db
+        .collection(COLLECTION)
+        // REPLACE, not save: beginExplainFailures already wrote the running
+        // placeholder under this key — the poll's anchor. The finished doc
+        // replaces it wholesale (and drops the 'running' status with it).
+        .replace(opts.explainKey || doc._key, { ...doc, _key: opts.explainKey || doc._key });
       span.setAttribute('okf.ragas.failing', attributions.length);
       span.setAttribute('okf.ragas.unfair', attributions.filter((a) => a.unfair_question).length);
       return doc;

@@ -3339,7 +3339,14 @@ export default {
         refreshed: 'Контекст разрешён заново.',
         pickerLabel: 'Контекст оценки',
         pickerNone: 'Без контекста — вся развёртка',
-        reposShort: 'репоз.'
+        reposShort: 'репоз.',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Редактирование {name} — при сохранении объединение разрешается заново и версия увеличивается.',
+        updated: 'Контекст обновлён и разрешён заново.',
+        deleted: 'Контекст удалён.'
       },
       head: {
         dim: 'Размерность',

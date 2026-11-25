@@ -1247,6 +1247,37 @@ describe('explain', () => {
     }
   });
 
+  // Live 2026-11-25 (David's explain click): the panel held a run from the
+  // OLD suite after a regenerate, the POST accepted the impossible pairing,
+  // the async job died writing NOTHING, and the poll then hammered
+  // "no explain found" for minutes. Two contracts pin the cure.
+  it('refuses an explain whose run belongs to ANOTHER suite — synchronously, at the POST', async () => {
+    const a = await makeSuiteWithRun();
+    const b = await svc.beginSuiteGeneration('me', { testset_size: 1 }, {});
+    await b.done;
+    await expect(svc.beginExplainFailures('me', b.suite_key, { run_key: a.run_key }, {})).rejects.toMatchObject({
+      code: 'RUN_NOT_FOUND',
+      status: 404
+    });
+  });
+
+  it('a failed explain leaves a TERMINAL failed doc — the poll answers, it never hangs on nothing', async () => {
+    const { suite_key, run_key } = await makeSuiteWithRun();
+    // Fail the job at its LAST step (the finished doc's write): the advisor
+    // degrading is a HANDLED outcome, so the failure must come from
+    // somewhere the flow does not catch. The poisoned replace is that
+    // place — and the placeholder written by the begin is what the poll
+    // then reads as terminal.
+    const col = __mockDb.collection('okf_head_test_runs');
+    col.replace.mockRejectedValueOnce(new Error('db exploded mid-explain'));
+    const begun = await svc.beginExplainFailures('me', suite_key, { run_key }, {});
+    await begun.done.catch(() => {}); // the job fails
+    const doc = await svc.getExplainFailures('me', suite_key, run_key);
+    expect(doc.status).toBe('failed');
+    expect(doc.error && doc.error.code).toBe('EXPLAIN_FAILED');
+    expect(doc.error.message).toContain('db exploded mid-explain');
+  });
+
   // Live 2026-10-19 (verification run rr1792392548082): the reference chunk
   // was retrieved VERBATIM — context recall 1.0, every reference token in the
   // retrieved union — and entity recall still scored 0.4–0.5, because the

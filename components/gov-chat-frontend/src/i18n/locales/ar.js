@@ -3279,7 +3279,14 @@ export default {
         refreshed: 'أُعيد حلّ السياق.',
         pickerLabel: 'سياق التقييم',
         pickerNone: 'بدون سياق — كامل النشر',
-        reposShort: 'مستودع'
+        reposShort: 'مستودع',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'تعديل {name} — الحفظ يعيد حل الاتحاد ويرفع الإصدار.',
+        updated: 'تم تحديث السياق وإعادة حله.',
+        deleted: 'تمت إزالة السياق.'
       },
       head: {
         dim: 'الأبعاد',

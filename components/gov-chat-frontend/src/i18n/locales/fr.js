@@ -3359,7 +3359,14 @@ export default {
         refreshed: 'Le contexte a été résolu à nouveau.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'Aucun contexte — tout le déploiement',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Modification de {name} — l’enregistrement résout à nouveau l’union et incrémente la version.',
+        updated: 'Le contexte a été mis à jour et résolu à nouveau.',
+        deleted: 'Le contexte a été supprimé.'
       },
       head: {
         dim: 'Dimensions',

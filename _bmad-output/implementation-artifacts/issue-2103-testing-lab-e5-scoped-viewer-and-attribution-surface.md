@@ -106,3 +106,74 @@ badge and the boundary readout ride the scoped viewer."*
 - Phase 5 (#2104) per the epic.
 - man/st translation quality: genuine best-effort (register matched to the
   existing catalogue); a native-review pass is the honest follow-up.
+
+## Amendment (2026-11-25, David's directive)
+
+> "Evaluation contexts must be able to be added/modified (change name and
+> add/remove groups) and removed. Removal should be restricted if they are
+> currently in use for test suites. You MUST be able to see the groups in an
+> existing evaluation context. I also just tried to run explain failures on a
+> RAGAS benchmark in the local build and it errored."
+
+### The mutability surface (backend + frontend)
+
+- `POST /okf/eval-contexts/:id/update` (superadmin-gated) — rename and/or
+  change `principal_refs`. A changed membership set re-resolves through the
+  ONE authority (`resolveContext`) and bumps the version; an update naming
+  an unreadable membership is REFUSED 422 `PRINCIPAL_UNREADABLE` with the
+  stored snapshot standing (the refresh rule — never silently widen).
+  Blank/non-string name → 400 `INVALID_NAME`; malformed refs → 400
+  `INVALID_REFS`; audited as `eval_context.update`.
+- `DELETE /okf/eval-contexts/:id` (superadmin-gated) — REFUSED 409
+  `CONTEXT_IN_USE` NAMING the bound suites (any `routing_suite`, `suite` or
+  `ragas_suite` whose `payload.context.id` matches, newest 50) while any
+  test suite is minted for the context; otherwise removed and audited as
+  `eval_context.delete`. The refusal's message renders verbatim in the
+  composer.
+- `EvalContextPanel.vue` — the composer doubles as the EDITOR: catalogue
+  rows gain Edit/Delete; `onEdit` loads the stored name + memberships
+  GRAFTED onto the loaded groups so each membership shows its GRANTS (the
+  "you MUST be able to see the groups" ruling — visible, not just counted);
+  an edit banner states that saving re-resolves and bumps the version;
+  Cancel restores the compose mode; the primary button becomes "Save the
+  changes" while editing.
+- `evalContextService.updateContext/deleteContext` — both invalidate the
+  catalogue memo (a write must not serve a stale picker list).
+- i18n — 7 new keys × 14 locales (edit/delete/save/cancelEdit short labels
+  English everywhere per convention; `editing`/`updated`/`deleted`
+  translated in ALL locales — localeConsistency green).
+
+### The explain-failures repair (David's live error, root-caused)
+
+Three layers, each RED→GREEN:
+
+1. **Frontend staleness** — regenerating a suite under the same key left
+   `RagasPanel` rendering the PREVIOUS suite's run/explain records (the run
+   doc's `suite_key` no longer matched the loaded suite; the poll then hung
+   on an explain doc that would never complete). Fix: a `suite.suite_key`
+   watcher clears `runDoc`/`explainDoc`/`explainProgress`/`error`.
+2. **Async pairing acceptance** — `beginExplainFailures` validated the
+   run/suite pairing INSIDE the async job, so an impossible pairing
+   produced a forever-running placeholder. Fix: synchronous validation
+   (404 `RUN_NOT_FOUND`), the placeholder saved before the job starts, and
+   `failTerminal` marks the doc `{status:'failed', error}` if the job
+   throws.
+3. **Final write** — the doc write moved from `.save()` to `.replace()` on
+   the placeholder's key (the placeholder and the final doc are one row).
+
+### Coverage + gates (amendment diff)
+
+- okf-server: stmt 88.36 / br 75.73 / fn 89.55 / lines 89.83 — above the
+  main baseline (88.34/75.72/89.4/89.81) on all four.
+- frontend: stmt 89.75 / br 77.97 / fn 69.91 / lines 90.04 — above the
+  baseline (89.72/77.86/69.76/89.98) on all four.
+- Suites: frontend 4646/4646 (post-prettier re-run); localeConsistency +
+  okf-surface-i18n-contract green; prettier + eslint clean.
+- Worktree measurement trap (recorded to memory): `jest --coverage` writes
+  NOTHING to the default dir in a `.claude` worktree and `json-summary`
+  is not a default reporter — the numbers above come from
+  `--coverageDirectory=./covtest --coverageReporters=json-summary` with a
+  verified-fresh mtime.
+- The controller adapter fix the new tests caught: every handler now
+  awaits the service BEFORE stamping the status (a refusal path must never
+  carry a success status through `res.status(200).json(await …)`).

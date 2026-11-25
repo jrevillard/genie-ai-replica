@@ -3366,7 +3366,14 @@ export default {
         refreshed: 'Der Kontext wurde neu aufgelöst.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'Kein Kontext — die gesamte Bereitstellung',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: '{name} wird bearbeitet — beim Speichern wird die Vereinigung neu aufgelöst und die Version erhöht.',
+        updated: 'Der Kontext wurde aktualisiert und neu aufgelöst.',
+        deleted: 'Der Kontext wurde entfernt.'
       },
       head: {
         dim: 'Dimensions',

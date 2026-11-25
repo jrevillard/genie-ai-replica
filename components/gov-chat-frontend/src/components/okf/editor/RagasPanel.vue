@@ -1636,6 +1636,22 @@ export default {
     }
   },
   watch: {
+    /**
+     * A run belongs to ONE suite (live 2026-11-25: a regenerate created a
+     * new suite while the OLD suite's run stayed on screen; the explain
+     * click then fired old-run/new-suite and the server rightly refused).
+     * The moment the loaded suite's key changes, the previous suite's run
+     * and its advisor travel off — the panel can never act on a run the
+     * loaded suite does not own.
+     */
+    'suite.suite_key'(nextKey, prevKey) {
+      if (prevKey && nextKey !== prevKey) {
+        this.runDoc = null;
+        this.explainDoc = null;
+        this.explainProgress = null;
+        this.error = '';
+      }
+    },
     /** A pick the dropdown cannot DISPLAY must never travel with the
      * request (live 2026-10-21): the run went to a personal MiniMax key
      * while the panel showed "Deployment default" — the active GLM config

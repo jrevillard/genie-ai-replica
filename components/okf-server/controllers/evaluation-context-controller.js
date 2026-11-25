@@ -48,6 +48,9 @@ const opts = (req) => ({ actor: actorFrom(req) });
 
 async function createContext(req, res, next) {
   try {
+    // The service is awaited BEFORE the status is set: a refusal must
+    // never leave a success status stamped on the response (the shared
+    // error handler owns the refusal's status).
     const doc = await evalCtxService.createContext(req.body || {}, opts(req));
     res.status(201).json(doc);
   } catch (err) {
@@ -57,7 +60,8 @@ async function createContext(req, res, next) {
 
 async function listContexts(req, res, next) {
   try {
-    res.status(200).json({ items: await evalCtxService.listContexts() });
+    const items = await evalCtxService.listContexts();
+    res.status(200).json({ items });
   } catch (err) {
     next(err);
   }
@@ -65,7 +69,8 @@ async function listContexts(req, res, next) {
 
 async function getContext(req, res, next) {
   try {
-    res.status(200).json(await evalCtxService.getContext(req.params.id));
+    const doc = await evalCtxService.getContext(req.params.id);
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -73,7 +78,8 @@ async function getContext(req, res, next) {
 
 async function refreshContext(req, res, next) {
   try {
-    res.status(200).json(await evalCtxService.refreshContext(req.params.id, opts(req)));
+    const doc = await evalCtxService.refreshContext(req.params.id, opts(req));
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -89,7 +95,8 @@ async function refreshContext(req, res, next) {
  */
 async function previewContext(req, res, next) {
   try {
-    res.status(200).json(await evalCtxService.previewContext(req.body || {}));
+    const doc = await evalCtxService.previewContext(req.body || {});
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -105,7 +112,36 @@ async function previewContext(req, res, next) {
 async function listGroups(req, res, next) {
   try {
     const q = req.query && typeof req.query.q === 'string' ? req.query.q : '';
-    res.status(200).json({ items: await evalCtxService.listGroups(q) });
+    const items = await evalCtxService.listGroups(q);
+    res.status(200).json({ items });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * #2061 phase-4 amendment (David, 2026-11-25): UPDATE a context — rename
+ * it, add/remove its group memberships. A membership change re-resolves
+ * through the one authority and bumps the version (the audit rides the
+ * service).
+ */
+async function updateContext(req, res, next) {
+  try {
+    const doc = await evalCtxService.updateContext(req.params.id, req.body || {}, opts(req));
+    res.status(200).json(doc);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * #2061 phase-4 amendment (David, 2026-11-25): DELETE a context — refused
+ * (409 CONTEXT_IN_USE, naming the suites) while any suite is bound to it.
+ */
+async function deleteContext(req, res, next) {
+  try {
+    const doc = await evalCtxService.deleteContext(req.params.id, opts(req));
+    res.status(200).json(doc);
   } catch (err) {
     next(err);
   }
@@ -118,6 +154,8 @@ module.exports = {
   listContexts,
   getContext,
   refreshContext,
+  updateContext,
+  deleteContext,
   previewContext,
   listGroups
 };

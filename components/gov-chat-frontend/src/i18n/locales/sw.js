@@ -3325,7 +3325,14 @@ export default {
         refreshed: 'Muktadha imetatuliwa upya.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'Hakuna muktadha — upelekaji mzima',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Inahariri {name} — kuhifadhi kunatatua muunganisho upya na kuongeza toleo.',
+        updated: 'Muktadha imesasishwa na kutatuliwa upya.',
+        deleted: 'Muktadha imefutwa.'
       },
       head: {
         dim: 'Dimensions',

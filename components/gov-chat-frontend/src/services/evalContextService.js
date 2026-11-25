@@ -72,6 +72,28 @@ const evalContextService = {
   /** REFRESH a context: re-resolve the same memberships, bump the version. */
   async refreshContext(id) {
     const res = await httpService.post(`/okf/eval-contexts/${cid(id)}/refresh`);
+    evalContextService.invalidateContexts();
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * UPDATE a context (David, 2026-11-25): rename it and/or add/remove its
+   * group memberships. A membership change re-resolves server-side and
+   * bumps the version.
+   */
+  async updateContext(id, payload) {
+    const res = await httpService.post(`/okf/eval-contexts/${cid(id)}/update`, payload);
+    evalContextService.invalidateContexts();
+    return res && res.data ? res.data : null;
+  },
+
+  /**
+   * DELETE a context — refused (409, naming the bound suites) while any
+   * test suite is minted for it.
+   */
+  async deleteContext(id) {
+    const res = await httpService.delete(`/okf/eval-contexts/${cid(id)}`);
+    evalContextService.invalidateContexts();
     return res && res.data ? res.data : null;
   },
 

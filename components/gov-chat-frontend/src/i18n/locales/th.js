@@ -3288,7 +3288,14 @@ export default {
         refreshed: 'แก้ไขบริบทใหม่แล้ว',
         pickerLabel: 'บริบทการประเมิน',
         pickerNone: 'ไม่มีบริบท — ทั้งระบบ',
-        reposShort: 'คลัง'
+        reposShort: 'คลัง',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'กำลังแก้ไข {name} — การบันทึกจะแก้ค่ายูเนียนใหม่และเพิ่มเวอร์ชัน',
+        updated: 'บริบทถูกอัปเดตและแก้ค่าใหม่แล้ว',
+        deleted: 'บริบทถูกลบแล้ว'
       },
       head: {
         dim: 'มิติ',

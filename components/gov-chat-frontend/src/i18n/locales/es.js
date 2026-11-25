@@ -3352,7 +3352,14 @@ export default {
         refreshed: 'El contexto fue resuelto de nuevo.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'Sin contexto — todo el despliegue',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Editando {name} — guardar vuelve a resolver la unión e incrementa la versión.',
+        updated: 'El contexto se actualizó y se volvió a resolver.',
+        deleted: 'El contexto se eliminó.'
       },
       head: {
         dim: 'Dimensions',

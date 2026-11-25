@@ -3344,7 +3344,14 @@ export default {
         refreshed: 'O contexto foi resolvido novamente.',
         pickerLabel: 'Evaluation context',
         pickerNone: 'Sem contexto — toda a implantação',
-        reposShort: 'repos'
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Editando {name} — salvar resolve novamente a união e incrementa a versão.',
+        updated: 'O contexto foi atualizado e resolvido novamente.',
+        deleted: 'O contexto foi removido.'
       },
       head: {
         dim: 'Dimensions',

@@ -592,6 +592,113 @@ async function refreshContext(id, opts = {}) {
 }
 
 /**
+ * UPDATE a context (David, 2026-11-25): an operator can rename one and
+ * add/remove its group memberships. A membership change is a RE-RESOLVE —
+ * the same `resolveContext` the create and the refresh call — and the
+ * unreadable-membership rule applies unchanged: an update that names a
+ * principal that cannot be read is REFUSED (422) and the stored snapshot
+ * stands, because falling back to the public corpus is the silent widening
+ * this whole surface exists to prevent. Every update bumps the version:
+ * runs recorded against version N stay comparable with version N.
+ */
+async function updateContext(id, payload = {}, opts = {}) {
+  const doc = await getContext(id);
+  const next = { ...doc };
+  let reResolved = null;
+  if (payload.name !== undefined) {
+    if (typeof payload.name !== 'string' || !payload.name.trim()) {
+      throw new EvalContextError('INVALID_NAME', 'a context name must be a non-empty string', 400);
+    }
+    next.name = payload.name.trim();
+  }
+  if (payload.principal_refs !== undefined) {
+    if (!Array.isArray(payload.principal_refs) || payload.principal_refs.some((r) => typeof r !== 'string')) {
+      throw new EvalContextError('INVALID_REFS', 'principal_refs must be an array of group names', 400);
+    }
+    const changed = JSON.stringify([...payload.principal_refs].sort()) !== JSON.stringify([...doc.principal_refs].sort());
+    if (changed) {
+      reResolved = await resolveContext({ scopes: doc.scopes, principal_refs: payload.principal_refs });
+      if (reResolved.unreadable.length) {
+        throw new EvalContextError(
+          'PRINCIPAL_UNREADABLE',
+          `the principal reference(s) ${reResolved.unreadable.join(', ')} could not be read, so the context ` +
+            "could not be updated. Its stored snapshot stands; the deployment's public set is not a " +
+            'fallback for a principal that could not be read.',
+          422
+        );
+      }
+      next.principal_refs = payload.principal_refs;
+      next.resolved = resolvedSnapshot(reResolved);
+      next.warnings = reResolved.warnings;
+    }
+  }
+  next.version = (doc.version || 1) + 1;
+  next.updated_at = new Date().toISOString();
+  next.updated_by = (opts.actor && opts.actor.user_id) || 'system';
+  delete next._id;
+  // `_rev` stays: the replace is revision-checked, so two concurrent
+  // updates cannot silently clobber each other.
+  const db = await dbService.getConnection();
+  const col = await ensureCollection(db);
+  await col.replace(id, next);
+  await writeAudit({
+    action: 'eval_context.update',
+    actor: next.updated_by,
+    repo_id: null,
+    details: {
+      context_id: id,
+      version: next.version,
+      name: next.name,
+      principal_refs: next.principal_refs.length,
+      graph_count: next.resolved.graph_names.length,
+      re_resolved: Boolean(reResolved)
+    }
+  });
+  return next;
+}
+
+/**
+ * DELETE a context (David, 2026-11-25) — REFUSED while any test suite is
+ * bound to it: a suite minted FOR a context carries the context's id, and
+ * deleting the principal out from under it would leave runs whose pairing
+ * can never be re-explained. The refusal NAMES the bound suites so the
+ * operator can see exactly what holds the context in place. Historical
+ * RUNS are unaffected in either case — they froze their own carriers.
+ */
+async function deleteContext(id, opts = {}) {
+  const doc = await getContext(id);
+  const db = await dbService.getConnection();
+  await ensureCollection(db);
+  const bound = await (
+    await db.query(
+      'FOR d IN okf_head_test_runs FILTER d.payload && d.payload.context && d.payload.context.id == @id ' +
+        'FILTER d.kind IN ["routing_suite", "suite", "ragas_suite"] ' +
+        'SORT d.created_at DESC LIMIT 50 RETURN KEEP(d, ["_key", "kind", "suite_key", "name"])',
+      { id }
+    )
+  ).all();
+  if (bound.length) {
+    const names = bound.map((s) => s.name || s.suite_key || s._key);
+    const err = new EvalContextError(
+      'CONTEXT_IN_USE',
+      `evaluation context ${doc.name || id} is bound to ${bound.length} test suite(s): ${names.join(', ')}. ` +
+        'Delete or re-mint those suites first.',
+      409
+    );
+    err.details = { suites: bound };
+    throw err;
+  }
+  await db.collection(COLLECTION).remove(id);
+  await writeAudit({
+    action: 'eval_context.delete',
+    actor: (opts.actor && opts.actor.user_id) || 'system',
+    repo_id: null,
+    details: { context_id: id, name: doc.name, version: doc.version }
+  });
+  return { deleted: true, context_id: id };
+}
+
+/**
  * The CARRIER a request asks to be evaluated against: a context's STORED
  * snapshot, never a fresh resolution. The snapshot is the contract — a run
  * recorded against version N stays comparable with the run recorded against
@@ -839,6 +946,8 @@ module.exports = {
   getContext,
   listContexts,
   refreshContext,
+  updateContext,
+  deleteContext,
   carrierFor,
   bindingFor
 };

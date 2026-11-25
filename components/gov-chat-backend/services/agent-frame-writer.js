@@ -103,7 +103,21 @@ async function proxyAgentRun({
   // (streaming off, and the non-streaming JSON entry) where the terminal
   // record exists. Moving the usage record earlier in the seam is the
   // future decision that would let the leg bound the units too.
-  const useStreamingTranslation = streamingTranslationEnabled() && wantsTranslation(targetLanguage);
+  //
+  // AD-14 — the agentic path's translation is GPU-ONLY (story 2.10: the
+  // backend selection is keyed on the routing decision; a GPU that is
+  // unconfigured or fails means skip-with-recorded-status, never the CPU
+  // model). The request-resolved translator is NOT keyed on that decision:
+  // it is whichever backend the service selected at startup, and on a
+  // deployment whose GPU probe failed inside the auto window that is the
+  // CPU model. So the agentic units are translated ONLY while the
+  // translator is GPU-backed; otherwise the units stay English (the leg's
+  // fail-closed direction — the whole answer is then translated by the
+  // leg, or skipped with its recorded reason). The legacy path keeps the
+  // CPU model: AD-14 scopes the agentic path.
+  const gpuBackedTranslator = translator?.backendType === 'gpu';
+  const useStreamingTranslation =
+    streamingTranslationEnabled() && wantsTranslation(targetLanguage) && gpuBackedTranslator;
   const streamRelay = useStreamingTranslation
     ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
     : null;

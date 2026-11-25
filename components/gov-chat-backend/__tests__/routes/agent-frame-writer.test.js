@@ -204,7 +204,11 @@ beforeEach(() => {
     next();
   });
   translationService.createMarkdownTranslator.mockImplementation((sourceLang, targetLang) => ({
-    translate: jest.fn((content) => translationService.translateMarkdown(content, sourceLang, targetLang))
+    translate: jest.fn((content) => translationService.translateMarkdown(content, sourceLang, targetLang)),
+    // The selected backend's type (the service carries it on the
+    // translator): 'gpu' is the deployment the agentic path requires
+    // (AD-14). A CPU-backed translator is exercised by its own test.
+    backendType: 'gpu'
   }));
   queryService.pickUserText.mockImplementation((messages, explicit) => {
     if (typeof explicit === 'string' && explicit.trim()) return explicit.trim();
@@ -1164,6 +1168,67 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
       // The agentic finalize's trailing options argument ({skipRoutedGraphs}).
       expect.anything()
     );
+  });
+
+  it('a CPU-backed translator never translates the agentic units (AD-14 is GPU-only)', async () => {
+    // The service's selected backend is the CPU (no GPU API configured, or
+    // the auto probe window elapsed before the backend settled): the
+    // agentic path must not translate its units with the CPU model. The
+    // units stay English — the leg's fail-closed direction — and the leg
+    // owns the answer's translation.
+    process.env.STREAMING_TRANSLATION_ENABLED = '1';
+    setupAgentQuery();
+    translationService.init.mockResolvedValue(undefined);
+    translationService.createMarkdownTranslator.mockImplementation((sourceLang, targetLang) => ({
+      translate: jest.fn((content) => translationService.translateMarkdown(content, sourceLang, targetLang)),
+      backendType: 'cpu'
+    }));
+    translationService.translateMarkdown.mockImplementation((content) => Promise.resolve(`cpu:${content}`));
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn().mockResolvedValue({
+        text: 'Bonjour le monde.',
+        failed: false,
+        queryTranslationStatus: 'translated',
+        accounting: {
+          outcome: 'translated',
+          queryTranslationStatus: 'translated',
+          configError: null,
+          mode: 'full-answer'
+        },
+        error: null
+      })
+    );
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q' }, { seq: 0 }),
+        envelope('text_message_content', { text: 'First sentence. ' }, { seq: 1 }),
+        envelope('text_message_content', { text: 'Second one.' }, { seq: 2 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 3 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 4 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }],
+      context: { language: 'FR' }
+    });
+
+    const frames = parseSSEEvents(response.text);
+    // The CPU model never touched the agentic answer: the units went out
+    // as they arrived.
+    expect(translationService.translateMarkdown).not.toHaveBeenCalled();
+    const chunks = frames
+      .filter((f) => f.type === 'chunk')
+      .map((f) => f.content)
+      .join('');
+    expect(chunks).toBe('First sentence. Second one.');
+    // The leg owns the answer's translation (GPU-only, residual-bounded).
+    const translation = frames.find((f) => f.type === 'translation');
+    expect(translation.content).toBe('Bonjour le monde.');
   });
 
   it('reports translationFailed on done when a relayed unit fails mid-stream', async () => {

@@ -57,9 +57,12 @@ Every failure classified, none silent:
 
 The GPU state at the moment of the failures (measured, not inferred):
 `vllm:num_requests_running 16`, `vllm:num_requests_waiting 19` on
-`ibm-granite/granite-4.1-8b` — the model was busy with other workloads. The same
-agentic specs PASS when the GPU is idle (an agentic run answered in 4.5 s on the
-same venue: `started_at 11:47:53`, `finished_at 11:47:57`, `outcome=answered`).
+`ibm-granite/granite-4.1-8b` — the model was busy with other workloads. The
+agentic path itself is not the problem: on the same venue, with the GPU idle, an
+agentic run answered in 4.5 s (`started_at 11:47:53`, `finished_at 11:47:57`,
+`outcome=answered`). What the suite could not do on THIS venue, with this queue,
+is answer the question inside the specs' 120 s budget — which is the finding
+#2181.
 
 **Coverage gap, declared:** the flag-ON run exercises the AGENTIC path only —
 `chatqna` took **0** `POST /v1/chatqna` in the whole window (`resolveQueryRoute()`

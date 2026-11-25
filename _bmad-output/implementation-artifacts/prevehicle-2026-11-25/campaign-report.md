@@ -37,7 +37,11 @@ answers carried non-empty `source_documents`, `abstained=false`, and
 ## 3. The E2E suite (the FULL tree, flag ON)
 
 `tests/e2e/run/run-local-e2e.sh` over the whole `tests/e2e/` tree, against the
-deployed venue, 40.1 min, 571 tests.
+deployed venue, 40.1 min, 571 tests. The evidence is `e2e-run.log` (the run's own
+output: every spec's outcome, every skip's reason, every failure with its
+stack, and the runner's own classification). The suite's machine-readable report
+(785 KB of JSON + 153 KB of XML) is NOT in the MR: the repo ignores `**/reports/`
+by convention, and the log carries the same facts.
 
 | outcome | count |
 |---|---|
@@ -131,9 +135,10 @@ Nothing outside the campaign's scope was widened into this diff.
 
 ## 8. The venue cleanup (the receipt)
 
-The run-scoped objects, the two storage PVCs, the dedicated Keycloak user, the
-ROPC posture and the baseline images all went back — the receipt is the script's
-own output (`cleanup-venue.sh`), reproduced in the MR description and in the
+The run-scoped objects, the three storage PVCs this run created, the dedicated
+Keycloak user, the ROPC posture and the baseline images all went back — the
+receipt is the script's own output (`cleanup-venue.sh` + the restore the script
+could not do alone), reproduced in the MR description and in the
 issue comment.
 
 ## 9. The review chain
@@ -147,18 +152,49 @@ HEAD_SHA = the HEAD after):
 | f=0 | d1648d17f..8b4740731 | 8 (F1–F8) | corrected in `1e88b6d64` |
 | f=1 | e84658706..1e88b6d64 | 4 blockers + 7 minors (N1–N11) | corrected in `cf9630f99` |
 | f=2 | cf9630f99..989e301dc | 2 blockers + 7 minors (F1–F9) | corrected in `989e301dc` — the run's exit-code contract named a run that never answered as "a rename on the agent side", and the transport correction was pinned by nothing |
-| f=3 (confirming) | cf9630f99..989e301dc | — | the chain's confirming round |
+| f=3 (confirming) | cf9630f99..989e301dc | 4 Important + 5 Minor | **NOT CLEAN → PARK** |
 
-**Disclosed:** the chain's nominal cap is three fix reviews (f=0..f=2). f=2 was
-NOT clean, so the corrections were applied and ONE confirming round beyond the
-cap was spent to prove them closed — the cap exists to stop a loop, not to
-ship a known defect. The gate should read that as it is.
+**The park, stated plainly.** The chain's nominal cap is three fix reviews
+(f=0..f=2); f=2 was not clean, one confirming round beyond the cap was spent,
+and it was ALSO not clean — the corrections of f=2 left one real regression
+(the poll erased a trace it had already fetched, losing the row's own
+diagnosis), left two of its behaviour fixes unpinned by the tests, and one
+attribution reason contradicted the row it sat on.
+
+Per the chain's rule, the loop STOPS here. Three of the findings were small
+enough that shipping them known would have been worse than the park's cost —
+the regression, the contradicting reason, and the poll's deadline overrun —
+so they were corrected in `efaf00ccf` **without a further review round**.
+Those corrections are UNREVIEWED and this report says so. The MR therefore
+stays a DRAFT: the finish condition (a clean scoped review covering the
+current HEAD) does not hold, and the decision is the operator's — spend
+another round, or accept the harness as reviewed through f=3 plus the three
+disclosed corrections.
 
 The decision log: `~/.claude/state/review/issue-2170-review.jsonl`. The
 quality record: **not applicable — evidence-only campaign** (the deliverable is
 E2E reports, trace proofs, queries-doc outcomes and a cleanup receipt; the
 scoped review covered ONLY the landed driver/harness code, and the run reports
 and artifacts are gated on evidence completeness).
+
+## 9b. The three post-park corrections (UNREVIEWED, disclosed)
+
+`efaf00ccf`, applied after the park, without a further review round:
+
+1. **the regression:** the poll overwrote `trace`/`reason` on every iteration,
+   so a fetched trace was erased by a later soft failure (a 503, an empty
+   trace, a not-indexed-yet). A found trace is never overwritten now.
+2. **the attribution reason:** a run that ANSWERED with no agent-service span
+   reached the agent under another service name; only a failed run may
+   "never have reached the agent". The old wording contradicted the row.
+3. **the poll's deadline:** the sleep clamps to the remaining window, so the
+   runner ends on its own deadline — and the suite's poll tests run several
+   polls inside a tiny window (the eval suite: 28 s → 1.6 s).
+
+One new test pins both behaviours the review called unpinned in a single
+scenario: the venue serves the children, then a 503, then the parent — the
+fetched trace survives the 503 AND the poll waits for the parent. 19 tests,
+0.9 s; the whole `eval/` directory: 224 passed, 1 skipped, 1.6 s.
 
 ## 10. The rebase (the target branch moved under the campaign)
 

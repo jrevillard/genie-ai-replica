@@ -221,6 +221,13 @@ def _sources_outside_labels(row: dict, requested_labels) -> list[str]:
     return offenders
 
 
+# The outcome expectations read the pairing the set schema owns
+# (evalset.OUTCOME_CLASS_EXPECTATIONS — #2156): the class vocabulary decides
+# the surface, the expectations decide which outcome is the expected one, and
+# the validator refuses a case whose class and expectations disagree, so the
+# two rules cannot drift inside a validated set.
+
+
 def _expects_denial(case: dict) -> bool:
     return bool((case.get("expectations") or {}).get("expect_denied"))
 

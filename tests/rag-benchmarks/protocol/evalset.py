@@ -132,6 +132,21 @@ OUTCOME_CLASSES = tuple(
     case_class for case_class in COMPOSITION_CLASSES if case_class not in RETRIEVAL_CLASSES
 )
 
+# The outcome-surface model in ONE place (#2156): each outcome class pairs
+# with exactly the expectation key the verdict layer reads for its non-answer
+# outcome. The class vocabulary decides the SURFACE; this pairing decides
+# WHICH outcome is the expected one — and the validator refuses a case whose
+# class and expectations disagree, so the surface rule and the verdict
+# layer's predicates cannot drift apart inside a validated set.
+# ``expect_denied`` is NOT in this table: it is the SECURITY surface's
+# expectation (an authorization case wants the refusal), not an outcome
+# class's.
+OUTCOME_CLASS_EXPECTATIONS = {
+    "unanswerable": "expect_abstained",
+    "failure": "expect_typed_failure",
+    "cancellation": "expect_cancelled",
+}
+
 # The minimum of non-Latin cases inside the representative_language class.
 DEFAULT_NON_LATIN_MINIMUM = 1
 
@@ -371,6 +386,24 @@ def _validate_case(index: int, case: dict, errors: list[str]) -> None:
     expectations = case.get("expectations")
     if expectations is not None and not isinstance(expectations, dict):
         errors.append(f"case {label}: expectations, when present, must be an object")
+        return
+    # The outcome-surface pairing: an outcome-class case carrying an outcome
+    # expectation that is not ITS class's is a contradiction — the surface
+    # says 'judged from the recorded outcome' while the expectation names a
+    # different outcome (or the security surface's denial). Refused here, so
+    # the surface model and the verdict layer's predicates cannot drift.
+    if case.get("case_class") in OUTCOME_CLASS_EXPECTATIONS and expectations:
+        expected_key = OUTCOME_CLASS_EXPECTATIONS[case.get("case_class")]
+        outcome_keys = set(OUTCOME_CLASS_EXPECTATIONS.values()) | {"expect_denied"}
+        carried = sorted(key for key in expectations if key in outcome_keys)
+        wrong = [key for key in carried if key != expected_key]
+        if wrong:
+            errors.append(
+                f"case {label}: class {case.get('case_class')!r} pairs with {expected_key!r} but carries"
+                f" {', '.join(wrong)} — an outcome expectation that names another outcome"
+                " (or the security surface's denial); the surface and the verdict layer"
+                " would read the case differently"
+            )
     if case.get("script") is not None and case.get("script") not in ("latin", "non-latin"):
         errors.append(f"case {label}: script, when present, must be 'latin' or 'non-latin'")
     if case.get("security_scenario") is not None and case.get("security_scenario") not in SECURITY_SCENARIOS:

@@ -3,7 +3,7 @@
 """The ``search_knowledge`` operation: the OPEA-free port of the recorded query path.
 
 Implements the contract's ``DocumentCapabilityPort.search_knowledge`` on top
-of the adapters. The behavior is frozen to the V02 record
+of the adapters. The behavior is frozen to the recorded query-path contract
 (``docs/baselines/v02-opea-query-path-contract.md``); the structure is free
 (clean-slate).
 
@@ -40,7 +40,9 @@ import asyncio
 import logging
 from collections.abc import Callable
 
-from .adapters.arango_retrieval import ArangoRetrievalAdapter, validate_graph_name
+from pydantic import ValidationError
+
+from .adapters.arango_retrieval import ArangoRetrievalAdapter
 from .adapters.env_config import ArangoConfig, EmbeddingConfig, HybridConfig, ModelEndpointConfig, RerankingConfig
 from .adapters.tei_embedding import TeiEmbeddingAdapter
 from .adapters.tei_reranking import RerankerInputTooLongError, TeiRerankingAdapter
@@ -57,10 +59,11 @@ from .contract import (
     SearchKnowledgeResult,
     TransientError,
 )
+from .identifiers import validate_graph_name
 
 logger = logging.getLogger(__name__)
 
-# The recorded English abstention text (V02 §4.14) — the too-long case's
+# The recorded English abstention text — the too-long case's
 # answer text; who translates it stays with the answer layer, as deployed.
 # PUBLIC single owner: the no-agent pipeline answers with the same constant
 # it imports from here — one edit point moves the log surface and the answer.
@@ -78,7 +81,7 @@ class SearchKnowledgeCapability:
     wiring from the environment (the recorded knobs) and a live ArangoDB
     client. The service builds this once at startup — a misconfigured knob
     fails the service at boot, the same crash-loop pattern the deployed
-    retriever exhibits at import (V02 §4.4).
+    retriever exhibits at import.
     """
 
     name = OperationName.SEARCH_KNOWLEDGE
@@ -89,7 +92,7 @@ class SearchKnowledgeCapability:
         owns — the narrow public surface the no-agent pipeline reads (the
         adapter itself stays internal: exposing ``rerank`` would invite a
         caller past the capability's authorized-set check). The capability
-        itself never calibrates (V02 §4.13: calibration is a confidence-time
+        itself never calibrates (calibration is a confidence-time
         concern, never a selection one)."""
         return self._reranking.calibrate
 
@@ -183,7 +186,11 @@ class SearchKnowledgeCapability:
                 operation=OperationName.SEARCH_KNOWLEDGE,
             )
         for graph_name in context.authorized_graph_names:
-            validate_graph_name(graph_name)
+            # The context's graph names are caller-supplied: the charset
+            # guard refuses them on the authorization channel, before any
+            # resolution — a malformed name and an unauthorized one are
+            # indistinguishable from the caller's side.
+            validate_graph_name(graph_name, operation=OperationName.SEARCH_KNOWLEDGE)
         try:
             return await asyncio.wait_for(
                 self._run(context, request, budget, abstention_sink),
@@ -207,7 +214,7 @@ class SearchKnowledgeCapability:
             embedded = await self._embedding.embed(request.query.text)
         except Exception as e:
             # The recorded chat path fails the turn when the embedding stage
-            # fails; it never abstains on an embedding error (V02 §4.1).
+            # fails; it never abstains on an embedding error.
             raise TransientError(f"the embedding stage failed: {e}", operation=OperationName.SEARCH_KNOWLEDGE) from e
 
         candidates: list[dict] = []
@@ -252,7 +259,7 @@ class SearchKnowledgeCapability:
         # The adaptive strategy consumes the chunk embeddings the deployed
         # propagation chain delivers; the dense leg carries them, the BM25
         # view does not — a fusion-rescued candidate misaligns the vectors
-        # and adaptive hard-fails on it, exactly as recorded (V02 §4.13).
+        # and adaptive hard-fails on it, exactly as recorded.
         chunk_embeddings = [item["doc"].embedding for item in candidates]
         try:
             outcome = await self._reranking.rerank(
@@ -268,7 +275,7 @@ class SearchKnowledgeCapability:
             return self._insufficient(request, "reranker_input_too_long", abstention_sink)
         except Exception as e:
             # No fallback to the retrieval order: a reranker transport or
-            # protocol failure fails the turn (V02 §4.14).
+            # protocol failure fails the turn.
             raise TransientError(f"the reranking stage failed: {e}", operation=OperationName.SEARCH_KNOWLEDGE) from e
         if outcome.selected_nothing:
             # The recorded abstention, distinct from empty retrieval.
@@ -277,7 +284,7 @@ class SearchKnowledgeCapability:
 
         # Map the selected positions back to their enriched candidates. The
         # selection keeps TEI's score-descending order — the hits carry that
-        # order into the result (V02 §4.13: the selected passages keep the
+        # order into the result (the selected passages keep the
         # reranker's score-descending order all the way through).
         # A candidate whose enrichment left ``file_ids`` empty is skipped,
         # never cited with an empty identity: the deployed end-to-end path
@@ -291,14 +298,23 @@ class SearchKnowledgeCapability:
             if not doc.file_ids:
                 logger.warning(f"skipped candidate with no resolvable file_id: key={doc.key!r} graph={doc.graph_name}")
                 continue
-            if doc.repo_id:
-                provenance = OkfConceptProvenance(
-                    concept_id=doc.file_ids[0],
-                    repo_id=doc.repo_id,
-                    bundle_version=doc.bundle_version,
-                )
-            else:
-                provenance = LegacyFileProvenance(file_id=doc.file_ids[0])
+            try:
+                if doc.repo_id:
+                    provenance = OkfConceptProvenance(
+                        concept_id=doc.file_ids[0],
+                        repo_id=doc.repo_id,
+                        bundle_version=doc.bundle_version,
+                    )
+                else:
+                    provenance = LegacyFileProvenance(file_id=doc.file_ids[0])
+            except ValidationError as error:
+                # The identity comes from the corpus, not from the caller: a
+                # payload that does not match the contract is a transient
+                # defect of the enrichment, never a raw validation error.
+                raise TransientError(
+                    f"the corpus served an identity that does not match the contract: {error}",
+                    operation=OperationName.SEARCH_KNOWLEDGE,
+                ) from error
             hits.append(SearchHit(provenance=provenance, text=doc.text, score=scored.score))
 
         if not hits:

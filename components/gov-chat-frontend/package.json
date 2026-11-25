@@ -73,6 +73,11 @@
     "gray-matter": {
       "js-yaml": "3.15.2"
     },
-    "parse5": "^8.1.1"
+    "jsdom": {
+      "parse5": "^8.1.1"
+    },
+    "@types/jsdom": {
+      "parse5": "^8.1.1"
+    }
   }
 }

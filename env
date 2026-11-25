@@ -1497,6 +1497,29 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # exactly what is missing.
 # AGENT_DOCREPO_URL=
 # AGENT_OKF_URL=
+# The shared corpus/model endpoints the agent service's assembly reads at
+# request time — the SAME knobs the OPEA services read (one .env line moves
+# both worlds). The agent service's compose block maps them with the same
+# spellings and the same defaults as the retriever's block; leave them
+# unset to run on the compose defaults. The knobs documented at their own
+# sections above (ARANGO_DB, ARANGO_PASSWORD, ARANGO_GRAPH_NAME,
+# VLLM_ENDPOINT) are shared as they are — this section documents only the
+# ones the agent service reads that have no home yet.
+#
+# TEI_EMBEDDING_ENDPOINT / TEI_RERANKING_ENDPOINT:
+#   the embedding endpoint is the FULL embed URL (the recorded value ends in
+#   /embed); the reranker endpoint is the BASE the /rerank call is built on.
+#   They follow EMBEDDING_SERVICE_URL / RERANKER_SERVICE_URL, which the
+#   GPU-node section below points at the node's gateway (/embed, /rerank).
+# ARANGO_URL:
+#   the ArangoDB host the retrieval legs read. Unset = the code default
+#   (localhost), which inside the container is the container itself.
+# ARANGO_USERNAME:
+#   the database user the retrieval legs authenticate with.
+# TEI_EMBEDDING_ENDPOINT=
+# TEI_RERANKING_ENDPOINT=
+# ARANGO_URL=
+# ARANGO_USERNAME=
 # AGENT_AUTHORIZED_GRAPHS=
 # AGENT_AUTHORIZED_REPOS=
 # AGENT_PROBE_BEARER=

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The preparation entry: the recorded §5.1 order, the failure-class matrix.
+"""The preparation entry: the recorded order, the failure-class matrix.
 
 Every row of the failure-class matrix lands here, against a REAL
 langdetect (seeded for determinism — production stays unseeded) and the
@@ -114,7 +114,7 @@ def test_no_name_detectable_last_user_message_drives_the_history_language():
 
 
 def test_the_arabic_non_latin_sample_is_detected_and_translated():
-    """V02 §5.6 sample family: a non-Latin script detects and translates."""
+    """The recorded locale sample family: a non-Latin script detects and translates."""
     result = asyncio.run(_preparer().prepare(ARABIC_SAMPLE))
 
     assert result.status is QueryPreparationStatus.TRANSLATED
@@ -290,7 +290,7 @@ def test_a_malformed_body_returns_unprepared_with_the_error_status():
 
 
 def test_the_degraded_classes_carry_the_source_text_under_an_unprepared_status():
-    """V02 §5.4 shape carries over as degradation-reported-to-caller; the
+    """The recorded failure-class shape carries over as degradation-reported-to-caller; the
     source text is never dressed as prepared."""
     config = _config()
     transport = PreparationFakeTransport(error=ConnectionError("endpoint down"))

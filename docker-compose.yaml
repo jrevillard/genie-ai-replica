@@ -1509,21 +1509,22 @@ services:
       # reports the value it sees in its readiness answer.
       - AGENT_ENABLED=${AGENT_ENABLED:-0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      # OpenTelemetry — the compose↔source pair (AD-11, story 2.11): the
+      # OpenTelemetry — the compose↔source pair: the
       # SDK in tracing.py is a no-op unless ENABLE_OBSERVABILITY=1 (the
-      # single gate), and OTEL_SERVICE_NAME matches the compose block name
-      # AND the setup_tracing("agent-service") source default, so the
-      # dashboards' `service_name` label discovery resolves to agent-service
-      # without any dashboard edit (the backend block at the service pair
-      # convention is the pattern).
+      # single gate). The service identity is the setup_tracing
+      # ("agent-service") source default — the fixed name the dashboards'
+      # `service_name` label discovery resolves to, never an env override;
+      # the OTEL_SERVICE_NAME line mirrors it for the OTel-standard
+      # tooling that reads the variable (the SDK's own resource detector),
+      # and the explicit resource attribute wins over it.
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - OTEL_SERVICE_NAME=agent-service
-      # Run-budget knobs (story 2.3) — REQUIRED for the run surface, read
+      # Run-budget knobs — REQUIRED for the run surface, read
       # fail-closed: a run request against a deployment that has not set
       # one is answered 503 naming every missing knob (no numeric default
       # exists in the enforcement path). Empty default here = unset there.
-      # Pair derivation (V08): AGENT_UPSTREAM_TIMEOUT_MS on the BFF leg
+      # Pair derivation (docs/agent-budget-deadline-pairs.md): AGENT_UPSTREAM_TIMEOUT_MS on the BFF leg
       # must be >= AGENT_RUN_MAX_WALL_CLOCK_SECONDS + the translation and
       # finalization reserves — docs/agent-budget-deadline-pairs.md.
       - AGENT_RUN_MAX_STEPS=${AGENT_RUN_MAX_STEPS:-}
@@ -1547,13 +1548,36 @@ services:
       - AGENT_RUN_SYSTEM_PROMPT=${AGENT_RUN_SYSTEM_PROMPT:-}
       # Port-assembly knobs the run surface reads fail-closed: an unset
       # base URL (or TEI endpoint) is answered 503 with the code
-      # run_surface_unconfigured naming what is missing. Deliberate scope:
-      # this is the corpus/model knob set the FULL assembly needs — the
-      # remaining TEI/Arango/vLLM endpoints ride the governed assembly
-      # wiring in the integration story, and until then the 503 names
-      # exactly what is missing.
+      # run_surface_unconfigured naming what is missing. The shared
+      # corpus/model endpoints the same assembly reads are forwarded
+      # below, with the spellings and the defaults the OPEA services
+      # read — one .env line moves both worlds.
       - AGENT_DOCREPO_URL=${AGENT_DOCREPO_URL:-}
       - AGENT_OKF_URL=${AGENT_OKF_URL:-}
+      # The shared corpus/model endpoints the run surface's assembly reads
+      # at request time — the SAME knobs the OPEA services read, mapped
+      # with the same spellings and the same compose defaults, so one
+      # .env line moves both worlds. The defaults are the compose stack's
+      # own services: a stack without the gpu-models profile has no tei
+      # behind them, and every model call then fails honestly at request
+      # time (the code's fail-closed 503 naming the knob protects only an
+      # assembly whose env carries NO value at all — an in-process run).
+      # The graph name MUST follow the deployment's real graph — the
+      # legacy leg reads the legacy collection and the legacy graph, so a
+      # diverging default silently drops every legacy hit and raises
+      # AuthorizationError on every legacy read_source.
+      - TEI_EMBEDDING_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
+      - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
+      - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      # The database user the retrieval legs authenticate with: one
+      # spelling, ARANGO_USERNAME, everywhere the agent service reads.
+      - ARANGO_USERNAME=${ARANGO_USERNAME:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
+      # The LLM endpoint the generation leg calls (the model discovery
+      # probe and the completion call share it).
+      - VLLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
       - AGENT_AUTHORIZED_GRAPHS=${AGENT_AUTHORIZED_GRAPHS:-}
       - AGENT_AUTHORIZED_REPOS=${AGENT_AUTHORIZED_REPOS:-}
       - AGENT_PROBE_BEARER=${AGENT_PROBE_BEARER:-}
@@ -1574,14 +1598,15 @@ services:
       # crashes). Point VLLM_TRANSLATION_ENDPOINT at a reachable endpoint
       # for the alternative.
       #
-      # BEHAVIOR DELTAS on the agentic path (review-flagged): with a
-      # non-English request locale, EVERY search query rides the
-      # translation leg — one auxiliary fleet model call per search (the
-      # locale hint beats detection, per the preparation contract's own
-      # order; an English locale rides passthrough_english, no call); and
-      # a query
-      # whose detection fails with NO locale named is refused as an
-      # insufficiency, never searched raw.
+      # BEHAVIOR DELTAS on the agentic path (review-flagged): the search
+      # query the MODEL writes is prepared in ITS OWN language — the
+      # request locale never forces a translation pass over an English
+      # query (the model's query rides the translation leg only when the
+      # query itself is not English); when the detector cannot classify
+      # the query at all, the request locale speaks for it, and with no
+      # locale anywhere the query is refused as an insufficiency, never
+      # searched raw. The CALLER's question (the no-agent path) whose
+      # detection fails with NO locale named behaves the same way.
       - TRANSLATION_SERVICE_HOST_IP=${TRANSLATION_SERVICE_HOST_IP:-vllm-translation-guardrail}
       - TRANSLATION_SERVICE_PORT=${TRANSLATION_SERVICE_PORT:-9031}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}

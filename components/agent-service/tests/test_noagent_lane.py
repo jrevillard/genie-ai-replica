@@ -230,3 +230,47 @@ def test_separate_instances_over_one_config_share_one_pool(lane_dir):
 
     asyncio.run(scenario())
     assert sorted(_slot_files(lane_dir)) == ["lane.lock", "lane.lock.1"]
+
+
+def test_a_cancellation_during_the_claim_releases_the_slot(lane_dir):
+    """A cancellation delivered WHILE the claiming thread works releases the
+    slot it claimed: the successor is admitted once the claim's own thread
+    has finished, so the cancellation can never wedge the lane closed. The
+    scan is slowed by monkeypatching the claim so the cancellation lands
+    inside the await, not before it."""
+    import threading
+    import time
+
+    lane = AdmissionLane(1, lane_dir)
+    slow = threading.Event()
+    original = lane._try_claim
+
+    def slow_claim(index):
+        handle = original(index)
+        if handle is not None:
+            slow.set()
+            time.sleep(0.2)  # the cancellation lands while the thread holds the slot
+        return handle
+
+    lane._try_claim = slow_claim
+
+    async def scenario():
+        task = asyncio.ensure_future(lane.acquire().__aenter__())
+        await asyncio.get_running_loop().run_in_executor(None, slow.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        # The claimed slot is released once the claim's thread finishes
+        # its in-flight work: the successor is admitted, and never queued.
+        lane._try_claim = original
+        deadline = time.monotonic() + 2.0
+        while True:
+            try:
+                async with lane.acquire():
+                    return
+            except LaneBusyError:
+                if time.monotonic() > deadline:
+                    raise
+                await asyncio.sleep(0.05)
+
+    asyncio.run(scenario())

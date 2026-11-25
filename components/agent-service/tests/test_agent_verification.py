@@ -236,6 +236,35 @@ def test_a_judge_timeout_yields_timeout_never_a_verdict():
     assert result == {"ran": True, "outcome": JUDGE_OUTCOME_TIMEOUT, "verdict": None}
 
 
+def test_a_judge_timeout_marks_the_run_usage_gap():
+    """The response that carries the judge's served usage never arrived:
+    the run's served totals must be reported as a lower bound, or the
+    residual budget downstream would compute a remaining allowance that
+    includes the tokens the timed-out call spent."""
+
+    class HangingJudgeModel:
+        async def complete(self, messages, tool_definitions, *, max_output_tokens):
+            await asyncio.Event().wait()  # forever
+
+    monitor = RunBudgetMonitor(run_budget(max_total_tokens=5000))
+    monitor.record_usage(100, 50)
+    assert monitor.remaining_output_tokens() == 4850  # exact before the timeout
+    judge = GroundingJudge(model_client=HangingJudgeModel(), monitor=monitor, timeout_seconds=0.01)
+    asyncio.run(judge.judge("the answer", [LEGACY_HIT]))
+    assert monitor.remaining_output_tokens() is None  # a bound cannot say what remains
+
+
+def test_a_judge_error_still_records_the_served_usage():
+    """An unparseable verdict is a judge failure, not unreportable usage:
+    the call was served, so its tokens are accounted for."""
+    judge_model = ScriptedLoopModel((ModelTurn(content="not a verdict", prompt_tokens=5, completion_tokens=2),))
+    monitor = RunBudgetMonitor(run_budget())
+    judge = GroundingJudge(model_client=judge_model, monitor=monitor, timeout_seconds=5.0)
+    result = asyncio.run(judge.judge("the answer", [LEGACY_HIT]))
+    assert result == {"ran": True, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None}
+    assert (monitor.prompt_tokens, monitor.completion_tokens) == (5, 2)
+
+
 # ---------------------------------------------------------------------
 # The pipeline: the mechanical outcome decides before the judge
 # ---------------------------------------------------------------------

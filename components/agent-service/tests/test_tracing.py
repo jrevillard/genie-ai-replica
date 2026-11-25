@@ -44,6 +44,34 @@ def test_setup_tracing_is_a_noop_when_observability_is_disabled(monkeypatch):
     assert tracing_module._provider is provider_before
 
 
+def test_the_service_identity_is_fixed_not_env_overridable(monkeypatch):
+    """The resource's identity is the deployment's fixed decision: an
+    operator's OTEL_SERVICE_NAME / OTEL_SERVICE_VERSION must not rename or
+    re-version the service (the dashboards and the service-identity
+    contract resolve on those attributes)."""
+    monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.invalid:4318")
+    monkeypatch.setenv("OTEL_SERVICE_NAME", "impostor")
+    monkeypatch.setenv("OTEL_SERVICE_VERSION", "9.9.9")
+
+    captured = {}
+    real_create = tracing_module.Resource.create
+
+    def capture_create(attributes=None, schema_url=None):
+        captured.update(attributes or {})
+        return real_create(attributes, schema_url)
+
+    monkeypatch.setattr(tracing_module.Resource, "create", staticmethod(capture_create))
+    monkeypatch.setattr(tracing_module.trace, "set_tracer_provider", lambda provider: None)
+    monkeypatch.setattr(tracing_module.metrics, "set_meter_provider", lambda provider: None)
+
+    tracing_module.setup_tracing("agent-service")
+
+    assert captured["service.name"] == "agent-service"
+    assert captured["service.namespace"] == "genie-core"
+    assert captured["service.version"] == "1.0.0"
+
+
 def test_setup_tracing_is_a_noop_without_a_collector_endpoint(monkeypatch):
     monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)

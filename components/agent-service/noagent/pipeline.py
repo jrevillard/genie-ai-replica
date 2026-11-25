@@ -371,7 +371,12 @@ class NoAgentPipeline:
         English answer in place."""
         if not self._config.answer_translation_enabled:
             return answer, None
-        if target_language in (None, "", "en", "auto"):
+        # The target code is compared in its normalized form: the display
+        # locale reaches this call in the upper case the detection module
+        # resolves, and an English answer must not be sent through an
+        # English-to-English round-trip that can reword it.
+        code = str(target_language or "").strip().lower()
+        if code in ("", "en", "auto"):
             return answer, None
         return await self._translator.translate(answer, target_language)
 

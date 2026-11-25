@@ -44,7 +44,7 @@ def test_the_vocabulary_covers_the_three_lifecycles():
 
 
 def test_the_bff_frame_snapshot_is_exactly_the_v05_inventory():
-    # The snapshot is hand-maintained against the V05 client-contract
+    # The snapshot is hand-maintained against the deployed client contract
     # inventory: the five preserved frame types plus the two additive ones.
     # A frame missing from this set is a collision the import guard cannot
     # see — this pin is what keeps the snapshot from rotting with a green

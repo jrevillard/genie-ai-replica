@@ -143,6 +143,50 @@ describe('the agent service is documented and wired', () => {
   });
 });
 
+describe('the agent service compose block forwards the shared corpus/model endpoints', () => {
+  let agentBlock;
+  let env;
+
+  beforeAll(() => {
+    agentBlock = parseComposeServiceBlock(fs.readFileSync(COMPOSE_PATH, 'utf-8'), 'agent-service');
+    env = parseEnvTemplate(ENV_PATH);
+  });
+
+  test('the TEI pair and the LLM endpoint ride the shared spellings', () => {
+    // The run surface's assembly reads these fail-closed: an unset TEI
+    // endpoint is a 503 naming it, and the LLM endpoint is what the
+    // generation leg calls. The same `${}` spellings the OPEA services
+    // read, so one .env line moves both worlds.
+    expect(agentBlock).toMatch(/- TEI_EMBEDDING_ENDPOINT=\$\{EMBEDDING_SERVICE_URL:-http:\/\/tei:80\}/);
+    expect(agentBlock).toMatch(/- TEI_RERANKING_ENDPOINT=\$\{RERANKER_SERVICE_URL:-http:\/\/tei_reranker:80\}/);
+    expect(agentBlock).toMatch(/- VLLM_ENDPOINT=\$\{VLLM_ENDPOINT:-http:\/\/vllm:8000\}/);
+  });
+
+  test('the ArangoDB knobs follow the deployment, not the code defaults', () => {
+    // The graph name MUST follow the deployment's real graph: a diverging
+    // default silently drops every legacy hit and refuses every legacy
+    // read_source. The credential has no default (a placeholder would
+    // authenticate nothing).
+    expect(agentBlock).toMatch(/- ARANGO_URL=\$\{ARANGO_URL:-http:\/\/arango-vector-db:8529\}/);
+    expect(agentBlock).toMatch(/- ARANGO_DB=\$\{ARANGO_DB:-genie-ai\}/);
+    // One spelling for the database user: ARANGO_USERNAME, everywhere the
+    // agent service reads.
+    expect(agentBlock).toMatch(/- ARANGO_USERNAME=\$\{ARANGO_USERNAME:-root\}/);
+    expect(agentBlock).toMatch(/- ARANGO_PASSWORD=\$\{ARANGO_PASSWORD\}/);
+    expect(agentBlock).toMatch(/- ARANGO_GRAPH_NAME=\$\{ARANGO_GRAPH_NAME:-GRAPH\}/);
+  });
+
+  test('the env template documents the knobs that have no other home', () => {
+    // ARANGO_DB / ARANGO_PASSWORD / ARANGO_GRAPH_NAME / VLLM_ENDPOINT are
+    // documented at their own sections; the agent section carries only the
+    // four knobs that were homeless.
+    for (const name of ['TEI_EMBEDDING_ENDPOINT', 'TEI_RERANKING_ENDPOINT', 'ARANGO_URL', 'ARANGO_USERNAME']) {
+      const documented = env.documented.find((entry) => entry.name === name);
+      expect(documented).toBeDefined();
+    }
+  });
+});
+
 describe('the agent service carries no OPEA overlay dependency', () => {
   test('no module of the service imports the overlay package', () => {
     const offenders = [];
@@ -275,6 +319,56 @@ describe('the pre-adoption checklist is satisfied for every pinned dependency', 
     // No dependency pinned outside the audited tree sneaks back into the lane.
     expect(lane).not.toMatch(/httpx==/);
     expect(lane).not.toMatch(/pytest==/);
+  });
+});
+
+describe('the dependency-evidence gate runs in CI', () => {
+  // The job mirrors the pin above with the verifier itself instead of the JS
+  // re-implementation: a defect this file cannot see (a duplicate evidence
+  // row, a row without a usable name) still fails the pipeline.
+  const JOB = 'verify:dependency-licenses';
+
+  test('the job runs the verifier against the committed evidence and trees', () => {
+    const block = jobBlock(fs.readFileSync(CI_PATH, 'utf-8'), JOB);
+    expect(block).toMatch(
+      /python3 scripts\/dependencies\/verify-dependency-licenses\.py --verify components\/agent-service\/requirements\.txt components\/agent-service\/requirements-test\.txt --evidence docs\/dependencies\/agent-service-dependency-evidence\.json/
+    );
+    // The gate's FAIL branches are unit-tested beside the real run: a branch
+    // that stops reporting is a red pipeline, not a weaker audit.
+    expect(block).toMatch(/python3 -m pytest scripts\/dependencies\/test_verify_dependency_licenses\.py/);
+  });
+
+  test('every trigger branch of the job fires on an audit input', () => {
+    // One glob per input the gate reads, carried by ONE anchor the three
+    // trigger branches reference: dropping a glob from the anchor (or the
+    // anchor reference from one branch — say the merge-request rule) would
+    // let an MR stale the audit while the other pipelines stay green.
+    const ci = fs.readFileSync(CI_PATH, 'utf-8');
+    // The anchor lives beside the job it serves (the module-source-changes
+    // idiom), not inside the job block: the definition is asserted on the
+    // whole file, the references on the job's own block.
+    const anchorAt = ci.indexOf('.agent_audit_source_changes: &agent_audit_source_changes');
+    expect(anchorAt).toBeGreaterThan(-1);
+    const anchor = ci.slice(anchorAt, ci.indexOf('verify:dependency-licenses:'));
+    const block = jobBlock(ci, JOB);
+    for (const input of [
+      '"components/agent-service/requirements*.txt"',
+      '"docs/dependencies/agent-service-dependency-evidence.json"',
+      '"scripts/dependencies/**"'
+    ]) {
+      expect(anchor).toContain(input);
+    }
+    const triggerBranches = [
+      '$CI_PIPELINE_SOURCE == "merge_request_event"',
+      '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH',
+      '$CI_COMMIT_BRANCH =~ /^release\\//'
+    ];
+    for (const condition of triggerBranches) {
+      const at = block.indexOf(condition);
+      expect(at).toBeGreaterThan(-1);
+      const rule = block.slice(at).split(/\n\s+- if:/)[0];
+      expect(rule).toContain('paths: *agent_audit_source_changes');
+    }
   });
 });
 

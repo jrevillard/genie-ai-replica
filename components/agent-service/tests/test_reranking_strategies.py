@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The TEI reranking and evidence-selection behaviors, asserted against V02 §4.13/§4.14.
+"""The TEI reranking and evidence-selection behaviors, asserted against the recorded contract.
 
 Every strategy's cutoff/ordering, the recorded TEI call shape, and one test
 per reranker-down failure mode.
@@ -71,7 +71,7 @@ def test_tei_call_carries_the_recorded_body_and_no_auth_header():
 
 
 # ---------------------------------------------------------------------
-# The five strategies (V02 §4.13 table)
+# The five strategies (the recorded table)
 # ---------------------------------------------------------------------
 
 
@@ -104,7 +104,7 @@ def test_slice_threshold_breaks_at_the_first_below_threshold():
 
 def test_knee_threshold_keeps_the_leading_entries_up_to_the_knee():
     # A convex decreasing curve with a clear knee. The selection must be the
-    # first knee+1 entries of the score curve (V02 §4.13: knee_threshold
+    # first knee+1 entries of the score curve (the knee_threshold
     # keeps the knee+1 leading entries; RERANKING_THRESHOLD is not consulted).
     from kneed import KneeLocator
 
@@ -162,7 +162,7 @@ def _tei_ok(request: httpx.Request) -> httpx.Response:
 
 
 # ---------------------------------------------------------------------
-# Reranker-down: one behavior per failure mode (V02 §4.14)
+# Reranker-down: one behavior per failure mode (as recorded)
 # ---------------------------------------------------------------------
 
 
@@ -241,7 +241,7 @@ def test_opaque_error_seen_as_an_empty_result_selects_nothing():
 
 
 # ---------------------------------------------------------------------
-# Calibration — confidence time only (V02 §4.13)
+# Calibration — confidence time only (as recorded)
 # ---------------------------------------------------------------------
 
 

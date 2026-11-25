@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The ``search_knowledge`` port: outcome mapping, budget, and the contract seam.
 
-The recorded empty cases stay distinct (V02 §4.13/§4.14) and map onto the
+The recorded empty cases stay distinct and map onto the
 accepted contract surface (every empty case is an
 ``insufficient_evidence`` answer); the budget and cancellation declarations
 behave per the contract's limit semantics.
@@ -178,8 +178,11 @@ def test_empty_authorized_set_is_an_authorization_failure():
 
 
 def test_invalid_graph_name_is_refused_before_any_query():
+    """A malformed graph name in the caller context is refused on the
+    authorization channel — the refusal happens before any resolution, so
+    it is indistinguishable from an unauthorized name."""
     capability, _e, _r, db_factory = make_capability()
-    with pytest.raises(ValueError, match="Invalid graph name"):
+    with pytest.raises(AuthorizationError, match="charset guard"):
         asyncio.run(capability.search_knowledge(context(graphs=("GRAPH}; DROP",)), prepared(), BUDGET))
     assert db_factory.graphs == []
 
@@ -300,15 +303,19 @@ def test_okf_candidate_with_unresolvable_file_id_is_skipped_not_cited_with_an_em
     """The OKF branch is guarded too: a resolved ``repo_id`` with no
     resolvable ``file_id`` never mints ``OkfConceptProvenance(concept_id="")``
     — the empty identity would collapse the repository's hits in the
-    no-agent dedup."""
+    no-agent dedup. The outcome and the sink reason are pinned with it:
+    the skip is an insufficiency, and the reason is its own."""
     rows_file_id = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": None}]
     rows_identity = [{"key": "c1", "repo_id": "repo-1", "bundle_version": 7}]
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking)
     capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
-    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    reasons = []
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=reasons.append))
+    assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
     assert result.hits == ()
+    assert reasons == ["no_resolvable_candidates"]
 
 
 def test_all_selected_candidates_unresolvable_is_insufficient_evidence_with_a_distinct_reason(caplog):
@@ -333,6 +340,35 @@ def test_all_selected_candidates_unresolvable_is_insufficient_evidence_with_a_di
     assert not any("no_documents_retrieved" in record.message for record in caplog.records)
 
 
+def test_a_drifted_identity_payload_is_a_transient_failure_not_a_raw_validation_error():
+    """The hit's identity comes from the corpus: a payload that does not
+    match the contract (an identity document whose fields are not the
+    contract's types) must surface as the contract's transient failure —
+    the same channel the executor's okf read path maps a drifted card to —
+    never as a raw pydantic error that matches no outcome code."""
+    rows_file_id = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"}]
+    rows_identity = [{"key": "c1", "repo_id": "repo-1", "bundle_version": {"a": 1}}]
+    selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking)
+    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
+    with pytest.raises(TransientError, match="hit that does not match the contract"):
+        asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+
+
+def test_a_drifted_text_payload_is_a_transient_failure_too():
+    """The whole hit comes from the corpus: a selected candidate whose
+    text field is not a string is the same transient payload defect as a
+    drifted identity — never a raw pydantic error that matches no outcome
+    code."""
+    rows = [{"key": "c1", "text": {"drifted": True}, "score": 0.9, "file_id": "f1"}]
+    selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
+    with pytest.raises(TransientError, match="hit that does not match the contract"):
+        asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+
+
 def test_raw_text_goes_to_the_bm25_side_and_prefixed_to_the_embedder():
     rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"}]
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
@@ -341,7 +377,7 @@ def test_raw_text_goes_to_the_bm25_side_and_prefixed_to_the_embedder():
     capability, embedding, reranking, _f = make_capability(embedding=embedding, reranking=reranking, rows=rows)
     asyncio.run(capability.search_knowledge(context(), prepared(text="Dubai transport"), BUDGET))
     assert embedding.last_raw == "Dubai transport"
-    # The reranker query is the RAW retrieval query (V02: TEI receives the
+    # The reranker query is the RAW retrieval query (TEI receives the
     # query, not the prefixed embedding input).
     assert reranking.calls[0][0] == "Dubai transport"
 

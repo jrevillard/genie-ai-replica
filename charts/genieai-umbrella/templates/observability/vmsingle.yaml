@@ -55,9 +55,7 @@ spec:
     (pluggable.storageClassName) — a venue that points the data tier at
     a fast or tmpfs-backed StorageClass must reach the observability
     tier too. Omitted when unset: the operator then creates the PVC
-    against the cluster default class. The key is the PVC spec's
-    `storageClassName`: the operator parses this block as a PVC spec and
-    refuses any other spelling ("json: unknown field \"className\""). */ -}}
+    against the cluster default class. */ -}}
     {{- with ($obsMetrics.storageClassName | default $pluggable.storageClassName) }}
     storageClassName: {{ . }}
     {{- end }}

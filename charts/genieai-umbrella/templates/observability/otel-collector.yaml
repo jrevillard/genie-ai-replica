@@ -53,7 +53,7 @@
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
-  name: {{ $obs.collectorCRName | default "genieai-collector" }}
+  name: {{ include "genieai-umbrella.collectorCRName" . }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
@@ -231,7 +231,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ $obs.collectorCRName | default "genieai-collector" }}-prereq
+  name: {{ include "genieai-umbrella.collectorCRName" . }}-prereq
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}

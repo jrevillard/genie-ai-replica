@@ -712,7 +712,8 @@ class QueryService {
   async resolveFanoutPosture(authHeaders, { queryId, sessionId = null, correlationId = null } = {}) {
     // The legacy graph the GRAPH-injection rule prepends — one computation
     // for both returns of this resolution (and the one `_fanoutGraphSet`
-    // reads back).
+    // reads back — the carrier's `_fanoutGraphSet` and the agent's
+    // `_agentGraphSet` both derive from it).
     const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
     const bearer = authHeaders?.authorization;
     if (!bearer) {
@@ -894,8 +895,10 @@ class QueryService {
    * The agent `CallerContext` the run request carries: the
    * trusted caller context the agent-service port enforces by construction.
    * Built from the SHARED posture resolution (no second upstream read), so
-   * the agent's authorized set is exactly the graph set the chatqna carrier
-   * would have carried for the same request:
+   * the agent's set and the carrier's set are read from ONE posture — but
+   * they are not the same set: the carrier's set says which OKF graphs the
+   * chatqna payload carries, the agent's set says which graphs the agent
+   * may SEARCH (its own scope rule, `_agentGraphSet`):
    *   - `authorized_graph_names` — the agent's search scope (`_agentGraphSet`);
    *   - `authorized_repos` — the authz-resolver's repo↔graph rows, kept only
    *     when the row's graph is IN the authorized set (the contract's

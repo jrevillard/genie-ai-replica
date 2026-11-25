@@ -87,12 +87,23 @@ spec:
             - { name: VLLM_TRANSLATION_ENDPOINT, value: "https://ai.assembly.govstack.global:444/translation" }
             - { name: VLLM_TRANSLATION_MODEL_ID, value: "google/gemma-3-4b-it" }
             - { name: VLLM_API_KEY, valueFrom: { secretKeyRef: { name: vllm-api-key, key: VLLM_API_KEY } } }
+            # The translation leg's bearer is OPENAI_API_KEY (the generation
+            # call reads it; VLLM_API_KEY only authenticates the /v1/models
+            # probe) — the compose block maps the same secret onto both
+            # names. Without it the translation calls carry no credential and
+            # the GPU gateway answers 401.
+            - { name: OPENAI_API_KEY, valueFrom: { secretKeyRef: { name: vllm-api-key, key: VLLM_API_KEY } } }
             - { name: OPEA_SSL_SKIP_VERIFY, value: "1" }
             # --- the capabilities layer (search_knowledge: doc-repo +
             #     retriever/embedding/reranker wiring)
             - { name: AGENT_DOCREPO_URL, value: "http://document-repository.genieai.svc.cluster.local" }
             - { name: AGENT_OKF_URL, value: "http://okf-server:3002" }
             - { name: AGENT_AUTHORIZED_GRAPHS, value: "GRAPH" }
+            # The legacy corpus BY NAME — the same value the BFF authorizes.
+            # A divergence (the BFF on another name) makes every legacy hit
+            # read as a foreign graph, and every answer degrades to the
+            # insufficiency statement.
+            - { name: ARANGO_GRAPH_NAME, value: "GRAPH" }
             - { name: TEI_EMBEDDING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/embed" }
             - { name: TEI_RERANKING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/rerank" }
             - { name: ARANGO_URL, value: "http://arangodb-single.genieai.svc.cluster.local:8529" }

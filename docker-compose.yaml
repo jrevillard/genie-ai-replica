@@ -1580,6 +1580,13 @@ services:
       - VLLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
       - AGENT_AUTHORIZED_GRAPHS=${AGENT_AUTHORIZED_GRAPHS:-}
       - AGENT_AUTHORIZED_REPOS=${AGENT_AUTHORIZED_REPOS:-}
+      # The legacy corpus the agent may search, BY NAME — the same value the
+      # BFF authorizes (its ARANGO_GRAPH_NAME) and the retriever reads. The
+      # agent's authorization check compares the caller's authorized graphs
+      # with ITS OWN graph name: when the two services carry different
+      # names, every legacy hit reads as a foreign graph and is dropped, and
+      # every answer degrades to the insufficiency statement.
+      - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
       - AGENT_PROBE_BEARER=${AGENT_PROBE_BEARER:-}
       # Query preparation (the preparation module's knobs, wired into the
       # run surface): the same knobs the deployed query path reads,

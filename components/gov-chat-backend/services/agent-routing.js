@@ -28,8 +28,8 @@ const DEFAULT_AGENT_SERVICE_URL = 'http://agent-service:8010';
 // The run surface the agent-service serves (POST /v1/runs). The BFF posts
 // the configured url VERBATIM (axios.post(agentRunUrl(), …)), so the url the
 // BFF dials must NAME the run surface: a base url without the path answers
-// 404 on a real deployment — the defect #2072 records (both sides were green
-// under a mocked axios; the live hop answered "POST / HTTP/1.1 404").
+// 404 on a real deployment (both sides stay green under a mocked axios;
+// the live hop answers "POST / HTTP/1.1 404").
 const AGENT_RUN_PATH = '/v1/runs';
 
 /**
@@ -60,11 +60,10 @@ function agentServiceUrl() {
  * run surface named.
  *
  * The path is appended HERE, once, so every consumer of the agent seam dials
- * the same url and the shipped default works without an operator override
- * (#2072). A configured url that ALREADY names the run surface is used as
- * it stands: a deployment that pinned the full path (the V08 rehearsal's
- * `…:8080/v1/runs`) keeps working, and the two spellings cannot disagree
- * about where the seam lives.
+ * the same url and the shipped default works without an operator override.
+ * A configured url that ALREADY names the run surface is used as it stands:
+ * a deployment that pinned the full path (`…:8080/v1/runs`) keeps working,
+ * and the two spellings cannot disagree about where the seam lives.
  *
  * @returns {string} The absolute url of POST /v1/runs.
  */

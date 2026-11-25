@@ -75,8 +75,14 @@ def _fetch_json(url: str, timeout: float = 60.0):
         raise RuntimeError(f"{url} answered {failed.code}: {body[:200]}") from failed
 
 
-def _trace_by_id(traces_url: str, trace_id: str) -> dict:
-    """The trace with that id, or an empty dict when the venue does not have it."""
+def _trace_by_id(traces_url: str, trace_id: str) -> tuple[dict, str]:
+    """The trace with that id, and the reason there is none.
+
+    The reason is NOT a sentinel inside the payload: a truthy error dict
+    would read as "the trace was found" on a venue with no trace pipeline
+    at all — the exact failure the anchor exists to catch. The trace and
+    the reason are separate return values.
+    """
     base = traces_url.rstrip("/")
     if "/select/jaeger" in base:
         base = base.split("/select/jaeger")[0]
@@ -84,11 +90,13 @@ def _trace_by_id(traces_url: str, trace_id: str) -> dict:
     try:
         payload = _fetch_json(url)
     except (RuntimeError, urllib.error.URLError, OSError) as failed:
-        return {"error": str(failed)[:200]}
+        return {}, f"the trace fetch failed: {str(failed)[:200]}"
+    if not isinstance(payload, dict):
+        return {}, "the trace fetch answered a non-object payload"
     traces = payload.get("data") or []
     if not traces:
-        return {}
-    return traces[0]
+        return {}, "the venue has no trace with that id"
+    return traces[0], ""
 
 
 def _span_names(trace: dict) -> list[str]:
@@ -118,34 +126,45 @@ def run(
         trace_id = row.get("trace_id")
         row["trace_id"] = trace_id
         trace: dict = {}
+        reason = "no trace id on the row"
         if trace_id:
             # The trace lands asynchronously (the collector batches it), so
             # the fetch polls until the deadline — the same shape as the
             # legacy anchor's trace fetch.
             deadline = time.time() + trace_timeout_s
             while time.time() < deadline:
-                trace = _trace_by_id(traces_url, trace_id)
+                trace, reason = _trace_by_id(traces_url, trace_id)
                 if trace:
                     break
                 time.sleep(2.0)
         names = _span_names(trace) if trace else []
-        row["trace_found"] = bool(trace)
-        row["span_names"] = sorted(set(names))
+        observed = set(names)
+        row["trace_found"] = bool(observed)
+        row["trace_error"] = reason or None
+        row["span_names"] = sorted(observed)
         row["services"] = sorted(_services(trace)) if trace else []
-        row["agent_run_span"] = "agent.run" in names
+        row["agent_run_span"] = "agent.run" in observed
         row["tool_call_spans"] = names.count("agent.tool_call")
         row["model_call_spans"] = names.count("agent.model_call")
+        # The span-name config is ENFORCED: a rename on the agent side must
+        # break the gate, not be reported as a green run.
+        missing = [name for name in AGENT_SPAN_NAMES if name not in observed]
+        row["missing_span_names"] = missing
         rows.append(row)
         print(
             f"[{case['id']}] outcome={row.get('outcome')} trace_found={row['trace_found']} "
-            f"spans={row['span_names']}",
+            f"spans={row['span_names']}"
+            + (f" missing={missing}" if missing else "")
+            + (f" ({reason})" if reason else ""),
             file=sys.stderr,
         )
     missed = sum(1 for r in rows if not r.get("trace_found"))
+    renamed = sum(1 for r in rows if r.get("missing_span_names"))
     report = {
         "aggregate": {
             "n": len(rows),
             "n_missed_traces": missed,
+            "n_rows_missing_expected_span_names": renamed,
             "n_answered": sum(1 for r in rows if r.get("outcome") == "answered"),
             "n_tool_calls": sum(r.get("tool_call_spans") or 0 for r in rows),
             "agent_service_name": AGENT_SERVICE_NAME,
@@ -194,8 +213,14 @@ def main() -> int:
     aggregate = report["aggregate"]
     print(json.dumps(aggregate, indent=2), file=sys.stderr)
     print(f"wrote {args.out}", file=sys.stderr)
-    # The acceptance: no run may miss its trace on a clean run.
-    return 0 if aggregate["n_missed_traces"] == 0 else 3
+    # The acceptance: no run may miss its trace on a clean run, and the
+    # agent's span names must be the ones this runner names — a rename on
+    # the agent side is a change of the contract, not a green run.
+    if aggregate["n_missed_traces"]:
+        return 3
+    if aggregate["n_rows_missing_expected_span_names"]:
+        return 5
+    return 0
 
 
 if __name__ == "__main__":

@@ -311,24 +311,24 @@ class SseParser {
   };
 
   SseEvent? _parseEvent(Map<String, dynamic> json) {
-    final type = json['type'] as String?;
+    final type = _asString(json, 'type');
     return switch (type) {
-      'chunk' => SseChunkEvent(json['content'] as String? ?? ''),
+      'chunk' => SseChunkEvent(_asString(json, 'content') ?? ''),
       'metadata' => _parseMetadata(json),
-      'translation' => SseTranslationEvent(json['content'] as String? ?? ''),
+      'translation' => SseTranslationEvent(_asString(json, 'content') ?? ''),
       'done' => SseDoneEvent(
-        json['queryId'] as String?,
-        translationFailed: json['translationFailed'] == true,
+        _asString(json, 'queryId'),
+        translationFailed: _asBool(json, 'translationFailed') ?? false,
         queryTranslationStatus: _asString(json, 'queryTranslationStatus'),
       ),
       'error' => SseErrorEvent(
-        json['message'] as String? ?? 'Unknown error',
-        code: json['code'] as String?,
+        _asString(json, 'message') ?? 'Unknown error',
+        code: _asString(json, 'code'),
       ),
       'agent_activity' => SseAgentActivityEvent(
-        status: json['status'] as String? ?? 'started',
-        operation: json['operation'] as String?,
-        callId: json['callId'] as String?,
+        status: _asString(json, 'status') ?? 'started',
+        operation: _asString(json, 'operation'),
+        callId: _asString(json, 'callId'),
       ),
       'agent_verdict' => _parseVerdict(json),
       _ => null,

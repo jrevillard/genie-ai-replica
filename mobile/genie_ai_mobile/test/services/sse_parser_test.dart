@@ -48,6 +48,19 @@ void main() {
       expect((events[0] as SseDoneEvent).queryId, 'abc123');
     });
 
+    test('degrades a badly typed field instead of dropping the frame', () {
+      // A numeric queryId (a proxy that rewrites the body, a deployment that
+      // sends a number) must cost THAT field, not the whole frame: the
+      // translation flag and the status still reach the client.
+      final events = parser.parseChunk(
+        'data: {"type":"done","queryId":123,"translationFailed":true}\n\n',
+      );
+      expect(events, hasLength(1));
+      expect(events[0], isA<SseDoneEvent>());
+      expect((events[0] as SseDoneEvent).queryId, isNull);
+      expect((events[0] as SseDoneEvent).translationFailed, isTrue);
+    });
+
     test('carries the translation failure flag on the done event', () {
       final events = parser.parseChunk(
         'data: {"type":"done","queryId":"abc123","translationFailed":true}\n\n',

@@ -242,6 +242,19 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // leg, the stream settles, and the refusal answers with the fallback body
   // — bounded and honest.
   let deadline = null;
+  // The answer's own state, declared HERE because the deadline's callback
+  // reads it and can fire before the stream is even established (a
+  // trickling refusal body): the guard must be safe to call at any point.
+  // `runCompleted`: the run reached its terminal (the `run_finished` event
+  // or the usage record). `fullResponseText`: the answer's text so far.
+  let runCompleted = false;
+  let fullResponseText = '';
+  // The ANSWER is in hand: the run reached its terminal AND its text
+  // arrived. A deadline that fires after that is the missing usage record
+  // (the agent service emits it after `run_finished`), not a timeout of a
+  // turn that already answered. A run that finished without text has
+  // nothing to keep — it stays a timeout.
+  const answerInHand = () => runCompleted && fullResponseText.trim().length > 0;
   const clearDeadline = () => {
     if (deadline !== null) {
       clearTimeout(deadline);
@@ -251,6 +264,15 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   deadline = setTimeout(() => {
     deadline = null;
     logger.warn('AgentJsonResult.upstream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
+    // A run whose ANSWER is in hand is NOT a timeout: the usage record is
+    // what is missing (the agent service emits it after `run_finished`).
+    // The abort still ends the stalled request, but the turn keeps its real
+    // outcome — latching `timed_out` here would answer a completed turn
+    // with a timeout.
+    if (answerInHand()) {
+      controller.abort();
+      return;
+    }
     // The BFF-attributed deadline is an honest terminal fact.
     // Latched: the abort's stream teardown must not overwrite it. The
     // pre-200 refusals (a slow 429/503 body under the armed deadline) wrote
@@ -293,16 +315,10 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   legEstablished = true;
   const stream = response.data;
   let buffer = '';
-  let fullResponseText = '';
   let runId = null;
   let capturedVerdict = null;
   let usageRecord = null;
   let failure = null;
-  // The run reached its terminal (the `run_finished` event or the usage
-  // record): the answer is complete. The wall-clock deadline is CLEARED
-  // there — a deadline that fires after the terminal would abort a run that
-  // already delivered its answer, and the abort would discard it.
-  let runCompleted = false;
 
   stream.setEncoding('utf8');
 
@@ -424,6 +440,13 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
     clearDeadline();
     if (failure) {
       // E.g. the run_error abort — the typed 502 already owns the terminal.
+      return;
+    }
+    if (answerInHand()) {
+      // The abort that ended a stalled-but-answered run reports as a stream
+      // error: it is the teardown of a run that already delivered its
+      // answer, not a failure of the turn. The answer stands.
+      logger.warn('AgentJsonResult.agent_stream_error_after_completion', { error: error.message, queryId });
       return;
     }
     logger.error('AgentJsonResult.agent_stream_error', { error: error.message, queryId });

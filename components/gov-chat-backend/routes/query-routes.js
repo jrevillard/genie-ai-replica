@@ -793,9 +793,11 @@ module.exports = (queryService) => {
     // The V05 status rides the DONE frame when the leg produced one: the
     // metadata frame was written before the translation settled (the sources
     // must not wait for it), so the done frame is the client's live carrier.
-    // The legacy lane has no status — its done frame stays byte-identical.
+    // Only the agentic lane runs the leg, and the legacy lane's metadata
+    // carries chatqna's own query-side status under that key — a different
+    // fact under the same name. The legacy done frame stays byte-identical.
     const doneFrame = { type: 'done', queryId, translationFailed };
-    if (metadata.query_translation_status) {
+    if (agenticLane && metadata.query_translation_status) {
       doneFrame.queryTranslationStatus = metadata.query_translation_status;
     }
     res.write(`data: ${JSON.stringify(doneFrame)}\n\n`);

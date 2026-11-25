@@ -786,6 +786,47 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     }
   });
 
+  it('a deadline that fires after the answer arrived keeps the answer (the abort is not a 504)', async () => {
+    // The run finished and its text arrived; the usage record never comes.
+    // The bound still fires (the teardown window is unbounded), but the turn
+    // already answered: the abort's teardown error is the death of a
+    // stalled stream, not a failure of the run, and the answer stands.
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      const mockStream = new Readable({ read() {} });
+      let capturedSignal = null;
+      axios.post.mockImplementation((_url, _body, opts) => {
+        capturedSignal = opts.signal;
+        return Promise.resolve({ status: 200, headers: {}, data: mockStream });
+      });
+
+      const responsePromise = postQuery();
+      responsePromise.catch(() => {});
+      for (let i = 0; i < 200 && mockStream.listenerCount('data') === 0; i++) {
+        await new Promise(setImmediate);
+      }
+      mockStream.push(
+        `data: ${JSON.stringify(envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }))}\n\n`
+      );
+      mockStream.push(`data: ${JSON.stringify(envelope('verdict', GROUNDED_VERDICT, { seq: 1 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify(envelope('run_finished', { outcome: 'answered' }, { seq: 2 }))}\n\n`);
+      await new Promise(setImmediate);
+
+      // The bound fires: the teardown window is not unbounded.
+      jest.advanceTimersByTime(40000);
+      expect(capturedSignal.aborted).toBe(true);
+      mockStream.emit('error', new Error('aborted'));
+
+      const response = await responsePromise;
+      expect(response.status).toBe(201);
+      expect(response.body.response).toBe('Hello world.');
+    } finally {
+      jest.useRealTimers();
+      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+    }
+  });
+
   it('unparsable 429/503/422 bodies degrade to the documented error names, never raw passthrough', async () => {
     const cases = [
       { status: 429, body: '<html>gateway timeout</html>', error: 'admission_refused' },

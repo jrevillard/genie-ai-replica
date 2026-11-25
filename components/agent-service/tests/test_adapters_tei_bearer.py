@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """The TEI adapters' bearer path: a configured credential rides the request
 as an Authorization header; an internal TEI (no credential) sends none. The
-V08 venue answers 401 without the header — a regression that drops the
+bearer-authenticated venue answers 401 without the header — a regression that drops the
 credential from ``SearchKnowledgeCapability.create``'s wiring must turn
-these red (issue #2167)."""
+these red."""
 
 import asyncio
 

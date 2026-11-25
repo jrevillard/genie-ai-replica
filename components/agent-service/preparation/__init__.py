@@ -15,14 +15,13 @@ contract's types (:class:`~capabilities.contract.PreparedQuery`,
 vLLM — the translation endpoint is preparation's business, which is WHY
 the module lives outside the port package.
 
-Behavior is frozen to the V02 record
-(``docs/baselines/v02-opea-query-path-contract.md`` §5); the structure is
+Behavior is frozen to the recorded preparation contract
+(``docs/baselines/v02-opea-query-path-contract.md``); the structure is
 free (clean-slate — no ``comps`` import, no OPEA service call,
 no shared library with the overlay). What the record freezes: the order of
-operations (§5.1), the ``query_translation_status`` vocabulary (§5.2 — the
-contract's ``QueryPreparationStatus``), the bounds (§5.3), the three
-failure classes with their distinct outcomes (§5.4), and the locale
-coverage shape (§5.6).
+operations, the ``query_translation_status`` vocabulary (the contract's
+``QueryPreparationStatus``), the bounds, the three failure classes with
+their distinct outcomes, and the locale coverage shape.
 
 Answer translation stays BFF-owned: this module never translates the
 answer and never decides the answer's language. The BFF's

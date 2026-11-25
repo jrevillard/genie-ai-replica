@@ -44,7 +44,7 @@ def test_the_reader_fills_both_projections_from_the_vendored_copy():
     codes = registry.language_codes()
     scripts = registry.language_scripts()
 
-    # V02 §5.1: 41 language codes.
+    # The recorded registry: 41 language codes.
     assert len(codes) == 41
     assert codes["en"] == "English"
     assert codes["fr"] == "French"

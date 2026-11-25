@@ -1,11 +1,11 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The TEI reranking and evidence-selection adapter (V02 §4.13, §4.14).
+"""The TEI reranking and evidence-selection adapter, as the record measures them.
 
 Ports the recorded reranking stage: the TEI ``/rerank`` call (recorded shape,
 timeouts, no retry — the recorded no-Authorization call stays the shape for
-an internal TEI; a configured deployment credential rides a bearer header,
-the V08-venue fix), the five selection strategies
+an internal TEI; a configured deployment credential rides a bearer header),
+the five selection strategies
 (``slice`` deployed; ``threshold``, ``slice_threshold``, ``knee_threshold``,
 ``adaptive``), the failure-mode mapping (one behavior per failure mode), and
 the confidence-time score calibration. The selected passages keep the
@@ -383,7 +383,7 @@ class TeiRerankingAdapter:
         return results
 
     def calibrate(self, score: float) -> float:
-        """Map a raw reranker score for CONFIDENCE use only (V02 §4.13).
+        """Map a raw reranker score for CONFIDENCE use only, as the record measures it.
 
         ``none`` (deployed) returns the raw score; ``sigmoid`` returns
         ``1/(1+exp(-score/temperature))`` with overflow saturation. The

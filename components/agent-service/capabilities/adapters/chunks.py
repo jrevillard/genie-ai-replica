@@ -3,7 +3,7 @@
 """The legacy chunk adapter: the corpus text of one legacy file.
 
 The chunks of a graph live in ``{graph_name}_SOURCE`` and their text rides
-the ``text`` field (V02 §4). The adapter reads them with one bind-variable
+the ``text`` field. The adapter reads them with one bind-variable
 AQL — the collection name itself is a bind variable, never interpolated —
 bounded by the AQL ``LIMIT`` to the chunk count, and joins the texts into
 the content a read returns. The byte budget is the executor's single

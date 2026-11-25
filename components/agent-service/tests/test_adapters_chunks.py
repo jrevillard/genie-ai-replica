@@ -3,7 +3,7 @@
 """The legacy chunk adapter: the corpus text of one legacy file.
 
 The chunks of the legacy graph live in ``{graph_name}_SOURCE``; the text
-rides the ``text`` field (V02 §4). The adapter reads them with one
+rides the ``text`` field. The adapter reads them with one
 bind-variable AQL — the collection name itself is bound, never interpolated
 (okf-011: no caller-supplied text reaches an AQL string) — and joins the
 texts into the content a read returns, honouring the caller's result budget

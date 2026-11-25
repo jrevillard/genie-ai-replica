@@ -63,4 +63,13 @@ spec:
       requests:
         storage: {{ $obsMetrics.storageSize | quote }}
   replicaCount: 1
+  {{- with (index $obsMetrics "extraArgs") }}
+  extraArgs:
+    {{- /* Every flag value is a STRING: the operator decodes
+    extraArgs as a map of strings, so a boolean (a --set that
+    lands as `true`) would be refused at admission. */}}
+    {{- range $flag, $value := . }}
+    {{ $flag }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
 {{- end }}

@@ -20,14 +20,15 @@ built:
 ## 2. What the campaign fixed (the landed diff)
 
 Three product defects, all measured live, plus the eval-harness adaptation and the
-campaign's artifacts. The three fixes are in `components/`; nothing else in
-`components/` changed except comments.
+campaign's artifacts. Two of the three fixes are in this MR (the third landed
+upstream first — see the table); nothing else in `components/` changed except
+comments.
 
 | # | file | fix |
 |---|---|---|
 | 1 | `components/gov-chat-backend/services/agent-routing.js` | `agentRunUrl()` appends the run surface ONCE; an override that already names it keeps working |
 | 2 | `components/gov-chat-backend/services/query-service.js` | `_agentGraphSet(posture)` — the agent's scope is the SEARCH scope, not the carrier's payload set |
-| 3 | `components/agent-service/capabilities/adapters/http.py` | `_bearer_token()` — the transport owns the scheme |
+| 3 | `components/agent-service/capabilities/adapters/http.py` | `_bearer_token()` — the transport owns the scheme. **The W-P1 hardening wave (`e1ae95372`) landed the SAME fix in the target branch while this campaign was running**, and its version carries more (the cookie policy that keeps ambient credentials out of the pooled session). The campaign's duplicate was dropped in the rebase — the wave's version wins, so the MR's diff carries no agent-service change. The DEFECT was real and was measured live; the FIX simply landed upstream first |
 
 Proof on the venue with the fixed images: the run path answered `201`, the
 answers carried non-empty `source_documents`, `abstained=false`, and
@@ -142,7 +143,17 @@ E2E reports, trace proofs, queries-doc outcomes and a cleanup receipt; the
 scoped review covered ONLY the landed driver/harness code, and the run reports
 and artifacts are gated on evidence completeness).
 
-## 10. The anchor's two harness corrections (found by the campaign, not by the code)
+## 10. The rebase (the target branch moved under the campaign)
+
+The W-P1 hardening wave merged into `feat/agentic-foundations/prd` while the
+campaign was running, and it carries its own fix for the double-prefixed
+bearer. The branch was rebased onto the target's tip before the MR was
+un-drafted: the conflict was resolved in the WAVE's favour (its transport
+hardening supersedes the campaign's duplicate), and the MR's diff therefore
+carries no `components/agent-service/` change. The rebased head is
+`a462c90cd`; the reviewed patches are unchanged by the rebase (the SHAs moved).
+
+## 11. The anchor's two harness corrections (found by the campaign, not by the code)
 
 The anchor's first run measured nothing: the harness's own deadline (the
 driver's `deadline_ms` + 60 s margin) was shorter than the agent's own model
@@ -152,7 +163,7 @@ END. Both are the harness's parameters, both are now corrected (a deadline
 that covers the agent's budget; a poll that waits for the property), and both
 are pinned by the new test file.
 
-## 11. What is NOT proven here
+## 12. What is NOT proven here
 
 - the chatqna leg (flag OFF) — not exercised by this campaign;
 - the chunk-level retrieval tuple for the agent path — deferred by design;

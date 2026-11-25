@@ -158,18 +158,16 @@ def test_an_unprepared_preparation_answers_insufficiency_and_never_touches_the_p
     assert statuses == ["fallback_timeout"]
 
 
-def test_an_unclassifiable_query_rides_the_locale_and_never_claims_english(monkeypatch, tmp_path):
-    """When the detector cannot classify the query at all, the request's
-    locale (the preparer's own default) speaks for it — the search the
-    caller can still have. With no locale anywhere, the module's own
-    unknown-language status refuses the query: never passthrough_english,
-    whose raw text would be embedded into the English-only space with a
-    prepared label."""
-    import preparation.detection as detection_module
+def test_an_unclassifiable_query_rides_the_locale_and_never_claims_english():
+    """A query the REAL detector cannot classify ("???" carries no
+    linguistic features) rides the request's locale — the preparer's own
+    default — and the search the caller can still have runs. With no
+    locale anywhere, the module's own unknown-language status refuses the
+    query: never passthrough_english, whose raw text would be embedded
+    into the English-only space with a prepared label."""
     from preparation import PreparationConfig, QueryPreparer
     from preparation.registry import LanguageRegistry
 
-    monkeypatch.setattr(detection_module, "detect_language", lambda text: None)
     env = {"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
     config = PreparationConfig.load(env=env)
     registry = LanguageRegistry(config.registry_path)

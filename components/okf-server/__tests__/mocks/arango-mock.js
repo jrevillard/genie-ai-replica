@@ -54,7 +54,7 @@ function createMockDb() {
         s[k] = { ...s[k], ...patch };
         return { ...s[k] };
       }),
-      replace: jest.fn(async (k, doc) => {
+      replace: jest.fn(async (k, doc, opts) => {
         const s = stores[name];
         if (!s || !s[k]) {
           const e = new Error('not found');
@@ -62,7 +62,19 @@ function createMockDb() {
           e.errorNum = 1204;
           throw e;
         }
-        s[k] = { ...doc, _key: k, _id: `${name}/${k}`, _rev: '2' };
+        // The driver's own rule (measured live, 2026-11-25 review round):
+        // a carried `_rev` is a PRECONDITION only when the caller passes
+        // `ignoreRevs: false` — the default IGNORES it, so the mock must
+        // too, or every optimistic-concurrency test is a lie that passes.
+        if (opts && opts.ignoreRevs === false && doc._rev != null && String(doc._rev) !== String(s[k]._rev)) {
+          const e = new Error('conflict');
+          e.code = 409;
+          e.statusCode = 409;
+          e.errorNum = 1200;
+          throw e;
+        }
+        const nextRev = String((Number(s[k]._rev) || 1) + 1);
+        s[k] = { ...doc, _key: k, _id: `${name}/${k}`, _rev: nextRev };
         return { ...s[k] };
       }),
       indexes: jest.fn(async () => []),

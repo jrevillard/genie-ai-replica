@@ -3373,7 +3373,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: '{name} wird bearbeitet — beim Speichern wird die Vereinigung neu aufgelöst und die Version erhöht.',
         updated: 'Der Kontext wurde aktualisiert und neu aufgelöst.',
-        deleted: 'Der Kontext wurde entfernt.'
+        deleted: 'Der Kontext wurde entfernt.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

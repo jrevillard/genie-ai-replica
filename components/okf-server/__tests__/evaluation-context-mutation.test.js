@@ -132,7 +132,9 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
     // The in-use guard's query answers with the bound suites.
     __mockDb.query.mockResolvedValueOnce({
       all: async () => [
-        { _key: 'rs-1', kind: 'routing_suite', suite_key: 'rs-1', name: 'Head suite A' },
+        // The REAL kinds the production writers emit: head suites are kind
+        // 'suite' (head-suite-service), RAGAS benchmarks 'ragas_suite'.
+        { _key: 'rs-1', kind: 'suite', suite_key: 'rs-1', name: 'Head suite A' },
         { _key: 'rx-1', kind: 'ragas_suite', suite_key: 'rx-1', name: 'Benchmark B' }
       ]
     });
@@ -156,15 +158,20 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
     );
   });
 
-  test('a rename to a blank name is refused as INVALID_NAME — nothing is written', async () => {
+  test('a rename to a blank name is refused — ONE rule and ONE code with the create', async () => {
     const doc = await makeContext();
     await expect(
       evalCtx.updateContext(doc._key, { name: '   ' }, { actor: { user_id: 'u-admin' } })
-    ).rejects.toMatchObject({ code: 'INVALID_NAME', status: 400 });
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 });
     // A non-string name is the same refusal (the type arm, not the blank arm).
     await expect(
       evalCtx.updateContext(doc._key, { name: 42 }, { actor: { user_id: 'u-admin' } })
-    ).rejects.toMatchObject({ code: 'INVALID_NAME', status: 400 });
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 });
+    // The create enforces an 80-character cap; a rename must not be the
+    // loophole past it (the review round's consistency note).
+    await expect(
+      evalCtx.updateContext(doc._key, { name: 'x'.repeat(81) }, { actor: { user_id: 'u-admin' } })
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', status: 400 });
     const still = await evalCtx.getContext(doc._key);
     expect(still.name).toBe('readers');
     expect(still.version).toBe(doc.version);
@@ -221,7 +228,7 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
       const next = jest.fn();
       await controller.updateContext({ params: { id: doc._key }, body: { name: '   ' } }, r, next);
       expect(r.status).not.toHaveBeenCalled();
-      expect(next).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_NAME', status: 400 }));
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({ code: 'VALIDATION_ERROR', status: 400 }));
     });
 
     test('a delete with no bound suites answers 200; the refusal path hands off too', async () => {
@@ -233,7 +240,7 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
 
       const doc2 = await makeContext();
       __mockDb.query.mockResolvedValueOnce({
-        all: async () => [{ _key: 'rs-9', kind: 'routing_suite', suite_key: 'rs-9', name: 'Holder suite' }]
+        all: async () => [{ _key: 'rs-9', kind: 'suite', suite_key: 'rs-9', name: 'Holder suite' }]
       });
       const r2 = res();
       const next2 = jest.fn();
@@ -254,6 +261,45 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'eval_context.update', actor: 'system' })
     );
+  });
+
+  // The review round's finding: `col.replace(id, next)` does NOT enforce the
+  // carried `_rev` (arangojs ignores revisions unless `ignoreRevs: false` is
+  // passed), so two concurrent updates silently clobber — the loser's audit
+  // row claims the same version while measuring a different set.
+  test('concurrent updates REFUSE the loser (409 CONTEXT_MODIFIED) — never a silent clobber', async () => {
+    const doc = await makeContext();
+    seedServing([servingRow('r-a'), servingRow('r-b'), servingRow('r-c')]);
+    const [a, b] = await Promise.allSettled([
+      evalCtx.updateContext(doc._key, { principal_refs: ['group-b'] }, { actor: { user_id: 'u-a' } }),
+      evalCtx.updateContext(doc._key, { principal_refs: ['group-c'] }, { actor: { user_id: 'u-b' } })
+    ]);
+    const outcomes = [a.status, b.status].sort();
+    expect(outcomes).toEqual(['fulfilled', 'rejected']);
+    const refused = a.status === 'rejected' ? a.reason : b.reason;
+    expect(refused.code).toBe('CONTEXT_MODIFIED');
+    expect(refused.status).toBe(409);
+    // The stored row is the WINNER's write — exactly one version bump, one
+    // membership set, never a blend of both.
+    const winner = a.status === 'fulfilled' ? a.value : b.value;
+    const still = await evalCtx.getContext(doc._key);
+    expect(still.principal_refs).toEqual(winner.principal_refs);
+    expect(still.version).toBe(doc.version + 1);
+  });
+
+  test('concurrent refreshes refuse the loser the same way', async () => {
+    const doc = await makeContext();
+    const [a, b] = await Promise.allSettled([
+      evalCtx.refreshContext(doc._key, { actor: { user_id: 'u-a' } }),
+      evalCtx.refreshContext(doc._key, { actor: { user_id: 'u-b' } })
+    ]);
+    const outcomes = [a.status, b.status].sort();
+    expect(outcomes).toEqual(['fulfilled', 'rejected']);
+    const refused = a.status === 'rejected' ? a.reason : b.reason;
+    expect(refused.code).toBe('CONTEXT_MODIFIED');
+    expect(refused.status).toBe(409);
+    const still = await evalCtx.getContext(doc._key);
+    expect(still.version).toBe(doc.version + 1);
   });
 
   test('the manage routes carry the superadmin gate', () => {

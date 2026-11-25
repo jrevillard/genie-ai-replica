@@ -3286,7 +3286,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'تعديل {name} — الحفظ يعيد حل الاتحاد ويرفع الإصدار.',
         updated: 'تم تحديث السياق وإعادة حله.',
-        deleted: 'تمت إزالة السياق.'
+        deleted: 'تمت إزالة السياق.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'الأبعاد',

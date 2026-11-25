@@ -42,9 +42,15 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 // The ONE worker-pool implementation (new callers require it).
 const { runPool } = require('./run-pool');
+const { isArangoConflict } = require('./arango-errors');
 
 const COLLECTION = 'okf_evaluation_contexts';
 const SUPERADMIN_REALM_ROLE = 'tools-admin';
+// The suite KINDS that can carry a context binding — minted by
+// head-suite-service ('suite') and ragas-suite-service ('ragas_suite'). The
+// delete guard asks THIS list (bind param), so a new suite family must be
+// added here or its contexts lose their delete protection.
+const SUITE_KINDS = ['suite', 'ragas_suite'];
 // A Keycloak group id is an opaque uuid. A principal reference that is NOT
 // uuid-shaped and does not resolve by name is a name that does not exist —
 // it never becomes a path segment.
@@ -57,6 +63,29 @@ class EvalContextError extends Error {
     this.name = 'EvalContextError';
     this.code = code;
     this.status = status;
+  }
+}
+
+/**
+ * The optimistic-concurrency replace (2026-11-25 review round): a carried
+ * `_rev` is a PRECONDITION only when `ignoreRevs: false` is passed — the
+ * arangojs default IGNORES the revision, so a bare `replace(id, doc)` let
+ * the LAST writer silently win (both audits claiming the same version over
+ * different membership sets). A conflict here answers 409 CONTEXT_MODIFIED
+ * and the stored row stays the winner's write.
+ */
+async function replaceChecked(col, id, doc) {
+  try {
+    await col.replace(id, doc, { ignoreRevs: false });
+  } catch (err) {
+    if (isArangoConflict(err)) {
+      throw new EvalContextError(
+        'CONTEXT_MODIFIED',
+        `evaluation context ${id} was modified by another writer while this change was being made; reload it and retry`,
+        409
+      );
+    }
+    throw err;
   }
 }
 
@@ -571,12 +600,12 @@ async function refreshContext(id, opts = {}) {
     refreshed_by: (opts.actor && opts.actor.user_id) || 'system'
   };
   delete next._id;
-  // `_rev` STAYS: the replace is then revision-checked, so two concurrent
-  // refreshes cannot silently clobber each other — the loser gets a
-  // conflict instead of an overwritten snapshot.
+  // `_rev` STAYS and the replace is `replaceChecked` — two concurrent
+  // refreshes cannot silently clobber each other; the loser gets 409
+  // CONTEXT_MODIFIED instead of an overwritten snapshot.
   const db = await dbService.getConnection();
   const col = await ensureCollection(db);
-  await col.replace(id, next);
+  await replaceChecked(col, id, next);
   await writeAudit({
     action: 'eval_context.refresh',
     actor: next.refreshed_by,
@@ -606,9 +635,10 @@ async function updateContext(id, payload = {}, opts = {}) {
   const next = { ...doc };
   let reResolved = null;
   if (payload.name !== undefined) {
-    if (typeof payload.name !== 'string' || !payload.name.trim()) {
-      throw new EvalContextError('INVALID_NAME', 'a context name must be a non-empty string', 400);
-    }
+    // ONE rule, ONE code: the create's own validator owns the name contract
+    // (non-empty string, ≤80 characters) — a rename is not a second,
+    // drifting copy of it.
+    validateInput({ name: payload.name });
     next.name = payload.name.trim();
   }
   if (payload.principal_refs !== undefined) {
@@ -637,11 +667,13 @@ async function updateContext(id, payload = {}, opts = {}) {
   next.updated_at = new Date().toISOString();
   next.updated_by = (opts.actor && opts.actor.user_id) || 'system';
   delete next._id;
-  // `_rev` stays: the replace is revision-checked, so two concurrent
-  // updates cannot silently clobber each other.
+  // `_rev` stays and the replace is `replaceChecked`: two concurrent updates
+  // cannot silently clobber each other — the loser gets 409 CONTEXT_MODIFIED
+  // and the stored row is exactly the winner's write. getContext(id) ensured
+  // the collection THIS request; the write only needs the handle.
   const db = await dbService.getConnection();
-  const col = await ensureCollection(db);
-  await col.replace(id, next);
+  const col = db.collection(COLLECTION);
+  await replaceChecked(col, id, next);
   await writeAudit({
     action: 'eval_context.update',
     actor: next.updated_by,
@@ -668,14 +700,15 @@ async function updateContext(id, payload = {}, opts = {}) {
  */
 async function deleteContext(id, opts = {}) {
   const doc = await getContext(id);
+  // getContext(id) ensured the context collection; the guard reads the RUNS
+  // collection and the remove goes straight through its handle.
   const db = await dbService.getConnection();
-  await ensureCollection(db);
   const bound = await (
     await db.query(
       'FOR d IN okf_head_test_runs FILTER d.payload && d.payload.context && d.payload.context.id == @id ' +
-        'FILTER d.kind IN ["routing_suite", "suite", "ragas_suite"] ' +
+        'FILTER d.kind IN @kinds ' +
         'SORT d.created_at DESC LIMIT 50 RETURN KEEP(d, ["_key", "kind", "suite_key", "name"])',
-      { id }
+      { id, kinds: SUITE_KINDS }
     )
   ).all();
   if (bound.length) {

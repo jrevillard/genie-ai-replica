@@ -161,13 +161,14 @@ Three layers, each RED→GREEN:
 3. **Final write** — the doc write moved from `.save()` to `.replace()` on
    the placeholder's key (the placeholder and the final doc are one row).
 
-### Coverage + gates (amendment diff)
+### Coverage + gates (amendment diff, after the review + simplify rounds)
 
-- okf-server: stmt 88.36 / br 75.73 / fn 89.55 / lines 89.83 — above the
-  main baseline (88.34/75.72/89.4/89.81) on all four.
+- okf-server: stmt 88.52 / br 75.76 / fn 89.57 / lines 90.0 — above the
+  main baseline (88.34/75.72/89.4/89.81) on all four (the simplify
+  consolidation RAISED it: less duplicated code to cover).
 - frontend: stmt 89.75 / br 77.97 / fn 69.91 / lines 90.04 — above the
   baseline (89.72/77.86/69.76/89.98) on all four.
-- Suites: frontend 4646/4646 (post-prettier re-run); localeConsistency +
+- Suites: okf-server 2598/2598; frontend 4645/4645; localeConsistency +
   okf-surface-i18n-contract green; prettier + eslint clean.
 - Worktree measurement trap (recorded to memory): `jest --coverage` writes
   NOTHING to the default dir in a `.claude` worktree and `json-summary`
@@ -177,3 +178,31 @@ Three layers, each RED→GREEN:
 - The controller adapter fix the new tests caught: every handler now
   awaits the service BEFORE stamping the status (a refusal path must never
   carry a success status through `res.status(200).json(await …)`).
+- Review round on the amendment diff: /security-review — explicit clean
+  verdict (all candidates traced and rejected). /code-review (high): 7
+  findings, ALL FIXED RED→GREEN — the missing optimistic concurrency
+  (`replaceChecked` with `ignoreRevs:false` + 409 CONTEXT_MODIFIED, the
+  arango-mock now faithfully honours the driver's revision rule so the
+  concurrency tests are real), the 80-char name cap (one rule and one code
+  with the create, via `validateInput`), grants UNKNOWN for unmatchable
+  memberships (never a counted zero), the pairing check's error swallowing
+  (a transient fault stays a fault, not a 404), the orphaned running
+  explain (a boot-sweep repair + a 15-minute read-side horizon), the stale
+  edit banner on self-delete, and the guard tests using the REAL suite
+  kinds. /simplify (4 angles): applied — one `runWrite` cycle, one
+  `graftMembership`, one invalidation owner (every service write drops the
+  memo), `loadOwnedRun` as the one home of run/suite ownership (begin,
+  poll and job), the guard's kind taxonomy as a named SUITE_KINDS bind
+  (phantom 'routing_suite' dropped), the explain job reusing the begin's
+  run doc, no redundant collection-ensures, one `resetSuiteRecords` behind
+  both suite-change doors, stale immutability comments corrected.
+- Local-build deploy + live proof (2026-11-25): tree synced
+  (`--merge-prefer-target`, verify 47/0), frontend + okf-server rebuilt and
+  recreated healthy. As genie-admin, in-container: create → 201 v1;
+  rename+membership update → 200 v2 with the union re-resolved; DELETE
+  while a test-only back-door suite doc holds the context → **409
+  CONTEXT_IN_USE naming it** ("evaluation context live-proof-renamed is
+  bound to 1 test suite(s): Live proof holder suite. Delete or re-mint
+  those suites first."); unbound DELETE → 200; GET after → 404;
+  unauthenticated DELETE → 401. Minted credentials removed; ROPC reverted
+  (asserted by the minter).

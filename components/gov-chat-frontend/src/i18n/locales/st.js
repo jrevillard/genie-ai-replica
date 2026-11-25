@@ -3349,7 +3349,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'E ntse e lokisa {name} — ho boloka ho rarolla kopano hape le ho eketsa version.',
         updated: 'Tikollo e ntjhafaditswe e rarollotsoe hape.',
-        deleted: 'Tikollo e tlositsoe.'
+        deleted: 'Tikollo e tlositsoe.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

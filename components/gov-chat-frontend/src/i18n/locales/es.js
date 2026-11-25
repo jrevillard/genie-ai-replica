@@ -3359,7 +3359,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'Editando {name} — guardar vuelve a resolver la unión e incrementa la versión.',
         updated: 'El contexto se actualizó y se volvió a resolver.',
-        deleted: 'El contexto se eliminó.'
+        deleted: 'El contexto se eliminó.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

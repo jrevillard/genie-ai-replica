@@ -7,11 +7,13 @@
  * the Lab's suites and benchmarks are then minted FOR it and measured over
  * it.
  *
- *   GET  /okf/eval-contexts             — the catalogue
- *   POST /okf/eval-contexts             — create (resolve, freeze, audit)
- *   POST /okf/eval-contexts/:id/refresh — re-resolve (version bump)
- *   GET  /okf/eval-contexts/groups?q=   — the composer's source: the groups
- *   POST /okf/eval-contexts/preview     — the resolution WITHOUT storing it
+ *   GET    /okf/eval-contexts             — the catalogue
+ *   POST   /okf/eval-contexts             — create (resolve, freeze, audit)
+ *   POST   /okf/eval-contexts/:id/refresh — re-resolve (version bump)
+ *   POST   /okf/eval-contexts/:id/update  — rename / change the memberships
+ *   DELETE /okf/eval-contexts/:id         — remove (refused while bound)
+ *   GET    /okf/eval-contexts/groups?q=   — the composer's source: the groups
+ *   POST   /okf/eval-contexts/preview     — the resolution WITHOUT storing it
  *
  * Every call here is SUPERADMIN-gated on the server: a context may name any
  * repository, so it is a deployment-wide fact, not a per-repo one. The
@@ -21,8 +23,8 @@
  * The CATALOGUE is memoised: the Lab renders two pickers and the composer
  * panel, and all three used to fire their own identical read on every
  * dialog open. The cache lives for the panel's lifetime between writes —
- * `invalidateContexts()` is what a create or a refresh calls, because those
- * are the only actions that change the catalogue.
+ * every WRITE (create, refresh, update, delete) invalidates it inside this
+ * service, the single owner of that decision.
  */
 
 import httpService from './httpService';
@@ -52,7 +54,8 @@ const evalContextService = {
     }
   },
 
-  /** A create or a refresh changed the catalogue — drop the memo. */
+  /** A write (create, refresh, update, delete) changed the catalogue — drop
+   *  the memo. Called by the writers themselves; callers never do this. */
   invalidateContexts() {
     catalogueCache = null;
     catalogueInFlight = null;
@@ -66,6 +69,7 @@ const evalContextService = {
    */
   async createContext(payload) {
     const res = await httpService.post('/okf/eval-contexts', payload);
+    evalContextService.invalidateContexts();
     return res && res.data ? res.data : null;
   },
 
@@ -107,9 +111,8 @@ const evalContextService = {
   },
 
   /**
-   * The resolution a create WOULD freeze, WITHOUT writing anything: a
-   * context is immutable and has no delete route, so the composer sees the
-   * union before it commits.
+   * The resolution a create or an update WOULD freeze, WITHOUT writing
+   * anything: the composer sees the union before it commits a name to it.
    */
   async previewContext(payload) {
     const res = await httpService.post('/okf/eval-contexts/preview', payload);

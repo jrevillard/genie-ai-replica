@@ -3332,7 +3332,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'Inahariri {name} — kuhifadhi kunatatua muunganisho upya na kuongeza toleo.',
         updated: 'Muktadha imesasishwa na kutatuliwa upya.',
-        deleted: 'Muktadha imefutwa.'
+        deleted: 'Muktadha imefutwa.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

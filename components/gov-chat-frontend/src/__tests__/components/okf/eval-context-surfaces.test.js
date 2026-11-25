@@ -243,6 +243,36 @@ describe('#2061 E-5: the composer composes memberships and previews before it co
     expect(wrapper.text()).toContain('Head suite A');
     expect(wrapper.text()).toContain('Benchmark B');
   });
+
+  // The review round's honesty finding: a stored membership the groups
+  // catalogue cannot match (realm with >100 groups, a uuid-shaped ref, a
+  // failed groups read) must read "grants unknown" — NOT a counted
+  // "0 grant(s)", which tells the operator a carrying group grants nothing.
+  test('a membership the groups catalogue cannot match reads grants UNKNOWN, never a counted zero', async () => {
+    const wrapper = mount(EvalContextPanel);
+    await new Promise((r) => setTimeout(r, 0));
+    await wrapper.vm.$nextTick();
+
+    await wrapper.vm.onEdit({ ...CONTEXTS[0], principal_refs: ['group-not-in-catalogue'] });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.editingKey).toBe('ec-1');
+    expect(wrapper.vm.memberships[0].grants).toBeNull();
+    expect(wrapper.text()).toContain('grants unknown');
+  });
+
+  test('deleting the row being EDITED leaves the composer, not a stale edit banner', async () => {
+    evalContextService.deleteContext.mockResolvedValue({ deleted: true });
+    const wrapper = mount(EvalContextPanel);
+    await new Promise((r) => setTimeout(r, 0));
+    await wrapper.vm.$nextTick();
+
+    await wrapper.vm.onEdit(CONTEXTS[0]);
+    await wrapper.vm.onDelete(CONTEXTS[0]);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.editingKey).toBeNull();
+    expect(wrapper.vm.name).toBe('');
+    expect(wrapper.vm.memberships).toEqual([]);
+  });
 });
 
 describe('#2061 E-5: the run carries the context id', () => {
@@ -323,18 +353,27 @@ describe('#2061 E-5: the client maps every call to its route', () => {
   });
 
   test('update and delete carry the id — and a write drops the catalogue memo', async () => {
+    httpService.get.mockClear();
+    httpService.get.mockResolvedValue({ data: { items: CONTEXTS } });
+    await realClient.listContexts();
+    expect(httpService.get).toHaveBeenCalledTimes(1);
+
     httpService.post.mockResolvedValue({ data: { _key: 'ec-1', version: 2 } });
     await realClient.updateContext('ec-1', { name: 'renamed', principal_refs: ['g'] });
     expect(httpService.post).toHaveBeenCalledWith('/okf/eval-contexts/ec-1/update', {
       name: 'renamed',
       principal_refs: ['g']
     });
-    // The memo is dropped: the next catalogue read reflects the write.
-    expect(evalContextService.invalidateContexts).toBeTruthy();
+    // The memo is dropped BY THE WRITE: the next catalogue read re-fetches
+    // (a second GET), so the pickers reflect the rename immediately.
+    await realClient.listContexts();
+    expect(httpService.get).toHaveBeenCalledTimes(2);
 
     httpService.delete.mockResolvedValue({ data: { deleted: true } });
     await realClient.deleteContext('ec 1');
     expect(httpService.delete).toHaveBeenCalledWith('/okf/eval-contexts/ec%201');
+    await realClient.listContexts();
+    expect(httpService.get).toHaveBeenCalledTimes(3);
   });
 });
 

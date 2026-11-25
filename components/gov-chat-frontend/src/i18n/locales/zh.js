@@ -3235,7 +3235,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: '正在编辑 {name} — 保存时会重新解析并集并提升版本号。',
         updated: '上下文已更新并重新解析。',
-        deleted: '上下文已删除。'
+        deleted: '上下文已删除。',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: '维度',

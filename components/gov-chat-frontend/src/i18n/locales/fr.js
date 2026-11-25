@@ -3366,7 +3366,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'Modification de {name} — l’enregistrement résout à nouveau l’union et incrémente la version.',
         updated: 'Le contexte a été mis à jour et résolu à nouveau.',
-        deleted: 'Le contexte a été supprimé.'
+        deleted: 'Le contexte a été supprimé.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

@@ -1646,10 +1646,7 @@ export default {
      */
     'suite.suite_key'(nextKey, prevKey) {
       if (prevKey && nextKey !== prevKey) {
-        this.runDoc = null;
-        this.explainDoc = null;
-        this.explainProgress = null;
-        this.error = '';
+        this.resetSuiteRecords();
       }
     },
     /** A pick the dropdown cannot DISPLAY must never travel with the
@@ -2082,11 +2079,26 @@ export default {
       const latestRun = this.runHistory.find((r) => r.status === 'done');
       if (latestRun) this.onLoadRun(latestRun._key, latestRun.suite_key, { silent: true });
     },
+    /** ONE home for "the loaded suite changed — its previous records go":
+     *  the run, its advisor, the explain progress, the error. Called by
+     *  loadSuite's key-change branch AND the suite-key watcher (a
+     *  regenerate can replace this.suite without loadSuite running). */
+    resetSuiteRecords() {
+      this.runDoc = null;
+      this.explainDoc = null;
+      this.explainProgress = null;
+      this.error = '';
+    },
     async loadSuite(suiteKey) {
       // A genuinely different suite invalidates the user's selection (the
       // new suite's own memory should load); a re-load of the SAME suite is
-      // the clobber path the metricsTouched guard exists for.
-      if (this.suite && this.suite.suite_key !== suiteKey) this.metricsTouched = false;
+      // the clobber path the metricsTouched guard exists for. The run
+      // records reset through the SAME one home the suite-key watcher
+      // calls — a new suite-keyed state lands in ONE method, not two.
+      if (this.suite && this.suite.suite_key !== suiteKey) {
+        this.metricsTouched = false;
+        this.resetSuiteRecords();
+      }
       const epoch = ++this.suiteEpoch;
       const res = await this.$store.dispatch('okf/ragasGetSuite', {
         repoId: this.repo && this.repo.repo_id,

@@ -1876,7 +1876,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'Editing {name} — saving re-resolves the union and bumps the version.',
         updated: 'The context was updated and re-resolved.',
-        deleted: 'The context was removed.'
+        deleted: 'The context was removed.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

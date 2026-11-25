@@ -3289,7 +3289,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'I be kontextoo labɛm {name} — a mara a be gulu uwanamaw tarandi kura.',
         updated: 'Kontextoo labɛnna, a tarandi kura.',
-        deleted: 'Kontextoo bɔra.'
+        deleted: 'Kontextoo bɔra.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

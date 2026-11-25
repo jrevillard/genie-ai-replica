@@ -3295,7 +3295,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'กำลังแก้ไข {name} — การบันทึกจะแก้ค่ายูเนียนใหม่และเพิ่มเวอร์ชัน',
         updated: 'บริบทถูกอัปเดตและแก้ค่าใหม่แล้ว',
-        deleted: 'บริบทถูกลบแล้ว'
+        deleted: 'บริบทถูกลบแล้ว',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'มิติ',

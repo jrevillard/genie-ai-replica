@@ -3346,7 +3346,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'Редактирование {name} — при сохранении объединение разрешается заново и версия увеличивается.',
         updated: 'Контекст обновлён и разрешён заново.',
-        deleted: 'Контекст удалён.'
+        deleted: 'Контекст удалён.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Размерность',

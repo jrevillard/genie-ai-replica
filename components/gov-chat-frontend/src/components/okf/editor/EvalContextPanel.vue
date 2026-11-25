@@ -155,11 +155,14 @@
         <li v-for="m in memberships" :key="m.name" class="okf-evalctx__chosen-item">
           <span class="okf-evalctx__chosen-name">{{ m.name }}</span>
           <span class="okf-evalctx__chosen-meta">
+            <!-- grants null = the groups catalogue could not match this
+                 membership (a >100-group realm, a uuid-shaped ref, a failed
+                 groups read): UNKNOWN, never a counted zero that says a
+                 carrying group grants nothing. -->
             {{
-              translate('okf.testingLab.contexts.grants', '{n} grant(s)').replace(
-                '{n}',
-                String((m.grants || []).length)
-              )
+              m.grants === null
+                ? translate('okf.testingLab.contexts.grantsUnknown', 'grants unknown')
+                : translate('okf.testingLab.contexts.grants', '{n} grant(s)', { n: (m.grants || []).length })
             }}
             <template v-if="m.member_count">
               ·
@@ -344,19 +347,47 @@ export default {
       }
     },
 
+    /** The graft every membership entry goes through: the loaded group's
+     *  facts when the catalogue holds it, and — when it cannot (a >100-group
+     *  realm, a uuid-shaped ref, a failed groups read) — a placeholder with
+     *  grants UNKNOWN (null), never a counted zero. */
+    graftMembership(name) {
+      const found = this.groups.find((g) => g.name === name);
+      return found ? { ...found } : { name, grants: null, member_count: 0 };
+    },
+
     onAddMembership(name) {
       const ref = String(name || '').trim();
       this.pickedGroup = '';
       if (!ref) return;
       if (this.memberships.some((m) => m.name === ref)) return;
-      const found = this.groups.find((g) => g.name === ref);
-      this.memberships.push(found ? { ...found } : { name: ref, grants: [], member_count: 0 });
+      this.memberships.push(this.graftMembership(ref));
       this.preview = null;
     },
 
     onRemoveMembership(name) {
       this.memberships = this.memberships.filter((m) => m.name !== name);
       this.preview = null;
+    },
+
+    /** The write cycle every mutation shares: busy, the honest error, the
+     *  catalogue reload (the service's own write already dropped its memo),
+     *  the note. `work` returns what the note may need. */
+    async runWrite(work, noteKey, noteDefault) {
+      this.busy = true;
+      this.error = '';
+      this.note = '';
+      try {
+        const out = await work();
+        await this.loadContexts();
+        this.note = this.translate(noteKey, noteDefault);
+        return out;
+      } catch (err) {
+        this.error = this.errorText(err);
+        return null;
+      } finally {
+        this.busy = false;
+      }
     },
 
     /** The resolution the create WOULD freeze — nothing is written. */
@@ -379,44 +410,32 @@ export default {
     /** CREATE: the server resolves, freezes and audits it. Only the
      *  CATALOGUE changed — the groups list is untouched, so it is not
      *  re-fetched (its read is the expensive one). */
-    async onCreate() {
-      this.busy = true;
-      this.error = '';
-      this.note = '';
-      try {
-        const created = await evalContextService.createContext({
-          name: this.name.trim(),
-          principal_refs: this.memberships.map((m) => m.name)
-        });
-        this.name = '';
-        this.memberships = [];
-        this.preview = null;
-        evalContextService.invalidateContexts();
-        await this.loadContexts();
-        this.note = this.translate('okf.testingLab.contexts.created', 'The context was created and frozen.');
+    onCreate() {
+      return this.runWrite(
+        async () => {
+          const created = await evalContextService.createContext({
+            name: this.name.trim(),
+            principal_refs: this.memberships.map((m) => m.name)
+          });
+          this.name = '';
+          this.memberships = [];
+          this.preview = null;
+          return created;
+        },
+        'okf.testingLab.contexts.created',
+        'The context was created and frozen.'
+      ).then((created) => {
         if (created && created.name) this.note += ` ${created.name}`;
-      } catch (err) {
-        this.error = this.errorText(err);
-      } finally {
-        this.busy = false;
-      }
+      });
     },
 
     /** REFRESH: re-resolve the same memberships; the version bumps. */
-    async onRefresh(c) {
-      this.busy = true;
-      this.error = '';
-      this.note = '';
-      try {
-        await evalContextService.refreshContext(c._key);
-        evalContextService.invalidateContexts();
-        await this.loadContexts();
-        this.note = this.translate('okf.testingLab.contexts.refreshed', 'The context was re-resolved.');
-      } catch (err) {
-        this.error = this.errorText(err);
-      } finally {
-        this.busy = false;
-      }
+    onRefresh(c) {
+      return this.runWrite(
+        () => evalContextService.refreshContext(c._key),
+        'okf.testingLab.contexts.refreshed',
+        'The context was re-resolved.'
+      );
     },
 
     /**
@@ -428,10 +447,7 @@ export default {
     onEdit(c) {
       this.editingKey = c._key;
       this.name = c.name;
-      this.memberships = (c.principal_refs || []).map((name) => {
-        const found = this.groups.find((g) => g.name === name);
-        return found ? { ...found } : { name, grants: [], member_count: 0 };
-      });
+      this.memberships = (c.principal_refs || []).map((name) => this.graftMembership(name));
       this.preview = null;
       this.error = '';
       this.note = '';
@@ -448,28 +464,21 @@ export default {
      * SAVE the edit: the name and the memberships go as ONE update — the
      * server re-resolves a changed membership set and bumps the version.
      */
-    async onSaveEdit() {
-      if (!this.editingKey) return;
-      this.busy = true;
-      this.error = '';
-      this.note = '';
-      try {
-        await evalContextService.updateContext(this.editingKey, {
-          name: this.name.trim(),
-          principal_refs: this.memberships.map((m) => m.name)
-        });
-        this.editingKey = null;
-        this.name = '';
-        this.memberships = [];
-        this.preview = null;
-        evalContextService.invalidateContexts();
-        await this.loadContexts();
-        this.note = this.translate('okf.testingLab.contexts.updated', 'The context was updated and re-resolved.');
-      } catch (err) {
-        this.error = this.errorText(err);
-      } finally {
-        this.busy = false;
-      }
+    onSaveEdit() {
+      if (!this.editingKey) return Promise.resolve();
+      const key = this.editingKey;
+      return this.runWrite(
+        async () => {
+          const updated = await evalContextService.updateContext(key, {
+            name: this.name.trim(),
+            principal_refs: this.memberships.map((m) => m.name)
+          });
+          this.onCancelEdit();
+          return updated;
+        },
+        'okf.testingLab.contexts.updated',
+        'The context was updated and re-resolved.'
+      );
     },
 
     /**
@@ -477,20 +486,18 @@ export default {
      * test suite is minted for the context — that refusal renders here via
      * errorText, so the operator learns WHICH suites hold it in place.
      */
-    async onDelete(c) {
-      this.busy = true;
-      this.error = '';
-      this.note = '';
-      try {
-        await evalContextService.deleteContext(c._key);
-        evalContextService.invalidateContexts();
-        await this.loadContexts();
-        this.note = this.translate('okf.testingLab.contexts.deleted', 'The context was removed.');
-      } catch (err) {
-        this.error = this.errorText(err);
-      } finally {
-        this.busy = false;
-      }
+    onDelete(c) {
+      return this.runWrite(
+        async () => {
+          const out = await evalContextService.deleteContext(c._key);
+          // Deleting the row being EDITED leaves the composer — a stale edit
+          // banner over a removed row would 404 on its next Save.
+          if (c._key === this.editingKey) this.onCancelEdit();
+          return out;
+        },
+        'okf.testingLab.contexts.deleted',
+        'The context was removed.'
+      );
     }
   }
 };

@@ -3335,7 +3335,8 @@ export default {
         cancelEdit: 'Cancel',
         editing: 'Menyunting {name} — menyimpan me-resolve ulang gabungan dan menaikkan versi.',
         updated: 'Konteks diperbarui dan di-resolve ulang.',
-        deleted: 'Konteks dihapus.'
+        deleted: 'Konteks dihapus.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',

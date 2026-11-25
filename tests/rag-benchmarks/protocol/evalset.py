@@ -39,7 +39,11 @@ Composition (ASSESSMENT sets): every class must be present and countable —
 answerable, unanswerable, citation_check, representative_language (including
 at least one NON-LATIN case), plus the access axis (public AND restricted) and
 the failure and cancellation classes. A missing class fails validation NAMING
-the class and its required minimum; a complete set passes.
+the class and its required minimum; a complete set passes. The post-signature
+classes ``multi_hop`` and ``ambiguous`` (issue #2146) are known to the floor
+at minimum 0 — a set opts in through ``_meta.minimums`` (raising them), never
+lowering a required class; the default of 0 keeps every pre-extension set
+(including the signed reference set) valid.
 
 Evaluation surfaces — which surface measures which case: the gold
 (``expected_chunks``) is consumed by ONE surface only, the chunk-level
@@ -63,12 +67,18 @@ from pathlib import Path
 
 PROVENANCES = ("assessment", "tuning")
 
-# The composition classes an ASSESSMENT set must carry.
+# The composition classes an ASSESSMENT set must carry. ``multi_hop`` and
+# ``ambiguous`` are the post-signature classes (issue #2146 blocker 3): the
+# PRD §4.1 note positions the agentic benefit on multi-hop and ambiguous
+# queries, and the vocabulary carries them so a set can require and the
+# gains layer can report them.
 COMPOSITION_CLASSES = (
     "answerable",
     "unanswerable",
     "citation_check",
     "representative_language",
+    "multi_hop",
+    "ambiguous",
     "failure",
     "cancellation",
 )
@@ -78,13 +88,26 @@ ACCESS_SCENARIOS = ("public", "restricted")
 
 # The per-class minimums for an ASSESSMENT set (a set missing a class fails
 # naming the class and this minimum). Overridable per set via ``_meta.minimums``
-# (an operator may raise them, never lower them below 1 — presence is the
-# invariant).
+# (an operator may raise them and never lower a REQUIRED class below 1 —
+# presence is the invariant; the 0-default classes below may state 0
+# explicitly).
+#
+# ``multi_hop`` and ``ambiguous`` default to 0 ON PURPOSE: they joined the
+# vocabulary after the FINAL A reference set was signed (its digest
+# ``cb371f1a…`` is bound to the signed thresholds), and every driver
+# re-validates its set on the data path — a floor of 1 would retroactively
+# refuse every pre-extension set, invalidating the signed chain the harness
+# just unblocked. Requiring them is a set's own decision via
+# ``_meta.minimums`` (the #2146 candidate set raises them); re-signing a
+# digest that carries the classes is the operator's later step (#2146
+# blocker 3).
 DEFAULT_COMPOSITION_MINIMUMS = {
     "answerable": 2,
     "unanswerable": 1,
     "citation_check": 1,
     "representative_language": 2,
+    "multi_hop": 0,
+    "ambiguous": 0,
     "failure": 1,
     "cancellation": 1,
 }
@@ -122,8 +145,19 @@ DEFAULT_SECURITY_MINIMUMS = {scenario: 1 for scenario in SECURITY_SCENARIOS}
 # refuses it — see :func:`evaluation_surface` and :func:`coverage_census`).
 SURFACES = ("retrieval", "outcome", "security", "restricted_access", "unknown")
 
-# The classes measured on the chunk-level retrieval surface.
-RETRIEVAL_CLASSES = ("answerable", "citation_check", "representative_language")
+# The classes measured on the chunk-level retrieval surface — the gold
+# consumers. ``multi_hop`` (a query whose answer joins facts across
+# documents; the gold names a passage from at least two of them) and
+# ``ambiguous`` (a query with more than one valid interpretation in the
+# corpus; the gold spans the interpretations' passages) are gold-carrying
+# classes like the rest of this surface.
+RETRIEVAL_CLASSES = (
+    "answerable",
+    "citation_check",
+    "representative_language",
+    "multi_hop",
+    "ambiguous",
+)
 
 # The classes judged from the recorded OUTCOME (abstention, typed failure,
 # cancellation) — never from passages. DERIVED from the composition classes,
@@ -349,8 +383,8 @@ def evaluation_surface(case: dict) -> str:
     * ``retrieval`` — a retrieval-class case with public access and no
       security scenario: the chunk-level surface, the only one that consumes
       ``expected_chunks``.
-    * ``unknown`` — a malformed case (its class is not one of the six); the
-      validator already names that offense.
+    * ``unknown`` — a malformed case (its class is not one of the
+      composition classes); the validator already names that offense.
     """
     if case.get("security_scenario"):
         return "security"
@@ -478,18 +512,22 @@ def _validate_composition(
     non_latin_minimum = DEFAULT_NON_LATIN_MINIMUM
     for key, value in (minimums_override or {}).items():
         try:
-            numeric = max(1, int(value))
+            numeric = int(value)
         except (TypeError, ValueError):
             errors.append(f"_meta.minimums: {key!r} must be a number (got {value!r})")
             continue
         if key in class_minimums:
-            class_minimums[key] = numeric
+            # "Never lower below 1" guards a REQUIRED class's presence; a
+            # post-signature class (default 0) may state its own optional
+            # floor explicitly — {multi_hop: 0} is a valid way to say
+            # "present when carried, never required here".
+            class_minimums[key] = max(1 if class_minimums[key] >= 1 else 0, numeric)
         elif key in access_minimums:
-            access_minimums[key] = numeric
+            access_minimums[key] = max(1, numeric)
         elif key in security_minimums:
-            security_minimums[key] = numeric
+            security_minimums[key] = max(1, numeric)
         elif key == "non_latin":
-            non_latin_minimum = numeric
+            non_latin_minimum = max(1, numeric)
         else:
             errors.append(f"_meta.minimums: unknown composition key {key!r}")
 

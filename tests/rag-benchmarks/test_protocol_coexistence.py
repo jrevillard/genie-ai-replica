@@ -109,12 +109,16 @@ def _limits(*, regression=True, **overrides):
 
 
 def _report(*, control=None, loaded=None, agent_load=None, limits=_limits(), lineage=True, **kwargs):
+    # ``lineage`` is the boolean switch (the synthetic CORPUS/SET_SHA pair,
+    # or None) or a dict verbatim (a test binding a REAL artifact's lineage).
+    if isinstance(lineage, bool):
+        lineage = {"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA} if lineage else None
     return build_coexistence_report(
         control_measurements=control if control is not None else _control(),
         loaded_measurements=loaded if loaded is not None else _loaded(),
         agent_load=agent_load if agent_load is not None else _agent_load(),
         limits=limits,
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA} if lineage else None,
+        lineage=lineage,
         created_utc=CREATED,
         **kwargs,
     )
@@ -558,3 +562,141 @@ def test_coexistence_keeps_the_measurement_reason_for_a_known_unmeasured_metric(
     by_metric = {record["metric"]: record for record in report["limits"]["limits"]}
     assert by_metric["latency_median_ms"]["outcome"] == "not_measurable"
     assert "the measurement carries no" in by_metric["latency_median_ms"]["reason"]
+
+
+# ---------------------------------------------------------------------------
+# The draft legacy-limits artifact (issue #2146) — proposal, never an agreed
+# limit
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DRAFT_LIMITS_FILE = (
+    REPO_ROOT
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "coexistence-limits-draft-2026-11-25"
+    / "legacy-limits.draft.json"
+)
+FINAL_A_MANIFEST = (
+    REPO_ROOT
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "e01-final-reference-2026-11-24"
+    / "reference.manifest.json"
+)
+
+
+def _draft_limits(force_status="draft") -> dict:
+    """The committed draft artifact, with its status FORCED to the requested
+    value by default: the tests must not pin the committed file's own status
+    field — the documented agreement act flips it to "agreed" in place, and
+    a flip commit must keep the suite green. ``force_status=None`` reads the
+    artifact verbatim."""
+    draft = json.loads(DRAFT_LIMITS_FILE.read_text(encoding="utf-8"))
+    if force_status is not None:
+        draft["status"] = force_status
+    return draft
+
+
+def _draft_lineage() -> dict:
+    """The lineage the draft binds: the FINAL A reference's corpus
+    fingerprint and assessment-set digest, read off the draft itself —
+    verbatim, status-independent (the committed file may be draft or
+    agreed; the lineage fields never move)."""
+    draft = _draft_limits(force_status=None)
+    return {
+        "corpus_fingerprint": draft["corpus_fingerprint"],
+        "assessment_set_sha256": draft["assessment_set_sha256"],
+    }
+
+
+def _held_loaded() -> dict:
+    """The loaded phase inside the draft's tolerances — the same mix, a few
+    milliseconds slower, no new failures."""
+    return {
+        case_id: {"http_status": 200, "wall_ms": measurement["wall_ms"] + 10.0}
+        for case_id, measurement in _control().items()
+    }
+
+
+def _all_answered_load() -> dict:
+    load = _agent_load()
+    load["outcomes"] = {"answered": 4}
+    load["n_admission_refusals"] = 0
+    return load
+
+
+def test_coexistence_refuses_a_draft_limits_artifact():
+    """A draft is the derivation's proposal for the operator's agreement,
+    never an agreed limit: passing it as the criterion's --limits is refused
+    before the report is built — the harness applies limits, it never lets a
+    proposal open a verdict by accident."""
+    with pytest.raises(CoexistenceRefusal) as failed:
+        _report(loaded=_held_loaded(), agent_load=_all_answered_load(), limits=_draft_limits())
+    assert failed.value.reason == "unagreed_limits"
+    assert "'draft'" in str(failed.value)
+
+
+def test_coexistence_refuses_any_non_agreed_status_not_just_draft():
+    """The whitelist, not a draft blacklist: a typo'd agreement flip
+    ('agree'), or any other non-agreed word ('pending', 'final', 'signed')
+    is refused too — an un-agreed artifact must never open a verdict,
+    whatever its status string claims. Only a case variant of 'agreed'
+    itself applies (the flip's intent is unambiguous)."""
+    for status in ("agree", "pending", "final", "signed"):
+        limits = _draft_limits()
+        limits["status"] = status
+        with pytest.raises(CoexistenceRefusal) as failed:
+            _report(loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits)
+        assert failed.value.reason == "unagreed_limits", status
+
+
+def test_coexistence_accepts_the_status_flip_in_any_case():
+    """The agreement act is the flip: 'agreed' in any casing applies (the
+    operator's intent is unambiguous), and the status-less shapes — the
+    pre-existing artifact spelling (no key) and a JSON null — apply
+    unchanged: both read as 'no status was recorded', not as an un-agreed
+    one."""
+    for name, status in (("agreed", "agreed"), ("AGREED", "AGREED"), ("Agreed", "Agreed")):
+        limits = _draft_limits()
+        limits["status"] = status
+        report = _report(
+            loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits, lineage=_draft_lineage()
+        )
+        assert report["verdict"]["verdict"] == "pass", name
+    for name, absent in (("no-status-key", "pop"), ("json-null-status", "null")):
+        limits = _draft_limits()
+        if absent == "pop":
+            limits.pop("status")
+        else:
+            limits["status"] = None
+        report = _report(
+            loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits, lineage=_draft_lineage()
+        )
+        assert report["verdict"]["verdict"] == "pass", name
+
+
+def test_coexistence_applies_the_limits_once_agreed():
+    """The agreement act is the status flip: the same artifact with the draft
+    status agreed applies cleanly — every limit and every regression tolerance
+    interpretable, and a loaded phase inside the derived bounds PASSes (the
+    verdict stays open for the operator's decision, nothing defaults)."""
+    limits = _draft_limits()
+    limits["status"] = "agreed"
+    report = _report(
+        loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits, lineage=_draft_lineage()
+    )
+    assert report["limits"]["present"] is True
+    assert all(record["outcome"] == "pass" for record in report["limits"]["limits"])
+    assert all(metric["outcome"] == "pass" for metric in report["regression_verdict"]["metrics"])
+    assert report["verdict"]["verdict"] == "pass"
+
+
+def test_draft_limits_lineage_matches_the_final_a_reference():
+    """The draft binds the lineage it was derived from — the FINAL A
+    reference (issue #2162): the corpus fingerprint and the assessment-set
+    digest the signed thresholds carry."""
+    manifest = json.loads(FINAL_A_MANIFEST.read_text(encoding="utf-8"))
+    draft = _draft_limits(force_status=None)
+    assert draft["corpus_fingerprint"] == manifest["corpus"]["fingerprint"]
+    assert draft["assessment_set_sha256"] == manifest["sets"]["assessment"]["sha256"]

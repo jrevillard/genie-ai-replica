@@ -1,0 +1,30 @@
+{
+  "artifact": "coexistence-legacy-limits",
+  "version": "1.0.0",
+  "status": "draft",
+  "criterion": "legacy non-regression under concurrent agentic load (NFR-3)",
+  "derived_utc": "2026-11-25",
+  "derived_by": "issue #2146 dispatch (story 4.5 residual)",
+  "method": "_bmad-output/implementation-artifacts/coexistence-limits-draft-2026-11-25/method.md",
+  "basis": [
+    "_bmad-output/implementation-artifacts/e01-final-reference-2026-11-24/ (issue #2162, MR !1072) — the FINAL A reference, the legacy path's own measurement",
+    "_bmad-output/implementation-artifacts/e01-run-2026-11-23-forge/ (issue #2118, MR !1056) — the first A reference, the cross-check",
+    "tests/rag-benchmarks/protocol/thresholds.yaml — the signed M-4 ceiling (wall_ms <= 15000), the line both distributional latency limits inherit"
+  ],
+  "corpus_fingerprint": "f82298c0852a39c800c67d292e02c5d931525719d9d025ff7673dd2478ea895f",
+  "assessment_set_sha256": "cb371f1a67d7d2e6d2ee22200bd45d546d8595745984f638b157568bf1461812",
+  "limits": {
+    "latency_median_ms": {"operator": "<=", "threshold": 12000},
+    "latency_p95_ms": {"operator": "<=", "threshold": 15000},
+    "latency_max_ms": {"operator": "<=", "threshold": 15000},
+    "error_rate": {"operator": "<=", "threshold": 0.05},
+    "availability": {"operator": ">=", "threshold": 0.95}
+  },
+  "regression": {
+    "latency_median_ms": {"max_delta": 3000},
+    "latency_p95_ms": {"max_delta": 3000},
+    "latency_max_ms": {"max_delta": 4500},
+    "error_rate": {"max_delta": 0.05},
+    "availability": {"max_delta": 0.05}
+  }
+}

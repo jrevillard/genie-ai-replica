@@ -17,7 +17,9 @@ CONTROLLED COMPARISON, not a sentence in a report:
 The honesty rules are the point:
 
 * a limit nobody agreed makes the verdict BLOCKED — never a pass, never a
-  default limit;
+  default limit; a limits artifact carrying a status that is not ``agreed``
+  is refused outright — a draft is the derivation's proposal for the
+  operator's agreement, never an agreed limit;
 * a limit whose metric the measurement does not carry is NOT MEASURABLE — it
   blocks the verdict, it never passes it;
 * a regression nobody agreed a tolerance for is NOT MEASURABLE — the
@@ -623,6 +625,24 @@ def build_coexistence_report(
         )
 
     if limits is not None:
+        # The status whitelist: the vocabulary is draft → agreed (the
+        # agreement act is the flip), so a status that is PRESENT and not
+        # agreed — a draft, a typo'd flip ("agree"), any pending-ish word —
+        # is refused: an un-agreed artifact must never open a verdict. A
+        # case variant of "agreed" itself ("Agreed", "AGREED") applies: the
+        # flip's intent is unambiguous. An artifact carrying NO status (no
+        # key or a JSON null) is the pre-existing shape (a bare operator
+        # artifact) and applies unchanged.
+        status = limits.get("status")
+        if status is not None and str(status).lower() != "agreed":
+            raise CoexistenceRefusal(
+                "unagreed_limits",
+                f"the legacy limits artifact carries status {str(status)!r} — an artifact that"
+                " is not agreed is never applied: the criterion applies the operator's agreed"
+                " limits only (record the agreement by setting the status to 'agreed', then"
+                " re-run)",
+            )
+
         for key in ("corpus_fingerprint", "assessment_set_sha256"):
             declared = limits.get(key)
             if declared is None:

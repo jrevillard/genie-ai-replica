@@ -491,6 +491,9 @@ module.exports = (queryService) => {
       const doHandleStreamDone = async (skipRoutedGraphs = false) => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
+        // The options object rides only when the skip is set (the arity
+        // rule the legacy terminal's call and its mocks pin).
+        const skipOpt = skipRoutedGraphs ? { skipRoutedGraphs: true } : {};
         try {
           if (streamRelay) {
             // Degraded or not: flush() orders every queued unit BEFORE the
@@ -502,7 +505,7 @@ module.exports = (queryService) => {
               translator,
               skipPostStreamTranslation: true,
               alreadyFailedTranslation,
-              ...(skipRoutedGraphs ? { skipRoutedGraphs: true } : {})
+              ...skipOpt
             });
           } else {
             // The post-stream translation runs here, and the client may be
@@ -510,7 +513,7 @@ module.exports = (queryService) => {
             await handleStreamDone(queryId, fullResponseText, streamStartTime, res, capturedMetadata, {
               targetLanguage,
               translator,
-              ...(skipRoutedGraphs ? { skipRoutedGraphs: true } : {})
+              ...skipOpt
             });
           }
         } catch (error) {

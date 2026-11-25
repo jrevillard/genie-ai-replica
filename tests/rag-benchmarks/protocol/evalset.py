@@ -88,8 +88,9 @@ ACCESS_SCENARIOS = ("public", "restricted")
 
 # The per-class minimums for an ASSESSMENT set (a set missing a class fails
 # naming the class and this minimum). Overridable per set via ``_meta.minimums``
-# (an operator may raise them, never lower them below 1 — presence is the
-# invariant).
+# (an operator may raise them and never lower a REQUIRED class below 1 —
+# presence is the invariant; the 0-default classes below may state 0
+# explicitly).
 #
 # ``multi_hop`` and ``ambiguous`` default to 0 ON PURPOSE: they joined the
 # vocabulary after the FINAL A reference set was signed (its digest

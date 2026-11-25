@@ -160,22 +160,23 @@ def test_the_committed_set_is_the_build_script_s_output():
     """The build script is the artifact's only writer, checked: running it
     against a temp path reproduces the committed bytes exactly — a hand edit
     to the committed JSON drifts from the declared derivation and fails
-    here."""
+    here. The rebuild lands in a temp dir, never the repo tree."""
     import subprocess
     import sys
+    import tempfile
 
-    rebuilt = CANDIDATE_DIR / (CANDIDATE_SET.name + ".rebuilt")
-    try:
-        subprocess.run(
+    with tempfile.TemporaryDirectory() as tmp:
+        rebuilt = Path(tmp) / CANDIDATE_SET.name
+        result = subprocess.run(
             [sys.executable, str(CANDIDATE_DIR / "build-candidate-2146.py"), str(rebuilt)],
-            check=True,
             capture_output=True,
             text=True,
             timeout=60,
+        )
+        assert result.returncode == 0, (
+            f"the build script failed against the temp path:\n{result.stderr}"
         )
         assert rebuilt.read_bytes() == CANDIDATE_SET.read_bytes(), (
             "the committed assessment-set.json is not the build script's output —"
             " the artifact and its declared derivation have drifted"
         )
-    finally:
-        rebuilt.unlink(missing_ok=True)

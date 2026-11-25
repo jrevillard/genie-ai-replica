@@ -641,14 +641,13 @@ def test_coexistence_refuses_any_non_agreed_status_not_just_draft():
 
 def test_coexistence_accepts_the_status_flip_in_any_case():
     """The agreement act is the flip: 'agreed' in any casing applies (the
-    operator's intent is unambiguous), and the status-less shape — the
-    pre-existing artifact spelling — applies unchanged."""
-    for status in ("agreed", "AGREED", "Agreed", None):
+    operator's intent is unambiguous), and the status-less shapes — the
+    pre-existing artifact spelling (no key) and a JSON null — apply
+    unchanged: both read as 'no status was recorded', not as an un-agreed
+    one."""
+    for name, status in (("agreed", "agreed"), ("AGREED", "AGREED"), ("Agreed", "Agreed")):
         limits = _draft_limits()
-        if status is None:
-            limits.pop("status")
-        else:
-            limits["status"] = status
+        limits["status"] = status
         report = build_coexistence_report(
             control_measurements=_control(),
             loaded_measurements=_held_loaded(),
@@ -660,7 +659,25 @@ def test_coexistence_accepts_the_status_flip_in_any_case():
             },
             created_utc=CREATED,
         )
-        assert report["verdict"]["verdict"] == "pass", status
+        assert report["verdict"]["verdict"] == "pass", name
+    for name, absent in (("no-status-key", "pop"), ("json-null-status", "null")):
+        limits = _draft_limits()
+        if absent == "pop":
+            limits.pop("status")
+        else:
+            limits["status"] = None
+        report = build_coexistence_report(
+            control_measurements=_control(),
+            loaded_measurements=_held_loaded(),
+            agent_load=_all_answered_load(),
+            limits=limits,
+            lineage={
+                "corpus_fingerprint": limits["corpus_fingerprint"],
+                "assessment_set_sha256": limits["assessment_set_sha256"],
+            },
+            created_utc=CREATED,
+        )
+        assert report["verdict"]["verdict"] == "pass", name
 
 
 def test_coexistence_applies_the_limits_once_agreed():

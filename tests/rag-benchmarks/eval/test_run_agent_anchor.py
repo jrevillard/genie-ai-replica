@@ -334,7 +334,10 @@ def test_a_404_is_a_wait_not_a_failure(monkeypatch):
     assert (
         report["per_query"][0]["trace_error"] == "the venue has no trace with that id"
     )
-    assert len(calls) >= 1
+    # The WAIT continued: a soft answer must not end the poll after one
+    # fetch — the trace may still land inside the window. One fetch would
+    # mean the soft reason aborted the wait (the would-be green row red).
+    assert len(calls) >= 2
 
 
 def test_a_transient_5xx_is_a_wait_not_a_failure(monkeypatch):
@@ -348,7 +351,10 @@ def test_a_transient_5xx_is_a_wait_not_a_failure(monkeypatch):
     )
 
     assert "the venue is not answering" in report["per_query"][0]["trace_error"]
-    assert len(calls) >= 1
+    # The WAIT continued: a soft answer must not end the poll after one
+    # fetch — the trace may still land inside the window. One fetch would
+    # mean the soft reason aborted the wait (the would-be green row red).
+    assert len(calls) >= 2
 
 
 # --- the exit codes ------------------------------------------------------------

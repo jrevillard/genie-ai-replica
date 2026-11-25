@@ -205,8 +205,14 @@ def _captured_rows():
 
 def _capture_stamp(set_sha=SET_SHA, corpus=CORPUS):
     """The stamp `capture-a` writes into its rows file: the assessment-set
-    digest and the corpus fingerprint the capture ran under."""
-    return {"assessment_set_sha256": set_sha, "corpus_fingerprint": corpus}
+    digest and the corpus fingerprint the capture ran under, plus the
+    protocol package's own code identity (the reuse identity a protocol
+    change moves)."""
+    return {
+        "assessment_set_sha256": set_sha,
+        "corpus_fingerprint": corpus,
+        "protocol_code_sha256": drivers.current_protocol_code_sha(),
+    }
 
 
 def _b_rows():
@@ -1034,6 +1040,26 @@ def test_e01_refuses_a_lineage_mismatch_naming_the_field():
     assert "assessment set digest" in str(failed.value)
 
 
+def test_e01_refuses_a_capture_stamped_under_another_protocol_identity():
+    """The capture stamp carries the protocol package's own code identity:
+    a capture made before a protocol change is not current evidence for the
+    join — the drivers, the set validator and the verdict layer are the
+    behaviour its rows speak for. A stamp that predates the field is
+    tolerated (recorded absent, never reconstructed)."""
+    reference, gated = _manifests()
+    stale = dict(_capture_stamp(), protocol_code_sha256="00" * 32)
+    with pytest.raises(E01Refusal) as failed:
+        _build(reference=reference, gated=gated, capture_stamp=stale)
+    assert failed.value.reason == "protocol_code_mismatch"
+    assert "protocol" in str(failed.value)
+
+    pre_field = {
+        k: v for k, v in _capture_stamp().items() if k != "protocol_code_sha256"
+    }
+    report = _build(reference=reference, gated=gated, capture_stamp=pre_field)
+    assert report["digest"]
+
+
 def test_e01_refuses_a_config_c_manifest_on_the_b_leg():
     reference, _ = _manifests()
     config_c = build_manifest(
@@ -1373,6 +1399,12 @@ def test_capture_a_stamps_the_set_digest_and_the_corpus(tmp_path):
     # the digest must be sensitive to WHICH cases are on the retrieval surface.
     projection = result["capture"]["anchor_projection_sha256"]
     assert re.fullmatch(r"[0-9a-f]{64}", projection)
+    # The stamp also carries the PROTOCOL's own code identity — the drivers,
+    # the set validator and the verdict layer are behaviour the capture
+    # speaks for, and the reuse check compares the recorded digest against
+    # the live package (a capture made before a protocol change is not
+    # current evidence).
+    assert result["capture"]["protocol_code_sha256"] == drivers.current_protocol_code_sha()
     entries = json.loads(Path(set_path).read_text(encoding="utf-8"))["entries"]
     for case in entries:
         if case["id"] == "_cite":

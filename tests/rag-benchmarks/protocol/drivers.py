@@ -76,6 +76,7 @@ from .manifest import (
     sha256_json,
 )
 from .redaction import redact_deep
+from .reuse import current_protocol_code_sha
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -606,6 +607,12 @@ def run_config_a_capture(
         # The identity of the ANCHOR's input — which of the set's cases the
         # chunk-level surface scores. A change to the surface model moves it.
         "anchor_projection_sha256": anchor_projection_sha256(anchor_projection(cases)),
+        # The PROTOCOL's own code identity: the reuse check compares the
+        # recorded digest against the live package, so a capture made before
+        # a protocol change is not current evidence (the drivers, the set
+        # validator and the verdict layer are behaviour the capture speaks
+        # for).
+        "protocol_code_sha256": current_protocol_code_sha(),
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set

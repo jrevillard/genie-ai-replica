@@ -16,6 +16,7 @@ from protocol.run_protocol import cmd_check_reuse
 
 HARNESS_SHA = "1b" * 32
 GOLD_SHA = "cd" * 32
+PROTO_SHA = "ef" * 32
 
 
 def _artifact(**overrides):
@@ -23,6 +24,7 @@ def _artifact(**overrides):
         "artifact": "rag-baseline",
         "version": "1.0.0",
         "harness_sha": HARNESS_SHA,
+        "protocol_code_sha256": PROTO_SHA,
         "stack": {"name": "release-el-salvador", "services": {}},
         "runs": {"gold_dataset": "gold_dataset.json", "gold_sha256": GOLD_SHA},
     }
@@ -31,7 +33,7 @@ def _artifact(**overrides):
 
 
 def _check(artifact, **kw):
-    args = dict(harness_sha=HARNESS_SHA, gold_sha256=GOLD_SHA)
+    args = dict(harness_sha=HARNESS_SHA, gold_sha256=GOLD_SHA, protocol_code_sha256=PROTO_SHA)
     args.update(kw)
     return reuse.check_capture_artifact(artifact, **args)
 
@@ -70,6 +72,70 @@ def test_missing_harness_identity_is_a_mismatch():
     assert report["mismatches"][0]["field"] == "harness_sha"
 
 
+def test_changed_protocol_code_sha_is_named():
+    """The protocol package's own code identity is compared like the harness
+    identity: an artifact captured before a protocol change is not current
+    evidence — the drivers, the set validator and the verdict layer are the
+    behaviour the artifact claims to speak for."""
+    report = _check(_artifact(protocol_code_sha256="00" * 32))
+    assert report["suitable"] is False
+    (mismatch,) = report["mismatches"]
+    assert mismatch["field"] == "protocol_code_sha256"
+    assert mismatch["artifact_value"] == "00" * 32
+    assert mismatch["current_value"] == PROTO_SHA
+
+
+def test_missing_protocol_identity_is_a_mismatch():
+    """An artifact that does not record its protocol identity cannot prove
+    suitability when the check is ARMED — the caller demanded a protocol
+    identity the artifact cannot name."""
+    artifact = _artifact()
+    del artifact["protocol_code_sha256"]
+    report = _check(artifact)
+    assert report["suitable"] is False
+    assert report["mismatches"][0]["field"] == "protocol_code_sha256"
+
+
+def test_protocol_identity_of_a_recording_artifact_is_compared_live():
+    """An artifact that records the protocol identity is compared even when
+    the caller passes no expected value — the recorded digest goes against
+    the live package, so a protocol change after the capture refuses the
+    reuse."""
+    report = reuse.check_capture_artifact(_artifact(), harness_sha=HARNESS_SHA, gold_sha256=GOLD_SHA)
+    assert report["suitable"] is False
+    (mismatch,) = report["mismatches"]
+    assert mismatch["field"] == "protocol_code_sha256"
+    assert mismatch["artifact_value"] == PROTO_SHA
+
+
+def test_protocol_identity_of_a_pre_field_artifact_is_not_refused_unarmed():
+    """An artifact that predates the field (the node-side rag-baseline
+    artifacts cannot record it — the eval node rsyncs eval/ only) is not
+    refused by an unarmed check: no protocol identity was ever claimed for
+    it, and the node-side capture machinery cannot record one."""
+    artifact = _artifact()
+    del artifact["protocol_code_sha256"]
+    report = reuse.check_capture_artifact(artifact, harness_sha=HARNESS_SHA, gold_sha256=GOLD_SHA)
+    assert report["suitable"] is True
+    assert report["mismatches"] == []
+
+
+def test_current_protocol_code_sha_covers_the_protocol_package():
+    """The live protocol identity is a digest over the protocol package's own
+    files: adding a module to the package moves it (a change to the
+    protocol's behaviour is visible to the reuse check)."""
+    before = reuse.current_protocol_code_sha()
+    probe = Path(reuse.__file__).resolve().parent / "_reuse_probe_tmp.py"
+    try:
+        probe.write_text("# the package's identity moves with its files\n", encoding="utf-8")
+        after = reuse.current_protocol_code_sha()
+    finally:
+        probe.unlink(missing_ok=True)
+    assert before != after
+    restored = reuse.current_protocol_code_sha()
+    assert restored == before
+
+
 def test_stack_mismatch_is_named_when_expected_stack_given():
     report = _check(_artifact(), expected_stack="other-stack")
     (mismatch,) = report["mismatches"]
@@ -99,7 +165,7 @@ def test_gold_sha_derived_from_the_artifacts_recorded_path(tmp_path):
     gold = tmp_path / "gold.json"
     gold.write_text('{"entries": []}', encoding="utf-8")
     artifact = _artifact(runs={"gold_dataset": str(gold), "gold_sha256": "11" * 32})
-    report = reuse.check_capture_artifact(artifact, harness_sha=HARNESS_SHA)
+    report = reuse.check_capture_artifact(artifact, harness_sha=HARNESS_SHA, protocol_code_sha256=PROTO_SHA)
     (mismatch,) = report["mismatches"]
     # The derived current value is the file's REAL digest, computed here
     # independently of the reuse helper (a helper-side hash bug cannot
@@ -112,7 +178,7 @@ def test_missing_recorded_gold_is_a_mismatch_row_not_a_crash(tmp_path):
     swarm-node path): the report names the path problem as a mismatch — no
     FileNotFoundError, no silent pass."""
     artifact = _artifact(runs={"gold_dataset": str(tmp_path / "nope.json"), "gold_sha256": "11" * 32})
-    report = reuse.check_capture_artifact(artifact, harness_sha=HARNESS_SHA)
+    report = reuse.check_capture_artifact(artifact, harness_sha=HARNESS_SHA, protocol_code_sha256=PROTO_SHA)
     assert report["suitable"] is False
     (mismatch,) = report["mismatches"]
     assert mismatch["field"] == "runs.gold_sha256"
@@ -147,7 +213,13 @@ def test_cli_check_reuse_zero_on_match(tmp_path):
     gold = _write_gold(tmp_path)
     from protocol.manifest import sha256_file
 
-    path = _write_artifact(tmp_path, _artifact(runs={"gold_dataset": "gold.json", "gold_sha256": sha256_file(gold)}))
+    path = _write_artifact(
+        tmp_path,
+        _artifact(
+            runs={"gold_dataset": "gold.json", "gold_sha256": sha256_file(gold)},
+            protocol_code_sha256=reuse.current_protocol_code_sha(),
+        ),
+    )
     rc = cmd_check_reuse(_cli_args(path, harness_sha=HARNESS_SHA, gold=str(gold)))
     assert rc == 0
 
@@ -169,6 +241,7 @@ def test_cli_check_reuse_without_explicit_digests_uses_the_live_harness_sha(tmp_
 
     gold = _write_gold(tmp_path)
     artifact = _artifact(harness_sha=reuse.current_harness_sha())
+    artifact["protocol_code_sha256"] = reuse.current_protocol_code_sha()
     artifact["runs"] = {"gold_dataset": str(gold), "gold_sha256": sha256_file(gold)}
     path = _write_artifact(tmp_path, artifact)
     rc = cmd_check_reuse(_cli_args(path, gold=str(gold)))

@@ -36,7 +36,12 @@ spec:
     tier too. Omitted when unset: the operator then creates the PVC
     against the cluster default class. */ -}}
     {{- with ($obsLogs.storageClassName | default $pluggable.storageClassName) }}
-    className: {{ . }}
+    {{- /* The storage class, under the PVC-SPEC field name: the
+    operator decodes `spec.storage` as a raw corev1.PersistentVolumeClaimSpec,
+    whose field is `storageClassName`. The former `className` was rejected
+    at admission ("json: unknown field \"className\""), so every venue that
+    set a storage class could not enable the tier at all (issue #2172). */}}
+    storageClassName: {{ . }}
     {{- end }}
     resources:
       requests:

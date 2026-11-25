@@ -3553,6 +3553,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: 'jumee {kept} ka {requested} la khaka di taba — {discarded} ma se ka ke ji bo corpus min be ti taba ({rounds} roundw kura)'
+      },
       dropped: {
         note: '{kept} of {requested} — {dropped} no fandegew',
         reason: {

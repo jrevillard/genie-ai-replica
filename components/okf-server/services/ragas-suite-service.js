@@ -123,6 +123,23 @@ function passageKey(text) {
   return norm ? norm.slice(0, PASSAGE_KEY_CHARS) : '';
 }
 
+// Ragas's multi-hop synthesizers prefix EVERY reference context with a
+// literal hop marker — "<1-hop>\n\n" + the chunk's page_content (vendored
+// ragas/testset/synthesizers/multi_hop/base.py, make_contexts). The marker
+// is plumbing, not corpus text: strip it at mint so the stored passage IS
+// the chunk text and the attribution match keys on content (live
+// 2026-11-25, David's 20-question benchmark that kept 10: "<1-hop> …"
+// matched no chunk and EVERY multi-hop question — 50% of the default mix —
+// was falsely discarded as unattributable).
+const HOP_MARKER_RE = /^\s*<\d+-hop>\s*/;
+
+// The re-ask cap (David, 2026-11-25): a context-bound generation that could
+// not ground every requested question asks again for the shortfall — the
+// head suite's fill discipline — but never more than this many extra
+// rounds; whatever still cannot be grounded is kept out and TOLD (the
+// grounding tally on the suite doc).
+const MAX_GROUNDING_ROUNDS = 3;
+
 // The DECLARED serve posture, recorded on every run doc so the record is
 // self-attributing: a mass-abstention run carries the configuration it ran
 // with (2026-10-27: a K=54 pool blew the reranker's per-batch token cap and
@@ -1360,59 +1377,57 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     });
     // 202 + poll: the sidecar starts a background job and we poll it — no
     // connection is held open for the (potentially hour-long) generation.
-    const genResp = await sidecarSubmitWithRetry(
-      '/generate-testset',
-      {
-        documents: docs,
-        testset_size: clampCount(payload.testset_size, 1, MAX_ENTRIES),
-        query_distribution: Array.isArray(payload.query_distribution) ? payload.query_distribution : null,
-        num_personas: clampCount(payload.num_personas, 1, 10),
-        judge: effectiveJudge
-          ? {
-              provider: effectiveJudge.provider,
-              base_url: effectiveJudge.base_url,
-              model: effectiveJudge.model,
-              api_key: effectiveJudge.api_key
-            }
-          : null
-      },
-      { repo_id: repoId }
-    );
-    const genStarted = await genResp.json();
-    // Cancel-race guard (same shape as the evaluate submit): a user cancel
-    // landing between the sidecar POST and the poll registration finds no
-    // registered job to cancel — the generation would run uncancelled for
-    // the whole KG build. Kill the fresh job and honour the cancel.
-    if (userCancelledGen.has(opts.suiteKey)) {
-      await cancelSidecarJob(genStarted.job_id, 'generation cancelled by user (landed during submit)');
-      const cancelled = new Error('generation cancelled by user');
-      cancelled.code = 'RAGAS_JOB_CANCELLED';
-      throw cancelled;
-    }
-    const gen = await pollSidecarJobOwned(
-      genStarted.job_id,
-      {
-        kind: 'generate-testset',
-        repo_id: repoId,
-        suite_key: opts.suiteKey
-      },
-      {
-        // live KG/synthesis counts land on the generating envelope (getSuite).
-        // MERGED, not replaced: the envelope also carries the effective
-        // judge, and a sidecar progress tick must not wipe it (the panel
-        // shows the model the run is actually using).
-        onProgress: (p) => genProgress.set(opts.suiteKey, { ...(genProgress.get(opts.suiteKey) || {}), ...p })
+    // One submit+poll per ROUND (David, 2026-11-25): a context-bound
+    // generation that could not ground every requested question asks again
+    // for the shortfall — the head suite's fill discipline — capped at
+    // MAX_GROUNDING_ROUNDS extra passes and honestly tallied on the suite.
+    const REQUESTED = clampCount(payload.testset_size, 1, MAX_ENTRIES);
+    const submitAndPoll = async (need) => {
+      const genResp = await sidecarSubmitWithRetry(
+        '/generate-testset',
+        {
+          documents: docs,
+          testset_size: need,
+          query_distribution: Array.isArray(payload.query_distribution) ? payload.query_distribution : null,
+          num_personas: clampCount(payload.num_personas, 1, 10),
+          judge: effectiveJudge
+            ? {
+                provider: effectiveJudge.provider,
+                base_url: effectiveJudge.base_url,
+                model: effectiveJudge.model,
+                api_key: effectiveJudge.api_key
+              }
+            : null
+        },
+        { repo_id: repoId }
+      );
+      const genStarted = await genResp.json();
+      // Cancel-race guard (same shape as the evaluate submit): a user cancel
+      // landing between the sidecar POST and the poll registration finds no
+      // registered job to cancel — the generation would run uncancelled for
+      // the whole KG build. Kill the fresh job and honour the cancel.
+      if (userCancelledGen.has(opts.suiteKey)) {
+        await cancelSidecarJob(genStarted.job_id, 'generation cancelled by user (landed during submit)');
+        const cancelled = new Error('generation cancelled by user');
+        cancelled.code = 'RAGAS_JOB_CANCELLED';
+        throw cancelled;
       }
-    );
-    genProgress.delete(opts.suiteKey);
-    const samples = Array.isArray(gen.samples) ? gen.samples : [];
-    if (!samples.length) {
-      const err = new Error('the generator produced no samples (judge/embedder logs have the cause)');
-      err.code = 'GENERATION_EMPTY';
-      err.status = 502;
-      throw err;
-    }
-    const now = new Date().toISOString();
+      return pollSidecarJobOwned(
+        genStarted.job_id,
+        {
+          kind: 'generate-testset',
+          repo_id: repoId,
+          suite_key: opts.suiteKey
+        },
+        {
+          // live KG/synthesis counts land on the generating envelope (getSuite).
+          // MERGED, not replaced: the envelope also carries the effective
+          // judge, and a sidecar progress tick must not wipe it (the panel
+          // shows the model the run is actually using).
+          onProgress: (p) => genProgress.set(opts.suiteKey, { ...(genProgress.get(opts.suiteKey) || {}), ...p })
+        }
+      );
+    };
     // #2061 phase 3 (E-7): the SOURCE-REPOSITORY STAMP. The corpus documents
     // carry their chunk metadata (repo_id, graph, chunk_key); the sidecar
     // answers with the passages the questions were minted from, so the
@@ -1426,44 +1441,84 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         sourceByPassage.set(key, d.metadata || {});
       }
     }
-    const stamped = samples.slice(0, MAX_ENTRIES).map((s, i) => {
-      const passages = (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
-        String(c).slice(0, CONTEXT_CHARS)
-      );
-      // The FIRST passage that matches a corpus document names the source.
-      let meta = null;
-      for (const p of passages) {
-        const hit = sourceByPassage.get(passageKey(p));
-        if (hit) {
-          meta = hit;
-          break;
+    const seenQueries = new Set();
+    const stampedAll = [];
+    const tally = { requested: REQUESTED, kept: 0, discarded_unattributed: 0, discarded_duplicate: 0, rounds: 0 };
+    let firstGen = null;
+    let droppedSum = 0;
+    const droppedReasons = {};
+    const kgFailures = {};
+    let sawAnySample = false;
+    const maxPasses = binding ? 1 + MAX_GROUNDING_ROUNDS : 1;
+    while (tally.rounds < maxPasses) {
+      const shortfall = REQUESTED - stampedAll.filter((e) => e.source_repo_id).length;
+      if (tally.rounds > 0 && shortfall <= 0) break;
+      const gen = await submitAndPoll(tally.rounds === 0 ? REQUESTED : shortfall);
+      tally.rounds += 1;
+      if (!firstGen) firstGen = gen;
+      droppedSum += Number.isFinite(gen.dropped) ? gen.dropped : 0;
+      Object.assign(droppedReasons, gen.dropped_reasons || {});
+      Object.assign(kgFailures, gen.kg_failures || {});
+      const samples = Array.isArray(gen.samples) ? gen.samples : [];
+      if (!samples.length) break;
+      sawAnySample = true;
+      for (const s of samples.slice(0, MAX_ENTRIES)) {
+        const query = String(s.user_input || '').trim();
+        // The uniqueness rule (the head suite's fill discipline): a re-ask
+        // must never mint the same question twice.
+        if (seenQueries.has(query)) {
+          tally.discarded_duplicate += 1;
+          continue;
         }
-      }
-      return {
-        id: `new-${i + 1}`,
-        query: String(s.user_input || '').trim(),
-        reference_answer: String(s.reference || ''),
+        seenQueries.add(query);
         // Reference passages stored WHOLE (capped at CONTEXT_CHARS, the run
-        // leg's per-context cap — a published chunk fits intact). The old
-        // 500-char slice cut them mid-table and often kept the WRONG section
-        // of the concept for the question it grounded: entity-recall then
-        // compared the wrong section's entities against correctly-retrieved
-        // chunks (2026-10-19: every entity-recall row of a 20-question suite
-        // failed at 0.10–0.50 with context_recall at 1.0).
-        reference_passages: passages,
-        source_doc: '',
-        // The stamp — the corpus the question was minted from.
-        source_repo_id: meta && meta.repo_id ? meta.repo_id : null,
-        source_graph: meta && meta.graph ? meta.graph : null,
-        source_chunk_key: meta && meta.chunk_key ? meta.chunk_key : null,
-        language: '',
-        difficulty: [s.query_style, s.query_length].filter(Boolean).join('/') || '',
-        persona: s.persona_name || '',
-        synthesizer: s.synthesizer_name || '',
-        oos: false,
-        source: 'llm'
-      };
-    });
+        // leg's per-context cap — a published chunk fits intact) with
+        // Ragas's hop marker STRIPPED (HOP_MARKER_RE): what is stored is
+        // the chunk text, and the attribution match keys on content, never
+        // on the generator's plumbing.
+        const passages = (Array.isArray(s.reference_contexts) ? s.reference_contexts : []).map((c) =>
+          String(c).replace(HOP_MARKER_RE, '').slice(0, CONTEXT_CHARS)
+        );
+        // The FIRST passage that matches a corpus document names the source.
+        let meta = null;
+        for (const p of passages) {
+          const hit = sourceByPassage.get(passageKey(p));
+          if (hit) {
+            meta = hit;
+            break;
+          }
+        }
+        const entry = {
+          query,
+          reference_answer: String(s.reference || ''),
+          reference_passages: passages,
+          source_doc: '',
+          // The stamp — the corpus the question was minted from.
+          source_repo_id: meta && meta.repo_id ? meta.repo_id : null,
+          source_graph: meta && meta.graph ? meta.graph : null,
+          source_chunk_key: meta && meta.chunk_key ? meta.chunk_key : null,
+          language: '',
+          difficulty: [s.query_style, s.query_length].filter(Boolean).join('/') || '',
+          persona: s.persona_name || '',
+          synthesizer: s.synthesizer_name || '',
+          oos: false,
+          source: 'llm'
+        };
+        stampedAll.push(entry);
+        if (binding && !entry.source_repo_id) tally.discarded_unattributed += 1;
+      }
+      if (!binding) break;
+    }
+    // The envelope is live until every round has landed; only now does the
+    // suite stop being "generating".
+    genProgress.delete(opts.suiteKey);
+    if (!sawAnySample) {
+      const err = new Error('the generator produced no samples (judge/embedder logs have the cause)');
+      err.code = 'GENERATION_EMPTY';
+      err.status = 502;
+      throw err;
+    }
+    const now = new Date().toISOString();
     // #2061 phase 3 (E-7) + David (2026-11-23): the EVALUATION CONTEXT
     // applies to the GENERATION. A question whose ground truth could not be
     // tied to the corpus it was minted from is INVALID for a context-bound
@@ -1474,17 +1529,18 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
     //
     // Without a binding there is no context to apply and the behaviour is
     // unchanged: the stamp is null ("not measured" is null, never a guess).
-    const unattributed = binding ? stamped.filter((e) => !e.source_repo_id) : [];
-    const entries = (binding ? stamped.filter((e) => e.source_repo_id) : stamped).map((e, i) => ({
+    const entries = (binding ? stampedAll.filter((e) => e.source_repo_id) : stampedAll).map((e, i) => ({
       ...e,
       id: `new-${i + 1}`
     }));
-    if (binding && unattributed.length) {
+    tally.kept = entries.length;
+    if (tally.discarded_unattributed) {
       logger.warn('ragas-suite.generate.unattributed_questions', {
         repo_id: repoId,
         suite_key: opts.suiteKey,
-        discarded: unattributed.length,
-        kept: entries.length
+        discarded: tally.discarded_unattributed,
+        kept: entries.length,
+        rounds: tally.rounds
       });
     }
     if (binding && !entries.length) {
@@ -1508,7 +1564,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
       created_at: now,
       created_by: (opts.actor && opts.actor.user_id) || 'system',
       payload: {
-        generator: `ragas:${gen.generator && gen.generator.model}`,
+        generator: `ragas:${firstGen && firstGen.generator ? firstGen.generator.model : ''}`,
         // Judge memory (David 2026-10-21: the model selection must survive
         // leaving and re-entering the dialog, not reset to the deployment
         // default). judge_pick is the selection AS MADE in the Generate
@@ -1540,10 +1596,15 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
           // The questions that were LOST and WHY (live 2026-10-21: 35 of
           // 100 were dropped to upstream 429s and the panel said nothing —
           // the user could not tell a short suite from a throttled one).
-          dropped: Number.isFinite(gen.dropped) ? gen.dropped : 0,
-          dropped_reasons: gen.dropped_reasons || {},
+          dropped: droppedSum,
+          dropped_reasons: droppedReasons,
           query_distribution: payload.query_distribution || null,
-          num_personas: payload.num_personas || 3
+          num_personas: payload.num_personas || 3,
+          // The GROUNDING TALLY (David, 2026-11-25): requested vs kept vs
+          // discarded, and how many rounds it took. A generate that keeps
+          // less than was asked OWES the operator the difference — on the
+          // record, never only in a log.
+          grounding: tally
         },
         // Coverage accounting: what slice of each repo's published corpus
         // the suite is actually grounded in. Equal when under the budget;
@@ -1553,7 +1614,7 @@ async function generateSuite(repoId, payload = {}, opts = {}) {
         // (2026-10-22: a server-dropped connection at node 1074/1075 ended
         // a 74-minute run). The run CONTINUES on a degraded node — the
         // count travels with the suite so the degradation is never silent.
-        kg_failures: gen.kg_failures || {},
+        kg_failures: kgFailures,
         metrics_config: [...DEFAULT_METRICS],
         entries
       }

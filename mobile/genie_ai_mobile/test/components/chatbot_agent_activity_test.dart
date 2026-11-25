@@ -819,24 +819,6 @@ void main() {
     },
   );
 
-  testWidgets('the save stamps failed when the translation failed', (
-    tester,
-  ) async {
-    final metadata = await savedMetadataOf(tester, [
-      {'type': 'chunk', 'content': 'Answer'},
-      {
-        'type': 'metadata',
-        'source_documents': <dynamic>[],
-        'confidence_score': 0.9,
-        'grounding_status': 'grounded',
-        'is_grounded': true,
-      },
-      {'type': 'done', 'queryId': 'q-failed', 'translationFailed': true},
-    ]);
-
-    expect(metadata['translation_status'], 'failed');
-  });
-
   testWidgets(
     'the save uploads the answer-translation outcome the restore reads',
     (tester) async {

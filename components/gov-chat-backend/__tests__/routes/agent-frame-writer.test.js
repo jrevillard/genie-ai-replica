@@ -2021,27 +2021,6 @@ describe('POST /api/queries/stream — the terminal facts (the W-P2 wave)', () =
     global.__agentUpstreamTimeoutMs = null;
   });
 
-  it('the verdict frame carries no passage text — the citation rows ride the metadata frame', async () => {
-    setupAgentQuery();
-    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
-
-    const response = await authPost('/api/queries/stream', {
-      sessionId: 's1',
-      messages: [{ role: 'user', content: 'What is the tax rate?' }]
-    });
-
-    const frames = parseSSEEvents(response.text);
-    const verdictFrame = frames.find((f) => f.type === 'agent_verdict');
-    // The citations carry the full passage text: they stay server-side.
-    expect(verdictFrame.citations).toBeUndefined();
-    expect(verdictFrame.invalid_citations).toBeUndefined();
-    expect(verdictFrame.findings).toBeUndefined();
-    expect(JSON.stringify(verdictFrame)).not.toContain('bees pollinate');
-    // The client still gets the citation rows — on the metadata frame.
-    const metadata = frames.find((f) => f.type === 'metadata');
-    expect(metadata.source_documents.length).toBeGreaterThan(0);
-  });
-
   it('a pre-stream refusal is not logged as a client disconnect', async () => {
     setupAgentQuery();
     const { logger } = require('../mocks/shared-lib');

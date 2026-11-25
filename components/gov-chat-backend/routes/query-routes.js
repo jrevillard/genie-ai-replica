@@ -491,8 +491,9 @@ module.exports = (queryService) => {
       const doHandleStreamDone = async (skipRoutedGraphs = false) => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
-        // The options object rides only when the skip is set (the arity
-        // rule the legacy terminal's call and its mocks pin).
+        // Only the skipRoutedGraphs KEY rides conditionally (the arity
+        // rule the legacy terminal's call and its mocks pin) — the options
+        // object itself always rides.
         const skipOpt = skipRoutedGraphs ? { skipRoutedGraphs: true } : {};
         try {
           if (streamRelay) {

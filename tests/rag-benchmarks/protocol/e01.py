@@ -34,13 +34,13 @@ The report's contract:
   building: corpus/set lineage mismatch between the legs, a config-C
   manifest on the B leg (C belongs to E02), a missing leg artifact, a
   lineage-mismatched ledger.
-* **No credentials anywhere in the report.** The report applies its OWN
-  credential rule (:func:`_is_credential_key`) at every depth on every path it
-  writes — the per-case rows, the M-5 values, the M-1 aggregate, the recorded
-  label scopes, the capture stamp and the manifests' prompt/model maps. The
-  rule is deliberately narrower than the manifest's (which drops every
-  marker-named key): the report keeps the measurement names the judge needs
-  (``chunk_key``, the token counts) and drops the credential names explicitly.
+* **No credentials anywhere in the report.** The report applies the
+  protocol's shared credential rule (:mod:`redaction`) at every depth on every
+  path it writes — the per-case rows, the M-5 values, the M-1 aggregate, the
+  recorded label scopes, the capture stamp and the manifests' prompt/model
+  maps. The run manifest records its maps through the same rule, so the two
+  surfaces cannot drift on what names a credential; the measurement names
+  (``chunk_key``, the token counts) survive — the judge needs them.
 * **No judging in code**: M-2/M-3 verdicts belong to the judge layer under
   the versioned evaluator instructions; the report carries the judgment
   inputs (answers, abstention facts, sources), never verdicts.

@@ -110,7 +110,9 @@ def _load_entries(set_path: str | Path) -> list[dict]:
     try:
         _, entries = load_set(set_path, kind="assessment")
     except SetValidationError as failed:
-        raise DriverError(f"{set_path} is not a valid assessment set: {failed}") from failed
+        raise DriverError(
+            f"{set_path} is not a valid assessment set: {failed}"
+        ) from failed
     return entries
 
 
@@ -140,7 +142,11 @@ def security_skip_rows(entries: list[dict]) -> dict:
         if not isinstance(case, dict) or not case.get("security_scenario"):
             continue
         for entry in turn_entries(case):
-            row = {"case_id": entry["id"], "outcome": "skipped", "reason": A_SECURITY_SKIP_REASON}
+            row = {
+                "case_id": entry["id"],
+                "outcome": "skipped",
+                "reason": A_SECURITY_SKIP_REASON,
+            }
             row.update(_turn_field(entry))
             rows[entry["id"]] = row
     return rows
@@ -156,7 +162,10 @@ def _pending_in_order(cases: list[dict], done: set[str]) -> list[dict]:
         if not isinstance(case, dict):
             continue
         expanded = turn_entries(case) if case.get("turns") else [case]
-        first_missing = next((index for index, entry in enumerate(expanded) if entry["id"] not in done), None)
+        first_missing = next(
+            (index for index, entry in enumerate(expanded) if entry["id"] not in done),
+            None,
+        )
         if first_missing is not None:
             pending.extend(expanded[first_missing:])
     return pending
@@ -197,7 +206,9 @@ def _merge_rows(prior: dict, new: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _default_a_runner(gold: Path, out: Path, seed: int, env_extra: dict | None = None) -> dict:
+def _default_a_runner(
+    gold: Path, out: Path, seed: int, env_extra: dict | None = None
+) -> dict:
     """The ``capture_baseline._run_anchor_eval`` pattern: one ``run_eval.py
     anchor`` subprocess with the seed forced into ``PYTHONHASHSEED``."""
     import capture_baseline  # local import: the sibling capture module
@@ -255,7 +266,9 @@ def _gold_without_identity(cases: list[dict]) -> list[str]:
             if not isinstance(chunk, dict):
                 unmatched.append(f"{case.get('id')}#gold{index}")
                 continue
-            identity = chunk.get("content_hash") if hash_branch else chunk.get("chunk_key")
+            identity = (
+                chunk.get("content_hash") if hash_branch else chunk.get("chunk_key")
+            )
             if not _has_text(identity):
                 unmatched.append(f"{case.get('id')}#gold{index}")
     return unmatched
@@ -343,7 +356,9 @@ def run_config_a(
     )
     report = runner(gold_path.resolve(), report_path.resolve(), seed, env_extra)
     if not isinstance(report, dict):
-        raise DriverError(f"config A runner returned {type(report).__name__}, not a report dict")
+        raise DriverError(
+            f"config A runner returned {type(report).__name__}, not a report dict"
+        )
     n_missed = int(report.get("n_missed_traces", 0))
     n_unmapped = int(report.get("n_unmapped_chunk_keys", 0))
     if n_missed > 0 or n_unmapped > 0:
@@ -365,7 +380,9 @@ def run_config_a(
             # for the retrieval surface only, so this is where the reader
             # learns why.
             "coverage": census,
-            "anchor_projection_sha256": anchor_projection_sha256(anchor_projection(cases)),
+            "anchor_projection_sha256": anchor_projection_sha256(
+                anchor_projection(cases)
+            ),
         },
         ensure_ascii=False,
     )
@@ -439,9 +456,17 @@ def _default_a_query(entry: dict) -> dict:
 
     run_eval._maybe_refresh_token()
     _start, body, status = run_eval.drive_query(entry)
-    if status in (401, 403) and run_eval._refresh_configured() and run_eval._maybe_refresh_token(force=True):
+    if (
+        status in (401, 403)
+        and run_eval._refresh_configured()
+        and run_eval._maybe_refresh_token(force=True)
+    ):
         _start, body, status = run_eval.drive_query(entry)
-    return {"http_status": status, "body": body, "answer": run_eval._extract_answer(body)}
+    return {
+        "http_status": status,
+        "body": body,
+        "answer": run_eval._extract_answer(body),
+    }
 
 
 def _response_source_fields(body) -> dict:
@@ -677,7 +702,9 @@ class ContainerExecBTransport:
     compose/swarm venue, ``kubectl exec`` on a Kubernetes venue (the venue
     is selected by ``EVAL_EXEC_BACKEND``, never detected)."""
 
-    def exec_cmd(self, container: str, cmd: str, timeout: float = 600, pass_env: tuple = ()) -> str:
+    def exec_cmd(
+        self, container: str, cmd: str, timeout: float = 600, pass_env: tuple = ()
+    ) -> str:
         return exec_in_container(container, cmd, timeout=timeout, pass_env=pass_env)
 
 
@@ -726,7 +753,10 @@ def _b_ready_case(case: dict) -> dict:
     if not isinstance(context, dict) or "requested_labels" not in context:
         return case
     ready = dict(case)
-    ready["context"] = {**context, "requested_labels": as_label_list(context.get("requested_labels"))}
+    ready["context"] = {
+        **context,
+        "requested_labels": as_label_list(context.get("requested_labels")),
+    }
     return ready
 
 
@@ -793,7 +823,9 @@ def run_config_b(
             f" {CONTAINER_TMP}/cases.json {CONTAINER_TMP}/rows.json",
             timeout=3600,
         )
-        rows_b64 = transport.exec_cmd(container, f"base64 -w0 {CONTAINER_TMP}/rows.json", timeout=60).strip()
+        rows_b64 = transport.exec_cmd(
+            container, f"base64 -w0 {CONTAINER_TMP}/rows.json", timeout=60
+        ).strip()
         new_rows = json.loads(base64.b64decode(rows_b64).decode("utf-8"))
         # The driver's resolved snapshot rides verbatim and the rows file is
         # the committed artifact: credential-named keys (VLLM_API_KEY rode
@@ -848,6 +880,13 @@ class UrllibRunStream:
     answer JSON, never an event stream); ``events()`` parses the SSE
     ``data:`` frames; ``close()`` is the cancellation point — closing the
     response mid-run is the client disconnect that cancels the run server-side.
+
+    ``trace_id`` is the trace the run is expected to land in: the driver
+    PROPAGATES its own W3C traceparent, so the agent's spans join that trace
+    and the caller can fetch the run's trace by identity instead of guessing
+    it out of a time window. The agent's own spans carry no run id (they
+    carry counters and ids only), so the propagated trace id is the only
+    exact handle on "this run's spans".
     """
 
     def __init__(self, url: str, payload: dict, timeout: float):
@@ -857,6 +896,10 @@ class UrllibRunStream:
         self._url = url
         self._payload = payload
         self._timeout = timeout
+        # The propagated trace id (32 hex chars) and the parent span id
+        # (16 hex chars) — W3C traceparent shape.
+        self.trace_id = os.urandom(16).hex()
+        self.parent_span_id = os.urandom(8).hex()
         # Eval venues are self-signed by default; the context is deliberately
         # unverified (no knob — a verifying venue can wrap the transport).
         self._ctx = ssl._create_unverified_context()
@@ -867,11 +910,16 @@ class UrllibRunStream:
         request = urllib.request.Request(
             self._url,
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "traceparent": f"00-{self.trace_id}-{self.parent_span_id}-01",
+            },
             method="POST",
         )
         try:
-            self._response = urllib.request.urlopen(request, timeout=self._timeout, context=self._ctx)
+            self._response = urllib.request.urlopen(
+                request, timeout=self._timeout, context=self._ctx
+            )
             self.status = self._response.status
         except urllib.error.HTTPError as failed:
             self.status = failed.code
@@ -879,7 +927,9 @@ class UrllibRunStream:
             try:
                 self.error_body = json.loads(raw.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError):
-                self.error_body = {"raw": raw.decode("utf-8", errors="replace")[:_ERROR_PREVIEW_CHARS]}
+                self.error_body = {
+                    "raw": raw.decode("utf-8", errors="replace")[:_ERROR_PREVIEW_CHARS]
+                }
 
     def events(self):
         """The parsed SSE ``data:`` payloads (JSON dicts), in arrival order.
@@ -941,7 +991,9 @@ def c_payload_for_case(case: dict, deadline_ms: int) -> dict:
             "authorized_repos": [
                 {"repo_id": str(repo["repo_id"]), "graph_name": str(repo["graph_name"])}
                 for repo in (raw.get("authorized_repos") or [])
-                if isinstance(repo, dict) and repo.get("repo_id") and repo.get("graph_name")
+                if isinstance(repo, dict)
+                and repo.get("repo_id")
+                and repo.get("graph_name")
             ],
             # The shared coercion (evalset.as_label_list): a bare string is
             # ONE label (the server's rule), never one character per label.
@@ -993,6 +1045,7 @@ def run_one_case_c(
     run_id: str | None = None
     usage_record: dict | None = None
     source_documents: list | None = None
+    citations: list | None = None
     outcome: str | None = None
     error_text: str | None = None
     events_seen = 0
@@ -1001,7 +1054,9 @@ def run_one_case_c(
         # The open is INSIDE the try: a venue-down transport failure (URLError,
         # socket timeout) is a typed stream_error row for THIS case — the run
         # continues, it never dies untyped.
-        stream = transport.open_run(url, c_payload_for_case(case, deadline_ms), timeout_s)
+        stream = transport.open_run(
+            url, c_payload_for_case(case, deadline_ms), timeout_s
+        )
         if stream.status >= 400:
             body = stream.error_body or {}
             outcome = _outcome_for_http(stream.status, body)
@@ -1033,6 +1088,14 @@ def run_one_case_c(
                     verdict_payload = event.get("payload") or {}
                     if isinstance(verdict_payload.get("source_documents"), list):
                         source_documents = verdict_payload["source_documents"]
+                    # The retrieval TUPLE of the agent path: the delivered
+                    # citations (the provenance the answer was composed
+                    # from). The legacy anchor reads its tuple from a
+                    # reranker span; the agent's spans carry no chunk keys,
+                    # so the citations are the tuple the SSE frames carry —
+                    # the agent path's own retrieval record.
+                    if isinstance(verdict_payload.get("citations"), list):
+                        citations = verdict_payload["citations"]
                 if is_cancellation and events_seen >= 1:
                     break
             if is_cancellation and events_seen >= 1 and outcome is None:
@@ -1058,6 +1121,10 @@ def run_one_case_c(
             stream.close()
     row["outcome"] = outcome
     row["run_id"] = run_id
+    # The trace the run's spans land in (the driver propagated its own
+    # traceparent) — the exact handle on the run's trace.
+    if stream is not None:
+        row["trace_id"] = stream.trace_id
     row["events_seen"] = events_seen
     row["wall_ms"] = round((time.monotonic() - started) * 1000.0, 1)
     # The answer surface exists ONLY on an answered terminal: a cancelled or
@@ -1069,6 +1136,8 @@ def run_one_case_c(
         row["usage_record"] = usage_record
     if source_documents is not None:
         row["source_documents"] = source_documents
+    if citations is not None:
+        row["citations"] = citations
     if error_text is not None:
         row["error_text"] = error_text
     # A turn's row records its turn index — the id carries the
@@ -1103,7 +1172,9 @@ def run_config_c(
     pending = _pending_in_order(cases, done)
 
     for case in pending:
-        row = run_one_case_c(case, base_url=base_url, transport=transport, deadline_ms=deadline_ms)
+        row = run_one_case_c(
+            case, base_url=base_url, transport=transport, deadline_ms=deadline_ms
+        )
         prior = _merge_rows(prior, {"cases": {case["id"]: row}})
         write_json(rows_path, prior, ensure_ascii=False)
 
@@ -1136,7 +1207,11 @@ def discover_model_ids(endpoint: str, *, fetch=None, timeout: float = 30.0) -> d
 
     body = (fetch or _fetch)(url, timeout)
     data = body.get("data") if isinstance(body, dict) else None
-    entry = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+    entry = (
+        data[0]
+        if isinstance(data, list) and data and isinstance(data[0], dict)
+        else None
+    )
     if not entry or not entry.get("id"):
         raise DriverError(f"the model discovery at {url} carried no usable model entry")
     return {"llm": str(entry["id"])}

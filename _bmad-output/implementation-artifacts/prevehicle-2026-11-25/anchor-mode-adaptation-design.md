@@ -58,26 +58,47 @@ Two consequences, both verified in the code:
 
 ## 3. The adaptation, in three levels
 
-### L1 — the trace anchor (implemented)
+### L1 — the trace anchor (IMPLEMENTED)
 
-The agent's trace half of the anchor needs no new instrumentation:
+The agent's trace half of the anchor needs no product change — but it needed
+one harness change, and the live measurement corrected the design.
 
-- the trace is fetched from the **same** VictoriaTraces Jaeger API, with
-  `service=agent-service` instead of `service=genieai-chatqna`;
-- the run is matched by its **`run_id`** (the id the driver already records
-  on every row), not by a time window alone;
-- `trace_found` is true when the `agent.run` span with that run id is
-  present — the parent span, with the per-model-call and per-tool-call
-  children under it;
-- `n_missed_traces` counts the runs with no matching trace, exactly as the
-  legacy mode does.
+**What the live measurement corrected.** The design assumed the run could be
+matched by its `run_id`. It cannot: the agent's spans carry counters and ids
+only, and the run id is NOT among them. The live span dump:
+
+```
+agent.run       span=7b31cbda05742fb3  tags: span.kind, otel.scope.name, error
+agent.tool_call span=bab4abecb34a8e7a  tags: span.kind, otel.scope.name, errored, tool, call_id
+```
+
+No `run_id`, no `query_id`, no chunk keys. A time-window match would be a
+guess; the identity has to come from the CALLER.
+
+**The identity the caller can own: the propagated trace id.** The shipped
+config-C driver now propagates its OWN W3C `traceparent`
+(`00-<trace id>-<span id>-01`) on the run request, and records that trace id
+on the row. The agent's spans join that trace (the OTel SDK extracts the
+incoming context), so the run's trace is fetchable BY ID:
+
+```
+GET /select/jaeger/api/traces/{trace_id}
+```
+
+→ the `agent.run` parent with its `agent.model_call` / `agent.tool_call` /
+`agent.grounding_judge` / `agent.verify_finalize` children under it, with
+`service_name=agent-service`.
+
+`trace_found` is true when that trace exists and carries the `agent.run`
+span; `n_missed_traces` counts the runs with no matching trace, exactly as
+the legacy mode does.
 
 **Span-name config**: the span names (`agent.run`, `agent.model_call`,
-`agent.tool_call`) and the service name (`agent-service`) are the
-configuration surface — they are constants in the agent's code, so the
-harness names them in ONE place rather than scattering them.
+`agent.tool_call`) and the service name (`agent-service`) are named in ONE
+place (`run_agent_anchor.py`) rather than scattered — a rename on the agent
+side must break there, not silently.
 
-### L2 — the retrieval tuple at FILE level (implemented)
+### L2 — the retrieval tuple at FILE level (the SSE tuple extractor is implemented; the gold-scored scoring is DEFERRED)
 
 The tuple comes from the **SSE frames of the config-c driver**, which
 already parses the run's frames. The `verdict` frame's payload carries
@@ -95,6 +116,23 @@ query, so the identity is re-verified rather than re-derived.
 So L2 = "did the agent cite the FILE that holds the gold chunk?" — a weaker
 but honest statement than the legacy chunk-level recall, and it is labelled
 as such in the report (`file_recall`, never `recall`).
+
+**What is implemented**: the SSE TUPLE EXTRACTOR — the shipped config-C
+driver lifts the verdict frame's `citations` (the delivered provenance) onto
+the row, next to the `source_documents` it already carried. The agent's
+verdict frame is the surface that carries what the answer was composed from,
+so the tuple is there to be read.
+
+**What is deferred, and why**: the gold-scored file-level NUMBER needs two
+things this campaign does not have: the gold set projected to FILE ids (the
+gold names chunk keys; the chunk→file mapping is an ArangoDB read the
+harness can make — the agent's own capability makes the same read), and a
+venue whose corpus carries that gold. The campaign's venue corpus is the
+demo seed, not an eval corpus; the gold set that exists in the repo
+(`eval/gold_dataset.example.json`) is an EXAMPLE, not a measured set. A
+file-level recall computed against an example gold would be a number about
+nothing. The trace property (L1) does not need a gold set — which is exactly
+why it is the half this campaign measures.
 
 ### L3 — the chunk-level anchor (DEFERRED, with the reason)
 
@@ -124,22 +162,26 @@ SSE tuple extractor" means concretely)
 
 | piece | file | shape |
 |---|---|---|
-| the run driver (REUSED, not reinvented) | `tests/rag-benchmarks/protocol/drivers.py` | `run_config_c` already drives `POST /v1/runs` and records `run_id`, `outcome`, `source_documents`, `usage_record`. The **SSE tuple extractor** is the addition: the verdict frame's `citations` (the delivered provenance, richer than `source_documents`) are lifted onto the row as the run's retrieval tuple. |
-| the span-name config | `tests/rag-benchmarks/eval/run_eval.py` | ONE place naming the agent's span names and service name (`agent.run` / `agent.model_call` / `agent.tool_call`, service `agent-service`), used by the fetch + the match. The legacy chatqna names stay where they are. |
-| the anchor fetch + match | `tests/rag-benchmarks/eval/run_eval.py` | the same Jaeger query API, `service=agent-service`, matched by `run_id`; `trace_found` + the per-run span summary (parent + children) on the row. |
-| the file-level gold projection | `tests/rag-benchmarks/eval/run_eval.py` | the chunk→file AQL (the agent's own), applied to the gold set; the score is `file_recall` — never named `recall`. |
+| the run driver (REUSED, not reinvented) | `tests/rag-benchmarks/protocol/drivers.py` | `run_config_c` already drives `POST /v1/runs` and records `run_id`, `outcome`, `source_documents`, `usage_record`. Two additions: the **SSE tuple extractor** (the verdict frame's `citations` — the delivered provenance — lifted onto the row as the run's retrieval tuple) and the **trace propagation** (the driver's own W3C `traceparent`, with the trace id recorded on the row — the exact handle on the run's spans). |
+| the span-name config | `tests/rag-benchmarks/eval/run_agent_anchor.py` | ONE place naming the agent's span names and service name (`agent.run` / `agent.model_call` / `agent.tool_call`, service `agent-service`), used by the fetch + the match. The legacy chatqna names stay where they are. |
+| the anchor fetch + match | `tests/rag-benchmarks/eval/run_agent_anchor.py` | the Jaeger query API by trace id (`/select/jaeger/api/traces/{trace_id}`), the same API the Grafana datasource proxies; `trace_found` + the per-run span summary (parent + children) on the row; `n_missed_traces` on the aggregate. |
+| the file-level gold projection | DEFERRED | the chunk→file AQL (the agent's own) applied to the gold set — it needs a measured gold set, which this venue's corpus does not carry (see L2). |
 
-**No new subsystem, no new protocol, no new file**: the campaign's
-constraint is "a driver flag + span-name config + SSE tuple extractor", and
-that is what this is.
+**One new file, and why**: the shipped harness's `run_eval.py` is
+config-B-shaped end to end (the chatqna drive leg is an in-cluster exec, the
+scoring is chunk→content-hash against a gold set). The agent anchor shares
+the DRIVER and the trace API with it, but not the drive leg (the config-C
+seam is a plain HTTP POST) nor the scoring (there is no chunk tuple to
+score). A sibling runner that reuses `protocol/drivers.py::run_one_case_c`
+keeps the legacy anchor mode untouched — a change there risks the shipped
+deterministic path for a measurement the legacy path cannot make anyway.
 
 ## 5. What the campaign runs
 
-- The driver runs against the **run-scoped agent-service** (the same
-  deployment the E2E suite and the trace evidence use), through a
-  port-forward, with the venue's own eval set.
+- The runner drives the **run-scoped agent-service** (the same deployment
+  the E2E suite and the trace evidence use) through a port-forward.
 - The acceptance number is the one the campaign names: **`n_missed_traces`
-  must be 0 on a clean run** — every answered run has its `agent.run` span
-  in VictoriaTraces.
-- The report states the level it measured: **file-level** (L2), with the
-  chunk-level (L3) deferral named.
+  must be 0 on a clean run** — every run's `agent.run` span is in
+  VictoriaTraces, fetched BY ID.
+- The report states the level it measured: the **trace** (L1), with the
+  file-scored (L2) and chunk-level (L3) deferrals named.

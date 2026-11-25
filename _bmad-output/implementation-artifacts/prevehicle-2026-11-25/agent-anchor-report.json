@@ -1,0 +1,110 @@
+{
+  "aggregate": {
+    "n": 2,
+    "n_missed_traces": 0,
+    "n_rows_missing_expected_span_names": 0,
+    "n_rows_runs_not_answered": 2,
+    "n_answered": 0,
+    "n_tool_calls": 0,
+    "agent_service_name": "agent-service",
+    "agent_span_names": [
+      "agent.run",
+      "agent.model_call",
+      "agent.tool_call"
+    ]
+  },
+  "per_query": [
+    {
+      "case_id": "q1",
+      "outcome": "error",
+      "run_id": "run-1318ae711e8d488db380343744833d0a",
+      "trace_id": "92532ac6302683291d997f926cfc9b77",
+      "events_seen": 3,
+      "wall_ms": 180915.9,
+      "usage_record": {
+        "run_id": "run-1318ae711e8d488db380343744833d0a",
+        "outcome": "error",
+        "steps": 1,
+        "model_calls": 1,
+        "aux_model_calls": 0,
+        "tool_calls": 0,
+        "evidence_bytes": 0,
+        "prompt_tokens": null,
+        "completion_tokens": null,
+        "wall_clock_seconds": 180.5185609050095,
+        "error": "ProbeTransientError: the generation call failed: ReadTimeout: ",
+        "language": null,
+        "preparation_status": null,
+        "injection_findings": 0
+      },
+      "error_text": "error: ProbeTransientError: the generation call failed: ReadTimeout: ",
+      "wall_s": 180.9,
+      "run_answered": false,
+      "trace_present": true,
+      "trace_found": true,
+      "trace_error": null,
+      "span_names": [
+        "POST",
+        "POST /v1/runs http receive",
+        "POST /v1/runs http send",
+        "agent.model_call",
+        "agent.run"
+      ],
+      "services": [
+        "agent-service"
+      ],
+      "agent_run_span": true,
+      "tool_call_spans": 0,
+      "model_call_spans": 1,
+      "missing_span_names": [
+        "agent.tool_call"
+      ]
+    },
+    {
+      "case_id": "q2",
+      "outcome": "error",
+      "run_id": "run-141250e19100441393a53638b0ceb4af",
+      "trace_id": "907a6ea230d4a38c8376b3e9c66630bf",
+      "events_seen": 3,
+      "wall_ms": 180476.5,
+      "usage_record": {
+        "run_id": "run-141250e19100441393a53638b0ceb4af",
+        "outcome": "error",
+        "steps": 1,
+        "model_calls": 1,
+        "aux_model_calls": 0,
+        "tool_calls": 0,
+        "evidence_bytes": 0,
+        "prompt_tokens": null,
+        "completion_tokens": null,
+        "wall_clock_seconds": 180.41961746406741,
+        "error": "ProbeTransientError: the generation call failed: ReadTimeout: ",
+        "language": null,
+        "preparation_status": null,
+        "injection_findings": 0
+      },
+      "error_text": "error: ProbeTransientError: the generation call failed: ReadTimeout: ",
+      "wall_s": 180.5,
+      "run_answered": false,
+      "trace_present": true,
+      "trace_found": true,
+      "trace_error": null,
+      "span_names": [
+        "POST",
+        "POST /v1/runs http receive",
+        "POST /v1/runs http send",
+        "agent.model_call",
+        "agent.run"
+      ],
+      "services": [
+        "agent-service"
+      ],
+      "agent_run_span": true,
+      "tool_call_spans": 0,
+      "model_call_spans": 1,
+      "missing_span_names": [
+        "agent.tool_call"
+      ]
+    }
+  ]
+}

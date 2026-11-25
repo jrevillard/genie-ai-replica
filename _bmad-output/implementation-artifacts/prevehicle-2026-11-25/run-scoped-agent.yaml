@@ -4,7 +4,7 @@
 # names, full restore behind the ownership guard) applied to the umbrella tip
 # d1648d17f. The umbrella tip's agent-service image is the promoted CI build
 # of that tree:
-#   genie-ai-agent-server:feat-agentic-foundations-prd-a2db5f7d
+#   genie-ai-agent-server:feat-agentic-foundations-chore-prevehicle-validation-f7e884cd
 #   (pipeline 19392 = refs/merge-requests/938/merge @ a2db5f7d; that merge's
 #   tree equals d1648d17f's tree).
 #
@@ -58,7 +58,7 @@ spec:
     spec:
       containers:
         - name: agent-service
-          image: registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-agent-server:feat-agentic-foundations-prd-a2db5f7d
+          image: registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-agent-server:feat-agentic-foundations-chore-prevehicle-validation-f7e884cd
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8080"]
           ports:

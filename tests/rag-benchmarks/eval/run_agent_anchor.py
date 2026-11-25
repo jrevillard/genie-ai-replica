@@ -29,10 +29,13 @@ and the shipped agent's own questions when no case file is given — it
 measures the TRACE property, not a gold-scored retrieval property.
 
 Exit codes (the contract a caller scripts against):
-    0  every run's trace landed and carried the expected span names
+    0  every run answered, and its trace carried the expected span names
     3  a run's trace did not land at all (the venue answered no trace)
-    5  a run's trace landed but an expected span name is missing — a
+    5  a run ANSWERED but its trace lacks an expected span name — a
        rename on the agent side, or a dropped parent span
+    6  a run did not answer at all — the venue, the model queue or the
+       run's own failure. NOT a span-name problem: a run that failed
+       produced no parent to rename
 
 The agent also emits `agent.grounding_judge` and `agent.verify_finalize`;
 they are NOT required per row (a run that answers without a citation
@@ -70,6 +73,15 @@ DEFAULT_QUESTIONS = (
 )
 
 
+class _VenueUnavailable(RuntimeError):
+    """The venue answered a transient error (5xx): the trace may still land.
+
+    Distinct from a hard failure (a connection error, a 4xx): the wait
+    continues for this one, so a momentary 503 does not turn a would-be
+    green row red.
+    """
+
+
 def _fetch_json(url: str, timeout: float = 60.0):
     ctx = None
     if url.startswith("https://"):
@@ -91,6 +103,10 @@ def _fetch_json(url: str, timeout: float = 60.0):
                 return json.loads(body)
             except ValueError:
                 return {}
+        if 500 <= failed.code < 600:
+            # A TRANSIENT venue error: the trace may still land, so the
+            # wait continues. Only a connection failure or a 4xx ends it.
+            raise _VenueUnavailable(f"{url} answered {failed.code}") from failed
         raise RuntimeError(f"{url} answered {failed.code}: {body[:200]}") from failed
     except (urllib.error.URLError, OSError) as failed:
         raise RuntimeError(f"{url} is unreachable: {str(failed)[:200]}") from failed
@@ -117,6 +133,8 @@ def _trace_by_id(traces_url: str, trace_id: str) -> tuple[dict, str]:
     url = f"{base}/select/jaeger/api/traces/{trace_id}"
     try:
         payload = _fetch_json(url)
+    except _VenueUnavailable as failed:
+        return {}, f"the venue is not answering: {str(failed)[:200]}"
     except (RuntimeError, urllib.error.URLError, OSError) as failed:
         return {}, f"the trace fetch failed: {str(failed)[:200]}"
     if not isinstance(payload, dict):
@@ -131,6 +149,11 @@ def _trace_by_id(traces_url: str, trace_id: str) -> tuple[dict, str]:
     trace = traces[0]
     if not isinstance(trace, dict):
         return {}, "the trace fetch answered a payload whose trace is not an object"
+    if not trace:
+        # An EMPTY trace: the run's spans have not been exported yet.
+        # It is a WAIT, and it carries its own reason (an empty payload
+        # must never read as "no error, no trace").
+        return {}, "the venue answered an empty trace for that id"
     return trace, ""
 
 
@@ -190,18 +213,39 @@ def run(
             deadline = time.time() + trace_timeout_s
             while time.time() < deadline:
                 trace, reason = _trace_by_id(traces_url, trace_id)
-                if trace or reason.startswith("the trace fetch failed"):
+                if reason.startswith("the trace fetch failed"):
+                    # A HARD failure (the venue is unreachable, the body is
+                    # not JSON): waiting for a broken venue only delays
+                    # the red. A transient 5xx is NOT hard — the trace may
+                    # still land, so the wait continues.
+                    break
+                if trace and "agent.run" in set(_span_names(trace)):
+                    # The property landed. The parent span is exported at
+                    # the run's END, so the children are already in
+                    # VictoriaTraces when it arrives — a trace that exists
+                    # without it is a run that has not finished yet.
                     break
                 time.sleep(2.0)
         trace_present = bool(trace)
         names = _span_names(trace) if trace_present else []
         observed = set(names)
+        # The run's OWN outcome: a run that never answered is not a
+        # renamed span, and the verdicts must say which happened.
+        row["run_answered"] = row.get("outcome") == "answered"
         # The trace FOUND is the design's wording: the trace exists AND
         # carries the `agent.run` parent. A trace whose parent was dropped
         # is not a found trace — the property the runner measures did not
         # land, whatever the children say.
         row["trace_present"] = trace_present
         row["trace_found"] = "agent.run" in observed
+        if trace_present and not observed:
+            # The trace carries no agent-service span at all: the run
+            # never reached the agent. That is an attribution fact, not
+            # a missing span name.
+            reason = reason or (
+                "the trace carries no agent-service spans — "
+                "the run never reached the agent"
+            )
         row["trace_error"] = reason or None
         row["span_names"] = sorted(observed)
         row["services"] = sorted(_services(trace)) if trace_present else []
@@ -220,21 +264,30 @@ def run(
             + (f" ({reason})" if reason else ""),
             file=sys.stderr,
         )
-    # n_missed_traces = the runs whose trace did not land: no trace with
-    # that id, or a trace without the `agent.run` parent. Both are the
-    # property the campaign's acceptance names, so both count.
+    # n_missed_traces = the runs whose `agent.run` parent did not land:
+    # no trace with that id, or a trace without the parent. This is the
+    # property the campaign's acceptance names.
     missed = sum(1 for r in rows if not r.get("trace_found"))
-    # A trace that landed but lost a span name is a RENAME (or a dropped
-    # span), not a missing trace: it is counted apart, and it is the
-    # sharper diagnosis, so it wins the exit code.
+    # A RENAME (or a dropped span) is only a rename on a run that
+    # ANSWERED: a run that failed on the venue produced no parent to
+    # rename, and reading that as a contract change sends the reader to
+    # the wrong place.
     renamed = sum(
-        1 for r in rows if r.get("trace_present") and r.get("missing_span_names")
+        1
+        for r in rows
+        if r.get("trace_present")
+        and r.get("run_answered")
+        and r.get("missing_span_names")
     )
+    # The runs that did not answer at all — the venue, the model queue or
+    # the run's own failure. Its own verdict, its own exit code.
+    not_answered = sum(1 for r in rows if not r.get("run_answered"))
     report = {
         "aggregate": {
             "n": len(rows),
             "n_missed_traces": missed,
             "n_rows_missing_expected_span_names": renamed,
+            "n_rows_runs_not_answered": not_answered,
             "n_answered": sum(1 for r in rows if r.get("outcome") == "answered"),
             "n_tool_calls": sum(r.get("tool_call_spans") or 0 for r in rows),
             "agent_service_name": AGENT_SERVICE_NAME,
@@ -290,6 +343,8 @@ def main() -> int:
     # is reported FIRST (the numbers are in the report either way).
     if aggregate["n_rows_missing_expected_span_names"]:
         return 5
+    if aggregate["n_rows_runs_not_answered"]:
+        return 6
     if aggregate["n_missed_traces"]:
         return 3
     return 0

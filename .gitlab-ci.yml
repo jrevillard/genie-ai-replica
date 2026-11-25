@@ -173,6 +173,20 @@ workflow:
     # approval the umbrella does not need. This rule therefore sits BEFORE
     # the suppression rule on purpose: it must apply to pushes on that
     # branch. The security policies themselves are untouched by it.
+    #
+    # Container-scanning asymmetry, ACCEPTED: this pipeline runs the
+    # security suite EXCEPT container scanning — the build:*/scan:* jobs
+    # stay gated to the default branch and release/*, so no pipeline on
+    # this branch produces a container_scanning report. The CVE
+    # scan-result policy dedupes an MR's container findings against the
+    # TARGET branch's report, so an untriaged HIGH/CRITICAL container
+    # finding in a merge request targeting this branch counts as newly
+    # introduced and demands the policy's Maintainer approval, where the
+    # same finding on a main-targeting MR does not (main carries the
+    # reports). Bounded today: the monthly CVE triage loop keeps
+    # needs-triage HIGH/CRITICAL findings at zero. If that stops holding,
+    # run the build+scan stages here (the same `*/prd` rule shape as this
+    # workflow rule) and take the full 15-image rebuild on every push.
     - if: $CI_COMMIT_BRANCH =~ /\/prd$/
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never

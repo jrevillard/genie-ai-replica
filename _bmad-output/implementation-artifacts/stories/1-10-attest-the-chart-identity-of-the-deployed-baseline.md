@@ -45,7 +45,7 @@ context:
 - `charts/genieai-umbrella/templates/opea/{pii-service,okf-server,ragas-service}.yaml` — the three non-retrieval tiers; each declares its component label (`pii-service`, `okf-server`, `ragas-service`) and its env rows.
 - `charts/genieai-umbrella/values.yaml` — the chart defaults; the OKF tiers' values live under `okf.*`, not `opea.*`.
 - `charts/genieai-umbrella/Chart.lock` — the chart's dependencies; the release secret carries the same lock.
-- `docs/baselines/v03-deployed-baseline-2026-11-18.md` — the record this story's gate extends.
+- `docs/baselines/v03-deployed-baseline-2026-11-19.md` — the record this story's gate extends (its Chart identity section).
 
 ## Tasks & Acceptance
 

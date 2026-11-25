@@ -20,16 +20,6 @@ import 'package:genie_ai_mobile/services/auth/token_storage.dart';
 import 'package:genie_ai_mobile/services/keycloak/keycloak_service.dart';
 import 'package:flutter/widgets.dart';
 
-/// A refresh rejection as the token endpoint really reports it, i.e. the
-/// refresh token is dead and the session must end (DW-325). Anything that is
-/// NOT shaped like this must be treated as transient instead.
-FlutterAppAuthPlatformException rejectedGrant() =>
-    FlutterAppAuthPlatformException(
-      code: 'invalid_grant',
-      message: 'Token is not active',
-      platformErrorDetails: FlutterAppAuthPlatformErrorDetails(),
-    );
-
 class MockAppAuth implements AppAuth {
   AuthorizationTokenResponse Function(AuthorizationTokenRequest)? onAuthorize;
   Future<AuthorizationTokenResponse> Function(AuthorizationTokenRequest)?
@@ -317,7 +307,7 @@ void main() {
       expect(state.status, equals(AuthStatus.unauthenticated));
     });
 
-    test('grant rejected — tokens deleted, state unauthenticated', () async {
+    test('fails — tokens deleted, state becomes unauthenticated', () async {
       await tokenStorage.saveTokens(
         accessToken: 'old-at',
         idToken: 'old-idt',
@@ -325,7 +315,7 @@ void main() {
         accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
       );
 
-      mockAppAuth.tokenException = rejectedGrant();
+      mockAppAuth.tokenException = Exception('Refresh failed');
 
       await container.read(authProvider.notifier).refreshToken();
       final state = container.read(authProvider);
@@ -439,34 +429,7 @@ void main() {
     );
 
     test(
-      'expired tokens with a REJECTED grant — state unauthenticated',
-      () async {
-        final preloadedStorage = InMemoryTokenStorage();
-        await preloadedStorage.saveTokens(
-          accessToken: 'expired-at',
-          idToken: 'idt',
-          refreshToken: 'rt',
-          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-        );
-
-        final failAuth = MockAppAuth();
-        failAuth.tokenException = rejectedGrant();
-
-        final c = makeContainer(storage: preloadedStorage, appAuth: failAuth);
-        c.read(authProvider.notifier);
-        await Future.delayed(Duration.zero);
-
-        final state = c.read(authProvider);
-        expect(state.status, equals(AuthStatus.unauthenticated));
-        c.dispose();
-      },
-    );
-
-    // DW-325: a TRANSIENT failure (no grant rejection) must NOT end the
-    // session. The old catch-all cleared every token here, which logged the
-    // user out permanently with no path back.
-    test(
-      'expired tokens with a TRANSIENT refresh failure — tokens survive',
+      'expired tokens with refresh failure — state unauthenticated',
       () async {
         final preloadedStorage = InMemoryTokenStorage();
         await preloadedStorage.saveTokens(
@@ -484,20 +447,14 @@ void main() {
         await Future.delayed(Duration.zero);
 
         final state = c.read(authProvider);
-        expect(state.status, equals(AuthStatus.error));
-        expect(state.retryable, isTrue);
-        expect(
-          await preloadedStorage.getAccessToken(),
-          isNotNull,
-          reason: 'a transient refresh failure must not destroy the session',
-        );
+        expect(state.status, equals(AuthStatus.unauthenticated));
         c.dispose();
       },
     );
   });
 
   group('refreshToken — error message on failure (AC3)', () {
-    test('sets errorMessage when the grant is rejected', () async {
+    test('sets errorMessage on refresh failure', () async {
       await tokenStorage.saveTokens(
         accessToken: 'old-at',
         idToken: 'old-idt',
@@ -505,7 +462,7 @@ void main() {
         accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
       );
 
-      mockAppAuth.tokenException = rejectedGrant();
+      mockAppAuth.tokenException = Exception('Refresh failed');
 
       await container.read(authProvider.notifier).refreshToken();
       final state = container.read(authProvider);
@@ -755,7 +712,7 @@ void main() {
     );
 
     test(
-      'both tokens expired on resume, grant rejected — unauthenticated with error message (AC4)',
+      'both tokens expired on resume — state transitions to unauthenticated with error message (AC4)',
       () async {
         final preloadedStorage = InMemoryTokenStorage();
         await preloadedStorage.saveTokens(
@@ -766,7 +723,7 @@ void main() {
         );
 
         final failAuth = MockAppAuth();
-        failAuth.tokenException = rejectedGrant();
+        failAuth.tokenException = Exception('Refresh failed');
 
         final c = makeContainer(storage: preloadedStorage, appAuth: failAuth);
         c.read(authProvider.notifier);
@@ -1273,31 +1230,10 @@ void main() {
       expect(await tokenStorage.getAccessToken(), isNotNull);
       c.dispose();
 
-      // Grant rejected (the session really is over): tokens deleted
-      mockAppAuth.tokenException = rejectedGrant();
-      await container.read(authProvider.notifier).refreshToken();
-      expect(await tokenStorage.getAccessToken(), isNull);
-    });
-
-    // DW-325: a non-network error that is NOT a grant rejection must be
-    // treated as transient — this is the case that used to log the user out.
-    test('non-grant refresh failure preserves tokens (DW-325)', () async {
-      await tokenStorage.saveTokens(
-        accessToken: 'at',
-        idToken: 'idt',
-        refreshToken: 'rt',
-        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-      );
-
+      // Session expired (non-network error): tokens deleted
       mockAppAuth.tokenException = Exception('Refresh failed');
       await container.read(authProvider.notifier).refreshToken();
-
-      expect(
-        await tokenStorage.getAccessToken(),
-        isNotNull,
-        reason: 'only a rejected grant may end the session',
-      );
-      expect(container.read(authProvider).status, equals(AuthStatus.error));
+      expect(await tokenStorage.getAccessToken(), isNull);
     });
   });
 
@@ -1945,28 +1881,7 @@ void main() {
     );
 
     test(
-      'rejected grant on refreshToken → unauthenticated, tokens deleted',
-      () async {
-        await tokenStorage.saveTokens(
-          accessToken: 'at',
-          idToken: 'idt',
-          refreshToken: 'rt',
-          accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
-        );
-        mockAppAuth.tokenException = rejectedGrant();
-
-        await container.read(authProvider.notifier).refreshToken();
-        final state = container.read(authProvider);
-
-        expect(state.status, equals(AuthStatus.unauthenticated));
-        expect(await tokenStorage.getAccessToken(), isNull);
-      },
-    );
-
-    // DW-325: the inverse case, pinned so the terminal state is only reached
-    // for a genuine rejection.
-    test(
-      'transient failure on refreshToken → retryable error, tokens kept',
+      'non-network error on refreshToken → unauthenticated, tokens deleted',
       () async {
         await tokenStorage.saveTokens(
           accessToken: 'at',
@@ -1979,9 +1894,8 @@ void main() {
         await container.read(authProvider.notifier).refreshToken();
         final state = container.read(authProvider);
 
-        expect(state.status, equals(AuthStatus.error));
-        expect(state.retryable, isTrue);
-        expect(await tokenStorage.getAccessToken(), isNotNull);
+        expect(state.status, equals(AuthStatus.unauthenticated));
+        expect(await tokenStorage.getAccessToken(), isNull);
       },
     );
   });

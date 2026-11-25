@@ -193,7 +193,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// M28 — previously this state was invisible, so for buttons whose labels
   /// do not exist in the corpus (e.g. Pest/Disease), a stale filter silently
   /// returned zero documents.
-  String? _activeQuickHelpId;
   List<dynamic> _relatedDocuments = [];
 
   // Quick Help Configuration
@@ -204,7 +203,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _showNewChatConfirm = false;
   bool _showLoadConfirm = false;
   String? _pendingLoadConversationId;
+  bool _showExportDialog = false;
   String _exportFilename = "";
+  bool _showSaveDialog = false;
   final TextEditingController _titleController = TextEditingController();
 
   // Quick Help Overlay Visibility
@@ -939,26 +940,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   void clearQuickHelpContext() {
     setState(() {
       _activeServiceLabels = [];
-      _activeQuickHelpId = null;
     });
-  }
-
-  /// M28: text for the context bar — uses the Quick Help title when one is
-  /// active, falls back to the sidebar selection, otherwise empty (the bar
-  /// itself is hidden in that case).
-  String _contextBarText() {
-    if (_activeQuickHelpId != null) {
-      final button = _quickHelpButtons.firstWhere(
-        (b) => b['id'] == _activeQuickHelpId,
-        orElse: () => const {},
-      );
-      final title =
-          (button['resolvedTitle'] as String?) ??
-          (button['id'] as String?) ??
-          _activeQuickHelpId!;
-      return '${tr('chatbot.contextPrefix')} $title';
-    }
-    return '${tr('chatbot.contextPrefix')} $_selectedCategoryName';
   }
 
   Future<void> loadConversation(String conversationId) async {
@@ -1125,7 +1107,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // M28: a fresh chat drops the previous Quick Help context so the new
       // session is unfiltered.
       _activeServiceLabels = [];
-      _activeQuickHelpId = null;
       if (!keepLoading) _isLoading = false;
       // A new chat inherits NOTHING from the previous one: a scope left
       // standing would filter the new conversation's questions and be
@@ -2265,186 +2246,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
-  /// Real modal route for the PDF export filename dialog — the old
-  /// inline Dialog-in-Column rendered invisibly and its layout crash
-  /// froze the whole screen (buttons dead).
-  Future<void> _openExportDialog() async {
-    _exportFilename =
-        "chat_${DateTime.now().toIso8601String().split('T').first}";
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final tokens = ThemeManager().tokens;
-        return Dialog(
-          backgroundColor: tokens.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DsRadii.xl),
-          ),
-          insetPadding: const EdgeInsets.all(DsSpacing.md),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DsSpacing.lg,
-                    DsSpacing.lg,
-                    DsSpacing.md,
-                    DsSpacing.md,
-                  ),
-                  child: Text(
-                    tr('chatbot.dialogs.exportTitle'),
-                    style: TextStyle(
-                      color: tokens.fg,
-                      fontSize: tokens.textLg,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(DsSpacing.lg),
-                  child: TextField(
-                    controller: TextEditingController(text: _exportFilename),
-                    style: TextStyle(color: tokens.fg),
-                    decoration: InputDecoration(
-                      hintText: tr('chatbot.dialogs.exportHint'),
-                      hintStyle: TextStyle(color: tokens.mutedSoft),
-                    ),
-                    onChanged: (v) => _exportFilename = v,
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DsSpacing.md,
-                    DsSpacing.sm,
-                    DsSpacing.md,
-                    DsSpacing.md,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      DsButton(
-                        label: tr('common.cancel'),
-                        variant: DsButtonVariant.ghost,
-                        expand: false,
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                      ),
-                      const SizedBox(width: DsSpacing.sm),
-                      DsButton(
-                        label: tr('chatbot.dialogs.actions.export'),
-                        variant: DsButtonVariant.primary,
-                        expand: false,
-                        onPressed: _exportFilename.trim().isEmpty
-                            ? null
-                            : () {
-                                Navigator.of(dialogContext).pop();
-                                exportChatToPDF();
-                              },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Save-Chat dialog as a real modal route. It previously rendered as an
-  /// inline Dialog in the layout tree — the theme's full-width button
-  /// constraint crashed the Row layout and nothing appeared (same bug
-  /// class as the export dialog above).
-  Future<void> _openSaveDialog() async {
-    _titleController.text = _conversationTitle;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final tokens = ThemeManager().tokens;
-        return Dialog(
-          backgroundColor: tokens.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DsRadii.xl),
-          ),
-          insetPadding: const EdgeInsets.all(DsSpacing.md),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DsSpacing.lg,
-                    DsSpacing.lg,
-                    DsSpacing.md,
-                    DsSpacing.md,
-                  ),
-                  child: Text(
-                    tr('chatbot.dialogs.saveTitle'),
-                    style: TextStyle(
-                      color: tokens.fg,
-                      fontSize: tokens.textLg,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(DsSpacing.lg),
-                  child: TextField(
-                    controller: _titleController,
-                    style: TextStyle(color: tokens.fg),
-                    decoration: InputDecoration(
-                      hintText: tr('chatbot.dialogs.saveHint'),
-                      hintStyle: TextStyle(color: tokens.mutedSoft),
-                      border: const OutlineInputBorder(),
-                    ),
-                    onChanged: (v) => _conversationTitle = v,
-                    autofocus: true,
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    DsSpacing.md,
-                    DsSpacing.sm,
-                    DsSpacing.md,
-                    DsSpacing.md,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      DsButton(
-                        label: tr('common.cancel'),
-                        variant: DsButtonVariant.ghost,
-                        expand: false,
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                      ),
-                      const SizedBox(width: DsSpacing.sm),
-                      DsButton(
-                        label: tr('common.save'),
-                        variant: DsButtonVariant.primary,
-                        expand: false,
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop();
-                          saveConversation().then((_) {});
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
     final tokens = ThemeManager().tokens;
@@ -3145,10 +2946,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     tokens,
                     tr('charts.insights'),
                   ),
-                  const Row(
+                  // Stacked, not side-by-side: at phone width (360dp) two
+                  // Expanded cards leave ~136dp per card, under the summary
+                  // rows' intrinsic content width — the side-by-side row
+                  // overflowed (a defect the branch carried onto phones; the
+                  // rebase surfaced it through main's strict layout tests).
+                  const Column(
                     children: [
-                      Expanded(child: CropHealthSummaryCard()),
-                      Expanded(child: PestAlertSummaryCard()),
+                      CropHealthSummaryCard(),
+                      SizedBox(height: DsSpacing.sm),
+                      PestAlertSummaryCard(),
                     ],
                   ),
                   const SizedBox(height: DsSpacing.lg),

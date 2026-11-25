@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genie_ai_mobile/config/flavors/el_salvador.dart' as el_salvador;
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
@@ -161,15 +162,16 @@ void main() {
     });
 
     group('per-deployment locale whitelist', () {
-      test('dev flavor restricts the dropdown to its active locales', () {
-        // AgroGenio (El Salvador) ships English + Spanish only. The other 12
-        // locale files stay in source for other deployments but must not
-        // surface in the dropdown on this flavor.
-        expect(getConfig().supportedLocaleCodes, ['en', 'es']);
-        final I18nService service = I18nService();
-        expect(service.supportedLanguages.length, 2);
-        expect(service.supportedLanguages.containsKey('en'), isTrue);
-        expect(service.supportedLanguages.containsKey('es'), isTrue);
+      test('the el_salvador product flavor restricts the dropdown to en/es', () {
+        // AgroGenio (El Salvador) ships English + Spanish only. The
+        // restriction lives in the flavor that builds the product
+        // (flavors/el_salvador.dart) — the dev default keeps every shipped
+        // locale active (see dev_config.dart). I18nService derives its map
+        // from getConfig(), so `flutter test` (no FLAVOR dart-define) runs
+        // against the unrestricted dev config; this pins the product
+        // flavor's whitelist instead.
+        expect(el_salvador.config.supportedLocaleCodes, ['en', 'es']);
+        expect(getConfig().supportedLocaleCodes, allSupportedLocaleCodes);
       });
 
       test('a bare KeycloakConfig still exposes every shipped locale', () {

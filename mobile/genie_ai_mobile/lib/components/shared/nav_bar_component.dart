@@ -66,12 +66,19 @@ class NavBarComponent extends StatelessWidget {
               // 1. BRAND LOGO (horizontal wordmark carries the name —
               // no separate title text). Two variants: white wordmark
               // for a dark navbar, dark verde for a light one.
+              //
+              // Same graceful degradation as the config icon branch: a
+              // missing/unresolvable wordmark must not throw during widget
+              // build (widget tests bundle no PNG assets) — it renders
+              // nothing instead.
               Image.asset(
                 ColorUtils.isDarkColor(tokens.navbarBg)
                     ? 'assets/images/agro-genio-navbar.png'
                     : 'assets/images/agro-genio-navbar-light.png',
                 height: 40,
                 fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
               ),
 
               const Spacer(),

@@ -236,13 +236,17 @@ class RunUsageRecord:
     record the translation leg plans against; ``preparation_status`` — the
     FIRST search query's preparation status (the initial query's, in the
     contract's preparation vocabulary; ``None`` when no query was prepared);
-    ``abstention_reason`` — the FIRST insufficiency reason the search port
-    recorded through the run's abstention sink (the contract's typed
-    vocabulary — ``no_documents_retrieved``, ``reranker_input_too_long``,
+    ``abstention_reason`` — the insufficiency reason the search port
+    recorded through the run's abstention sink on the run's LATEST search
+    dispatch (the contract's typed vocabulary —
+    ``no_documents_retrieved``, ``reranker_input_too_long``,
     ``reranker_selected_nothing``, ``result_budget_exhausted``,
-    ``no_resolvable_candidates``; ``None`` when no insufficiency fired, and
-    the executor's own authorization refusals record no reason — they are
-    authorization outcomes, not retrieval insufficiencies);
+    ``no_resolvable_candidates``; ``None`` when no dispatch recorded one —
+    a run that answered from later evidence after an insufficient hop
+    carries none, and neither the executor's own authorization refusals
+    (authorization outcomes, not retrieval insufficiencies) nor the
+    preparation-driven insufficiencies (whose fact rides
+    ``preparation_status``) record through it);
     ``injection_findings`` — how many injection attempts the run's taint
     scan recorded (an attempt is a counted finding, the content
     still passed as data).
@@ -394,9 +398,11 @@ class RequestOrchestrator:
         # the FIRST one is the initial query's — the record carries it.
         preparation_statuses: list[str] = []
         # The insufficiency reasons land here, through the same toolset
-        # wiring: the FIRST recorded reason is the record's — the typed
-        # reason survives the executor boundary on the agent path exactly
-        # as the noagent pipeline records it on its direct call.
+        # wiring: the search executor keeps this list at the LATEST search
+        # dispatch's recorded reason (a successful retry after an
+        # insufficient hop clears it), and the record carries it — the
+        # typed reason survives the executor boundary on the agent path
+        # exactly as the noagent pipeline records it on its direct call.
         abstention_reasons: list[str] = []
 
         def record(outcome: str, *, error: str | None) -> RunUsageRecord:
@@ -427,7 +433,7 @@ class RequestOrchestrator:
                 self._config.operation_budget,
                 preparer=preparer,
                 on_preparation_status=preparation_statuses.append,
-                abstention_sink=abstention_reasons.append,
+                abstention_sink=abstention_reasons,
             )
             verifier = VerificationPipeline(
                 policy=self._config.verdict_policy,

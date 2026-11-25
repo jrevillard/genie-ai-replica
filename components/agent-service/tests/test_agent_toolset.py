@@ -286,16 +286,16 @@ def test_a_missing_or_blank_query_is_the_same_structured_refusal_on_both_paths(p
 
 
 def test_the_run_abstention_sink_rides_the_toolset_call_to_the_port():
-    """The sink the caller supplies (the run's recorder) reaches the port
-    with the search dispatch, and the typed insufficiency reason the port
-    fires through it lands in the caller's list — the agent-path counterpart
-    of the noagent pipeline's direct-call recording."""
+    """The recording list the caller supplies (the run's) is kept at the
+    search dispatch's recorded reason, and the port receives the per-call
+    hook — the agent-path counterpart of the noagent pipeline's
+    direct-call recording."""
     reasons: list[str] = []
     port = AgentFakePort(
         search_result=canned_search_result(hits=(), outcome=OutcomeCode.INSUFFICIENT_EVIDENCE),
         sink_reason="no_documents_retrieved",
     )
-    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, abstention_sink=reasons.append)
+    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, abstention_sink=reasons)
 
     result = asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
 
@@ -304,7 +304,7 @@ def test_the_run_abstention_sink_rides_the_toolset_call_to_the_port():
     assert port.search_calls[0]["abstention_sink"] is not None
 
 
-def test_an_absent_abstention_sink_keeps_the_toolset_call_at_three_args():
+def test_an_absent_abstention_sink_passes_none_to_the_port():
     """No sink supplied (the probe path, any caller that does not want the
     reason): the port call carries ``abstention_sink=None`` — the contract's
     optional hook stays optional, no behavior change."""

@@ -113,10 +113,11 @@ class AuthorizedExecutor:
         port takes: threading it here means an insufficiency answered
         through the executor records its exact reason WHEN a caller
         supplies the sink — the reason no longer dies at the executor
-        boundary for a caller that wants it. Both production callers
+        boundary for a caller that wants it. Both run-recording callers
         supply one: the noagent pipeline calls the capability directly,
         and the agent path's toolset threads the run's own sink (the
-        recorded reason lands on the run's usage record). The executor's
+        recorded reason lands on the run's usage record); the probe's
+        toolset passes none — a probe search records no reason. The executor's
         own authorization refusals (no authorized graphs, no surviving
         authorized hits) record no reason through it — they are
         authorization outcomes, not retrieval insufficiencies.

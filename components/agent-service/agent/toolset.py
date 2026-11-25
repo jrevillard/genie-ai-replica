@@ -77,9 +77,10 @@ def document_toolset(
     module's entry; ``on_preparation_status`` (optional) receives each
     query's :class:`~capabilities.contract.QueryPreparationStatus` value, so
     the caller records what preparation actually did; ``abstention_sink``
-    (optional) is the contract's per-call hook the search executor threads
-    to the port, so an insufficiency answered through the search records
-    its exact reason for the caller (the run's usage record). The executors
+    (optional) is the caller's recording LIST (the run's — read after the
+    run): the search executor keeps it at the LATEST dispatch's recorded
+    reason (cleared when a dispatch records none), so a successful retry
+    after an insufficient hop records no reason. The executors
     adapt the model-generated JSON arguments into the contract's input
     types — a ``PreparedQuery`` and a ``SourceRef`` — and carry the fixed
     ``CallerContext``. An argument the contract refuses (a missing query, a
@@ -212,9 +213,23 @@ def _make_search_executor(
             if on_preparation_status is not None:
                 on_preparation_status(preparation.status.value)
             prepared = preparation.query
+        # The dispatch records into a FRESH per-call list (the noagent
+        # pipeline's exact shape); afterwards the run's list is kept at
+        # THIS dispatch's reasons — cleared when the search recorded
+        # nothing, so a later successful search after an insufficient hop
+        # records no reason and the record never misattributes an earlier
+        # hop's insufficiency onto a run that answered from later
+        # evidence. The capability fires at most one reason per call.
+        sink_reasons: list[str] = []
         result = await port.search_knowledge(
-            context, SearchKnowledgeInput(query=prepared), budget, abstention_sink=abstention_sink
+            context,
+            SearchKnowledgeInput(query=prepared),
+            budget,
+            abstention_sink=sink_reasons.append if abstention_sink is not None else None,
         )
+        if abstention_sink is not None:
+            abstention_sink.clear()
+            abstention_sink.extend(sink_reasons)
         return result.model_dump(mode="json")
 
     return execute

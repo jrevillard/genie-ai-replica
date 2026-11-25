@@ -25,6 +25,90 @@ final RegExp _conceptsPrefixRe = RegExp(r'^concepts/');
 final RegExp _dotSlashPrefixRe = RegExp(r'^\./');
 final RegExp _unsafeIdCharsRe = RegExp(r'[^A-Za-z0-9._-]');
 
+/// The longest concept body the pane renders. A concept may carry up to the
+/// deployment's ceiling (~250 000 characters); the pane shows a bounded
+/// PREVIEW and says so (the truncation notice).
+const int _maxPreviewChars = 20000;
+
+/// The longest run of letters and digits a preview shows before a soft
+/// space is inserted inside it.
+///
+/// One unbroken run (a base64 blob, a hex digest, a long identifier) is
+/// what makes the markdown inline parser backtrack quadratically: on the
+/// pinned markdown version, 20 000 characters in one run cost ~1.4 s on
+/// the UI thread, the same characters broken every 500 cost ~4 ms.
+const int _previewRunWidth = 500;
+
+/// The body the pane shows: the concept's markdown, bounded, and whether
+/// the bound dropped anything.
+///
+/// The bound has two halves, and both matter:
+///  - the LENGTH: a concept may carry up to the deployment's ceiling
+///    (~250 000 characters), which freezes the UI thread on a phone;
+///  - the longest unbroken run of letters and digits: the markdown inline
+///    parser backtracks quadratically over one, and a naive cut CREATES
+///    that shape (cutting a long line leaves a long run).
+///
+/// The cut never leaves an ill-formed string: a surrogate is not a letter
+/// or a digit, so the run resets at one and a break can never land inside
+/// a surrogate pair; a trailing lone high surrogate is dropped.
+({String text, bool truncated}) _boundedPreview(String body) {
+  if (body.length <= _maxPreviewChars && !_hasLongRun(body)) {
+    return (text: body, truncated: false);
+  }
+  final buffer = StringBuffer();
+  int run = 0;
+  // The body characters the preview keeps — the breaks the preview inserts
+  // count against the bound, so they cannot be the measure of what was
+  // dropped.
+  int kept = 0;
+  for (var i = 0; i < body.length; i++) {
+    if (buffer.length >= _maxPreviewChars) break;
+    final int unit = body.codeUnitAt(i);
+    buffer.writeCharCode(unit);
+    kept++;
+    if (!_isAlnum(unit)) {
+      run = 0;
+      continue;
+    }
+    run++;
+    if (run >= _previewRunWidth && buffer.length < _maxPreviewChars) {
+      buffer.write(' ');
+      run = 0;
+    }
+  }
+  String text = buffer.toString();
+  if (text.isNotEmpty) {
+    final int last = text.codeUnitAt(text.length - 1);
+    if (last >= 0xD800 && last <= 0xDBFF) {
+      text = text.substring(0, text.length - 1);
+      kept--;
+    }
+  }
+  // Truncated EXACTLY when body characters were dropped: the breaks the
+  // preview inserts count against the bound, so the flag cannot be derived
+  // from the body's length alone.
+  return (text: text, truncated: kept < body.length);
+}
+
+bool _isAlnum(int unit) =>
+    (unit >= 0x30 && unit <= 0x39) ||
+    (unit >= 0x41 && unit <= 0x5A) ||
+    (unit >= 0x61 && unit <= 0x7A);
+
+bool _hasLongRun(String body) {
+  int run = 0;
+  for (var i = 0; i < body.length; i++) {
+    if (_isAlnum(body.codeUnitAt(i))) {
+      run++;
+      if (run >= _previewRunWidth) return true;
+    } else {
+      run = 0;
+    }
+  }
+  return false;
+}
+
 /// The mobile OKF concept-tree browser (#1939 — the W9 browser's mobile
 /// mirror). Citizen-scoped reads only: the tree list, the concept pane,
 /// back/forward over visited concepts, related-concept chips, download.
@@ -67,6 +151,10 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   // the exact UI thread the chunking exists to protect).
   String? _chunksFor;
   List<String> _chunks = const [''];
+
+  // Whether the bounded preview dropped part of the body — the pane says
+  // so instead of pretending the document ended here.
+  bool _truncated = false;
 
   @override
   void initState() {
@@ -560,18 +648,25 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     // repo's citizen card carried a 249,557-char body and one
     // whole-document MarkdownBody wedged the render pipeline — the card
     // pane painted nothing. The chunker cuts at paragraph boundaries and
-    // the ListView builds only the visible slice: a 250k body parses
-    // viewport-sized pieces, the FULL content kept. MarkdownBody DEFAULTS
+    // the ListView builds only the visible slice. MarkdownBody DEFAULTS
     // — no HTML extension. A concept body's raw HTML renders as text; it
     // never executes. The chunk list is memoized per concept id (the
     // /simplify review: _cardView runs on every rebuild — a 250k re-walk
     // per filter keystroke was the exact UI-thread work the chunking
     // exists to protect).
+    //
+    // The chunking is the RENDER strategy; the preview bound is the
+    // CONTENT bound (#2169): the pane shows a bounded preview of the
+    // concept and says so when the bound dropped something — the user
+    // learns the document continues instead of believing it ended.
     if (_chunksFor != card.conceptId) {
       _chunksFor = card.conceptId;
-      _chunks = chunkMarkdownBody(card.body ?? '');
+      final preview = _boundedPreview(card.body ?? '');
+      _truncated = preview.truncated;
+      _chunks = chunkMarkdownBody(preview.text);
     }
     final chunks = _chunks;
+    final truncated = _truncated;
     final hasChips = chips.isNotEmpty;
 
     Widget buildItem(BuildContext context, int index) {
@@ -602,6 +697,14 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
               ],
             ),
             const SizedBox(height: DsSpacing.sm),
+            if (truncated) ...[
+              Text(
+                tr('sidebar.okfConceptTruncated'),
+                key: const ValueKey('okf-browser-truncated-notice'),
+                style: TextStyle(color: tokens.muted, fontSize: tokens.textSm),
+              ),
+              const SizedBox(height: DsSpacing.sm),
+            ],
           ],
         );
       }

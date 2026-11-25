@@ -229,6 +229,43 @@ void main() {
       expect(verdict.extra, isEmpty);
     });
 
+    test('keeps the metadata frame when a string field is not a string', () {
+      // A malformed field degrades THAT field; it must never throw and drop
+      // the whole event (the metadata frame carries the sources, the
+      // confidence and the verdict the answer renders from).
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.9,'
+        '"query_translation_status":42,"grounding_status":true}\n\n',
+      );
+      expect(events, hasLength(1));
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.queryTranslationStatus, isNull);
+      expect(meta.groundingStatus, isNull);
+    });
+
+    test('keeps the metadata frame when a list field is not a list', () {
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":"not-a-list",'
+        '"confidence_score":0.9,"is_grounded":"yes"}\n\n',
+      );
+      expect(events, hasLength(1));
+      final meta = events[0] as SseMetadataEvent;
+      expect(meta.sourceDocuments, isEmpty);
+      expect(meta.isGrounded, isFalse);
+    });
+
+    test('keeps the verdict frame when a string field is not a string', () {
+      final events = parser.parseChunk(
+        'data: {"type":"agent_verdict","version":1,"grounding_status":7,'
+        '"is_grounded":"yes","translation_mode":true}\n\n',
+      );
+      expect(events, hasLength(1));
+      final verdict = events[0] as SseAgentVerdictEvent;
+      expect(verdict.groundingStatus, isNull);
+      expect(verdict.isGrounded, isFalse);
+      expect(verdict.translationMode, isNull);
+    });
+
     test('parses translation event', () {
       final events = parser.parseChunk(
         'data: {"type":"translation","content":"Bonjour"}\n\n',

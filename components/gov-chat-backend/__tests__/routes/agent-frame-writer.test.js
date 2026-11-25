@@ -24,6 +24,18 @@ const { createWholeAnswerTranslator } = require('../../services/translation/agen
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
 jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-lib'), { virtual: true });
 
+// The upstream timeout the wall-clock deadline arms from. The frame writer
+// reads it through the contract module at IMPORT time, so a test that needs
+// a short deadline overrides it through this global — the mock reads it at
+// CALL time, and the default (null) is the contract's own resolution.
+jest.mock('../../services/agent-run-contract', () => {
+  const actual = jest.requireActual('../../services/agent-run-contract');
+  return {
+    ...actual,
+    resolveUpstreamTimeoutMs: () => global.__agentUpstreamTimeoutMs ?? actual.resolveUpstreamTimeoutMs()
+  };
+});
+
 jest.mock('../../services/keycloak-auth-service', () => ({
   verifyToken: jest.fn(),
   checkUserStatusInKeycloak: jest.fn()
@@ -320,8 +332,21 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     });
     expect(chunkA).toEqual({ type: 'chunk', content: 'Hello ' });
     expect(chunkB).toEqual({ type: 'chunk', content: 'world.' });
-    // The verdict frame carries the projection payload verbatim + the version.
-    expect(verdictFrame).toEqual({ type: 'agent_verdict', version: 1, ...GROUNDED_VERDICT });
+    // The verdict frame carries the projection payload + the version — but
+    // NOT the heavy fields: the citations carry the full passage text and
+    // the client receives the citation rows as source_documents on the
+    // metadata frame.
+    expect(verdictFrame).toEqual({
+      type: 'agent_verdict',
+      version: 1,
+      grounding_status: GROUNDED_VERDICT.grounding_status,
+      is_grounded: GROUNDED_VERDICT.is_grounded,
+      translation_mode: GROUNDED_VERDICT.translation_mode,
+      policy: GROUNDED_VERDICT.policy,
+      judge: GROUNDED_VERDICT.judge,
+      insufficient_evidence: GROUNDED_VERDICT.insufficient_evidence,
+      marking: GROUNDED_VERDICT.marking
+    });
 
     // The metadata frame keeps the legacy shape; grounding + agent_run ride
     // additively, the citations are mapped into the deployed envelope rows.
@@ -366,7 +391,10 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     // deliberate override: an agentic turn is an ANSWER in the legacy
     // abstention vocabulary, never the "chatqna never answered" null.
     expect(metadata.abstained).toBe(false);
-    expect(metadata.filter_labels).toBeNull();
+    // The scope the run applied is recorded: this run narrowed on no label,
+    // so the doc reads "ran unfiltered" (the empty list the noagent lane
+    // records) — not the base's "not recorded" null.
+    expect(metadata.filter_labels).toEqual([]);
     // The interrupted marker is a partial-save-only field: a normal
     // completion never carries it.
     expect(metadata.answer_interrupted).toBeUndefined();
@@ -398,7 +426,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
 
     expect(axios.post).toHaveBeenCalledTimes(1);
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     // deadline_ms = AGENT_UPSTREAM_TIMEOUT_MS − translation reserve −
     // finalization reserve (the pair rule holds by construction) — asserted
     // as the explicit arithmetic on the shipped constants, not by calling
@@ -471,7 +499,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     });
 
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     expect(body.deadline_ms).toBe(60000 - _internals.TRANSLATION_RESERVE_MS - _internals.FINALIZATION_MARGIN_MS);
     // The wire-level timeout is the configured 60000, not a derived value.
     expect(options.timeout).toBe(60000);
@@ -520,7 +548,9 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
       // assertion owns a fresh one instead of depending on test order. The
       // virtual shared-lib mock resolves to the suite's shared logger
       // instance, so the count below reads the fresh module's warnings.
-      freshContract = require('../../services/agent-run-contract');
+      // requireActual (not require): the suite mocks this module for the
+      // deadline seam, and the assertion wants the REAL resolver.
+      freshContract = jest.requireActual('../../services/agent-run-contract');
     });
     freshContract.resolveUpstreamTimeoutMs();
     freshContract.resolveUpstreamTimeoutMs();
@@ -542,7 +572,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     });
 
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     // The deadline the run paces against AND the timeout the BFF aborts with
     // are the SAME absorbed value — the small configuration aborts nothing
     // ahead of the run's own honest ending.
@@ -650,6 +680,23 @@ describe('POST /api/queries/stream — pre-stream refusals (JSON, before any SSE
       'AgentRunContract.upstream_body_stream_error',
       expect.objectContaining({ status: 429, error: 'connection reset mid-body' })
     );
+  });
+
+  it('a body that dies mid-read keeps the buffered head — the upstream answer is not discarded', async () => {
+    // The body already received its head (the upstream's own error payload);
+    // a mid-read death must not replace that named answer with the generic
+    // fallback.
+    const { EventEmitter } = require('stream');
+    const { readUpstreamBody } = require('../../services/agent-run-contract');
+    const body = new EventEmitter();
+    const pending = readUpstreamBody(body, 429);
+    body.emit('data', Buffer.from('{"error":"admission_refused"}'));
+    body.emit('error', new Error('connection reset mid-body'));
+
+    await expect(pending).resolves.toEqual({
+      text: '{"error":"admission_refused"}',
+      parsed: { error: 'admission_refused' }
+    });
   });
 
   it('a body whose JSON only exists past the cap degrades to the documented fallback', async () => {
@@ -1322,16 +1369,20 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
       const text = response.text;
       const metaPos = text.indexOf('"type":"metadata"');
       const translationPos = text.indexOf('"type":"translation"');
-      // The FIRST keepalive AT OR AFTER the metadata frame: a setup tick that
-      // fired before the terminal (possible on a loaded runner) lands earlier
-      // in the stream and must not satisfy the window assertion.
-      const keepalivePos = text.indexOf(': keepalive', metaPos);
+      // The agentic leg resolves its translation BEFORE the metadata frame
+      // (the leg's V05 status rides that frame), so the translation window —
+      // and the keepalive ticks covering it — land BEFORE the metadata frame.
+      const keepalivePos = text.lastIndexOf(': keepalive', metaPos);
       expect(metaPos).toBeGreaterThan(-1);
       expect(translationPos).toBeGreaterThan(-1);
-      // The keepalive ticked DURING the translation window (after metadata,
-      // before the translation frame) — the wire never went silent.
+      // The keepalive ticked DURING the translation window — the wire never
+      // went silent. The window is 250ms with a 50ms tick: more than one tick
+      // before the metadata frame is the window's own coverage (a setup tick
+      // that fired before the terminal cannot account for it).
+      const ticksBeforeMetadata = text.slice(0, metaPos).split(': keepalive').length - 1;
+      expect(ticksBeforeMetadata).toBeGreaterThan(1);
       expect(keepalivePos).toBeGreaterThan(-1);
-      expect(keepalivePos).toBeLessThan(translationPos);
+      expect(keepalivePos).toBeLessThan(metaPos);
       const frames = parseSSEEvents(text);
       expect(frames[frames.length - 1].type).toBe('done');
       expect(frames[frames.length - 1].translationFailed).toBe(false);
@@ -1899,5 +1950,204 @@ describe('proxyAgentRun — story 2.11, the run-start handshake and the honest o
       expect(serialized).not.toMatch(/bearer|authorization|secret|api[_-]?key|password/i);
       expect(serialized).not.toContain('Bearer tok');
     }
+  });
+});
+
+// ── the terminal facts (the W-P2 seams hardening wave) ───────────────────────
+
+describe('POST /api/queries/stream — the terminal facts (the W-P2 wave)', () => {
+  afterEach(() => {
+    global.__agentUpstreamTimeoutMs = null;
+  });
+
+  it('the verdict frame carries no passage text — the citation rows ride the metadata frame', async () => {
+    setupAgentQuery();
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'What is the tax rate?' }]
+    });
+
+    const frames = parseSSEEvents(response.text);
+    const verdictFrame = frames.find((f) => f.type === 'agent_verdict');
+    // The citations carry the full passage text: they stay server-side.
+    expect(verdictFrame.citations).toBeUndefined();
+    expect(verdictFrame.invalid_citations).toBeUndefined();
+    expect(verdictFrame.findings).toBeUndefined();
+    expect(JSON.stringify(verdictFrame)).not.toContain('bees pollinate');
+    // The client still gets the citation rows — on the metadata frame.
+    const metadata = frames.find((f) => f.type === 'metadata');
+    expect(metadata.source_documents.length).toBeGreaterThan(0);
+  });
+
+  it('a pre-stream refusal is not logged as a client disconnect', async () => {
+    setupAgentQuery();
+    const { logger } = require('../mocks/shared-lib');
+    axios.post.mockResolvedValue({
+      status: 429,
+      headers: {},
+      data: dataStream('{"error":"admission_refused"}')
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+    expect(response.status).toBe(429);
+
+    // The response is over: its own 'close' event is the refusal's end, not
+    // a client that left.
+    await flush(50);
+    const disconnects = logger.info.mock.calls.filter((call) => call[0] === 'QueryService.stream_client_disconnected');
+    expect(disconnects).toHaveLength(0);
+  });
+
+  it('a tool call that ended on an error is reported as failed', async () => {
+    setupAgentQuery();
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: seamStream([
+        envelope('run_started', { question: 'q' }, { seq: 0 }),
+        envelope(
+          'tool_call_started',
+          { name: 'search_knowledge', arguments: { query: 'tax' } },
+          { seq: 1, call_id: 'c1' }
+        ),
+        envelope(
+          'tool_call_finished',
+          { error: { code: 'retrieval_failed', operation: 'search_knowledge', message: 'boom' } },
+          { seq: 2, call_id: 'c1' }
+        ),
+        envelope('text_message_content', { text: 'Hello.' }, { seq: 3 }),
+        envelope('verdict', GROUNDED_VERDICT, { seq: 4 }),
+        envelope('run_finished', { outcome: 'answered' }, { seq: 5 }),
+        { usage_record: USAGE_RECORD }
+      ])
+    });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    const activities = parseSSEEvents(response.text).filter((f) => f.type === 'agent_activity');
+    expect(activities.map((f) => f.status)).toEqual(['started', 'failed']);
+  });
+
+  it('the success finalize never overwrites a latched terminal outcome', async () => {
+    global.__agentUpstreamTimeoutMs = 50;
+    setupAgentQuery();
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+    responsePromise.catch(() => {});
+    for (let i = 0; i < 500 && mockStream.listenerCount('data') === 0; i++) {
+      await flush(10);
+    }
+    mockStream.push(`data: ${JSON.stringify(envelope('text_message_content', { text: 'Hello.' }, { seq: 0 }))}\n\n`);
+    // The deadline fires: the run is latched as timed_out.
+    await flush(120);
+    expect(queryService.persistAgentRunOutcome).toHaveBeenCalledWith('q1', 'timed_out');
+
+    // The upstream still ends normally — the assembled block must not
+    // overwrite the latched terminal with 'answered'.
+    mockStream.push(`data: ${JSON.stringify(envelope('verdict', GROUNDED_VERDICT, { seq: 1 }))}\n\n`);
+    mockStream.push(`data: ${JSON.stringify({ usage_record: USAGE_RECORD })}\n\n`);
+    mockStream.emit('end');
+
+    const response = await responsePromise;
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.agent_run.outcome).toBe('timed_out');
+  });
+
+  it('the doc records the scope the run applied', async () => {
+    setupAgentQuery();
+    queryService.buildAgentCallerContext.mockImplementation(() => ({
+      user_id: 'user-123',
+      authorized_graph_names: [],
+      authorized_repos: [],
+      requested_labels: ['theme:energy']
+    }));
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.filter_labels).toEqual(['theme:energy']);
+  });
+
+  it('the agentic terminal carries the leg status and the answer-translation outcome', async () => {
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn().mockResolvedValue({
+        text: 'Bonjour le monde.',
+        failed: false,
+        queryTranslationStatus: 'translated',
+        accounting: {
+          outcome: 'translated',
+          queryTranslationStatus: 'translated',
+          configError: null,
+          mode: 'full-answer'
+        },
+        error: null
+      })
+    );
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'FR' }
+    });
+
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    // The leg's V05 status rides the metadata frame — the client reads the
+    // live status there (the persisted doc carries it too).
+    expect(metadata.query_translation_status).toBe('translated');
+    // The answer-translation outcome, presence-keyed: 'ok' — a translation
+    // was delivered.
+    expect(metadata.translation_status).toBe('ok');
+  });
+
+  it('a failed leg translation persists the failed outcome', async () => {
+    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    setupAgentQuery();
+    createWholeAnswerTranslator.mockImplementation(() =>
+      jest.fn().mockResolvedValue({
+        text: null,
+        failed: true,
+        queryTranslationStatus: 'fallback_error',
+        accounting: {
+          outcome: 'failed',
+          queryTranslationStatus: 'fallback_error',
+          configError: null,
+          mode: 'full-answer'
+        },
+        error: null
+      })
+    );
+    axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'FR' }
+    });
+
+    const frames = parseSSEEvents(response.text);
+    const metadata = frames.find((f) => f.type === 'metadata');
+    expect(metadata.translation_status).toBe('failed');
+    const done = frames[frames.length - 1];
+    expect(done.translationFailed).toBe(true);
   });
 });

@@ -582,7 +582,7 @@ class QueryService {
    *   its CallerContext assembly, so the carrier attach (a second upstream
    *   read of a posture it would not use) is skipped there. The legacy entry
    *   keeps the attach.
-   * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
+   * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, authHeaders, queryData }
    */
   async initStreamQuery(queryData, authHeaders, { skipFanoutCarrier = false } = {}) {
     logger.info('QueryService.init_stream_query_start');

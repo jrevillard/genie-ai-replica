@@ -38,9 +38,11 @@ bool isOkfConceptSource(Map? doc) {
   return _pick(doc, const ['concept_id', 'conceptId']) != null;
 }
 
-/// Whether a citation may render the browse affordance — a WORKING
-/// okf-concept row WITH repo identity. A pre-CAP-1 row (no repo_id) or a
-/// legacy document gets no affordance anywhere, so an entry is never dead.
+/// Whether a citation row carries the BROWSE identity — a WORKING
+/// okf-concept row WITH repo identity. A row that names a concept but lost
+/// its repository (a pre-CAP-1 row) carries no identity HERE: the shared
+/// opener resolves its repository live (okf_citation_open.dart), and a
+/// legacy document is never browsable.
 bool canBrowseSource(Map? doc) {
   if (doc == null || doc.isEmpty) return false;
   if (!isOkfConceptSource(doc)) return false;

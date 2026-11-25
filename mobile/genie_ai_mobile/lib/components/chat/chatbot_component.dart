@@ -33,6 +33,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 import 'package:genie_ai_mobile/okf/okf_citation.dart';
 import 'package:genie_ai_mobile/okf/okf_citation_open.dart';
+import 'package:genie_ai_mobile/okf/concept_browser_repository.dart';
 
 import 'quick_help_scope.dart';
 
@@ -1477,6 +1478,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
+                    // The same delivery marker the live path stamps: the
+                    // whole-answer translation frame IS the delivery, and the
+                    // save reads this variable to know it.
+                    translationMode = 'post-stream';
                   case SseErrorEvent(:final message):
                     debugPrint('[SSE] Error event (flush): $message');
                   case SseAgentActivityEvent():
@@ -1488,6 +1493,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     translationMode = mode;
                 }
               }
+
+              // The answer-translation outcome, PRESENCE-KEYED (the
+              // vocabulary the restore reads — isTranslationFailed): the
+              // key is present only when a translation was actually
+              // attempted. 'ok' means the answer WAS translated, 'failed'
+              // means one was attempted and broke, absent means none was
+              // asked for (an English UI) or none was delivered (a skipped
+              // translation). Stamping 'ok' on every turn claimed a
+              // translation that never happened.
+              final String? answerTranslationStatus = answerTranslationFailed
+                  ? 'failed'
+                  : (translationMode == 'post-stream' ||
+                        translationMode == 'streaming-units')
+                  ? 'ok'
+                  : null;
 
               final msg = findStreamingMessage();
               if (msg != null) {
@@ -1513,9 +1533,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     // — the agent lane's server-side doc does not, and a
                     // restored failed translation would otherwise read as
                     // a delivered one.
-                    'translation_status': answerTranslationFailed
-                        ? 'failed'
-                        : 'ok',
+                    'translation_status': answerTranslationStatus,
                     // The delivery mode, folded when this turn learned it
                     // (web's storableMetadata): the restored conversation's
                     // scope caption reads it — a restored answer scopes its
@@ -2539,8 +2557,19 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   /// ladder; an OKF row that cannot be browsed gets the notice, never a
   /// silent external launch). What remains here is this surface's own
   /// external-URL rung and the final honest notice.
-  void _openCitation(Map<String, dynamic> doc) {
-    if (openOkfCitation(context, doc, logTag: 'chat.citation')) return;
+  ///
+  /// The opener resolves a concept's repository LIVE when the citation row
+  /// carries none, so it is asynchronous: the external-URL rung runs after
+  /// that resolution answered.
+  Future<void> _openCitation(Map<String, dynamic> doc) async {
+    final handled = await openOkfCitation(
+      context,
+      doc,
+      logTag: 'chat.citation',
+      repository: ref.read(conceptBrowserRepositoryProvider),
+    );
+    if (!mounted) return;
+    if (handled) return;
     final url = (doc['url'] ?? doc['sourceUrl'] ?? '').toString();
     final uri = Uri.tryParse(url);
     if (uri != null &&

@@ -663,6 +663,124 @@ void main() {
     },
   );
 
+  /// Mounts the saving mock, feeds [frames], saves the conversation and
+  /// returns the assistant message's saved metadata map — the record the
+  /// restore reads (isTranslationFailed).
+  Future<Map<String, dynamic>> savedMetadataOf(
+    WidgetTester tester,
+    List<Map<String, dynamic>> frames,
+  ) async {
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    final saving = _SavingStreamMockClient(tree);
+    final controller = await mountStreaming(
+      tester,
+      mock: saving,
+      chatKey: chatKey,
+    );
+
+    controller.add(_frames(frames));
+    await controller.close();
+    await tester.pumpAndSettle();
+
+    await chatKey.currentState!.saveConversation();
+    await tester.pumpAndSettle();
+
+    final assistantBodies = saving.savedMessageBodies
+        .where((body) => body['metadata'] != null)
+        .toList();
+    expect(assistantBodies, hasLength(1));
+    return assistantBodies.single['metadata'] as Map<String, dynamic>;
+  }
+
+  testWidgets(
+    'the save omits translation_status when no translation was delivered',
+    (tester) async {
+      // The field is PRESENCE-KEYED: the key is present only when a
+      // translation was actually attempted. A turn that never translated
+      // (an English UI, a skipped translation) carries no key at all —
+      // stamping 'ok' there claimed a translation that never happened.
+      final metadata = await savedMetadataOf(tester, [
+        {'type': 'chunk', 'content': 'Answer'},
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+        },
+        {'type': 'done', 'queryId': 'q-no-translation'},
+      ]);
+
+      expect(metadata.containsKey('translation_status'), isFalse);
+    },
+  );
+
+  testWidgets('the save stamps ok when the translation was delivered', (
+    tester,
+  ) async {
+    // The whole-answer translation frame IS the delivery ('post-stream').
+    final metadata = await savedMetadataOf(tester, [
+      {'type': 'chunk', 'content': 'The verified English answer'},
+      {
+        'type': 'metadata',
+        'source_documents': <dynamic>[],
+        'confidence_score': 0.9,
+        'grounding_status': 'grounded',
+        'is_grounded': true,
+      },
+      {'type': 'translation', 'content': 'La réponse vérifiée'},
+      {'type': 'done', 'queryId': 'q-translated'},
+    ]);
+
+    expect(metadata['translation_status'], 'ok');
+  });
+
+  testWidgets(
+    'the save stamps ok when the verdict reported relayed translated units',
+    (tester) async {
+      // The relay path: the translated units were the delivery
+      // ('streaming-units' on the verdict frame).
+      final metadata = await savedMetadataOf(tester, [
+        {'type': 'chunk', 'content': 'Réponse'},
+        {
+          'type': 'agent_verdict',
+          'version': 1,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+          'translation_mode': 'streaming-units',
+        },
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+        },
+        {'type': 'done', 'queryId': 'q-streaming-units'},
+      ]);
+
+      expect(metadata['translation_status'], 'ok');
+    },
+  );
+
+  testWidgets('the save stamps failed when the translation failed', (
+    tester,
+  ) async {
+    final metadata = await savedMetadataOf(tester, [
+      {'type': 'chunk', 'content': 'Answer'},
+      {
+        'type': 'metadata',
+        'source_documents': <dynamic>[],
+        'confidence_score': 0.9,
+        'grounding_status': 'grounded',
+        'is_grounded': true,
+      },
+      {'type': 'done', 'queryId': 'q-failed', 'translationFailed': true},
+    ]);
+
+    expect(metadata['translation_status'], 'failed');
+  });
+
   testWidgets(
     'the save uploads the answer-translation outcome the restore reads',
     (tester) async {

@@ -298,6 +298,11 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   let capturedVerdict = null;
   let usageRecord = null;
   let failure = null;
+  // The run reached its terminal (the `run_finished` event or the usage
+  // record): the answer is complete. The wall-clock deadline is CLEARED
+  // there — a deadline that fires after the terminal would abort a run that
+  // already delivered its answer, and the abort would discard it.
+  let runCompleted = false;
 
   stream.setEncoding('utf8');
 
@@ -322,8 +327,15 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
         }
         case 'text_message_started':
         case 'text_message_finished':
-        case 'run_finished':
           // Run lifecycle and the text-message envelope are seam-internal.
+          break;
+        case 'run_finished':
+          // The run reached its terminal: the deadline is cleared (the
+          // answer is complete — an abort now would discard it) and the
+          // completion is recorded, so a late abort cannot be read as a
+          // timeout of a COMPLETED run.
+          runCompleted = true;
+          clearDeadline();
           break;
         case 'text_message_content': {
           const text = event.payload?.text;
@@ -364,6 +376,11 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       }
     } else if (parsed.type === 'usage_record') {
       usageRecord = parsed.record;
+      // The terminal record: the run is complete. The deadline is cleared
+      // here — the answer is in hand, and a deadline that fires in the end
+      // tick would abort a run that already delivered it.
+      runCompleted = true;
+      clearDeadline();
     } else {
       logger.warn('AgentJsonResult.seam_parse_error', {
         queryId,
@@ -443,10 +460,12 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   if (failure) {
     throw failure;
   }
-  if (controller.signal.aborted) {
+  if (controller.signal.aborted && !runCompleted) {
     // A wall-clock abort whose stream terminated without an 'error' event
     // (destroyed, 'close' only) is still a BFF-attributed timeout — never a
-    // truncated-but-complete answer.
+    // truncated-but-complete answer. A run that already reached its terminal
+    // is NOT that case: the abort fired after the answer was complete (the
+    // end tick), and it must not discard it.
     throw new AgentJsonTurnError(504, {
       error: 'AGENT_SERVICE_UNAVAILABLE',
       message: 'Agent service unavailable or timed out'
@@ -468,6 +487,10 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   let deliveredText = fullResponseText;
   let translationFailed = false;
   let translationStatus = null;
+  // The delivery mode of the answer translation, in the vocabulary the
+  // streaming path uses: 'post-stream' — the whole answer was translated
+  // after the run. Null when no translation was delivered.
+  let translationMode = null;
   if (wantsTranslation(targetLanguage) && fullResponseText) {
     // The bound translator: construction, deadline clock and fail-soft
     // delivery are the leg module's one home (the helper never raises).
@@ -486,6 +509,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       translationFailed = true;
     } else if (legResult.text) {
       deliveredText = legResult.text;
+      translationMode = 'post-stream';
     }
   }
 
@@ -495,13 +519,36 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // block merges the run-start record + the `answered` outcome —
   // createQuery's tail writes it, completing the start write.
   const metadata = applyAbstentionOverlay(
-    assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome: 'answered' }),
+    assembleAgentMetadata({
+      verdict: capturedVerdict,
+      runId,
+      usageRecord,
+      runStart,
+      outcome: 'answered',
+      // The scope the run applied (the request's own narrowing) — the doc
+      // states it instead of the base's "not recorded" null.
+      filterLabels: callerContext?.requested_labels
+    }),
     capturedVerdict
   );
   // The leg's V05 status rides the persisted metadata (presence-keyed, like
   // the legacy passthrough: absent when no translation was asked for).
   if (translationStatus) {
     metadata.query_translation_status = translationStatus;
+  }
+  // The delivery mode rides it too — the streaming path annotates it on the
+  // verdict frame, and this entry has no frames: the metadata IS the
+  // record.
+  if (translationMode) {
+    metadata.translation_mode = translationMode;
+  }
+  // The answer-translation outcome, presence-keyed (the noagent lane's
+  // vocabulary): 'ok' when a translation was delivered, 'failed' when one
+  // was attempted and failed, absent when none was asked for.
+  if (translationFailed) {
+    metadata.translation_status = 'failed';
+  } else if (translationMode) {
+    metadata.translation_status = 'ok';
   }
 
   const result = {

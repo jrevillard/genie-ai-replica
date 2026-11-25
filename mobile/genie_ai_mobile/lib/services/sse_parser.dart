@@ -215,25 +215,58 @@ class SseParser {
 
   SseMetadataEvent _parseMetadata(Map<String, dynamic> json) {
     return SseMetadataEvent(
-      sourceDocuments: json['source_documents'] as List<dynamic>? ?? [],
-      confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
-      isGrounded: json['is_grounded'] as bool? ?? false,
-      // Tolerant num cast, like confidenceScore above: a double from the wire
+      sourceDocuments: _asList(json, 'source_documents'),
+      confidenceScore: _asNum(json, 'confidence_score')?.toDouble() ?? 0.0,
+      isGrounded: _asBool(json, 'is_grounded') ?? false,
+      // Tolerant num read, like confidenceScore above: a double from the wire
       // must degrade this one field, not throw and drop the whole event.
-      responseTime: (json['responseTime'] as num?)?.toInt(),
-      queryTranslationStatus: json['query_translation_status'] as String?,
-      groundingStatus: json['grounding_status'] as String?,
+      responseTime: _asNum(json, 'responseTime')?.toInt(),
+      queryTranslationStatus: _asString(json, 'query_translation_status'),
+      groundingStatus: _asString(json, 'grounding_status'),
       extra: _extraOf(json, _knownMetadataKeys),
     );
   }
 
   SseAgentVerdictEvent _parseVerdict(Map<String, dynamic> json) {
     return SseAgentVerdictEvent(
-      groundingStatus: json['grounding_status'] as String?,
-      isGrounded: json['is_grounded'] as bool? ?? false,
-      translationMode: json['translation_mode'] as String?,
+      groundingStatus: _asString(json, 'grounding_status'),
+      isGrounded: _asBool(json, 'is_grounded') ?? false,
+      translationMode: _asString(json, 'translation_mode'),
       extra: _extraOf(json, _knownVerdictKeys),
     );
+  }
+
+  /// Tolerant reads of the wire values.
+  ///
+  /// WHY: the parser's own discipline is that a bad field degrades THIS
+  /// one field — it must never throw and drop the whole SSE event. A hard
+  /// `as` cast on a `dynamic` map value threw a TypeError inside
+  /// `_parseMetadata`/`_parseVerdict`, and the `catch` in [parseChunk]
+  /// then swallowed it: the metadata frame, the verdict frame and every
+  /// other field they carried were LOST. A value of another type (a
+  /// number where a string was expected, a string where a list was
+  /// expected) now degrades to the field's own default and the frame
+  /// survives.
+  static String? _asString(Map<String, dynamic> json, String key) {
+    final Object? value = json[key];
+    return value is String ? value : null;
+  }
+
+  static bool? _asBool(Map<String, dynamic> json, String key) {
+    final Object? value = json[key];
+    return value is bool ? value : null;
+  }
+
+  static num? _asNum(Map<String, dynamic> json, String key) {
+    final Object? value = json[key];
+    return value is num ? value : null;
+  }
+
+  /// A list field: a list passes through, anything else degrades to the
+  /// empty list the field's default is.
+  static List<dynamic> _asList(Map<String, dynamic> json, String key) {
+    final Object? value = json[key];
+    return value is List<dynamic> ? value : const <dynamic>[];
   }
 
   /// The keys of [json] outside [known] — the verbatim passthrough every

@@ -25,6 +25,13 @@ const AGENT_ENABLED = (process.env.AGENT_ENABLED ?? '0').trim() === '1';
 // operator override is optional, never required.
 const DEFAULT_AGENT_SERVICE_URL = 'http://agent-service:8010';
 
+// The run surface the agent service serves: its app exposes exactly three
+// routes (`/health`, `/ready` and this one), so a POST to the bare base URL
+// is a 404 on every agentic turn. The run path is JOINED HERE, in the one
+// place that owns the agent endpoint — the operator configures the BASE
+// (host:port) and the BFF appends the surface the agent serves.
+const AGENT_RUNS_PATH = '/v1/runs';
+
 /**
  * Whether the agentic branch of the query entries is exposed.
  *
@@ -40,11 +47,17 @@ function isAgentPathEnabled() {
  * Read per call (a constant, not a knob an operator flips at runtime — but a
  * function keeps the test surface honest about where the value comes from).
  *
- * @returns {string} The AGENT_SERVICE_URL override, or the compose default.
+ * The configured value is the BASE (host:port); the run surface the agent
+ * serves is appended here, so the wire contract is joined in ONE place. A
+ * deployment that already names the full path (the V08 rehearsal configured
+ * `AGENT_SERVICE_URL=…/v1/runs`) must not get the path twice.
+ *
+ * @returns {string} The URL a run is POSTed to.
  */
 function agentServiceUrl() {
-  const configured = (process.env.AGENT_SERVICE_URL ?? '').trim();
-  return configured || DEFAULT_AGENT_SERVICE_URL;
+  const configured = ((process.env.AGENT_SERVICE_URL ?? '').trim() || DEFAULT_AGENT_SERVICE_URL).replace(/\/+$/, '');
+  const base = configured.endsWith(AGENT_RUNS_PATH) ? configured.slice(0, -AGENT_RUNS_PATH.length) : configured;
+  return `${base}${AGENT_RUNS_PATH}`;
 }
 
 module.exports = { isAgentPathEnabled, agentServiceUrl };

@@ -281,7 +281,10 @@ describe('POST /api/queries — the agentic success contract', () => {
         // abstain (V05 §3) — null stays the "no verdict" meaning.
         abstained: false,
         abstention_reason: null,
-        filter_labels: null,
+        // The scope the run applied: this run narrowed on no label, so the
+        // doc reads "ran unfiltered" (the empty list the noagent lane
+        // records) — not the base's "not recorded" null.
+        filter_labels: [],
         grounding_status: 'grounded',
         agent_run: {
           run_id: 'run-abc',
@@ -299,7 +302,7 @@ describe('POST /api/queries — the agentic success contract', () => {
     // posture — empty authorization) and the bearer.
     expect(axios.post).toHaveBeenCalledTimes(1);
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     expect(body.deadline_ms).toBe(
       _internals.DEFAULT_UPSTREAM_TIMEOUT_MS - _internals.TRANSLATION_RESERVE_MS - _internals.FINALIZATION_MARGIN_MS
     );
@@ -702,6 +705,48 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     expect(attributionPatch()).toEqual({ outcome: 'timed_out', finished_at: expect.any(String) });
   });
 
+  it('a deadline that fires after the run completed does not discard the answer', async () => {
+    // The run reached its terminal (the usage record): the answer is in
+    // hand. The wall-clock deadline is CLEARED there — a deadline that fires
+    // afterwards would abort a completed run, and the abort's check would
+    // turn a complete answer into a 504.
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      const mockStream = new Readable({ read() {} });
+      let capturedSignal = null;
+      axios.post.mockImplementation((_url, _body, opts) => {
+        capturedSignal = opts.signal;
+        return Promise.resolve({ status: 200, headers: {}, data: mockStream });
+      });
+
+      const responsePromise = postQuery();
+      responsePromise.catch(() => {});
+      for (let i = 0; i < 200 && mockStream.listenerCount('data') === 0; i++) {
+        await new Promise(setImmediate);
+      }
+      mockStream.push(
+        `data: ${JSON.stringify(envelope('text_message_content', { text: 'Hello world.' }, { seq: 0 }))}\n\n`
+      );
+      mockStream.push(`data: ${JSON.stringify(envelope('verdict', GROUNDED_VERDICT, { seq: 1 }))}\n\n`);
+      mockStream.push(`data: ${JSON.stringify({ usage_record: USAGE_RECORD })}\n\n`);
+      await new Promise(setImmediate);
+
+      // The deadline would fire now — the run is complete, so it was
+      // cleared: no abort.
+      jest.advanceTimersByTime(40000);
+      expect(capturedSignal.aborted).toBe(false);
+      mockStream.emit('end');
+
+      const response = await responsePromise;
+      expect(response.status).toBe(201);
+      expect(response.body.response).toBe('Hello world.');
+    } finally {
+      jest.useRealTimers();
+      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+    }
+  });
+
   it('unparsable 429/503/422 bodies degrade to the documented error names, never raw passthrough', async () => {
     const cases = [
       { status: 429, body: '<html>gateway timeout</html>', error: 'admission_refused' },
@@ -854,6 +899,16 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
       'q1',
       expect.objectContaining({ metadata: expect.objectContaining({ query_translation_status: 'translated' }) })
     );
+    // The delivery mode and the answer-translation outcome ride the metadata
+    // too: this entry has no frames, so the metadata IS the record.
+    expect(response.body.metadata.translation_mode).toBe('post-stream');
+    expect(response.body.metadata.translation_status).toBe('ok');
+    expect(collections.update).toHaveBeenCalledWith(
+      'q1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({ translation_mode: 'post-stream', translation_status: 'ok' })
+      })
+    );
   });
 
   it('a failed leg translation is fail-soft: the English answer stands, translationFailed rides additively', async () => {
@@ -879,6 +934,11 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
     expect(response.status).toBe(201);
     expect(response.body.response).toBe('Hello world.');
     expect(response.body.translationFailed).toBe(true);
+    // The outcome is recorded, presence-keyed: 'failed' — a translation was
+    // attempted and failed.
+    expect(response.body.metadata.translation_status).toBe('failed');
+    // No delivery, no mode.
+    expect(response.body.metadata).not.toHaveProperty('translation_mode');
     expect(collections.update).toHaveBeenCalledWith(
       'q1',
       expect.objectContaining({
@@ -914,6 +974,10 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
     expect(response.status).toBe(201);
     expect(response.body.response).toBe('Hello world.');
     expect(response.body).not.toHaveProperty('translationFailed');
+    // A skip is not a failure and no translation was delivered: the outcome
+    // stays ABSENT (the presence-keyed rule).
+    expect(response.body.metadata).not.toHaveProperty('translation_status');
+    expect(response.body.metadata).not.toHaveProperty('translation_mode');
     expect(collections.update).toHaveBeenCalledWith(
       'q1',
       expect.objectContaining({
@@ -931,6 +995,9 @@ describe('POST /api/queries — whole-answer translation (the agentic translatio
     expect(response.status).toBe(201);
     expect(response.body.response).toBe('Hello world.');
     expect(response.body).not.toHaveProperty('translationFailed');
+    // No translation was asked for: the outcome stays ABSENT.
+    expect(response.body.metadata).not.toHaveProperty('translation_status');
+    expect(response.body.metadata).not.toHaveProperty('translation_mode');
     expect(collections.update).toHaveBeenCalledWith(
       'q1',
       expect.objectContaining({

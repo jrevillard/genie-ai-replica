@@ -54,6 +54,7 @@ jest.mock(
 const http = require('http');
 const { createAgenticTranslationLeg } = require('../../../services/translation/agentic-translation-leg');
 const { computeResidual, planTranslation } = require('../../../services/agent-residual-budget');
+const { serveTranslationHttp } = require('../../helpers/translation-http-stub');
 
 // The canonical terminal usage record — the RunUsageRecord the governed run
 // surface emits as its stream's last frame (the counters plus the
@@ -80,40 +81,9 @@ const canonicalRunUsage = (overrides = {}) => ({
 describe('agentic translation pairing (story 2.5 — the integration pin)', () => {
   let savedEnv;
 
-  const serve = ({ chat = {} } = {}) => {
-    const calls = [];
-    const chatWrites = [];
-    http.request.mockImplementation((opts, cb) => {
-      calls.push(opts);
-      const path = String(opts.path);
-      const req = new EventEmitter();
-      req.write = jest.fn((d) => {
-        if (path.includes('/chat/completions')) chatWrites.push(JSON.parse(d));
-      });
-      req.end = jest.fn();
-      req.setTimeout = jest.fn();
-      req.destroy = jest.fn((err) => {
-        if (err) req.emit('error', err);
-      });
-      process.nextTick(() => {
-        const res = new EventEmitter();
-        res.setEncoding = () => {};
-        if (path.endsWith('/health') || path.endsWith('/v1/models')) {
-          res.statusCode = 200;
-          cb(res);
-          res.emit(path.endsWith('/health') ? 'end' : 'data', JSON.stringify({ data: [] }));
-          res.emit('end');
-          return;
-        }
-        res.statusCode = chat.status || 200;
-        cb(res);
-        if (chat.json !== undefined) res.emit('data', JSON.stringify(chat.json));
-        res.emit('end');
-      });
-      return req;
-    });
-    return { calls, chatWrites };
-  };
+  // The shared outbound http.request double (ONE home for the
+  // request-interface model — see __tests__/helpers/translation-http-stub.js).
+  const serve = serveTranslationHttp;
 
   beforeEach(() => {
     savedEnv = Object.fromEntries(

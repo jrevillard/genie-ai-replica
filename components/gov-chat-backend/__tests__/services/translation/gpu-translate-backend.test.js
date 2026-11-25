@@ -16,43 +16,32 @@ jest.mock(
 const http = require('http');
 const https = require('https');
 const GpuTranslateBackend = require('../../../services/translation/gpu-translate-backend');
+const { createRequestDouble } = require('../../helpers/translation-http-stub');
 
 // The shared http.request double for this file's standard request/response
 // scenarios — every request that completes gets the same response, and the
 // timed-out ones all time out. The init test's two sequential responses and
 // the abort test's incomplete response stay hand-rolled — one-off shapes
-// this builder does not parameterize. Each block used to hand-roll the same
-// scaffolding (an EventEmitter req with write/setTimeout/destroy stubs,
-// `end -> cb(res)`), and the copies drifted: the non-2xx health refusal
-// drains the response (`res.resume()`), a piece only some copies modelled.
-// One builder models the request/response interface the service touches;
-// each block parameterizes only the behavior it pins (status, response body,
-// whether the request times out).
+// this builder does not parameterize. The REQUEST/RESPONSE INTERFACE itself
+// (the EventEmitter req with its write/setTimeout/destroy stubs, the
+// response with its setEncoding and drain) comes from the shared helper —
+// one home for the model the service touches, so a new interface piece is
+// added once and no copy drifts.
 const serveRequest = ({ client = http, statusCode = 200, body = null, timeout = false } = {}) => {
   const capturedOpts = [];
   const writtenBodies = [];
   const responses = [];
   client.request.mockImplementation((opts, cb) => {
     capturedOpts.push(opts);
-    const req = new EventEmitter();
-    req.write = jest.fn((chunk) => writtenBodies.push(JSON.parse(chunk)));
-    req.setTimeout = () => {};
-    // A real ClientRequest emits 'error' when destroyed with one — the abort
-    // wiring relies on it.
-    req.destroy = jest.fn((err) => {
-      if (err) req.emit('error', err);
+    const { req, res } = createRequestDouble({
+      captureWrite: (chunk) => writtenBodies.push(JSON.parse(chunk))
     });
+    res.statusCode = statusCode;
     if (timeout) {
       // Node fires 'timeout' on the request when the `timeout` option expires.
       req.end = () => process.nextTick(() => req.emit('timeout'));
       return req;
     }
-    const res = new EventEmitter();
-    res.statusCode = statusCode;
-    res.setEncoding = () => {};
-    // The refusal paths drain the response (`resume`); a real IncomingMessage
-    // carries it, so the double models it as a jest.fn the tests can pin.
-    res.resume = jest.fn();
     responses.push(res);
     // A request that never ends never gets a response, like a real socket:
     // the answer is delivered by `end`, then finishes itself (`healthCheck`

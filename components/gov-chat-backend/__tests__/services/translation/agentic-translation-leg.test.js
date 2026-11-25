@@ -70,81 +70,16 @@ const {
   translateWholeAnswerWithLeg
 } = require('../../../services/translation/agentic-translation-leg');
 const { SKIP_STATUSES } = require('../../../services/agent-residual-budget');
+const { serveTranslationHttp } = require('../../helpers/translation-http-stub');
 
 describe('agentic translation leg (story 2.10)', () => {
   let savedEnv;
 
-  // Serves the GPU backend's three request kinds off one http mock, and
-  // captures the chat requests (opts + written body) for the bound asserts.
-  const serve = ({ health = {}, models = {}, chat = {} } = {}) => {
-    const calls = [];
-    const chatWrites = [];
-    http.request.mockImplementation((opts, cb) => {
-      calls.push(opts);
-      const path = String(opts.path);
-      const req = new EventEmitter();
-      req.write = jest.fn((d) => {
-        if (path.includes('/chat/completions')) chatWrites.push(JSON.parse(d));
-      });
-      req.end = jest.fn();
-      req.setTimeout = jest.fn();
-      req.destroy = jest.fn((err) => {
-        if (err) req.emit('error', err);
-      });
-      process.nextTick(() => {
-        const res = new EventEmitter();
-        res.setEncoding = () => {};
-        if (path.endsWith('/health')) {
-          if (health.onRequest) health.onRequest();
-          if (health.hang) {
-            // The endpoint accepted the connection and never answers: the
-            // request dangles until its own socket timeout.
-            return;
-          }
-          if (health.emitErrorAfterMs) {
-            // Answers with an error on a later tick — past the budget timer
-            // a won race would have settled on.
-            setTimeout(
-              () => req.emit('error', new Error('connect ETIMEDOUT after the budget')),
-              health.emitErrorAfterMs
-            );
-            return;
-          }
-          if (health.emitError) {
-            req.emit('error', new Error(health.emitError));
-            return;
-          }
-          res.statusCode = health.status || 200;
-          cb(res);
-          res.emit('end');
-          return;
-        }
-        if (path.endsWith('/v1/models')) {
-          res.statusCode = 200;
-          cb(res);
-          res.emit('data', JSON.stringify(models.json !== undefined ? models.json : { data: [] }));
-          res.emit('end');
-          if (models.afterResponse) models.afterResponse();
-          return;
-        }
-        if (chat.beforeResponse) {
-          chat.beforeResponse();
-          return;
-        }
-        if (chat.emitTimeout) {
-          req.emit('timeout');
-          return;
-        }
-        res.statusCode = chat.status || 200;
-        cb(res);
-        if (chat.json !== undefined) res.emit('data', JSON.stringify(chat.json));
-        res.emit('end');
-        if (chat.afterResponse) chat.afterResponse();
-      });
-      return req;
-    });
-    return { calls, chatWrites };
-  };
+  // The shared outbound http.request double (ONE home for the
+  // request-interface model — see __tests__/helpers/translation-http-stub.js):
+  // it routes by path (health/models/chat), models the install-tick delivery
+  // and the request's write/setTimeout/destroy interface.
+  const serve = serveTranslationHttp;
 
   const chatBody = (content, extra = {}) => ({
     choices: [{ finish_reason: 'stop', message: { content } }],

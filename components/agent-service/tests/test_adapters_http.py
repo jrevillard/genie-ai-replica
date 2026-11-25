@@ -1,84 +1,85 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The production transport: a Session per transport instance.
+"""The production transport: a cookie-free Session per transport instance,
+and the caller credential normalized to exactly one scheme prefix.
 
-A shared Session would persist one caller's cookies into another caller's
-GET — ambient credential bleed the per-call bearer design exists to avoid.
-
-The credential's SCHEME belongs to the transport: the caller may hand over
-the bare token or the whole Authorization header value ("Bearer <jwt>" —
-the shape the BFF forwards in the run body). The transport must send ONE
-well-formed header in both cases.
+A shared cookie jar would persist one caller's cookies into another
+caller's GET — ambient credential bleed the per-call bearer design exists
+to avoid. And the caller forwards the Authorization header value it
+received (scheme included); the transport adds the scheme again, so a full
+header value must never reach the upstream doubled.
 """
 
-from capabilities.adapters.http import RequestsTransport, _bearer_token
+import http.server
+import json
+import socketserver
+import threading
+
+from capabilities.adapters.http import RequestsTransport
 
 
 def test_each_transport_instance_owns_its_session():
     assert RequestsTransport()._session is not RequestsTransport()._session
 
 
-def test_a_bare_token_keeps_its_shape():
-    assert _bearer_token("abc.def.ghi") == "abc.def.ghi"
+class _SetCookieHandler(http.server.BaseHTTPRequestHandler):
+    """One GET, answered with a session cookie and a JSON body."""
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Set-Cookie", "session=SECRET; Path=/")
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"ok":true}')
+
+    def log_message(self, *args):  # the test runner's output stays clean
+        pass
 
 
-def test_a_header_value_loses_its_scheme_prefix():
-    # The double-prefix defect: the transport prefixed the scheme onto a
-    # value that already carried it, so the downstream service read
-    # "Bearer Bearer <jwt>" and rejected the token.
-    assert _bearer_token("Bearer abc.def.ghi") == "abc.def.ghi"
+class _EchoHandler(http.server.BaseHTTPRequestHandler):
+    """One GET, answered with the request's ambient headers as JSON."""
+
+    def do_GET(self):
+        body = json.dumps(
+            {"cookie": self.headers.get("Cookie"), "authorization": self.headers.get("Authorization")}
+        ).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
 
 
-def test_the_scheme_prefix_is_matched_case_insensitively():
-    assert _bearer_token("bearer abc.def.ghi") == "abc.def.ghi"
-    assert _bearer_token("BEARER abc.def.ghi") == "abc.def.ghi"
+def _serve(handler):
+    server = socketserver.TCPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}/"
 
 
-def test_the_surrounding_whitespace_is_ignored():
-    assert _bearer_token("  Bearer abc.def.ghi  ") == "abc.def.ghi"
-    assert _bearer_token("  abc.def.ghi  ") == "abc.def.ghi"
+def test_a_set_cookie_never_survives_to_the_next_request():
+    cookie_server, cookie_url = _serve(_SetCookieHandler)
+    echo_server, echo_url = _serve(_EchoHandler)
+    try:
+        transport = RequestsTransport()
+        status, _body = transport.get_json(cookie_url, None, 5.0)
+        assert status == 200
+        assert dict(transport._session.cookies) == {}
+        _status, body = transport.get_json(echo_url, None, 5.0)
+        assert body["cookie"] is None
+    finally:
+        cookie_server.shutdown()
+        echo_server.shutdown()
 
 
-class _RecordingSession:
-    """A session that records the headers of the last GET."""
-
-    def __init__(self):
-        self.headers = None
-        self.url = None
-
-    def get(self, url, headers=None, timeout=None):
-        self.url = url
-        self.headers = headers
-        return _Response()
-
-
-class _Response:
-    status_code = 200
-
-    @staticmethod
-    def json():
-        return {"ok": True}
-
-
-def _transport_with_recording_session():
-    transport = RequestsTransport()
-    transport._session = _RecordingSession()
-    return transport
-
-
-def test_the_transport_sends_one_scheme_for_a_header_value():
-    transport = _transport_with_recording_session()
-    transport.get_json("http://doc-repo/api/files/x", "Bearer abc.def.ghi", 1.0)
-    assert transport._session.headers["Authorization"] == "Bearer abc.def.ghi"
-
-
-def test_the_transport_sends_one_scheme_for_a_bare_token():
-    transport = _transport_with_recording_session()
-    transport.get_json("http://doc-repo/api/files/x", "abc.def.ghi", 1.0)
-    assert transport._session.headers["Authorization"] == "Bearer abc.def.ghi"
-
-
-def test_the_transport_sends_no_authorization_without_a_bearer():
-    transport = _transport_with_recording_session()
-    transport.get_json("http://doc-repo/api/files/x", None, 1.0)
-    assert "Authorization" not in transport._session.headers
+def test_a_full_header_value_is_sent_with_one_scheme_prefix():
+    echo_server, echo_url = _serve(_EchoHandler)
+    try:
+        transport = RequestsTransport()
+        _status, body = transport.get_json(echo_url, "Bearer abc.def", 5.0)
+        assert body["authorization"] == "Bearer abc.def"
+        _status, body = transport.get_json(echo_url, "abc.def", 5.0)
+        assert body["authorization"] == "Bearer abc.def"
+    finally:
+        echo_server.shutdown()

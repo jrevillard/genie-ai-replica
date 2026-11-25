@@ -69,15 +69,19 @@ def document_toolset(
     operation_budget: OperationBudget,
     preparer=None,
     on_preparation_status=None,
+    abstention_sink=None,
 ) -> ToolRegistry:
     """The document toolset: search + read, executors bound to the port.
 
     ``preparer`` (optional — the probe passes none) is the preparation
     module's entry; ``on_preparation_status`` (optional) receives each
     query's :class:`~capabilities.contract.QueryPreparationStatus` value, so
-    the caller records what preparation actually did. The executors adapt
-    the model-generated JSON arguments into the contract's input types — a
-    ``PreparedQuery`` and a ``SourceRef`` — and carry the fixed
+    the caller records what preparation actually did; ``abstention_sink``
+    (optional) is the contract's per-call hook the search executor threads
+    to the port, so an insufficiency answered through the search records
+    its exact reason for the caller (the run's usage record). The executors
+    adapt the model-generated JSON arguments into the contract's input
+    types — a ``PreparedQuery`` and a ``SourceRef`` — and carry the fixed
     ``CallerContext``. An argument the contract refuses (a missing query, a
     malformed target) raises ``ValidationError``, which the loop feeds back
     as the structured tool result.
@@ -98,7 +102,7 @@ def document_toolset(
                 "required": ["query"],
             },
         ),
-        _make_search_executor(port, context, operation_budget, preparer, on_preparation_status),
+        _make_search_executor(port, context, operation_budget, preparer, on_preparation_status, abstention_sink),
     )
     registry.register(
         ToolDefinition(
@@ -130,6 +134,7 @@ def _make_search_executor(
     budget: OperationBudget,
     preparer=None,
     on_preparation_status=None,
+    abstention_sink=None,
 ):
     def _unprepared_envelope(status: QueryPreparationStatus) -> dict:
         """The contract's insufficiency answer for a query that could not be
@@ -207,7 +212,9 @@ def _make_search_executor(
             if on_preparation_status is not None:
                 on_preparation_status(preparation.status.value)
             prepared = preparation.query
-        result = await port.search_knowledge(context, SearchKnowledgeInput(query=prepared), budget)
+        result = await port.search_knowledge(
+            context, SearchKnowledgeInput(query=prepared), budget, abstention_sink=abstention_sink
+        )
         return result.model_dump(mode="json")
 
     return execute

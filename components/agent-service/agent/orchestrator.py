@@ -236,6 +236,13 @@ class RunUsageRecord:
     record the translation leg plans against; ``preparation_status`` — the
     FIRST search query's preparation status (the initial query's, in the
     contract's preparation vocabulary; ``None`` when no query was prepared);
+    ``abstention_reason`` — the FIRST insufficiency reason the search port
+    recorded through the run's abstention sink (the contract's typed
+    vocabulary — ``no_documents_retrieved``, ``reranker_input_too_long``,
+    ``reranker_selected_nothing``, ``result_budget_exhausted``,
+    ``no_resolvable_candidates``; ``None`` when no insufficiency fired, and
+    the executor's own authorization refusals record no reason — they are
+    authorization outcomes, not retrieval insufficiencies);
     ``injection_findings`` — how many injection attempts the run's taint
     scan recorded (an attempt is a counted finding, the content
     still passed as data).
@@ -254,6 +261,7 @@ class RunUsageRecord:
     error: str | None = None
     language: str | None = None
     preparation_status: str | None = None
+    abstention_reason: str | None = None
     injection_findings: int = 0
 
     def as_dict(self) -> dict:
@@ -385,12 +393,23 @@ class RequestOrchestrator:
         # The preparation statuses land here, through the toolset's callback:
         # the FIRST one is the initial query's — the record carries it.
         preparation_statuses: list[str] = []
+        # The insufficiency reasons land here, through the same toolset
+        # wiring: the FIRST recorded reason is the record's — the typed
+        # reason survives the executor boundary on the agent path exactly
+        # as the noagent pipeline records it on its direct call.
+        abstention_reasons: list[str] = []
 
         def record(outcome: str, *, error: str | None) -> RunUsageRecord:
             """This run's terminal usage record — every exit path below is
             a one-liner over the same request, monitor and statuses."""
             return self._record(
-                run_id, outcome, monitor, error=error, request=request, preparation_statuses=preparation_statuses
+                run_id,
+                outcome,
+                monitor,
+                error=error,
+                request=request,
+                preparation_statuses=preparation_statuses,
+                abstention_reasons=abstention_reasons,
             )
 
         try:
@@ -408,6 +427,7 @@ class RequestOrchestrator:
                 self._config.operation_budget,
                 preparer=preparer,
                 on_preparation_status=preparation_statuses.append,
+                abstention_sink=abstention_reasons.append,
             )
             verifier = VerificationPipeline(
                 policy=self._config.verdict_policy,
@@ -487,6 +507,7 @@ class RequestOrchestrator:
         error: str | None,
         request: AgentRunRequest,
         preparation_statuses: list[str],
+        abstention_reasons: list[str],
     ) -> RunUsageRecord:
         """The usage record: the monitor IS the source of every counter."""
         return RunUsageRecord(
@@ -503,5 +524,6 @@ class RequestOrchestrator:
             error=error,
             language=request.language,
             preparation_status=preparation_statuses[0] if preparation_statuses else None,
+            abstention_reason=abstention_reasons[0] if abstention_reasons else None,
             injection_findings=monitor.injection_findings,
         )

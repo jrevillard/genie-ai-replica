@@ -18,8 +18,11 @@ from dataclasses import replace
 import pytest
 from conftest import (
     REQUIRED_KNOBS,
+    AgentFakePort,
     HangingLoopModel,
     ScriptedLoopModel,
+    canned_read_result,
+    canned_search_result,
     fake_port,
     multihop_turns,
     orchestrator_config,
@@ -38,7 +41,7 @@ from agent.orchestrator import (
 from agent.probe import PROBE_SYSTEM_PROMPT
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
-from capabilities.contract import CallerContext, OperationBudget
+from capabilities.contract import CallerContext, OperationBudget, OutcomeCode
 from noagent.lane import AdmissionLane
 
 CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
@@ -289,6 +292,7 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
     assert (record.prompt_tokens, record.completion_tokens) == (40, 20)
     assert record.wall_clock_seconds >= 0
     assert record.error is None
+    assert record.abstention_reason is None
     assert record.as_dict().keys() == {
         "run_id",
         "outcome",
@@ -303,6 +307,7 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
         "error",
         "language",
         "preparation_status",
+        "abstention_reason",
         "injection_findings",
     }
     assert [event.kind.value for event in events][-1] == "run_finished"
@@ -315,6 +320,28 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
     for event in events:
         assert event.run_id == record.run_id
         assert event.kind.value not in BFF_FRAME_NAMES
+
+
+def test_an_insufficiency_through_the_governed_run_records_its_reason(tmp_path):
+    """The agent-path counterpart of the noagent pipeline's sink recording:
+    the search dispatch carries the run's sink, and the typed reason the
+    port fires through it (no_documents_retrieved here) lands on the
+    terminal usage record — the reason survives the executor boundary on
+    the agent path instead of dying past the toolset call."""
+    port = AgentFakePort(
+        search_result=canned_search_result(hits=(), outcome=OutcomeCode.INSUFFICIENT_EVIDENCE),
+        read_result=canned_read_result(),
+        sink_reason="no_documents_retrieved",
+    )
+    orchestrator, _, _ = _orchestrator(
+        ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "ungrounded"}')), port, tmp_path
+    )
+
+    record = asyncio.run(orchestrator.run(_request()))
+
+    assert record.outcome == OUTCOME_ANSWERED
+    assert record.abstention_reason == "no_documents_retrieved"
+    assert port.search_calls[0]["abstention_sink"] is not None
 
 
 def test_the_executor_is_built_per_request_with_the_request_context_and_bearer(tmp_path):

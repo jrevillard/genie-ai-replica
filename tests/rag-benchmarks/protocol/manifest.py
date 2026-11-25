@@ -9,9 +9,9 @@ One manifest rides every run report (reference or gated) and records:
   :func:`fingerprint_corpus`);
 * **sets** — the sha256 of every set file the run consumed;
 * **configuration** — per config (A/B/C), the resolved-env snapshot (values
-  read from the live containers, redacted of credential-named keys), the
-  model ids as resolved from the serving endpoints, and the digests of the
-  resolved prompt surfaces;
+  read from the live containers), the model ids as resolved from the serving
+  endpoints, and the digests of the resolved prompt surfaces — each of the
+  three redacted at every depth (see :func:`redact`);
 * **evaluator_instructions** — the digest of the versioned instructions file
   (what the judged dimensions check; the file lives beside this package);
 * **kind** — ``reference`` (an A-only run, never gated) or ``gated`` (a B/C
@@ -20,11 +20,13 @@ One manifest rides every run report (reference or gated) and records:
 * **pair** — the E01/E02 pair conditions stamped from :mod:`pairs` when the
   run belongs to a pair.
 
-No credentials in any record: :func:`redact` drops every key whose name
-carries a credential marker (PASSWORD/SECRET/TOKEN/KEY/BEARER/CREDENTIAL,
-case-insensitive) from anything recorded. The redaction is a denylist over
-KEY NAMES, not a scan of values — a config value named ``RETRIES`` survives,
-a value stored under ``KEYCLOAK_ADMIN_PASSWORD`` does not.
+No credentials in any record: every map the manifest records is redacted at
+EVERY depth (:func:`redact`, the protocol's shared credential rule) — a key
+whose name names a credential never reaches the record, in any spelling the
+shared vocabulary knows. The redaction is a denylist over KEY NAMES, not a
+scan of values — a config value named ``RETRIES`` survives, a value stored
+under ``KEYCLOAK_ADMIN_PASSWORD`` does not; so does a measurement name
+(``chunk_key``, a token count) the judge reads.
 """
 
 from __future__ import annotations
@@ -36,14 +38,12 @@ from pathlib import Path
 
 from . import PROTOCOL_VERSION
 from . import pairs as pairs_mod
+from .redaction import redact_deep
 
 MANIFEST_VERSION = "1.0.0"
 
 CONFIGS = ("A", "B", "C")
 KINDS = ("reference", "gated")
-
-# Any recorded key whose NAME contains one of these markers is dropped.
-SECRET_KEY_MARKERS = ("PASSWORD", "SECRET", "TOKEN", "KEY", "BEARER", "CREDENTIAL")
 
 
 class ManifestError(ValueError):
@@ -81,19 +81,16 @@ def digest_without_embedded(record: dict) -> str:
 
 
 def redact(mapping: dict) -> dict:
-    """Drop every key whose name carries a credential marker (case-insensitive).
+    """Drop every credential-named key at ANY depth.
 
-    Applied to everything the manifest records — the resolved-env snapshots
-    first among them. The recorded evidence must be shareable; a leaked
-    secret in a committed manifest is the failure this exists to prevent.
+    The protocol's shared credential rule (:func:`redaction.redact_deep`) —
+    the manifest and the comparison reports write through ONE rule, so a
+    marker the shared vocabulary knows reaches the manifest's record too and
+    the two surfaces cannot state two different things about the same datum.
+    The recorded evidence must be shareable; a leaked secret in a committed
+    manifest is the failure this exists to prevent.
     """
-    out = {}
-    for key, value in mapping.items():
-        name = str(key).upper()
-        if any(marker in name for marker in SECRET_KEY_MARKERS):
-            continue
-        out[key] = value
-    return out
+    return redact_deep(mapping)
 
 
 def fingerprint_corpus(source_collection: str, content_hashes: list[str]) -> str:
@@ -135,7 +132,8 @@ def build_manifest(
     refuses a lineage (a reference run chains nothing — it IS the chain's
     head). ``configuration`` maps config letter → ``{"resolved_env", "model_ids",
     "prompt_digests"}``; every recorded mapping is redacted of credential-named
-    keys. ``pair`` stamps the pair-conditions manifest (see :mod:`pairs`).
+    keys at every depth. ``pair`` stamps the pair-conditions manifest (see
+    :mod:`pairs`).
     """
     if kind not in KINDS:
         raise ManifestError(f"manifest kind must be one of {', '.join(KINDS)} (got {kind!r})")
@@ -153,8 +151,8 @@ def build_manifest(
             raise ManifestError(f"configuration[{config_letter}].resolved_env must be a mapping")
         recorded_configuration[config_letter] = {
             "resolved_env": redact(resolved_env),
-            "model_ids": dict(snapshot.get("model_ids") or {}),
-            "prompt_digests": dict(snapshot.get("prompt_digests") or {}),
+            "model_ids": redact(dict(snapshot.get("model_ids") or {})),
+            "prompt_digests": redact(dict(snapshot.get("prompt_digests") or {})),
         }
 
     manifest = {

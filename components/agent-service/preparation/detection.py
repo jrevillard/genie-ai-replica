@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The ported language detection (V02 §5.1, deployed ``chatqna:4578-4672``).
+"""The ported language detection (deployed ``chatqna:4578-4672``).
 
 Three decisions are ported, and one is deliberately NOT:
 
@@ -18,12 +18,12 @@ Three decisions are ported, and one is deliberately NOT:
   language and runs no answer fallback.
 
 langdetect runs UNSEEDED in production (deployed parity — the detector is
-non-deterministic; V02 records that a re-run may produce a different
+non-deterministic; the record states that a re-run may produce a different
 detected code). Tests seed ``DetectorFactory`` for stability.
 
 The BFF's refused-language case cannot reach this module: the BFF answers
 HTTP 400 ``UNSUPPORTED_LANGUAGE`` before the agent path sees the request
-(V02 §5.5). A named code the registry does not know therefore behaves here
+A named code the registry does not know therefore behaves here
 as "nothing named" — detection runs — which is the same trigger the deployed
 refusal produces; no separate refused branch is built.
 """

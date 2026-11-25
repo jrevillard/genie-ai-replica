@@ -8,7 +8,7 @@ recording headers — lands once for every adapter.
 
 The preparation suites share their own doubles here too: the async POST
 transport seam (``PreparationFakeTransport``), the model-entry helper, the
-V02 locale samples and the detector-seeding fixture — one home, so a
+The recorded locale samples and the detector-seeding fixture — one home, so a
 surface or policy change lands once.
 """
 
@@ -87,7 +87,7 @@ def preparation_model_entry(max_model_len=8192, model_id="test-model"):
 VENDORED_REGISTRY_PATH = str(Path(__file__).resolve().parents[1] / "preparation" / "language-registry.json")
 
 
-# The V02 §5.6 sample family (shape reference, not exact wording — the
+# The recorded locale sample family (shape reference, not exact wording — the
 # detector is non-deterministic and the model sampled).
 FRENCH_SAMPLE = (
     "Bonjour, comment la ville de Geneve gere-t-elle les services de "

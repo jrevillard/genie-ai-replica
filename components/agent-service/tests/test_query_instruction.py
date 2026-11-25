@@ -1,8 +1,8 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The query-instruction contract, asserted against the V02 record.
+"""The query-instruction contract, asserted against the recorded contract.
 
-V02 §4.12 (fixtures: ``query_instruction``): the instruction is
+The recorded contract (fixtures: ``query_instruction``): the instruction is
 MODEL-SPECIFIC — deployer overrides first (first match wins), the built-in
 table second (first match wins, most specific first), a model with no entry
 gets NO prefix, and the prefix applies to the query only.

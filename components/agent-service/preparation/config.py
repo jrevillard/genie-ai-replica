@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """The frozen env-knob surface of the input-preparation module.
 
-Every knob the deployed preparation pipeline reads (V02 §5,
-``docs/baselines/v02-opea-query-path-contract.md``; the deployed module is
+Every knob the deployed preparation pipeline reads (the recorded
+preparation contract, ``docs/baselines/v02-opea-query-path-contract.md``;
+the deployed module is
 ``genie-ai-overlay/chatqna/genieai_chatqna.py``) is read here under the SAME
 name with the SAME code default, so a deployment that tunes the legacy
 translation path tunes this module identically. The completion-cap constants
@@ -84,7 +85,7 @@ class PreparationConfig:
     # LOWERS the derived budget, it never raises the code default. Kept
     # separate from `max_translation_chars` because the deployed derivation
     # caps only when the deployer set the knob — a default must not cap the
-    # derived budget down (V02 §5.3: MAX_TRANSLATION_CHARS unset on the
+    # derived budget down (MAX_TRANSLATION_CHARS unset on the measured
     # venue; the derived budget was 11520, not 2000).
     max_translation_chars_cap: int
     prompt_overhead_tokens: int
@@ -99,7 +100,8 @@ class PreparationConfig:
     probe_timeout_seconds: float
     detect_ttl_seconds: int
     # The translation call and its /tokenize count authenticate with the
-    # OPENAI_API_KEY bearer (deployed: same server, same auth).
+    # OPENAI_API_KEY bearer, falling back to the GPU-node key when the
+    # deployment carries only that one (deployed: same server, same auth).
     bearer: str | None
     # The /v1/models probe authenticates with the VLLM_API_KEY bearer
     # (deployed endpoint_auth_headers — a contract applied to the probe and
@@ -140,7 +142,12 @@ class PreparationConfig:
             registry_path=str(source.get("LANGUAGE_REGISTRY_FILEPATH", DEFAULT_REGISTRY_PATH)),
             probe_timeout_seconds=_env_float(source, "MODEL_PROBE_TIMEOUT_SECONDS", 10.0),
             detect_ttl_seconds=_env_int(source, "MODEL_DETECT_TTL", 60),
-            bearer=source.get("OPENAI_API_KEY"),
+            # The data-call bearer: an explicit OPENAI_API_KEY wins, and the
+            # GPU-node key backs it up — an in-process run inherits the
+            # operator's shell, not the compose mapping that fills
+            # OPENAI_API_KEY from VLLM_API_KEY, and the canonical venue
+            # carries only the GPU-node key.
+            bearer=source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY"),
             probe_bearer=source.get("VLLM_API_KEY"),
             tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",
         )

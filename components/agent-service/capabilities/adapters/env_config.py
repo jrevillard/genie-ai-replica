@@ -2,23 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 """The frozen env-knob surface of the search adapters.
 
-Every retrieval / reranking / embedding-budget knob the V02 record lists
-(``docs/baselines/v02-opea-query-path-contract.md`` §3, §6) is read here under
+Every retrieval / reranking / embedding-budget knob the recorded query-path
+contract (``docs/baselines/v02-opea-query-path-contract.md``) lists is read here under
 the SAME name with the SAME code default, so a deployment that tunes the
 legacy path tunes this port identically. Two recorded embedding knobs are the
 exception and live in their own ported module:
 ``capabilities/adapters/query_instruction.py`` reads ``TEI_EMBED_MODEL`` and
-``EMBEDDING_QUERY_INSTRUCTIONS`` (V02 §4.12's contract surface). The values
+``EMBEDDING_QUERY_INSTRUCTIONS`` (the embedding-instruction contract's
+surface). The values
 recorded as deployed are the ones the record measured; the values recorded as
 code defaults apply when the env does not set the knob.
 
 Configuration errors crash at adapter construction, exactly as the deployed
-retriever crashes at import for the same class of error (V02 §4.4: an invalid
+retriever crashes at import for the same class of error: an invalid
 ``RETRIEVER_ARANGO_FILTER_STRATEGY`` raises ``ValueError`` at import, the pod
 crash-loops, and the client sees 503 — never a request-time 400).
 
 Two knobs are read and deliberately unused, because that is what the record
-says about them (§6):
+says about them:
 
 * ``RETRIEVER_ARANGO_DISTANCE_THRESHOLD`` — forwarded on the deployed stack
   but read by nobody;
@@ -36,13 +37,13 @@ SEARCH_MODE = "vector"
 SEARCH_START = "chunk"
 DISTANCE_STRATEGIES = ("COSINE",)
 FILTER_STRATEGIES = ("AND", "OR")
-# The reranking strategies the record defines (V02 §4.13 table).
+# The reranking strategies the record defines.
 STRATEGIES = ("slice", "threshold", "slice_threshold", "knee_threshold", "adaptive")
 
 
 @dataclass(frozen=True)
 class ArangoConfig:
-    """The ArangoDB connection and retrieval knobs (V02 §3.1)."""
+    """The ArangoDB connection and retrieval knobs as the record measures them."""
 
     url: str
     username: str
@@ -110,7 +111,7 @@ class ArangoConfig:
 
 @dataclass(frozen=True)
 class HybridConfig:
-    """The BM25 + RRF lexical channel (V02 §4.2, §4.3)."""
+    """The BM25 + RRF lexical channel, as the record measures it."""
 
     enabled: bool
     rrf_k: int
@@ -134,7 +135,7 @@ class HybridConfig:
 
 @dataclass(frozen=True)
 class RerankingConfig:
-    """The reranking and evidence-selection knobs (V02 §4.13).
+    """The reranking and evidence-selection knobs, as the record measures them.
 
     An invalid ``RERANKING_STRATEGY`` is NOT a boot error: the deployed
     resolver falls back to ``slice`` with a warning at request time, and this
@@ -226,7 +227,7 @@ class EmbeddingConfig:
 
 @dataclass(frozen=True)
 class ModelEndpointConfig:
-    """The model-service endpoints the adapters call directly (V02 §3.3).
+    """The model-service endpoints the adapters call directly, as the record serves them.
 
     ``TEI_EMBEDDING_ENDPOINT`` is the full embed URL the deployment already
     serves (the recorded value ends in ``/embed``). ``TEI_RERANKING_ENDPOINT``

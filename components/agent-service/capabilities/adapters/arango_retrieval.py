@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The ArangoDB retrieval adapter: the dense/BM25/fusion/enrichment stages.
 
-Ports the recorded retrieval stages of the query path (V02 §4.1–4.8):
+Ports the recorded retrieval stages of the query path:
 
 * **Dense retrieval** — brute-force cosine over ``<GRAPH>_SOURCE`` (the
   deployed ``use_approx_search=false`` makes it an exact scan: the vector
@@ -35,13 +35,12 @@ Ports the recorded retrieval stages of the query path (V02 §4.1–4.8):
   whole enrichment with an ERROR log and never breaks the leg.
 
 Graph traversal, multi-graph fan-out and the routing gate are recorded in
-V02 §4.9–4.11 but are NOT part of this port (the frozen enumeration
+the recorded traversal/fan-out/routing stages are NOT part of this port (the frozen enumeration
 stops at the stages above).
 """
 
 import asyncio
 import logging
-import re
 from dataclasses import dataclass, field
 
 from .env_config import ArangoConfig, HybridConfig
@@ -52,21 +51,6 @@ ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
 OKF_CONCEPTS_META_COLLECTION = "okf_concepts_meta"
-
-# Graph/collection names are interpolated into backticked AQL identifiers —
-# only the character set ArangoDB itself accepts may reach that text.
-_GRAPH_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
-
-
-def validate_graph_name(graph_name: str) -> str:
-    """Refuse a graph name that would carry AQL metacharacters into the text.
-
-    Every graph name — the config constant, a caller-context name — funnels
-    through here before any AQL is built.
-    """
-    if not isinstance(graph_name, str) or not _GRAPH_NAME_PATTERN.fullmatch(graph_name):
-        raise ValueError(f"Invalid graph name: {graph_name!r}")
-    return graph_name
 
 
 def _materialized_rows(db, aql, bind_vars) -> list:
@@ -228,7 +212,7 @@ class ArangoRetrievalAdapter:
         # The recorded degradations, tracked for the caller's outcome mapping:
         # the BM25 channel failing degrades the leg to dense-only; the CAP-1
         # join failing leaves chunks unattributed. Neither breaks the leg
-        # (V02 §4.2, §4.7) — but the contract reports the partial dependency
+        # — but the contract reports the partial dependency
         # unavailability as a degraded answer instead of swallowing it.
         self.bm25_degraded = False
         self.cap1_degraded = False
@@ -356,7 +340,7 @@ class ArangoRetrievalAdapter:
             logger.error(f"Failed to ensure BM25 view '{view_name}': {e}")
 
     async def bm25_search(self, query: str, graph_name: str, labels_to_filter: list, filter_strategy: str) -> list:
-        """Run a BM25 lexical search over the chunk view (V02 §4.2).
+        """Run a BM25 lexical search over the chunk view, as the record measures it.
 
         Tokenizes the RAW query (never the prefixed one). The candidate cap
         is ``max(k, RETRIEVER_HYBRID_BM25_CANDIDATES)``. The label clause is
@@ -455,7 +439,7 @@ class ArangoRetrievalAdapter:
     # ------------------------------------------------------------------
 
     async def enrich(self, results: list) -> None:
-        """file_id enrichment + the CAP-1 identity join, in place (V02 §4.6, §4.7).
+        """file_id enrichment + the CAP-1 identity join, in place, as the record measures them.
 
         ONE batched AQL resolves every chunk's ``file_id``; ``file_ids``
         becomes ``[file_id]`` or ``[]`` — never null, never a missing

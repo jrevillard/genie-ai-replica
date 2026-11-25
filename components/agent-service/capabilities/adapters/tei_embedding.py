@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The TEI embedding adapter: embeds the query, honoring the instruction contract.
 
-V02 §4.12: the chat path sends the PREFIXED text to the embedder and the RAW
+The recorded contract: the chat path sends the PREFIXED text to the embedder and the RAW
 text to the retriever, so the BM25 leg tokenizes the bare query. This adapter
 is the embedder side — it applies ``get_query_instruction`` to the query text
 and posts the prefixed text to the TEI endpoint. The raw text stays with the

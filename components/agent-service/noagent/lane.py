@@ -12,8 +12,8 @@ runs — refusal, never queueing.
 
 The lock file handle is the slot: it travels with the acquisition and its
 close releases the kernel lock on every exit path — return, exception and
-cancellation alike (the handle is closed in ``finally``; a cancelled task's
-``finally`` runs during unwinding).
+cancellation alike (the handle is closed in ``finally``, and a cancellation
+delivered while the slot is being claimed releases it too).
 
 The deployment contract runs agent-service at exactly one
 replica (flag-gated 0/1), so this intra-container pool IS the global bound;
@@ -25,6 +25,7 @@ host runs no serving traffic.
 
 import logging
 import os
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -33,6 +34,41 @@ import anyio
 from .config import NoAgentConfig
 
 logger = logging.getLogger(__name__)
+
+
+class _SlotClaim:
+    """The slot handle a claiming thread hands over to its acquisition.
+
+    The handle is the slot: whoever holds it holds the kernel lock, and the
+    lock is released only when the handle is closed. A cancellation can
+    arrive while the claiming thread is still working, so the ownership
+    moves in one step — the thread registers the handle it claimed, and the
+    acquisition closes it. A handle registered after the acquisition gave
+    up is closed by the thread itself: a cancelled acquisition never leaves
+    a slot locked.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._handle = None
+        self._given_up = False
+
+    def register(self, handle) -> bool:
+        """Take ownership of a claimed handle; False when the acquisition
+        already gave up (the caller closes the handle itself then)."""
+        with self._lock:
+            if self._given_up:
+                return False
+            self._handle = handle
+            return True
+
+    def release(self) -> None:
+        """Close the claimed handle and refuse any later registration."""
+        with self._lock:
+            self._given_up = True
+            handle, self._handle = self._handle, None
+        if handle is not None:
+            handle.close()
 
 
 class LaneBusyError(RuntimeError):
@@ -106,9 +142,19 @@ class AdmissionLane:
         event loop never stalls on the filesystem. When every slot is held
         the run raises :class:`LaneBusyError` — before any stage of the run
         has started. ``asyncio.CancelledError`` raised while waiting for the
-        thread propagates untouched.
+        thread propagates untouched, and the slot the thread claimed on the
+        way out is released with it.
         """
-        lock_file = await anyio.to_thread.run_sync(self._scan_for_free_slot)
+        claim = _SlotClaim()
+        try:
+            lock_file = await anyio.to_thread.run_sync(self._scan_for_free_slot, claim)
+        except BaseException:
+            # The acquisition gave up before the scan answered: whatever the
+            # thread claimed is released here (or by the thread itself, if
+            # it claims after this point) — a cancelled acquisition never
+            # leaves a slot locked.
+            claim.release()
+            raise
         if lock_file is None:
             raise LaneBusyError(
                 f"the admission lane is saturated: all {self._slots} slots are held; the run is refused"
@@ -118,12 +164,17 @@ class AdmissionLane:
         finally:
             # The close releases the flock AND removes our fd — on return,
             # exception and cancellation alike.
-            lock_file.close()
+            claim.release()
 
-    def _scan_for_free_slot(self):
+    def _scan_for_free_slot(self, claim: _SlotClaim):
         """One non-blocking pass over the slots; the open handle or None."""
         for index in range(self._slots):
             lock_file = self._try_claim(index)
             if lock_file is not None:
+                if not claim.register(lock_file):
+                    # The acquisition gave up while the scan ran: the slot
+                    # must not stay locked.
+                    lock_file.close()
+                    return None
                 return lock_file
         return None

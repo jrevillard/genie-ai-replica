@@ -585,23 +585,22 @@ def setup_tracing(service_name: str) -> None:
     if not endpoint_base:
         return
 
-    # `OTEL_SERVICE_NAME` is the canonical OTel-spec env var. The
-    # function-arg `service_name` is a per-service default (e.g.
-    # `genieai-chatqna`) that operators can shadow per environment by
-    # setting `OTEL_SERVICE_NAME` in their compose override. This matches
-    # the Node.js `logger.js:84` resolution order.
-    service_name_resolved = os.getenv("OTEL_SERVICE_NAME") or service_name
+    # The service identity is fixed by the deployment's ops decision: the
+    # namespace, the per-service name (e.g. `genieai-chatqna`) and the
+    # version are the resource's own attributes, and no environment variable
+    # may rename or re-version them — a renamed service breaks the dashboard
+    # and the service-identity contract the decision fixed. The SDK's own
+    # resource detector reads OTEL_SERVICE_NAME, but the attributes set here
+    # take precedence over the detected ones.
     # `service.namespace` groups related services (all OPEA overlay services
     # share 'genieai'; backend + doc-repo use 'genie-core').
     service_namespace = "genieai"
     # `service.version` is hardcoded for the cross-version regression check
-    # (see commit 1737bd52a) — operators shadow per environment via
-    # `OTEL_SERVICE_VERSION` env var, mirroring the OTEL_SERVICE_NAME
-    # pattern above. Default 1.0.0 matches the previous constant.
-    service_version = os.getenv("OTEL_SERVICE_VERSION") or "1.0.0"
+    # (see commit 1737bd52a) — 1.0.0 matches the previous constant.
+    service_version = "1.0.0"
     resource = Resource.create(
         {
-            "service.name": service_name_resolved,
+            "service.name": service_name,
             "service.namespace": service_namespace,
             "service.version": service_version,
             "deployment.environment": os.getenv("NODE_ENV", "development"),

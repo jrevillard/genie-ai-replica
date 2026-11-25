@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The doc-repo metadata adapter: how a legacy ``file_id`` resolves.
 
-``GET /api/files/:fileId`` is the one legacy resolution surface that exists
-(the V04 map, §2.3): it authenticates the caller and authorizes nothing
+``GET /api/files/:fileId`` is the one legacy resolution surface that exists:
+it authenticates the caller and authorizes nothing
 beyond that — which is exactly why the executor, not this adapter, is the
 authority for a legacy target. The adapter only reports what the service
 answered: 200 unwraps to the file record (every envelope shape the fleet

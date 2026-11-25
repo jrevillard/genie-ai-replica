@@ -24,25 +24,57 @@ and the answer-translation gate reads ``AGENT_ANSWER_TRANSLATION_ENABLED``
 exists for the evaluation mode to turn on deliberately).
 """
 
+import logging
 import math
 import os
 from dataclasses import dataclass
 
 from preparation.config import _env_float, _env_int
 
+logger = logging.getLogger(__name__)
+
 
 def _env_bool(source, name: str, default: str) -> bool:
-    """The tolerant boolean read (deployed ``os.getenv(...) or default`` +
-    lower-case compare; set-to-empty falls back to the default)."""
+    """The deployed boolean read (``os.getenv(...) or default`` + lower-case
+    compare; set-to-empty falls back to the default).
+
+    Only the literal ``true`` enables the knob. This is the DEPLOYED
+    predicate of the abstention guardrail, and it stays an exact match:
+    widening it would enable a guardrail where the deployed service leaves it
+    off.
+    """
     raw = source.get(name)
     return str(raw if raw not in (None, "") else default).lower() == "true"
 
 
+def _env_flag(source, name: str, default: str) -> bool:
+    """The feature-flag read: the repository's ``0``/``1`` convention.
+
+    ``1`` and ``true`` enable, ``0`` and ``false`` disable, and any other
+    value falls back to the default with a warning naming the knob — a
+    malformed flag is a configuration defect, and the operator must see it
+    instead of finding the gate silently off.
+    """
+    raw = source.get(name)
+    value = str(raw if raw not in (None, "") else default).strip().lower()
+    if value in ("1", "true"):
+        return True
+    if value in ("0", "false"):
+        return False
+    logger.warning(
+        "%s=%r is not a flag value (expected 0 or 1): the default %r applies",
+        name,
+        raw,
+        default,
+    )
+    return str(default).strip().lower() in ("1", "true")
+
+
 # Two knob-reading disciplines live in this module, side by side:
 #
-# * the TOLERANT readers above (``_env_int`` / ``_env_float`` / ``_env_bool``)
-#   fall back to a default — a deployed semantic knob that is unset or
-#   empty must not crash-loop a long-running service at wiring time;
+# * the TOLERANT readers above (``_env_int`` / ``_env_float`` / ``_env_bool``
+#   / ``_env_flag``) fall back to a default — a deployed semantic knob that is
+#   unset or empty must not crash-loop a long-running service at wiring time;
 # * the REQUIRED readers below fall back to NOTHING — a budget number the
 #   enforcement path needs is fail-closed: unset, empty, non-numeric,
 #   non-finite or out-of-bound means the caller refuses, naming the knob.
@@ -170,7 +202,7 @@ class NoAgentConfig:
             tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",
             probe_timeout_seconds=_env_float(source, "MODEL_PROBE_TIMEOUT_SECONDS", 10.0),
             detect_ttl_seconds=_env_int(source, "MODEL_DETECT_TTL", 60),
-            answer_translation_enabled=_env_bool(source, "AGENT_ANSWER_TRANSLATION_ENABLED", "false"),
+            answer_translation_enabled=_env_flag(source, "AGENT_ANSWER_TRANSLATION_ENABLED", "false"),
             translation_endpoint=translation_endpoint
             or (
                 f"http://{source.get('TRANSLATION_SERVICE_HOST_IP', '0.0.0.0')}:"

@@ -53,7 +53,7 @@ from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content, resolve_window_tokens
-from preparation.translation import MAX_SANE_TOKENS, HttpxTransport, coerce_int
+from preparation.translation import HttpxTransport, coerce_sane_int
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
@@ -339,8 +339,11 @@ class ProbeModelClient:
             self._model_id = str(entry["id"])
             # The same probe serves the window the one-call cap is anchored
             # on; a garbage or absent value falls to the configured tier.
-            discovered = entry.get("max_model_len")
-            if isinstance(discovered, int) and discovered > 0:
+            # A proxy may serialize the served window as a float or a digit
+            # string, so the value rides the shared coercion-then-sane-bound
+            # stance: an absurd value must not disable the overflow guard.
+            discovered = coerce_sane_int(entry.get("max_model_len"))
+            if discovered is not None:
                 self._discovered_window = discovered
         return self._model_id
 
@@ -406,9 +409,12 @@ class ProbeModelClient:
             # The offset is added AFTER the estimate: the +20 prompt-offset
             # tokens are tokens, not characters — inside the division they
             # would contribute only 5.
-            input_tokens = (
-                math.ceil(len(json.dumps(messages)) / MODEL_CHARS_PER_TOKEN_ESTIMATE) + MODEL_PROMPT_OFFSET_TOKENS
-            )
+            # The declared tools are part of the request the endpoint sees,
+            # so their serialized size counts against the room too: for a
+            # tool-shaped call the schemas are the dominant term, and a
+            # room computed without them overstates what one call can serve.
+            request_chars = len(json.dumps(messages)) + len(json.dumps(payload.get("tools", [])))
+            input_tokens = math.ceil(request_chars / MODEL_CHARS_PER_TOKEN_ESTIMATE) + MODEL_PROMPT_OFFSET_TOKENS
             room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
             if room > 0:
                 payload["max_tokens"] = min(max_output_tokens, room)
@@ -480,9 +486,7 @@ class ProbeModelClient:
         # budget-exhausted.
         usage = body.get("usage")
         if isinstance(usage, dict):
-            coerced = coerce_int(usage.get(name))
-            if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
-                return coerced
+            return coerce_sane_int(usage.get(name))
         return None
 
 

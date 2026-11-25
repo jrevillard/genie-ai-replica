@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The ported detection: langdetect on the last user message, crash-safe.
 
-langdetect is UNSEEDED in production (deployed parity — V02 notes the
+langdetect is UNSEEDED in production (deployed parity — the record notes the
 detector is non-deterministic). These tests seed ``DetectorFactory`` for
 stability only; the production module never seeds, and the non-Latin sample
 detects robustly enough for the REAL detector to carry the test.
@@ -20,7 +20,7 @@ pytestmark = pytest.mark.usefixtures("seeded_langdetect")
 
 def test_production_detection_is_never_seeded():
     """A seed in the production module would diverge from the deployed
-    detector (V02: the detector is non-deterministic by design). The check
+    detector (the detector is non-deterministic by design). The check
     reads the module's AST, not its prose — the docstring is allowed to
     mention the seeding, the code is not."""
     import ast
@@ -34,12 +34,12 @@ def test_production_detection_is_never_seeded():
 
 
 def test_the_french_v02_sample_detects_french():
-    """V02 §5.6 sample family (shape, not wording)."""
+    """The recorded locale sample family (shape, not wording)."""
     assert detection.detect_language(FRENCH_SAMPLE) == "FR"
 
 
 def test_the_arabic_non_latin_sample_detects_arabic():
-    """The non-Latin sample of V02 §5.6 — detected with the REAL detector."""
+    """The non-Latin recorded sample — detected with the REAL detector."""
     assert detection.detect_language(ARABIC_SAMPLE) == "AR"
 
 

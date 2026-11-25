@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The ArangoDB retrieval-stage behaviors, asserted against V02 §4.1–4.8.
+"""The ArangoDB retrieval-stage behaviors, asserted against the recorded contract.
 
 The recorded AQL shapes are asserted verbatim (the fixture's ``aql`` fields),
 the RRF fusion semantics, the label clause + post-filter (including the
@@ -32,7 +32,7 @@ def fixtures():
 
 
 def recorded_knobs():
-    """The deployed retriever knobs the fixtures record (V02 §3.1)."""
+    """The deployed retriever knobs the fixtures record."""
     return fixtures()["measured"]["deployed_env"]["retriever"]
 
 
@@ -102,7 +102,7 @@ def run(coroutine):
 
 
 # ---------------------------------------------------------------------
-# Dense leg (V02 §4.1)
+# Dense leg
 # ---------------------------------------------------------------------
 
 
@@ -172,7 +172,7 @@ def test_dense_row_with_null_score_is_skipped_not_raised():
 
 
 # ---------------------------------------------------------------------
-# BM25 leg (V02 §4.2)
+# BM25 leg
 # ---------------------------------------------------------------------
 
 
@@ -263,7 +263,7 @@ def test_bm25_view_creation_failure_is_logged_and_never_cached():
 
 
 # ---------------------------------------------------------------------
-# Fusion (V02 §4.3)
+# Fusion
 # ---------------------------------------------------------------------
 
 
@@ -347,7 +347,7 @@ def test_fused_list_is_truncated_to_k():
 
 
 # ---------------------------------------------------------------------
-# Label clause + post-filter (V02 §4.4, §4.5)
+# Label clause + post-filter
 # ---------------------------------------------------------------------
 
 
@@ -388,7 +388,7 @@ def test_post_filter_semantics():
 
 
 # ---------------------------------------------------------------------
-# Enrichment: file_id + CAP-1 (V02 §4.6, §4.7)
+# Enrichment: file_id + CAP-1
 # ---------------------------------------------------------------------
 
 
@@ -502,7 +502,7 @@ def test_boot_validation_rejects_out_of_record_values():
 
 
 def test_invalid_filter_strategy_boot_error_matches_the_recorded_pattern():
-    """V02 §4.4: an invalid env strategy is a boot ValueError (crash-loop),
+    """An invalid env strategy is a boot ValueError (crash-loop),
     never a request-time HTTP error."""
     env = dict(recorded_knobs_env())
     env["RETRIEVER_ARANGO_FILTER_STRATEGY"] = "not-a-strategy"
@@ -519,14 +519,18 @@ def test_recorded_inert_knobs_are_accepted_without_effect():
 
 
 def test_graph_name_charset_guard():
-    from capabilities.adapters.arango_retrieval import validate_graph_name
+    """The graph name reaches a backticked AQL identifier, so the charset
+    guard refuses it — on the authorization channel, before any resolution."""
+    from capabilities.contract import AuthorizationError, OperationName
+    from capabilities.identifiers import validate_graph_name
 
-    assert validate_graph_name("GRAPH") == "GRAPH"
-    assert validate_graph_name("OKF_slug_v1") == "OKF_slug_v1"
-    with pytest.raises(ValueError):
-        validate_graph_name("GRAPH}` RETURN malice //")
-    with pytest.raises(ValueError):
-        validate_graph_name("")
+    operation = OperationName.SEARCH_KNOWLEDGE
+    assert validate_graph_name("GRAPH", operation=operation) == "GRAPH"
+    assert validate_graph_name("OKF_slug_v1", operation=operation) == "OKF_slug_v1"
+    with pytest.raises(AuthorizationError):
+        validate_graph_name("GRAPH}` RETURN malice //", operation=operation)
+    with pytest.raises(AuthorizationError):
+        validate_graph_name("", operation=operation)
 
 
 def test_the_modules_aql_doubles_track_the_real_driver_signature():

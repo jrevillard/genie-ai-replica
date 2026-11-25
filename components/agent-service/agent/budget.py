@@ -243,6 +243,25 @@ class RunBudgetMonitor:
                 completion_tokens,
             )
 
+    def mark_usage_gap(self) -> None:
+        """Mark the served totals as a known lower bound.
+
+        A call whose response never arrived (a timeout) leaves its server-side
+        spend unreportable: the usage record the endpoint would have sent is
+        the one that carries the count. The run's served totals are then a
+        lower bound, token enforcement degrades, and the degradation is
+        logged ONCE per run — the same honesty rule an incomplete usage
+        record applies.
+        """
+        if self._usage_gap_logged:
+            return
+        self._usage_gap_logged = True
+        logger.warning(
+            "a model call's served usage is unreportable (the response never arrived); "
+            "the run's token enforcement degrades — the served totals are a lower bound, "
+            "never guessed up to the budget"
+        )
+
     def record_evidence(self, result_bytes: int) -> None:
         """Add one executed tool result's size to the run's evidence volume."""
         self._evidence_bytes += result_bytes

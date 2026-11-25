@@ -5882,6 +5882,53 @@ verify:overlay-locks:reranker:
           - ".gitlab-ci.yml"
 
 
+# The dependency-evidence gate: the licence audit must cover exactly the
+# pinned trees, offline. It runs in the config stage — next to the other
+# dependency-freshness gates — so an MR that adds a pin without an evidence
+# row, drops a row, or drifts a version fails before anything builds. The
+# gate's own FAIL branches are unit-tested beside the real run: a branch
+# that stops reporting is a red pipeline, not a silently weaker audit.
+# The trigger paths ride one anchor (the module-source-changes idiom): a
+# path addition cannot drift between the trigger branches again.
+.agent_audit_source_changes: &agent_audit_source_changes
+  [
+    "components/agent-service/requirements*.txt",
+    "docs/dependencies/agent-service-dependency-evidence.json",
+    "scripts/dependencies/**",
+    ".gitlab-ci.yml"
+  ]
+verify:dependency-licenses:
+  stage: config
+  image: python:3.11-slim
+  interruptible: true
+  dependencies: []
+  before_script:
+    - pip install --no-cache-dir "pytest==${PYTEST_VERSION}"
+  script:
+    - python3 scripts/dependencies/verify-dependency-licenses.py --verify components/agent-service/requirements.txt components/agent-service/requirements-test.txt --evidence docs/dependencies/agent-service-dependency-evidence.json
+    - python3 -m pytest scripts/dependencies/test_verify_dependency_licenses.py -q -p no:cacheprovider --junitxml=reports/pytest-dependency-licenses.xml
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - reports/pytest-dependency-licenses.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *agent_audit_source_changes
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *agent_audit_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *agent_audit_source_changes
+
+
 # The SLIM locks (issue #2000) are verified for all three modules in ONE job:
 # each slim lock must resolve without re-resolution (uv pip sync --dry-run),
 # and each slim requirements.in must be covered by its slim lock — the same

@@ -797,15 +797,16 @@ def run_config_b(
         new_rows = json.loads(base64.b64decode(rows_b64).decode("utf-8"))
         # The driver's resolved snapshot rides verbatim and the rows file is
         # the committed artifact: credential-named keys (VLLM_API_KEY rode
-        # the VLLM_ prefix into the #2167 campaign's committed copy) are
-        # redacted HERE, at the write boundary, by the protocol's own rule —
-        # before any merge or write. The resumed prior is redacted at load
-        # for the same reason (a legacy file written by the old code).
+        # the VLLM_ prefix into a committed campaign copy) are redacted
+        # HERE, at the write boundary, by the protocol's own rule — before
+        # any merge or write. The resumed prior is redacted at load for the
+        # same reason (a legacy file written by the old code).
         # Accepted trade (the rule's documented safe side, applied at this
         # boundary): AGENT_AUTHORIZED_GRAPHS/REPOS are dropped too — the
         # word "authorized" carries the auth marker and the exact-match
-        # keep-list does not cover it. The manifests' own narrower rule
-        # keeps them; the rows file loses that evidence.
+        # keep-list does not cover it. The manifest applies the same rule to
+        # every map it records, so the manifest and the rows file lose that
+        # evidence alike.
         if isinstance(new_rows.get("resolved"), dict):
             new_rows["resolved"] = redact_deep(new_rows["resolved"])
         resolved = new_rows.get("resolved") or resolved

@@ -63,6 +63,12 @@ from protocol.drivers import run_one_case_c
 AGENT_SPAN_NAMES = ("agent.run", "agent.model_call", "agent.tool_call")
 AGENT_SERVICE_NAME = "agent-service"
 
+# The poll's cadence: a found trace is re-checked at most this often. A
+# test suite overrides it (monkeypatching the module constant) to run the
+# poll several times inside a tiny window, without changing the cadence
+# the venue sees.
+POLL_INTERVAL_S = 2.0
+
 # The questions the runner drives when no case file is given. Each one makes
 # the agent SEARCH (the corpus question), so the run carries the tool-call
 # children the trace property is about.
@@ -212,7 +218,17 @@ def run(
             # still be indexed.
             deadline = time.time() + trace_timeout_s
             while time.time() < deadline:
-                trace, reason = _trace_by_id(traces_url, trace_id)
+                fetched, fetched_reason = _trace_by_id(traces_url, trace_id)
+                if fetched:
+                    # A FOUND trace wins and is NEVER overwritten: the
+                    # poll keeps going only until the property lands, and
+                    # a later soft failure (a 503, an empty trace, a
+                    # not-indexed-yet) must not erase the spans already
+                    # fetched — they are the row's diagnosis.
+                    trace, reason = fetched, ""
+                elif not trace:
+                    # Nothing fetched yet: the reason is the newest one.
+                    trace, reason = fetched, fetched_reason
                 if reason.startswith("the trace fetch failed"):
                     # A HARD failure (the venue is unreachable, the body is
                     # not JSON): waiting for a broken venue only delays
@@ -225,7 +241,10 @@ def run(
                     # VictoriaTraces when it arrives — a trace that exists
                     # without it is a run that has not finished yet.
                     break
-                time.sleep(2.0)
+                # Never overrun the window: the sleep clamps to whatever
+                # is left, so the runner ends on its own deadline.
+                remaining = deadline - time.time()
+                time.sleep(min(POLL_INTERVAL_S, max(remaining, 0.0)))
         trace_present = bool(trace)
         names = _span_names(trace) if trace_present else []
         observed = set(names)
@@ -239,13 +258,21 @@ def run(
         row["trace_present"] = trace_present
         row["trace_found"] = "agent.run" in observed
         if trace_present and not observed:
-            # The trace carries no agent-service span at all: the run
-            # never reached the agent. That is an attribution fact, not
-            # a missing span name.
-            reason = reason or (
-                "the trace carries no agent-service spans — "
-                "the run never reached the agent"
-            )
+            # The trace carries no agent-service span at all. The cause
+            # must agree with the run's OWN verdict: a run that ANSWERED
+            # obviously reached the agent, so its spans carry another
+            # service name; a run that failed may never have reached it.
+            # That is an attribution fact, not a missing span name.
+            if row["run_answered"]:
+                reason = reason or (
+                    "the trace carries no agent-service spans — the run "
+                    "answered under another service name"
+                )
+            else:
+                reason = reason or (
+                    "the trace carries no agent-service spans — "
+                    "the run never reached the agent"
+                )
         row["trace_error"] = reason or None
         row["span_names"] = sorted(observed)
         row["services"] = sorted(_services(trace)) if trace_present else []

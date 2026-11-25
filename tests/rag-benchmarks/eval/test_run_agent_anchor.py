@@ -29,6 +29,10 @@ import urllib.error
 
 import run_agent_anchor as runner
 
+# The poll's cadence, shrunk for the suite: the runner reads the module
+# constant, so a tiny interval lets a test window hold several polls.
+runner.POLL_INTERVAL_S = 0.01
+
 AGENT = "agent-service"
 SPANS = ("agent.run", "agent.model_call", "agent.tool_call")
 
@@ -196,7 +200,62 @@ def test_a_foreign_service_does_not_satisfy_the_gate(monkeypatch):
 
     assert report["aggregate"]["n_missed_traces"] == 1
     assert report["per_query"][0]["span_names"] == []
+    assert "another service name" in report["per_query"][0]["trace_error"]
+
+
+def test_a_failed_run_with_no_agent_spans_says_the_run_never_reached_the_agent(
+    monkeypatch,
+):
+    # The same empty attribution, on a run that did NOT answer: the cause
+    # must agree with the run's own verdict, not contradict it.
+    report = _run(monkeypatch, _trace(*SPANS, service="chatqna"), outcome="error")
+
     assert "never reached the agent" in report["per_query"][0]["trace_error"]
+
+
+def _trace_payload(*names: str) -> dict:
+    return {
+        "data": [
+            {
+                "spans": [{"operationName": name, "processID": "p1"} for name in names],
+                "processes": {"p1": {"serviceName": AGENT}},
+            }
+        ]
+    }
+
+
+def test_a_fetched_trace_is_not_erased_and_the_poll_waits_for_the_parent(monkeypatch):
+    # The venue serves the CHILDREN on the first poll, answers a transient
+    # 503 on the second, and only exports the parent on the third: the
+    # trace already fetched must survive the 503 (losing it would turn
+    # "the run answered but the parent was late" into "the trace did not
+    # land at all" — a red naming the wrong cause), AND the poll must keep
+    # waiting until the parent lands (a trace that exists without
+    # agent.run is a run that has not finished yet, not a rename).
+    responses = [
+        _trace_payload("agent.model_call"),
+        _http_error(503, b"unavailable"),
+        _trace_payload(*SPANS),
+    ]
+
+    def fake_urlopen(request, timeout=None, context=None):
+        assert responses, "the poll fetched past the served answers"
+        answer = responses.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return _FakeResponse(json.dumps(answer).encode())
+
+    monkeypatch.setattr(runner.urllib.request, "urlopen", fake_urlopen)
+    _driver_only(monkeypatch)
+
+    report = runner.run(
+        "http://agent", "http://traces", [{"id": "q1", "query": "q"}], 1000, 0.05
+    )
+
+    assert report["per_query"][0]["trace_present"] is True
+    assert report["per_query"][0]["trace_found"] is True
+    assert report["per_query"][0]["span_names"] == sorted(SPANS)
+    assert report["aggregate"]["n_missed_traces"] == 0
 
 
 def test_a_malformed_payload_is_recorded_not_raised(monkeypatch):

@@ -48,7 +48,7 @@ development_status:
   1-10-attest-the-chart-identity-of-the-deployed-baseline: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-runtime-seam-and-bounded-decision-probe: done
   2-2-v06-runtime-verification-and-d03-closure: done
   2-3-request-orchestrator-budgets-admission-cancellation: done
@@ -63,7 +63,7 @@ development_status:
   2-11-execution-attribution-and-observability: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-one-flag-both-paths-provably: done
   3-2-rollback-continuity: done
   3-3-rehearsed-rollback-and-rollout-record-v08: done

@@ -297,8 +297,10 @@ helm dependency update /tmp/chart-before/charts/genieai-umbrella >/dev/null
 # The two "before" renders use the SAME flags as the "after" ones, with
 # the chart path swapped:
 #   rtk proxy helm template genieai /tmp/chart-before/charts/genieai-umbrella/ -n genieai \
+#     --api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector \
 #     <the same --set list> --set opea.gpu.mode=external > /tmp/before-external.yaml
 #   rtk proxy helm template genieai /tmp/chart-before/charts/genieai-umbrella/ -n genieai \
+#     --api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector \
 #     <the same --set list> --set opea.gpu.mode=in-cluster > /tmp/before-incluster.yaml
 
 # Every offline render MUST declare the otel operator's API version

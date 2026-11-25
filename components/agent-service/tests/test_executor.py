@@ -95,7 +95,9 @@ class FakeSearchPort:
         self.calls = []
 
     async def search_knowledge(self, context, request, budget, abstention_sink=None):
-        self.calls.append({"context": context, "request": request, "budget": budget, "abstention_sink": abstention_sink})
+        self.calls.append(
+            {"context": context, "request": request, "budget": budget, "abstention_sink": abstention_sink}
+        )
         if self.result is None:
             if abstention_sink is not None:
                 abstention_sink("no_documents_retrieved")

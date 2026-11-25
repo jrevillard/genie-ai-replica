@@ -244,6 +244,58 @@ function deviceSources(service) {
  * @param {Object} service - a rendered compose service
  * @returns {string[]}
  */
+/**
+ * Does one rendered service's argv carry a tool-calling pin?
+ *
+ * Per-TOKEN PREFIX check, not a substring match: argparse's default
+ * `allow_abbrev` accepts unambiguous long-option prefixes, so a token that
+ * merely PREFIXES the flag name (`--tool-call-p`) is a pin too — a
+ * substring check for the full flag spelling reads past it. Tokens are
+ * compared dash-stripped and prefix-wise (`tool-call*`, `enable-auto-tool*`)
+ * over BOTH the command and the entrypoint arrays; the equals-form
+ * (`--tool-call-parser=granite`) prefix-matches the same way.
+ *
+ * Scope assumption, documented: this reads the file-local service block
+ * ONLY. A future `extends`/`include` partial merge (a child carrying
+ * `command`, an extended base carrying the pin in `entrypoint`) would keep
+ * this guard green while the EFFECTIVE argv carries the pin — compose
+ * merges what `yaml.safe_load` never sees. Neither form exists in the
+ * shipped file; if one lands, the guard moves to the merged render.
+ *
+ * @param {{command?: string[]|string, entrypoint?: string[]|string}} service -
+ *   one rendered compose service
+ * @returns {boolean} True when any token prefixes a tool-calling flag
+ */
+function carriesToolCallingFlag(service) {
+  const tokens = [];
+  for (const field of ['command', 'entrypoint']) {
+    const value = service?.[field];
+    if (Array.isArray(value)) tokens.push(...value.map(String));
+    else if (value !== undefined && value !== null) tokens.push(...String(value).split(/\s+/));
+  }
+  return tokens.some((token) => {
+    const bare = token.replace(/^-+/, '');
+    return bare.startsWith('tool-call') || bare.startsWith('enable-auto-tool');
+  });
+}
+
+describe('the tool-calling pin guard (per-token prefix)', () => {
+  it('reads tokens, so an abbreviated pin cannot slip past', () => {
+    // The guard is per-TOKEN PREFIX: argparse's default `allow_abbrev`
+    // accepts unambiguous long-option prefixes, so `--tool-call-p` IS a
+    // pin. A substring check for the full flag spelling reads past it.
+    expect(carriesToolCallingFlag({ command: ['vllm', 'serve', '--tool-call-parser', 'granite'] })).toBe(true);
+    expect(carriesToolCallingFlag({ command: ['vllm', 'serve', '--tool-call-p'] })).toBe(true);
+    expect(carriesToolCallingFlag({ command: ['vllm', 'serve', '--enable-auto-tool-c'] })).toBe(true);
+    expect(carriesToolCallingFlag({ command: ['vllm', 'serve', '--tool-call-parser=granite'] })).toBe(true);
+    expect(carriesToolCallingFlag({ entrypoint: ['vllm', 'serve', '--enable-auto-tool-choice'] })).toBe(true);
+    expect(carriesToolCallingFlag({ command: 'vllm serve --tool-call-p' })).toBe(true);
+    // And the shipped shapes carry no pin.
+    expect(carriesToolCallingFlag({ command: ['vllm', 'serve', 'granite-3.1-2b'] })).toBe(false);
+    expect(carriesToolCallingFlag({ command: [], entrypoint: ['vllm', 'serve'] })).toBe(false);
+  });
+});
+
 function publishedPorts(service) {
   return (service.ports || []).map((port) => String(port.published));
 }
@@ -778,12 +830,9 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       // profile too, so a vendor-conditional pin row cannot hide from
       // this guard), joined then substring-matched so an equals-form
       // token cannot slip past element equality.
-      const commandOf = (s) => (Array.isArray(s.command) ? s.command.join(' ') : String(s.command));
       const renders = [JSON.parse(gpuNvidia.stdout).services, JSON.parse(gpu.stdout).services];
       for (const services of renders) {
-        const command = commandOf(services['vllm-llm']);
-        expect(command).not.toContain('tool-call-parser');
-        expect(command).not.toContain('--enable-auto-tool-choice');
+        expect(carriesToolCallingFlag(services['vllm-llm'])).toBe(false);
       }
     });
 

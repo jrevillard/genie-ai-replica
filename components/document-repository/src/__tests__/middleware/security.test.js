@@ -39,12 +39,25 @@ jest.mock('../../config/appConfig', () => ({
 // runs under --experimental-vm-modules). The factory reads the shared jest.fn
 // lazily through a getter, so per-test mockResolvedValue calls are visible.
 const fileTypeFromBuffer = jest.fn();
-jest.unstable_mockModule('file-type', () => ({
-  get fileTypeFromBuffer() {
-    return fileTypeFromBuffer;
-  }
-}));
-const { validateFileType } = require('../../utils/mimeTypeValidator');
+const { validateFileType, setFileTypeLoader, resetFileTypeLoader } = require('../../utils/mimeTypeValidator');
+
+// file-type 21 is ESM-only, so it is stubbed through mimeTypeValidator's
+// injectable loader seam — NOT through `jest.unstable_mockModule`. That API
+// needs Jest's ESM VM (--experimental-vm-modules), and the flag makes Jest
+// classify every `"type": "module"` package as ESM and refuse `require()`
+// before the transform runs — which parse5 8 (the CVE-2026-133245 fix) is.
+// The seam is the injection point the module documents for exactly this
+// reason ("dynamic imports are not interceptable in the CJS VM").
+//
+// The seam lives on globalThis, so it must be (re)installed per test: the
+// beforeEach below resets it, and the getter keeps the shared jest.fn
+// visible to each test's mockResolvedValue call.
+const installFileTypeStub = () =>
+  setFileTypeLoader({
+    get fileTypeFromBuffer() {
+      return fileTypeFromBuffer;
+    }
+  });
 
 const fs = require('fs');
 const path = require('path');
@@ -54,6 +67,8 @@ const { cleanClamAV, infectedClamAV } = require('../mocks/clamav');
 describe('Security Middleware Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetFileTypeLoader();
+    installFileTypeStub();
     securityService.isInitialized = false;
     securityService.clamscan = null;
   });

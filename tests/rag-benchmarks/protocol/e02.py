@@ -1147,9 +1147,11 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
     # committed maps are the BUILD-TIME redacted snapshots (credential-named
     # keys were dropped before the manifest was written), so a difference that
     # lived only in a credential-named key is not comparable — "identical"
-    # means "identical over the recorded keys", and two empty maps are two
-    # UNRECORDED envs, never an identical pair.
-    if not b_committed and not c_committed:
+    # means "identical over the recorded keys", and an env UNRECORDED ON
+    # EITHER SIDE makes the comparison itself unrecorded (equality over an
+    # empty shared-key set is a vacuous claim — the same never-equal-from-
+    # absence principle the recorded comparisons carry).
+    if not b_committed or not c_committed:
         env_state = "not_recorded"
     else:
         env_state = "identical" if not differing_env else "different"
@@ -1184,8 +1186,10 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
             "note": (
                 "the resolved env is recorded from the two runs' own snapshots, which the manifest"
                 " redacted at build time: credential-named keys are not comparable, so 'identical'"
-                " means identical over the recorded keys, and two empty maps are two unrecorded"
-                " envs. A key that differs is an uncontrolled difference the reader must weigh"
+                " means identical over the recorded keys, and an env unrecorded on either side"
+                " (both maps empty, or one leg's map empty) is not compared — 'not_recorded',"
+                " never an identical pair. A key that differs is an uncontrolled difference the"
+                " reader must weigh"
             ),
         },
         "execution_conditions": {

@@ -922,7 +922,7 @@ def test_e02_resolved_env_does_not_claim_identical_over_unrecorded_maps():
 
 def test_e02_resolved_env_key_on_one_side_alone_is_not_a_difference():
     """A key recorded on ONE side alone (the B container's EVAL_* snapshot
-    when the C side records nothing) is an unrecorded value on the other —
+    when the C side does not carry it) is an unrecorded value on the other —
     never a disagreement. Counting it manufactured a phantom divergence
     signal on every venue that set the var."""
     b_manifest, c_manifest = _legs()
@@ -943,6 +943,32 @@ def test_e02_resolved_env_key_on_one_side_alone_is_not_a_difference():
     resolved = report["uncontrolled_differences"]["resolved_env"]
     assert resolved["state"] == "identical"
     assert "EVAL_DEFAULT_GRAPH" not in (resolved.get("differing_keys") or [])
+
+
+def test_e02_resolved_env_recorded_on_one_side_only_is_not_compared():
+    """One leg records NO env while the other records keys: the comparison
+    itself is unrecorded — 'identical' over an empty shared-key set is a
+    vacuous equality (the never-equal-from-absence principle the recorded
+    comparisons carry)."""
+    b_manifest, c_manifest = _legs()
+    b_manifest["configuration"]["B"]["resolved_env"] = {
+        "LLM_MODEL": "granite",
+        "AGENT_LANE_SLOTS": "2",
+        "EVAL_DEFAULT_GRAPH": "GRAPH",
+    }
+    c_manifest["configuration"]["C"]["resolved_env"] = {}
+    report = build_e02_report(
+        b_manifest=b_manifest,
+        c_manifest=c_manifest,
+        b_rows=_b_rows(),
+        c_rows=_c_rows(),
+        entries=_entries(),
+        set_sha256=SET_SHA,
+        created_utc=CREATED,
+    )
+    resolved = report["uncontrolled_differences"]["resolved_env"]
+    assert resolved["state"] == "not_recorded"
+    assert resolved["differing_keys"] == []
 
 
 def test_e02_reads_the_resource_record_limit_marker_on_the_b_leg():

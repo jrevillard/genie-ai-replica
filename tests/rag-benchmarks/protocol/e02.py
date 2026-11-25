@@ -71,7 +71,7 @@ from .e01 import (
 from .e01 import (
     _ok_rows as _b_ok_rows,
 )
-from .evalset import base_case_id
+from .evalset import base_case_id, coverage_census
 from .manifest import (
     digest_without_embedded,
     manifest_digest,
@@ -1475,6 +1475,12 @@ def build_e02_report(
             "c_missing": sum(1 for record in per_case.values() if record["c"] is None),
             "n_query_classes": len(gains.get("per_class") or {}),
             "n_query_classes_not_covered": len(gains.get("not_covered") or []),
+            # What the set covers, per evaluation surface — the same census
+            # the A capture stamps and the E01 report carries in its own
+            # counts. The C verdict's coverage claim is the one the operator
+            # reads, so it is stated here against the set digest the report
+            # carries, not inferred from a gold count.
+            "coverage": coverage_census(entries),
         },
     }
     body["verdict"] = _verdict(dimensions, gains)

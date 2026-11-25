@@ -780,6 +780,19 @@ def test_e02_counts_multi_turn_rows_in_their_case_class():
     assert multi_hop["delta"]["answered"] == 2
 
 
+def test_e02_counts_carries_the_coverage_census():
+    """The E02 report carries the set's coverage census — the C verdict's
+    coverage claim is the one the operator reads, so it states what the set
+    covers per surface instead of leaving it inferred from a gold count.
+    The census is a pure function of the set, and the report carries the
+    set's digest — the same claim the A capture stamps."""
+    entries = _entries()
+    report = _report(entries=entries)
+    from protocol.evalset import coverage_census
+
+    assert report["counts"]["coverage"] == coverage_census(entries)
+
+
 def test_e02_does_not_count_a_budget_exhausted_row_as_answered():
     """A row whose terminal state is a limit hit is not an answer — counting
     it as one inflates the fixed pipeline's coverage and can deny the agent a

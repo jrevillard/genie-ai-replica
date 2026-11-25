@@ -1040,6 +1040,24 @@ function loadDoc(db, key, code, what) {
     });
 }
 
+/**
+ * ONE home for "this run belongs to this suite": the ownership rule the
+ * explain begin, the run poll and the explain job all enforce (repo, suite,
+ * kind). Absence and mismatch both answer 404 RUN_NOT_FOUND; a transient DB
+ * fault propagates as the fault it is.
+ */
+function loadOwnedRun(db, repoId, suiteKey, runKey) {
+  return loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey} for suite ${suiteKey}`).then((doc) => {
+    if (doc.repo_id !== repoId || doc.suite_key !== suiteKey || doc.kind !== 'ragas_run') {
+      const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
+      err.code = 'RUN_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    return doc;
+  });
+}
+
 /** Published corpus CHUNKS of the selected repos → sidecar documents.
  *
  * The generation corpus is the `<graph>_SOURCE` chunk texts — the same unit
@@ -3288,13 +3306,7 @@ async function getRunSuite(repoId, suiteKey, runKey) {
     const live = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`).catch(() => null);
     return { run_key: runKey, suite_key: suiteKey, status: 'running', progress: (live && live.progress) || null };
   }
-  const doc = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey} for suite ${suiteKey}`);
-  if (doc.repo_id !== repoId || doc.suite_key !== suiteKey) {
-    const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
-    err.code = 'RUN_NOT_FOUND';
-    err.status = 404;
-    throw err;
-  }
+  const doc = await loadOwnedRun(db, repoId, suiteKey, runKey);
   if (doc.status === 'running') {
     // This process does not have it in flight — but the SIDECAR may still
     // be judging it (another replica owns it, or this server restarted
@@ -3398,6 +3410,9 @@ const rescoreInFlight = new Map(); // new run_key -> {source_run_key} (re-score 
 // start time so the poll envelope can render "advisor thinking, N failing
 // rows, X elapsed" instead of a dead button.
 const explainProgress = new Map(); // suite_key -> {phase, started_ms, failing}
+// A 'running' explain doc older than this has no writer left (the process
+// that would terminalize it is gone) — the read treats it as failed.
+const EXPLAIN_STALE_MS = 15 * 60 * 1000;
 
 async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
   const db = await dbService.getConnection();
@@ -3411,6 +3426,23 @@ async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
     err.status = 409;
     throw err;
   }
+  // Live 2026-11-25: the panel held a run from the OLD suite after a
+  // regenerate, and this begin ACCEPTED the impossible pairing — the 202
+  // answered, the async job died writing nothing, and the poll hammered
+  // "no explain found" for minutes. The pairing is validated HERE, before
+  // the job exists, so the impossible request gets its honest 404 now
+  // (loadOwnedRun: ONE home for the ownership rule; absence → null here,
+  // mismatch → 404, transient faults propagate as faults).
+  const pairingDoc = await loadOwnedRun(db, repoId, suiteKey, runKey).catch((err) => {
+    if (err && err.code === 'RUN_NOT_FOUND') return null;
+    throw err;
+  });
+  if (!pairingDoc) {
+    const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
+    err.code = 'RUN_NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
   const inflight = explainInFlight.get(suiteKey);
   if (inflight) {
     const err = new Error('an explain is already running for this suite');
@@ -3420,9 +3452,42 @@ async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
     throw err;
   }
   const explainKey = `rx${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+  // The placeholder is the poll's anchor (the head-suite flow's shape): a
+  // job that fails mid-flight updates IT to a terminal failed state, so
+  // getExplainFailures always has something honest to answer — the poll
+  // can never hang on a doc that was never written.
+  await db.collection(COLLECTION).save({
+    _key: explainKey,
+    repo_id: repoId,
+    kind: 'ragas_explain',
+    suite_key: suiteKey,
+    status: 'running',
+    created_at: new Date().toISOString(),
+    created_by: (opts.actor && opts.actor.user_id) || 'system',
+    payload: { run_key: runKey }
+  });
   explainInFlight.set(suiteKey, { explain_key: explainKey, run_key: runKey });
-  const done = explainFailures(repoId, suiteKey, runKey, { ...opts, explainKey })
-    .then((doc) => doc)
+  const failTerminal = async (e) => {
+    const code = typeof e.code === 'string' && e.code ? e.code : 'EXPLAIN_FAILED';
+    try {
+      await db.collection(COLLECTION).update(explainKey, { status: 'failed', error: { code, message: e.message } });
+    } catch (updateErr) {
+      logger.error('ragas-suite.explain.failed_doc_unwritable', {
+        repo_id: repoId,
+        suite_key: suiteKey,
+        explain_key: explainKey,
+        error: updateErr.message
+      });
+    }
+  };
+  // pairingDoc rides the opts: the job reloads nothing it can reuse — the
+  // target run is terminal ('done') when an explain is begun, so the second
+  // read could never see anything new.
+  const done = explainFailures(repoId, suiteKey, runKey, { ...opts, explainKey, runDoc: pairingDoc })
+    .catch(async (e) => {
+      await failTerminal(e);
+      throw e;
+    })
     .finally(() => explainInFlight.delete(suiteKey));
   done.catch((e) =>
     logger.error('ragas-suite.explain.async_failed', { repo_id: repoId, suite_key: suiteKey, error: e.message })
@@ -3473,7 +3538,25 @@ async function getExplainFailures(repoId, suiteKey, runKey) {
     err.status = 404;
     throw err;
   }
-  return rows[0];
+  // A 'running' doc whose writer is GONE (a server restart between the
+  // placeholder save and completion) must not read as a healthy poll
+  // forever: past the horizon it is honestly FAILED, and the panel's poll
+  // renders the interruption instead of an empty advisor.
+  const doc = rows[0];
+  if (doc.status === 'running') {
+    const ageMs = Date.now() - Date.parse(doc.created_at || '');
+    if (Number.isFinite(ageMs) && ageMs > EXPLAIN_STALE_MS) {
+      return {
+        ...doc,
+        status: 'failed',
+        error: {
+          code: 'EXPLAIN_INTERRUPTED',
+          message: 'the explain job did not complete (it was likely interrupted by a server restart); start it again'
+        }
+      };
+    }
+  }
+  return doc;
 }
 
 /**
@@ -4684,13 +4767,9 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
     const db = await dbService.getConnection();
     await ensureCollection(db);
     const suite = await loadSuite(db, repoId, suiteKey);
-    const runDoc = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`);
-    if (runDoc.repo_id !== repoId || runDoc.suite_key !== suiteKey || runDoc.kind !== 'ragas_run') {
-      const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
-      err.code = 'RUN_NOT_FOUND';
-      err.status = 404;
-      throw err;
-    }
+    // opts.runDoc: the begin already loaded AND validated this run — reuse
+    // it; a standalone caller pays the one read through the same rule.
+    const runDoc = opts.runDoc || (await loadOwnedRun(db, repoId, suiteKey, runKey));
     // The evidence pass (Story 8-6, 2026-10-23): prove WHERE each expected
     // passage went, against the corpus itself, before blaming any tier.
     // This is what stops a content-curation instruction for content that is
@@ -5070,7 +5149,12 @@ async function explainFailures(repoId, suiteKey, runKey, opts = {}) {
           advice
         }
       };
-      await db.collection(COLLECTION).save(doc);
+      await db
+        .collection(COLLECTION)
+        // REPLACE, not save: beginExplainFailures already wrote the running
+        // placeholder under this key — the poll's anchor. The finished doc
+        // replaces it wholesale (and drops the 'running' status with it).
+        .replace(opts.explainKey || doc._key, { ...doc, _key: opts.explainKey || doc._key });
       span.setAttribute('okf.ragas.failing', attributions.length);
       span.setAttribute('okf.ragas.unfair', attributions.filter((a) => a.unfair_question).length);
       return doc;
@@ -5234,7 +5318,34 @@ async function sweepInterruptedRuns() {
         .catch(() => {});
       swept += 1;
     }
-    if (swept) logger.info('ragas-suite.boot_sweep', { swept });
+    // The SAME repair for explain placeholders: a 'running' ragas_explain doc
+    // this process does not hold in flight has no writer left (the process
+    // that would terminalize it is gone). Repaired ONCE here, at boot — the
+    // read-side horizon in getExplainFailures only covers the window until
+    // the next restart.
+    const liveExplainKeys = new Set([...explainInFlight.values()].map((v) => v.explain_key));
+    const explainRows = await (
+      await db.query(
+        `FOR d IN ${COLLECTION} FILTER d.kind == "ragas_explain" AND d.status == "running" RETURN KEEP(d, ["_key", "suite_key"])`
+      )
+    ).all();
+    let sweptExplain = 0;
+    for (const r of explainRows) {
+      if (liveExplainKeys.has(r._key)) continue;
+      await db
+        .collection(COLLECTION)
+        .replace(r._key, {
+          ...(await db.collection(COLLECTION).document(r._key)),
+          status: 'failed',
+          error: {
+            code: 'EXPLAIN_INTERRUPTED',
+            message: 'the explain job did not complete (it was likely interrupted by a server restart); start it again'
+          }
+        })
+        .catch(() => {});
+      sweptExplain += 1;
+    }
+    if (swept || sweptExplain) logger.info('ragas-suite.boot_sweep', { swept, swept_explain: sweptExplain });
   } catch (e) {
     logger.warn('ragas-suite.boot_sweep_failed', { error: e.message });
   }

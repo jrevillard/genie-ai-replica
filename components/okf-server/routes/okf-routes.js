@@ -380,12 +380,22 @@ router.use('/model-configs', require('./model-config-routes'));
 const evalContextController = require('../controllers/evaluation-context-controller');
 router.post('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.createContext);
 router.get('/eval-contexts', evalContextController.requireSuperadmin, evalContextController.listContexts);
+// #2061 phase 4 (E-5) — the composer's two reads. THE LITERAL ROUTES COME
+// FIRST: `/eval-contexts/groups` would otherwise be parsed as
+// `/eval-contexts/:id` and answered with a context-not-found.
+router.get('/eval-contexts/groups', evalContextController.requireSuperadmin, evalContextController.listGroups);
+router.post('/eval-contexts/preview', evalContextController.requireSuperadmin, evalContextController.previewContext);
 router.get('/eval-contexts/:id', evalContextController.requireSuperadmin, evalContextController.getContext);
 router.post(
   '/eval-contexts/:id/refresh',
   evalContextController.requireSuperadmin,
   evalContextController.refreshContext
 );
+// #2061 phase-4 amendment (David, 2026-11-25): contexts are MANAGEABLE —
+// rename/add/remove memberships (update) and delete, with the in-use guard
+// answering 409 CONTEXT_IN_USE naming the bound suites.
+router.post('/eval-contexts/:id/update', evalContextController.requireSuperadmin, evalContextController.updateContext);
+router.delete('/eval-contexts/:id', evalContextController.requireSuperadmin, evalContextController.deleteContext);
 
 // Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the governance
 // write is tools-admin only and audited before→after in the service.

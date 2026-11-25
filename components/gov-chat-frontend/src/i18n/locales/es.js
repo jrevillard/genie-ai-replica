@@ -3316,7 +3316,51 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Pruebas comparativas de RAGAS'
+        ragas: 'Pruebas comparativas de RAGAS',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'Un contexto es un principal con nombre: un conjunto de membresías de grupo, resuelto una vez y congelado. Una suite creada para un contexto se mide sobre ese contexto — nunca sobre todo el despliegue.',
+        empty:
+          'Aún no hay contexto de evaluación. Componga uno abajo — es el ámbito sobre el que se mide una evaluación con ámbito.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Añadir una membresía (un grupo)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        membersTruncated: '{n}+ miembro(s) — la lectura está limitada',
+        noMemberships:
+          'Aún no hay membresía — sin ninguna, el contexto se resuelve al despliegue completo (el contexto abierto).',
+        preview: 'Previsualizar a qué alcanza',
+        previewRepos: 'Reaches',
+        unreadable: 'Estas membresías no se pudieron leer: {list}',
+        create: 'Create the context',
+        created: 'El contexto fue creado y congelado.',
+        refreshed: 'El contexto fue resuelto de nuevo.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'Sin contexto — todo el despliegue',
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Editando {name} — guardar vuelve a resolver la unión e incrementa la versión.',
+        updated: 'El contexto se actualizó y se volvió a resolver.',
+        deleted: 'El contexto se eliminó.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',
@@ -3507,7 +3551,14 @@ export default {
         deleteConfirmBody: 'Esto elimina permanentemente la suite y su historial de ejecuciones. No se puede deshacer.',
         deleteConfirm: 'Eliminar suite',
         deleteCancel: 'Cancelar',
-        unnamedFallback: 'suite sin nombre'
+        unnamedFallback: 'suite sin nombre',
+        bindingOpen: 'Creada para el despliegue — sin contexto de evaluación',
+        binding: 'Medida sobre «{name}» (v{version} · {repos} repositorios)',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryPartial: '({measured} de {total} medidas)',
+        boundaryNotMeasured: 'Límite de ámbito: no medido'
       },
       error: {
         explain: 'La explicación falló',
@@ -3943,6 +3994,9 @@ export default {
       },
       results: {
         title: 'Resultados de la prueba comparativa',
+        attributionBy: 'Respondido por',
+        attributionOutside: 'Fundamentado fuera del portador: {pct}%',
+        attributionNoCarrier: 'Fundamentación fuera del portador: no medible sin un contexto de evaluación',
         failing: '{n} con fallos',
         advisorHint:
           '{n} preguntas están por debajo de sus umbrales de métricas. Ejecute el asesor para atribuir cada fallo a una etapa del pipeline y obtener acciones concretas.',

@@ -247,6 +247,41 @@ async function findGroupByName(name) {
   return groups.find((g) => g.name === name) || null;
 }
 
+/**
+ * The MEMBERS of a group — the "who does this membership stand for" surface
+ * the evaluation-context composer shows an operator.
+ *
+ * ENCODED: the group id reaches this path from a caller-supplied principal
+ * reference, exactly like `groupRealmRoles` above — unencoded, a reference
+ * like `../users` escapes the `/groups/{id}` segment.
+ *
+ * The username and the id only: the composer needs to name the people a
+ * membership stands for, and the email is not that.
+ */
+async function groupMembers(groupId) {
+  // PAGED, and capped: Keycloak's admin API returns at most `max` rows per
+  // call with no server-side "there are more" marker. Five pages of 200 is
+  // far beyond any membership a composer pass needs to reason about — and
+  // when even that is not enough, the caller is TOLD (`truncated`) instead
+  // of being shown a smaller population as if it were the whole one.
+  const PAGE = 200;
+  const MAX_PAGES = 5;
+  const members = [];
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const rows = await jsonOrThrow(
+      await adminApi('GET', `/groups/${encodeURIComponent(groupId)}/members?max=${PAGE}&first=${page * PAGE}`),
+      'group members'
+    );
+    const mapped = (Array.isArray(rows) ? rows : []).map((u) => ({
+      id: u.id,
+      username: u.username || null
+    }));
+    members.push(...mapped);
+    if (mapped.length < PAGE) return { members, truncated: false };
+  }
+  return { members, truncated: true };
+}
+
 /** Create the group if missing; return its representation. */
 async function ensureGroup(name) {
   const existing = await findGroupByName(name);
@@ -320,6 +355,7 @@ module.exports = {
   usersWithAttribute,
   ensureRole,
   groupRealmRoles,
+  groupMembers,
   ensureGroup,
   findGroupByName,
   setGroupRole,

@@ -1247,6 +1247,98 @@ describe('explain', () => {
     }
   });
 
+  // Live 2026-11-25 (David's explain click): the panel held a run from the
+  // OLD suite after a regenerate, the POST accepted the impossible pairing,
+  // the async job died writing NOTHING, and the poll then hammered
+  // "no explain found" for minutes. Two contracts pin the cure.
+  it('refuses an explain whose run belongs to ANOTHER suite — synchronously, at the POST', async () => {
+    const a = await makeSuiteWithRun();
+    const b = await svc.beginSuiteGeneration('me', { testset_size: 1 }, {});
+    await b.done;
+    await expect(svc.beginExplainFailures('me', b.suite_key, { run_key: a.run_key }, {})).rejects.toMatchObject({
+      code: 'RUN_NOT_FOUND',
+      status: 404
+    });
+  });
+
+  it('a failed explain leaves a TERMINAL failed doc — the poll answers, it never hangs on nothing', async () => {
+    const { suite_key, run_key } = await makeSuiteWithRun();
+    // Fail the job at its LAST step (the finished doc's write): the advisor
+    // degrading is a HANDLED outcome, so the failure must come from
+    // somewhere the flow does not catch. The poisoned replace is that
+    // place — and the placeholder written by the begin is what the poll
+    // then reads as terminal.
+    const col = __mockDb.collection('okf_head_test_runs');
+    col.replace.mockRejectedValueOnce(new Error('db exploded mid-explain'));
+    const begun = await svc.beginExplainFailures('me', suite_key, { run_key }, {});
+    await begun.done.catch(() => {}); // the job fails
+    const doc = await svc.getExplainFailures('me', suite_key, run_key);
+    expect(doc.status).toBe('failed');
+    expect(doc.error && doc.error.code).toBe('EXPLAIN_FAILED');
+    expect(doc.error.message).toContain('db exploded mid-explain');
+  });
+
+  it('a TRANSIENT fault reading the run surfaces as the fault it is — not a 404 RUN_NOT_FOUND', async () => {
+    const { suite_key, run_key } = await makeSuiteWithRun();
+    // The run read faults at the transport layer (not absence): the pairing
+    // validation must NOT translate that into "run not found", which would
+    // send the operator re-running a long suite for the wrong reason.
+    const stores = __mockDb._stores['okf_head_test_runs'];
+    __mockDb.collection('okf_head_test_runs').document.mockImplementation(async (k) => {
+      if (k === run_key) throw new Error('gateway flap mid-read');
+      const d = stores[k];
+      if (!d) {
+        const e = new Error('not found');
+        e.code = 404;
+        e.errorNum = 1204;
+        throw e;
+      }
+      return { ...d };
+    });
+    const err = await svc.beginExplainFailures('me', suite_key, { run_key }, {}).catch((e) => e);
+    expect(err.message).toBe('gateway flap mid-read');
+    expect(err.code).not.toBe('RUN_NOT_FOUND');
+    expect(err.status).not.toBe(404);
+  });
+
+  it('a RUNNING explain doc older than the horizon reads as FAILED — a crash mid-explain never polls forever', async () => {
+    const { suite_key, run_key } = await makeSuiteWithRun();
+    __mockDb._stores['okf_head_test_runs']['rx-stale-1'] = {
+      _key: 'rx-stale-1',
+      repo_id: 'me',
+      suite_key,
+      kind: 'ragas_explain',
+      status: 'running',
+      created_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      payload: { run_key }
+    };
+    const doc = await svc.getExplainFailures('me', suite_key, run_key);
+    expect(doc.status).toBe('failed');
+    expect(doc.error && doc.error.code).toBe('EXPLAIN_INTERRUPTED');
+  });
+
+  it('the boot SWEEP repairs an orphaned running explain doc — storage heals once at restart', async () => {
+    const { suite_key, run_key } = await makeSuiteWithRun();
+    __mockDb._stores['okf_head_test_runs']['rx-orphan-1'] = {
+      _key: 'rx-orphan-1',
+      repo_id: 'me',
+      suite_key,
+      kind: 'ragas_explain',
+      status: 'running',
+      created_at: new Date().toISOString(),
+      payload: { run_key }
+    };
+    // The sweep asks two queries (ragas_run orphans, then ragas_explain
+    // orphans); the mock answers filtered queries with [] by default, so
+    // both are programmed: no run orphans, one explain orphan.
+    __mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    __mockDb.query.mockResolvedValueOnce({ all: async () => [{ _key: 'rx-orphan-1', suite_key }] });
+    await svc.sweepInterruptedRuns();
+    const healed = await __mockDb.collection('okf_head_test_runs').document('rx-orphan-1');
+    expect(healed.status).toBe('failed');
+    expect(healed.error && healed.error.code).toBe('EXPLAIN_INTERRUPTED');
+  });
+
   // Live 2026-10-19 (verification run rr1792392548082): the reference chunk
   // was retrieved VERBATIM — context recall 1.0, every reference token in the
   // retrieved union — and entity recall still scored 0.4–0.5, because the

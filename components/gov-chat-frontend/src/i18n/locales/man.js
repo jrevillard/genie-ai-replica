@@ -3247,7 +3247,50 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'RAGAS Benchmarks'
+        ragas: 'RAGAS Benchmarks',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'Kontext ye moodo min nye dina: gulu uwanama kɔlɔ, a tarandi kilin ko saaying, a be kɛ kanden ye. Kontextoo la suite minted, a test kontextoo la — wili deploymentoo ti bɛɛ.',
+        empty: 'Kontext si tɔɔ na sai. I kan a da a gbii — a de ye a ye min na testoo be test kontextoo la.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Uwanama ti a kofu (gulu kilin)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        membersTruncated: '{n}+ memberolu — kanko dong gbe',
+        noMemberships:
+          'Uwanama si men na — a ti bɛɛ a ma, kontextoo be a tarandi deploymentoo bɛɛ la (kontext a buka).',
+        preview: 'A ye fin ye min be se',
+        previewRepos: 'Reaches',
+        unreadable: 'Uwanama ninnu ma se k’a da kanko: {list}',
+        create: 'Create the context',
+        created: 'Kontextoo da, a be kɛ kanden ye.',
+        refreshed: 'Kontextoo tarandi kura.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'Kontext si — deploymentoo bɛɛ',
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'I be kontextoo labɛm {name} — a mara a be gulu uwanamaw tarandi kura.',
+        updated: 'Kontextoo labɛnna, a tarandi kura.',
+        deleted: 'Kontextoo bɔra.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',
@@ -3429,7 +3472,14 @@ export default {
         deleteConfirmBody: 'Nying bɛ suiteoo ani a run tariiku murung fiti. Nying kwoo mang si murung.',
         deleteConfirm: 'Delete suite',
         deleteCancel: 'Cancel',
-        unnamedFallback: 'unnamed suite'
+        unnamedFallback: 'unnamed suite',
+        bindingOpen: 'A minted deploymentoo la — kontext si',
+        binding: 'A test “{name}” la (v{version} · repo {repos})',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryPartial: '(a test {measured} fo {total})',
+        boundaryNotMeasured: 'Kontextoo ji so: a ma test'
       },
       error: {
         explain: 'Explain failed',
@@ -3858,6 +3908,9 @@ export default {
       },
       results: {
         title: 'Benchmark results',
+        attributionBy: 'A ye answere',
+        attributionOutside: 'A dulaka carrieroo ti: {pct}%',
+        attributionNoCarrier: 'A dulaka carrieroo ti: i ma se k’a test kontext si de',
         failing: '{n} failing',
         advisorHint:
           'Ñiningolu {n} bɛ u metric threshold koto. Advisor run ka failu kiling pipeline stage la attribute ani kewu concrete soto.',

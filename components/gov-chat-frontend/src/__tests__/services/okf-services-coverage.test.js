@@ -72,7 +72,9 @@ describe('headTestService — the Testing Lab client', () => {
     await headTestService.probeSuiteQuery('r1', 's1', 'q');
     expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/routing-testsuite/s1/probe', { query: 'q' });
     await headTestService.runSuite('r1', 's1');
-    expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/routing-testsuite/s1/run');
+    expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/routing-testsuite/s1/run', {});
+    await headTestService.runSuite('r1', 's1', 'ec-1');
+    expect(httpService.post).toHaveBeenCalledWith('/okf/repos/r1/routing-testsuite/s1/run', { context_id: 'ec-1' });
   });
 
   it('run + explain polls GET the keyed endpoints', async () => {

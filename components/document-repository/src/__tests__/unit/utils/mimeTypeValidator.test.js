@@ -1,6 +1,9 @@
-jest.unstable_mockModule('file-type', () => ({
-  fileTypeFromBuffer: jest.fn().mockResolvedValue(null)
-}));
+// No `file-type` mock: the suite below exercises only the pure string helpers
+// (getFileExtension / getMimeType / getFileCategory / isTextExtractable), which
+// never load the module — `mimeTypeValidator` imports it lazily, inside
+// `validateFileType`, and no test here calls that. The stub was dead code, and
+// `jest.unstable_mockModule` needs jest's ESM VM (--experimental-vm-modules),
+// which the test script no longer runs.
 const {
   getFileExtension,
   getMimeType,

@@ -17,6 +17,11 @@ module.exports = {
       }
     ]
   ],
+  // parse5 8.x and its `entities` dependency are ESM-only; Jest's CommonJS
+  // loader cannot require() them (ERR_REQUIRE_ESM) below Node 24.9, and
+  // transformIgnorePatterns is what lets babel.config.js compile them.
+  // The negative lookahead keeps every OTHER package untransformed.
+  transformIgnorePatterns: ['/node_modules/(?!(parse5|entities)/)'],
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],

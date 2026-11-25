@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+    "test": "node ./node_modules/jest/bin/jest.js",
     "test:contract": "jest --testPathPattern='src/__tests__/unit/(controllers|middlewares)/'",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -76,7 +76,10 @@
     "jest-junit": "^17.0.0",
     "nodemon": "^3.0.1",
     "prettier": "^3.8.1",
-    "supertest": "^6.3.3"
+    "supertest": "^6.3.3",
+    "@babel/core": "^7.29.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.29.14",
+    "@babel/plugin-transform-export-namespace-from": "^7.29.15"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -89,6 +92,7 @@
     "brace-expansion": "^5.0.8",
     "file-type": "$file-type",
     "@xmldom/xmldom": "^0.9.12",
-    "qs": "^6.16.2"
+    "qs": "^6.16.2",
+    "parse5": "^8.1.1"
   }
 }

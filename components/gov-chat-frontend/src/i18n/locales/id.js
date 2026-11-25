@@ -3293,7 +3293,50 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Tolok ukur RAGAS'
+        ragas: 'Tolok ukur RAGAS',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'Konteks adalah prinsipal bernama: sekumpulan keanggotaan grup, diselesaikan sekali lalu dibekukan. Suite yang dibuat untuk sebuah konteks diukur atas konteks itu — bukan atas seluruh deployment.',
+        empty: 'Belum ada konteks evaluasi. Susun satu di bawah — itulah cakupan pengukuran evaluasi terlingkup.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Tambahkan keanggotaan (sebuah grup)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        membersTruncated: '{n}+ anggota — pembacaan dibatasi',
+        noMemberships:
+          'Belum ada keanggotaan — tanpa keanggotaan apa pun, konteks menyelesaikan ke seluruh deployment (konteks terbuka).',
+        preview: 'Pratinjau jangkauannya',
+        previewRepos: 'Reaches',
+        unreadable: 'Keanggotaan berikut tidak dapat dibaca: {list}',
+        create: 'Create the context',
+        created: 'Konteks telah dibuat dan dibekukan.',
+        refreshed: 'Konteks telah diselesaikan ulang.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'Tanpa konteks — seluruh deployment',
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Menyunting {name} — menyimpan me-resolve ulang gabungan dan menaikkan versi.',
+        updated: 'Konteks diperbarui dan di-resolve ulang.',
+        deleted: 'Konteks dihapus.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',
@@ -3478,7 +3521,14 @@ export default {
         deleteConfirmBody: 'Ini menghapus suite beserta riwayat eksekusinya secara permanen. Tidak dapat dibatalkan.',
         deleteConfirm: 'Hapus suite',
         deleteCancel: 'Batal',
-        unnamedFallback: 'suite tanpa nama'
+        unnamedFallback: 'suite tanpa nama',
+        bindingOpen: 'Dibuat untuk deployment — tanpa konteks evaluasi',
+        binding: 'Diukur atas “{name}” (v{version} · {repos} repositori)',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryPartial: '({measured} dari {total} terukur)',
+        boundaryNotMeasured: 'Batas cakupan: tidak diukur'
       },
       error: {
         explain: 'Penjelasan gagal',
@@ -3911,6 +3961,9 @@ export default {
       },
       results: {
         title: 'Hasil tolok ukur',
+        attributionBy: 'Dijawab oleh',
+        attributionOutside: 'Diattributkan di luar carrier: {pct}%',
+        attributionNoCarrier: 'Atribusi di luar carrier: tidak terukur tanpa konteks evaluasi',
         failing: '{n} gagal',
         advisorHint:
           '{n} pertanyaan berada di bawah ambang metriknya. Jalankan penasihat untuk mengatribusikan setiap kegagalan ke tahap pipeline dan mendapatkan tindakan konkret.',

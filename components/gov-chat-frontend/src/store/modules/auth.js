@@ -24,6 +24,12 @@ function mapOidcUserToState(oidcUser) {
   const roles = (accessTokenClaims?.realm_access?.roles || []).filter(
     (r) => r !== 'offline_access' && r !== 'uma_authorization' && !r.startsWith('default-roles-')
   );
+  // #2061 phase 4: the OKF scope claim rides the access token too. The Lab's
+  // context surfaces gate on the SAME predicate the server enforces
+  // (tools-admin role OR the okf:*:*:admin wildcard scope) — without the
+  // claim here, a wildcard-scope superadmin would be hidden surfaces the
+  // server would happily serve.
+  const okfScopes = Array.isArray(accessTokenClaims?.okf_scopes) ? accessTokenClaims.okf_scopes : [];
 
   return {
     iss_sub: `${profile.iss}#${profile.sub}`,
@@ -32,7 +38,8 @@ function mapOidcUserToState(oidcUser) {
     email: profile.email || null,
     name: profile.name || profile.preferred_username || null,
     preferred_username: profile.preferred_username || null,
-    roles
+    roles,
+    okf_scopes: okfScopes
   };
 }
 
@@ -68,6 +75,17 @@ const getters = {
   isAuthenticated: (state) => state.isAuthenticated,
   currentUser: (state) => state.user,
   accessToken: (state) => state.accessToken,
+  /**
+   * #2061 phase 4: is this caller an OKF superadmin? The SAME predicate the
+   * okf-server's isSuperadminCaller enforces — the tools-admin realm role OR
+   * the wildcard okf:*:*:admin scope. Presentation gates consume this; the
+   * server still enforces every read on its own.
+   */
+  isOkfSuperadmin: (state) => {
+    const roles = (state.user && state.user.roles) || [];
+    const scopes = (state.user && state.user.okf_scopes) || [];
+    return roles.includes('tools-admin') || scopes.includes('okf:*:*:admin');
+  },
   authError: (state) => {
     // Backward compatibility: return message string if error is object
     if (state.error && typeof state.error === 'object') {

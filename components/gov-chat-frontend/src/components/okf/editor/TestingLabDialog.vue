@@ -458,6 +458,11 @@
             :maxlength="80"
           />
         </div>
+        <!-- #2061 phase 4 (E-5): the Evaluation Context this suite is minted
+             FOR. Without it the suite is minted against the whole
+             deployment (the open context) and the run measures the
+             deployment, not a principal's scope. -->
+        <EvalContextPicker v-if="canUseContexts" v-model="suiteContextId" input-id="okf-lab-suite-context" />
         <div class="okf-headtest__pane-actions">
           <DsButton variant="primary" small :disabled="busy !== null" @click="onGenerateSuite">
             {{ translate('okf.testingLab.suites.generate', 'Generate test suite') }}
@@ -598,6 +603,12 @@
             {{ translate('okf.testingLab.suites.current', 'Current suite') }}
             <code>{{ suite.suite_key }}</code>
           </h4>
+          <!-- #2061 phase 4 (E-5): the BINDING BADGE — which principal this
+               suite is measured over. A suite minted for a context says so
+               here; a suite minted without one says THAT (the open context),
+               because "minted for the deployment" and "minted for nobody" are
+               different claims. -->
+          <DsStatusTag v-if="suiteBindingLabel" small>{{ suiteBindingLabel }}</DsStatusTag>
           <div class="okf-headtest__pane-actions">
             <DsButton variant="secondary" small :disabled="busy !== null" @click="onRunSuite">
               {{ translate('okf.testingLab.suites.run', 'Run all queries') }}
@@ -756,6 +767,20 @@
             <span>
               {{ translate('okf.testingLab.suites.positives', 'Positives') }}:
               <strong>{{ lastRunSummary.positive_passed }}/{{ lastRunSummary.positive_total }}</strong>
+            </span>
+            <!-- #2061 phase 4 (E-5): the BOUNDARY READOUT — the evidence a
+                 scoped evaluation exists to produce. "Held" is the scope
+                 holding; "breached" is the group seeing content it must
+                 not. NULL is not "held": the boundary was NOT MEASURED.
+                 The labels are computeds (boundaryLabel/boundaryPartialLabel):
+                 the partial-hole rule is a fact about the data, testable
+                 without mounting the DOM. -->
+            <span v-if="lastRunSummary.boundary">
+              {{ boundaryLabel }}
+              <em v-if="boundaryPartialLabel" class="okf-headtest__muted">{{ boundaryPartialLabel }}</em>
+            </span>
+            <span v-else-if="lastRunSummary" class="okf-headtest__muted">
+              {{ translate('okf.testingLab.suites.boundaryNotMeasured', 'Scope boundary: not measured') }}
             </span>
             <span>
               {{ translate('okf.testingLab.suites.negatives', 'Negatives') }}:
@@ -1405,6 +1430,22 @@
       <div v-show="tab === 'ragas'" class="okf-headtest__pane">
         <OkfRagasPanel ref="ragasPanel" :repo="repo" :read-only="readOnly" @changed="refreshRagasSuites()" />
       </div>
+      <!-- #2061 phase 4 (E-5): the Evaluation Context COMPOSER. The context
+           is a named principal with group memberships; a suite minted for
+           one is measured over that principal's scope, never the whole
+           deployment. Self-contained: the panel owns the catalogue, the
+           composer and the preview. -->
+      <!-- v-if, not just v-show: a non-superadmin must not MOUNT the composer
+           at all — its loads would be two guaranteed 403s per dialog open,
+           churning error state inside a pane they can never see. -->
+      <div
+        v-if="canUseContexts"
+        v-show="tab === 'contexts'"
+        class="okf-headtest__pane"
+        data-test-id="okf-lab-pane-contexts"
+      >
+        <EvalContextPanel />
+      </div>
       <!-- 1-8g-t (David): suite deletion MUST be confirmed with a dialog —
            the × button only ARMS the confirmation; the delete fires solely
            from the dialog's Confirm. Names the suite + the consequence. -->
@@ -1444,6 +1485,7 @@
 
 <script>
 import translateMixin from '../../../mixins/translateMixin';
+import evalContextSurfaceMixin from '../../../mixins/evalContextSurfaceMixin';
 import { translateLabError, isLabelsStale } from '../../../services/okfRepoOps';
 import { toEpochMs } from '../piiReview.js';
 import DsDialog from '../../ds/Dialog.vue';
@@ -1455,8 +1497,13 @@ import DsSelect from '../../ds/Select.vue';
 import DsPill from '../../ds/Pill.vue';
 import DsTag from '../../ds/Tag.vue';
 import DsSpinner from '../../ds/Spinner.vue';
+import DsStatusTag from '../../ds/StatusTag.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsProgress from '../../ds/Progress.vue';
+// #2061 phase 4 (E-5): the Evaluation Context surfaces — the composer tab
+// and the picker that names the context a suite is minted FOR.
+import EvalContextPanel from './EvalContextPanel.vue';
+import EvalContextPicker from './EvalContextPicker.vue';
 
 // The head text is assembled server-side as "Label: v1, v2. …" lines; the
 // panel re-renders each frontmatter field from the STORED frontmatter on
@@ -1480,11 +1527,14 @@ export default {
     DsPill,
     DsTag,
     DsSpinner,
+    DsStatusTag,
     DsInfoTip,
     DsProgress,
-    OkfRagasPanel
+    OkfRagasPanel,
+    EvalContextPanel,
+    EvalContextPicker
   },
-  mixins: [translateMixin],
+  mixins: [translateMixin, evalContextSurfaceMixin],
   props: {
     visible: { type: Boolean, default: false },
     repo: { type: Object, default: null },
@@ -1499,6 +1549,11 @@ export default {
     return {
       tab: this.initialTab,
       busy: null,
+      // #2061 phase 4 (E-5): the Evaluation Context the next suite is
+      // minted FOR. Empty = the OPEN context (the deployment's default
+      // posture) — the pre-contexts behaviour, kept as the default so
+      // nothing changes silently.
+      suiteContextId: '',
       // Cancel token for the explain-failures poll (round 16, #80124): the
       // store's pollJob checks it each tick, so closing the Lab stops the
       // client loop within one cadence. The server job is untouched.
@@ -1652,13 +1707,28 @@ export default {
       return 'present';
     },
     tabDefs() {
-      return [
+      const tabs = [
         { value: 'head', label: this.translate('okf.testingLab.tab.head', 'Head') },
         { value: 'test', label: this.translate('okf.testingLab.tab.test', 'Test') },
         { value: 'suites', label: this.translate('okf.testingLab.tab.suites', 'Suites & analytics') },
         { value: 'ragas', label: this.translate('okf.testingLab.tab.ragas', 'RAGAS Benchmarks') }
       ];
+      // #2061 phase 4 (E-5): the Evaluation Context composer tab. It is
+      // SUPERADMIN-ONLY, and not by taste: a context may name ANY
+      // repository, so the catalogue is a deployment-wide fact and the server
+      // refuses a non-superadmin read of it. A curator who cannot read it
+      // must not be shown a tab that 403s.
+      if (this.canUseContexts) {
+        tabs.push({
+          value: 'contexts',
+          label: this.translate('okf.testingLab.tab.contexts', 'Evaluation contexts')
+        });
+      }
+      return tabs;
     },
+    // canUseContexts / suiteBindingLabel / suiteContextIdFor live in
+    // evalContextSurfaceMixin — ONE authority for all three members, so the
+    // dialog and the RAGAS panel cannot drift apart.
     /** Story 8-6: the unified saved-suites list — head suites and RAGAS
      * benchmark suites in ONE table (David: integrated but visually
      * differentiated), newest first. */
@@ -1906,6 +1976,29 @@ export default {
         return this.translate('okf.testingLab.suites.noCompetitors', 'n/a — no competing heads yet');
       }
       return `${s.negative_passed}/${s.negative_evaluatable}`;
+    },
+    /** #2061 phase 4 (E-5): the boundary verdict as ONE sentence — held and
+     *  breached counts over what the boundary actually measured. */
+    boundaryLabel() {
+      const b = this.lastRunSummary && this.lastRunSummary.boundary;
+      if (!b) return '';
+      const held = this.translate('okf.testingLab.suites.boundaryHeld', '{held} held', { held: String(b.held || 0) });
+      const breached = this.translate('okf.testingLab.suites.boundaryBreached', '{n} breached', {
+        n: String(b.breached || 0)
+      });
+      return `${this.translate('okf.testingLab.suites.boundary', 'Scope boundary')}: ${held} · ${breached}`;
+    },
+    /** The HOLE: boundary rows that errored are neither held nor breached —
+     *  a partial measurement must say so, or "2 held · 0 breached" reads as
+     *  a clean verdict over 5 rows. Empty string when fully measured. */
+    boundaryPartialLabel() {
+      const b = this.lastRunSummary && this.lastRunSummary.boundary;
+      if (!b) return '';
+      if (!(Number(b.evaluatable) < Number(b.total))) return '';
+      return this.translate('okf.testingLab.suites.boundaryPartial', '({measured} of {total} measured)', {
+        measured: String(b.evaluatable || 0),
+        total: String(b.total || 0)
+      });
     },
     /** #2061 phase 1c (F7): the positives the run lost with NO winner at
      * all — the answer vanished, and the pass rate alone cannot show it. */
@@ -2785,7 +2878,11 @@ export default {
       const t2 = Date.now();
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
-        suiteKey: this.suite.suite_key
+        suiteKey: this.suite.suite_key,
+        // #2061 phase 4: the re-run names the suite's OWN context too —
+        // the advisor path used to post none, so a context-bound suite's
+        // re-run was refused 409 CROSS_CONTEXT_BLOCKED every time.
+        contextId: this.suiteContextIdFor(this.suite)
       });
       this.legTiming('advisor-rerun', t2);
       this.legTiming('advisor-total', t0);
@@ -2864,7 +2961,9 @@ export default {
         nNegativeRandom: this.intOf(this.counts.n_negative_random),
         nMeta: this.intOf(this.counts.n_meta),
         nNearMiss: this.intOf(this.counts.n_near_miss),
-        name: (this.suiteName || '').trim() || undefined
+        name: (this.suiteName || '').trim() || undefined,
+        // #2061 phase 4 (E-5): the context this suite is minted FOR.
+        contextId: this.suiteContextId || undefined
       });
       this.suiteName = '';
       if (!res.ok) {
@@ -2945,6 +3044,7 @@ export default {
       }
       return null;
     },
+    // suiteContextIdFor: evalContextSurfaceMixin
     async onRunSuite() {
       if (!this.suite) return;
       this.busy = 'run';
@@ -2968,7 +3068,11 @@ export default {
       const t0 = Date.now();
       const res = await this.$store.dispatch('okf/headSuiteRun', {
         repoId: this.repo.repo_id,
-        suiteKey
+        suiteKey,
+        // #2061 phase 4 (E-5): the run names the context it measures over —
+        // the suite's OWN binding. Without it the server refuses a bound
+        // suite as "cross-context" (the deployment is not the context).
+        contextId: this.suiteContextIdFor(this.suite)
       });
       this.legTiming('suite-run', t0, { suite: suiteKey });
       if (!res.ok) {

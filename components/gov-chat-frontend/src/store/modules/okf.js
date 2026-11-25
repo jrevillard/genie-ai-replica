@@ -1440,7 +1440,10 @@ const actions = {
   /** Generate a test suite (LLM + forbidden-derived negatives). The
    * 1-8c count knobs are optional — undefined lets the server apply its
    * own per-class defaults/clamps. */
-  async headSuiteGenerate(_ctx, { repoId, nPositive, nNegative, nNegativeRandom, nMeta, nNearMiss, name } = {}) {
+  async headSuiteGenerate(
+    _ctx,
+    { repoId, nPositive, nNegative, nNegativeRandom, nMeta, nNearMiss, name, contextId } = {}
+  ) {
     try {
       const result = await headTestService.generateSuite(repoId, {
         n_positive: nPositive,
@@ -1448,7 +1451,11 @@ const actions = {
         n_negative_random: nNegativeRandom,
         n_meta: nMeta,
         n_near_miss: nNearMiss,
-        name
+        name,
+        // #2061 phase 4 (E-5): the Evaluation Context this suite is minted
+        // FOR. Absent → the OPEN context (the deployment's default posture),
+        // which is what the Lab did before contexts existed.
+        context_id: contextId || undefined
       });
       return { ok: true, result };
     } catch (err) {
@@ -1546,9 +1553,12 @@ const actions = {
   },
 
   /** Run every suite query + aggregate pass rates / margins / steals. */
-  async headSuiteRun(_ctx, { repoId, suiteKey } = {}) {
+  async headSuiteRun(_ctx, { repoId, suiteKey, contextId } = {}) {
     try {
-      const result = await headTestService.runSuite(repoId, suiteKey);
+      // #2061 phase 4 (E-5): the run names the context it measures over —
+      // the suite's OWN binding, so a suite minted for a context is not
+      // refused as "cross-context" by the client's own omission.
+      const result = await headTestService.runSuite(repoId, suiteKey, contextId);
       return { ok: true, result };
     } catch (err) {
       // ONE CODE, ONE KEY for the suite family — the synchronous start
@@ -1964,7 +1974,7 @@ const actions = {
    * (a plain function, not serialized) receives each poll's {phase, done, total}. */
   async ragasRun(
     _ctx,
-    { repoId, suiteKey, metrics, judge_config_key, judge_model, onProgress, onStarted, signal } = {}
+    { repoId, suiteKey, metrics, judge_config_key, judge_model, contextId, onProgress, onStarted, signal } = {}
   ) {
     try {
       ensureServices();
@@ -1974,6 +1984,10 @@ const actions = {
         body.judge_config_key = judge_config_key;
         if (judge_model) body.judge_model = judge_model;
       }
+      // #2061 phase 4 (E-5): the Evaluation Context the run measures over —
+      // the suite's OWN binding. A benchmark minted for a context may only
+      // be measured over THAT context.
+      if (contextId) body.context_id = contextId;
       const started = await ragasService.runSuite(repoId, suiteKey, body);
       // A 202 without a run key means the run never started — reporting
       // SUCCESS left the panel showing a finished run that does not exist.

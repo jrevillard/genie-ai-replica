@@ -1,6 +1,9 @@
 'use strict';
 
-const { normalizeRequestedLanguage, streamingTranslationEnabled } = require('../../../services/translation/language-request');
+const {
+  normalizeRequestedLanguage,
+  streamingTranslationEnabled
+} = require('../../../services/translation/language-request');
 
 /**
  * The canonical form of a caller-supplied language.

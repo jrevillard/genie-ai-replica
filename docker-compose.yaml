@@ -2023,12 +2023,11 @@ services:
     # The image and entrypoint are the VENDOR axis, carried as VALUES (no
     # vendor overlay files): env.strixhalo pins VLLM_IMAGE to the ROCm
     # build; unset — every NVIDIA deployment — keeps this image. The
-    # entrypoint IS the NVIDIA image's own (the flag `command:` below has
-    # always attached to it), so restating it here is a no-op for NVIDIA
-    # and repairs the ROCm image, which ships ENTRYPOINT=null and
-    # CMD=/bin/bash: one flag block, both vendors, no drift.
+    # entrypoint is a /bin/sh script that execs `vllm serve` (the NVIDIA
+    # image's own entrypoint resolves `vllm` on PATH, and restating the
+    # launcher repairs the ROCm image, which ships ENTRYPOINT=null and
+    # CMD=/bin/bash): one flag block, both vendors, no drift.
     image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
-    entrypoint: ["vllm", "serve"]
     # Same vendor axis, same value shape: an NVIDIA host never sets the
     # device/GID vars, so the defaults are paths that exist on EVERY host
     # (a missing device path is a hard create-time error — moby Lstats the
@@ -2045,26 +2044,54 @@ services:
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
-    # Tool-calling pin (REC-6, issue #2052): granite4 is the vLLM 0.29
-    # documented parser for the shipped default model (granite-4.1-8b); the
-    # flags are inert for requests that carry no tools. A deployment
-    # overriding VLLM_LLM_MODEL_ID outside Granite 4.x (env.strixhalo's
-    # granite-3.1-2b does) must set VLLM_TOOL_CALL_PARSER to its model's
-    # documented parser (e.g. granite for Granite 3.x) — the default would
-    # misparse that model's tool output silently. Some model families also
-    # need a --chat-template for tool output to parse at all (see the GPU
-    # template note); setting the parser alone does not complete tool calling.
-    command: >
-      --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
-      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
-      --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
-      --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
-      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
-      --dtype=${VLLM_DTYPE:-half}
-      --enforce-eager
-      --enable-auto-tool-choice
-      --tool-call-parser ${VLLM_TOOL_CALL_PARSER:-granite4}
+    # Tool-calling flags, DERIVED from the served model id (the same contract
+    # the ansible GPU template and the chart's vllm template carry): the
+    # granite4 parser — vLLM 0.29's documented parser for Granite 4.x — is
+    # pinned only when the served model id contains `granite-4`, and an
+    # explicit VLLM_TOOL_CALL_PARSER always wins. Serving a model outside
+    # Granite 4.x (env.strixhalo's granite-3.1-2b does) therefore boots with
+    # NO tool-calling flags instead of the granite4 default misparsing that
+    # model's tool output silently. The flags are inert for requests that
+    # carry no tools. Divergence to know: compose interpolation cannot tell
+    # an EMPTY VLLM_TOOL_CALL_PARSER from an unset one, so here empty behaves
+    # as unset (derive), where the ansible lever treats empty as "force the
+    # flags OFF". Some model families also need a --chat-template for tool
+    # output to parse at all (see the GPU template note); setting the parser
+    # alone does not complete tool calling.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        model="$${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}"
+        parser="$${VLLM_TOOL_CALL_PARSER:-}"
+        if [ -z "$$parser" ]; then
+          case "$$model" in
+            *granite-4*) parser=granite4 ;;
+          esac
+        fi
+        set -- \
+          --model "$$model" \
+          --gpu_memory_utilization "$${VLLM_GPU_UTILIZATION:-0.55}" \
+          --served-model-name "$$model" \
+          --max_model_len "$${VLLM_MAX_MODEL_LEN:-65536}" \
+          --max_num_seqs "$${VLLM_MAX_NUM_SEQS:-16}" \
+          --dtype=$${VLLM_DTYPE:-half} \
+          --enforce-eager
+        if [ -n "$$parser" ]; then
+          set -- "$$@" --enable-auto-tool-choice --tool-call-parser "$$parser"
+        fi
+        exec vllm serve "$$@"
     environment:
+      # The model knobs the entrypoint script reads AT CONTAINER START
+      # (compose bakes the same defaults into both this list and the
+      # script's fallbacks, so a value present in .env resolves identically
+      # whichever side reads it).
+      - VLLM_LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
+      - VLLM_GPU_UTILIZATION=${VLLM_GPU_UTILIZATION:-0.55}
+      - VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-65536}
+      - VLLM_MAX_NUM_SEQS=${VLLM_MAX_NUM_SEQS:-16}
+      - VLLM_DTYPE=${VLLM_DTYPE:-half}
+      - VLLM_TOOL_CALL_PARSER=${VLLM_TOOL_CALL_PARSER:-}
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:

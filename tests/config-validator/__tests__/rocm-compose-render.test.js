@@ -393,16 +393,15 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
 
     test('the main vLLM entrypoint is the derived-flags launcher script', () => {
       // The launcher is /bin/sh -ec <script>: the tool-calling flags are
-      // DERIVED at container start (granite4 only for a granite-4.x model
-      // id, an explicit parser winning), so the render cannot pin a
-      // resolved parser into the file — the script's logic is the contract.
+      // DERIVED at container start, so the render cannot pin a resolved
+      // parser into the file. The script's BEHAVIOR is pinned by the argv
+      // resolution test below; this pins the launcher shape itself — the
+      // shell wrapper (what makes derivation possible) and the exec tail
+      // (vLLM replaces the shell as PID 1, signals included).
       const services = JSON.parse(single.stdout).services;
       const entrypoint = services.vllm.entrypoint;
       expect(entrypoint.slice(0, 2)).toEqual(['/bin/sh', '-ec']);
-      const script = scriptOf(services);
-      expect(script).toContain('*granite-4*)');
-      expect(script).toContain('--enable-auto-tool-choice');
-      expect(script.trim().endsWith('exec vllm serve "$@"')).toBe(true);
+      expect(scriptOf(services).trim().endsWith('exec vllm serve "$@"')).toBe(true);
     });
 
     test('the tool-calling pin resolves per vendor shape through the launcher script', () => {

@@ -488,7 +488,7 @@ module.exports = (queryService) => {
         ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
         : null;
 
-      const doHandleStreamDone = async () => {
+      const doHandleStreamDone = async (skipRoutedGraphs = false) => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
         try {
@@ -501,14 +501,16 @@ module.exports = (queryService) => {
               targetLanguage,
               translator,
               skipPostStreamTranslation: true,
-              alreadyFailedTranslation
+              alreadyFailedTranslation,
+              ...(skipRoutedGraphs ? { skipRoutedGraphs: true } : {})
             });
           } else {
             // The post-stream translation runs here, and the client may be
             // gone by the time it answers.
             await handleStreamDone(queryId, fullResponseText, streamStartTime, res, capturedMetadata, {
               targetLanguage,
-              translator
+              translator,
+              ...(skipRoutedGraphs ? { skipRoutedGraphs: true } : {})
             });
           }
         } catch (error) {
@@ -587,10 +589,16 @@ module.exports = (queryService) => {
           // close paths. A `done` frame already handled
           // leaves the metadata untouched — the marker must never leak into
           // a normally completed answer.
+          // The sticky-graph decision reads the CAPTURED state — before the
+          // interruption marker replaces a missing metadata frame with a
+          // truthy object — so a truncated stream that never saw a metadata
+          // frame leaves the session's routed-graph stickiness untouched, the
+          // same arity rule the `res.on('close')` path applies.
+          const hadCapturedMetadata = capturedMetadata !== null;
           if (!doneState.handled) {
             capturedMetadata = interruptedMetadata(capturedMetadata);
           }
-          doHandleStreamDone();
+          doHandleStreamDone(!hadCapturedMetadata);
         }
       });
 

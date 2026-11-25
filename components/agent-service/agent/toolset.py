@@ -168,10 +168,15 @@ def _make_search_executor(
             # the conversation's locale: the schema asks the model for an
             # English query, and a foreign-language hint would send that
             # English query through a translation pass that can reword it.
-            # A model that echoes the user's language is translated; a
-            # query whose language stays undetermined passes through as
-            # the English the schema asked for.
-            query_language = detect_language(query_text) or "EN"
+            # A model that echoes the user's language is translated. When
+            # the detector cannot classify the query at all, no locale may
+            # speak for it either: the honest answer is the module's own
+            # unknown-language status — never a claimed English that was
+            # not established, whose raw text would be embedded into the
+            # English-only space with a prepared label.
+            query_language = detect_language(query_text)
+            if query_language is None:
+                return _unprepared_envelope(QueryPreparationStatus.PASSTHROUGH_UNKNOWN_LANGUAGE)
             # The call is BOUNDED at the dispatch's operation budget — its
             # own pieces only know the translation service's generous
             # timeout, and the run's wall clock is checked only BETWEEN

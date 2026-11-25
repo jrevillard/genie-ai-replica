@@ -1555,19 +1555,24 @@ services:
       - AGENT_OKF_URL=${AGENT_OKF_URL:-}
       # The shared corpus/model endpoints the run surface's assembly reads
       # at request time — the SAME knobs the OPEA services read, mapped
-      # with the same spellings, so one .env line moves both worlds. The
-      # TEI pair is required fail-closed (an unset endpoint is a 503
-      # naming it); the ArangoDB pair falls back to the code defaults
-      # (localhost inside the container) when unset, and the graph name
-      # MUST follow the deployment's real graph — the legacy leg reads
-      # the legacy collection and the legacy graph, so a diverging
-      # default silently drops every legacy hit and raises
+      # with the same spellings and the same compose defaults, so one
+      # .env line moves both worlds. The defaults are the compose stack's
+      # own services: a stack without the gpu-models profile has no tei
+      # behind them, and every model call then fails honestly at request
+      # time (the code's fail-closed 503 naming the knob protects only an
+      # assembly whose env carries NO value at all — an in-process run).
+      # The graph name MUST follow the deployment's real graph — the
+      # legacy leg reads the legacy collection and the legacy graph, so a
+      # diverging default silently drops every legacy hit and raises
       # AuthorizationError on every legacy read_source.
       - TEI_EMBEDDING_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
-      - ARANGO_USERNAME=${ARANGO_USERNAME:-root}
+      # The database user: the core services spell it ARANGO_USER, the
+      # adapters read ARANGO_USERNAME — either spelling reaches the
+      # retrieval legs, ARANGO_USERNAME winning when both are set.
+      - ARANGO_USERNAME=${ARANGO_USERNAME:-${ARANGO_USER:-root}}
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
       # The LLM endpoint the generation leg calls (the model discovery

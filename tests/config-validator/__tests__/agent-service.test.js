@@ -169,7 +169,10 @@ describe('the agent service compose block forwards the shared corpus/model endpo
     // authenticate nothing).
     expect(agentBlock).toMatch(/- ARANGO_URL=\$\{ARANGO_URL:-http:\/\/arango-vector-db:8529\}/);
     expect(agentBlock).toMatch(/- ARANGO_DB=\$\{ARANGO_DB:-genie-ai\}/);
-    expect(agentBlock).toMatch(/- ARANGO_USERNAME=\$\{ARANGO_USERNAME:-root\}/);
+    // The user spelling the core services read (ARANGO_USER) reaches the
+    // adapters' ARANGO_USERNAME too: either .env line configures the
+    // retrieval legs.
+    expect(agentBlock).toMatch(/- ARANGO_USERNAME=\$\{ARANGO_USERNAME:-\$\{ARANGO_USER:-root\}\}/);
     expect(agentBlock).toMatch(/- ARANGO_PASSWORD=\$\{ARANGO_PASSWORD\}/);
     expect(agentBlock).toMatch(/- ARANGO_GRAPH_NAME=\$\{ARANGO_GRAPH_NAME:-GRAPH\}/);
   });

@@ -158,6 +158,34 @@ def test_an_unprepared_preparation_answers_insufficiency_and_never_touches_the_p
     assert statuses == ["fallback_timeout"]
 
 
+def test_an_unclassifiable_query_is_never_claimed_english(monkeypatch):
+    """When the detector cannot classify the query at all, no locale may
+    speak for it either: the tool answers the module's own
+    unknown-language status — never passthrough_english, whose raw text
+    would be embedded into the English-only space with a prepared label."""
+    import agent.toolset as toolset_module
+
+    monkeypatch.setattr(toolset_module, "detect_language", lambda text: None)
+    preparer = FakePreparer(_preparation_result(QueryPreparationStatus.PASSTHROUGH_ENGLISH))
+    statuses: list[str] = []
+    port = AgentFakePort(search_result=canned_search_result())
+    registry = document_toolset(
+        port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer, on_preparation_status=statuses.append
+    )
+
+    result = asyncio.run(registry.dispatch("search_knowledge", {"query": "???"}))
+
+    assert result == {
+        "outcome": "insufficient_evidence",
+        "hits": [],
+        "truncated": False,
+        "query_preparation_status": "passthrough_unknown_language",
+    }
+    assert port.search_calls == []
+    assert statuses == ["passthrough_unknown_language"]
+    assert preparer.calls == []  # nothing is prepared from an unclassified query
+
+
 def test_an_over_budget_query_is_the_contract_transient_carrier():
     """The over-budget input is structured tool feedback, not a run error:
     the executor raises the contract's TransientError (the same carrier the

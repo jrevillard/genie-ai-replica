@@ -39,8 +39,9 @@ The capture records 68 rows: 60 executed legacy requests (`status: ok`)
 and 8 config-A-skipped security rows (`wall_ms: 0.0` placeholders — never
 sent on config A, not legacy requests, excluded from every denominator
 here; the criterion's own request mix on the venue excludes them the same
-way). The 60 OK rows, nearest-rank percentiles (the harness's own rule,
-`coexistence._percentile`):
+way). The 60 OK rows, the harness's own rules — the median by
+`coexistence._median` (`statistics.median`, the mean of the two middle
+values), p90/p95 by nearest-rank (`coexistence._percentile`):
 
 | stat | ms |
 |---|---|

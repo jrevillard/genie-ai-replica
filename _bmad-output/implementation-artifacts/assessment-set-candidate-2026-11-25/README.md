@@ -8,8 +8,12 @@ signed against, plus the thresholds re-signed on its digest").
 
 - `assessment-set.json` — 71 cases: the signed FINAL A reference set's 67
   cases byte-identical + 4 new-class cases (2 `multi_hop`, 2 `ambiguous`).
+  The signed set's `match_run` block is deliberately NOT carried: it is the
+  Phase-2 record of the SIGNED set's campaign (57 previews, 2026-11-24) and
+  never measured this candidate — the candidate's own match record is
+  produced by the ingestion campaign that follows the operator's agreement.
   Digest at authoring time:
-  `aeeae302c14bf4f3509c1624382e699831cdb4110a52dfb178044bc6ccb46956`.
+  `9d1bfa240d16f14749980089382abb56896ff5ac87c87274d02d0ed3fd9d5bdb`.
 - `build-candidate-2146.py` — the derivation script (the only writer; the
   signed source file is only ever read).
 

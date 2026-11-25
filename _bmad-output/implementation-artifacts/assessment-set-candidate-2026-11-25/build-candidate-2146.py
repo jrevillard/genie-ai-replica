@@ -9,6 +9,14 @@ digest-pins is never rewritten), and the four new-class cases (2 multi_hop,
 2 ambiguous) are appended with verbatim committed-fixture gold — the #2145
 rule enforced by tests/rag-benchmarks/test_assessment_candidate_set.py.
 
+The signed set's ``match_run`` block is deliberately NOT copied: it is the
+Phase-2 record of the SIGNED set's ingestion campaign (57 previews,
+2026-11-24) — it never measured this candidate, whose four new cases carry
+unresolved identities by design. Carrying it would let a consumer read
+43/57 as THIS artifact's resolution state and skip the Phase-2 venue
+resolution the new cases still need. The candidate's own match record is
+produced by the ingestion campaign that follows the operator's agreement.
+
 The output's digest MOVES by addition only (the expected, documented
 outcome); re-signing a digest that carries the new classes is the
 operator's later step. The signed source file is only ever READ.
@@ -207,7 +215,6 @@ def main() -> None:
             "minimums": {"multi_hop": 2, "ambiguous": 2},
         },
         "entries": signed["entries"] + NEW_CASES,
-        "match_run": signed["match_run"],
     }
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "assessment-set.json"
     out.write_text(json.dumps(candidate, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

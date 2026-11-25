@@ -1613,18 +1613,5 @@
    "access_scenario": "public",
    "provenance": "assessment"
   }
- ],
- "match_run": {
-  "ran_at": "2026-11-24T15:48:15+00:00",
-  "graph_source": "GRAPH_SOURCE",
-  "duplicate_passages_kept": true,
-  "stats": {
-   "resolved": 43,
-   "split_passages": 0,
-   "unresolved": 14,
-   "skipped_short": 0,
-   "total_previews": 57,
-   "deduped_passages": 0
-  }
- }
+ ]
 }

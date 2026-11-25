@@ -53,7 +53,7 @@ from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content, resolve_window_tokens
-from preparation.translation import MAX_SANE_TOKENS, HttpxTransport, coerce_int
+from preparation.translation import HttpxTransport, coerce_sane_int
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
@@ -340,11 +340,10 @@ class ProbeModelClient:
             # The same probe serves the window the one-call cap is anchored
             # on; a garbage or absent value falls to the configured tier.
             # A proxy may serialize the served window as a float or a digit
-            # string, so the value is coerced like the other numeric fields
-            # the payload carries — and the sane cap keeps an absurd value
-            # from disabling the overflow guard.
-            discovered = coerce_int(entry.get("max_model_len"))
-            if discovered is not None and 0 < discovered <= MAX_SANE_TOKENS:
+            # string, so the value rides the shared coercion-then-sane-bound
+            # stance: an absurd value must not disable the overflow guard.
+            discovered = coerce_sane_int(entry.get("max_model_len"))
+            if discovered is not None:
                 self._discovered_window = discovered
         return self._model_id
 
@@ -487,9 +486,7 @@ class ProbeModelClient:
         # budget-exhausted.
         usage = body.get("usage")
         if isinstance(usage, dict):
-            coerced = coerce_int(usage.get(name))
-            if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
-                return coerced
+            return coerce_sane_int(usage.get(name))
         return None
 
 

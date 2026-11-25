@@ -5888,6 +5888,15 @@ verify:overlay-locks:reranker:
 # row, drops a row, or drifts a version fails before anything builds. The
 # gate's own FAIL branches are unit-tested beside the real run: a branch
 # that stops reporting is a red pipeline, not a silently weaker audit.
+# The trigger paths ride one anchor (the module-source-changes idiom): a
+# path addition cannot drift between the trigger branches again.
+.agent_audit_source_changes: &agent_audit_source_changes
+  [
+    "components/agent-service/requirements*.txt",
+    "docs/dependencies/agent-service-dependency-evidence.json",
+    "scripts/dependencies/**",
+    ".gitlab-ci.yml"
+  ]
 verify:dependency-licenses:
   stage: config
   image: python:3.11-slim
@@ -5911,25 +5920,13 @@ verify:dependency-licenses:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths:
-          - "components/agent-service/requirements*.txt"
-          - "docs/dependencies/agent-service-dependency-evidence.json"
-          - "scripts/dependencies/**"
-          - ".gitlab-ci.yml"
+        paths: *agent_audit_source_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths:
-          - "components/agent-service/requirements*.txt"
-          - "docs/dependencies/agent-service-dependency-evidence.json"
-          - "scripts/dependencies/**"
-          - ".gitlab-ci.yml"
+        paths: *agent_audit_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths:
-          - "components/agent-service/requirements*.txt"
-          - "docs/dependencies/agent-service-dependency-evidence.json"
-          - "scripts/dependencies/**"
-          - ".gitlab-ci.yml"
+        paths: *agent_audit_source_changes
 
 
 # The SLIM locks (issue #2000) are verified for all three modules in ONE job:

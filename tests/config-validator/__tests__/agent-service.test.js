@@ -339,27 +339,35 @@ describe('the dependency-evidence gate runs in CI', () => {
   });
 
   test('every trigger branch of the job fires on an audit input', () => {
-    // One glob per input the gate reads, asserted on EVERY trigger branch:
-    // dropping a glob from one branch (say the merge-request rule) would let
-    // an MR stale the audit while the default-branch pipelines stay green.
-    const block = jobBlock(fs.readFileSync(CI_PATH, 'utf-8'), JOB);
+    // One glob per input the gate reads, carried by ONE anchor the three
+    // trigger branches reference: dropping a glob from the anchor (or the
+    // anchor reference from one branch — say the merge-request rule) would
+    // let an MR stale the audit while the other pipelines stay green.
+    const ci = fs.readFileSync(CI_PATH, 'utf-8');
+    // The anchor lives beside the job it serves (the module-source-changes
+    // idiom), not inside the job block: the definition is asserted on the
+    // whole file, the references on the job's own block.
+    const anchorAt = ci.indexOf('.agent_audit_source_changes: &agent_audit_source_changes');
+    expect(anchorAt).toBeGreaterThan(-1);
+    const anchor = ci.slice(anchorAt, ci.indexOf('verify:dependency-licenses:'));
+    const block = jobBlock(ci, JOB);
+    for (const input of [
+      '"components/agent-service/requirements*.txt"',
+      '"docs/dependencies/agent-service-dependency-evidence.json"',
+      '"scripts/dependencies/**"'
+    ]) {
+      expect(anchor).toContain(input);
+    }
     const triggerBranches = [
       '$CI_PIPELINE_SOURCE == "merge_request_event"',
       '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH',
       '$CI_COMMIT_BRANCH =~ /^release\\//'
     ];
-    const auditInputs = [
-      '- "components/agent-service/requirements*.txt"',
-      '- "docs/dependencies/agent-service-dependency-evidence.json"',
-      '- "scripts/dependencies/**"'
-    ];
     for (const condition of triggerBranches) {
       const at = block.indexOf(condition);
       expect(at).toBeGreaterThan(-1);
       const rule = block.slice(at).split(/\n\s+- if:/)[0];
-      for (const input of auditInputs) {
-        expect(rule).toContain(input);
-      }
+      expect(rule).toContain('paths: *agent_audit_source_changes');
     }
   });
 });

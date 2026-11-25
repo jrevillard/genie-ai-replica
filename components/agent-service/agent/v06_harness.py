@@ -54,7 +54,7 @@ from typing import Any, Protocol
 import httpx
 
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
-from preparation.translation import MAX_SANE_TOKENS, HttpxTransport, coerce_int
+from preparation.translation import HttpxTransport, coerce_sane_int
 
 from .budget import RunBudgetMonitor
 from .cancellation import CancellationToken
@@ -932,12 +932,11 @@ async def _discover_model(config: ProbeConfig, transport) -> tuple[str | None, i
             "the model discovery carried no usable model entry "
             f"(expected a non-empty list of objects under 'data', got {type(data).__name__})"
         )
-    window = coerce_int(entry.get("max_model_len"))
     # A proxy may serialize the served window as a float or a digit string,
     # and a boolean is an int in Python — a True window is a malformed
-    # answer, not 1. The sane cap keeps an absurd value out of the record.
-    if window is None or not 0 < window <= MAX_SANE_TOKENS:
-        window = None
+    # answer, not 1. The record rides the shared coercion-then-sane-bound
+    # stance: an absurd value lands as absent, never as a wrong number.
+    window = coerce_sane_int(entry.get("max_model_len"))
     return str(entry["id"]), window
 
 

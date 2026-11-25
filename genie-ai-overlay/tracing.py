@@ -592,7 +592,6 @@ def setup_tracing(service_name: str) -> None:
     # and the service-identity contract the decision fixed. The SDK's own
     # resource detector reads OTEL_SERVICE_NAME, but the attributes set here
     # take precedence over the detected ones.
-    service_name_resolved = service_name
     # `service.namespace` groups related services (all OPEA overlay services
     # share 'genieai'; backend + doc-repo use 'genie-core').
     service_namespace = "genieai"
@@ -601,7 +600,7 @@ def setup_tracing(service_name: str) -> None:
     service_version = "1.0.0"
     resource = Resource.create(
         {
-            "service.name": service_name_resolved,
+            "service.name": service_name,
             "service.namespace": service_namespace,
             "service.version": service_version,
             "deployment.environment": os.getenv("NODE_ENV", "development"),

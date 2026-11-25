@@ -129,6 +129,21 @@ def coerce_int(value) -> int | None:
     return None
 
 
+def coerce_sane_int(value) -> int | None:
+    """Coerce a JSON scalar to an int inside the sane token bound, or None.
+
+    The one home for the coercion-then-bound predicate every numeric field
+    read out of a model-server payload applies (served context windows,
+    usage counts): the coercion is :func:`coerce_int`, and a value past
+    ``MAX_SANE_TOKENS`` (or not positive) is dropped — an absurd value
+    would silently disable the overflow guard it feeds.
+    """
+    coerced = coerce_int(value)
+    if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
+        return coerced
+    return None
+
+
 # Token-budget markers in vLLM/OpenAI error bodies (ported from the dataprep
 # fail-loud pattern, ``genieai_dataprep_arangodb.py:79-84``; agent-service has
 # no dataprep to import from — reimplemented, never imported).
@@ -346,10 +361,7 @@ class ModelEndpointCache:
         dropped so a bad payload never poisons the cache entry — an absurdly
         large window would silently disable the truncation guard.
         """
-        coerced = coerce_int(value)
-        if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
-            return coerced
-        return None
+        return coerce_sane_int(value)
 
     async def max_model_len(self, config: PreparationConfig) -> int | None:
         """The served window, TTL-cached; stale-served on a failed re-probe."""

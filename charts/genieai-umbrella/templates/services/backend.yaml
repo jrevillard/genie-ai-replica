@@ -424,6 +424,22 @@ spec:
         - protocol: TCP
           port: 3002
     {{- end }}
+    # Agent service (AGENT_SERVICE_URL:8010) — the BFF's agentic run leg.
+    # PRE-WIRED, INERT TODAY: the chart does not deploy the agent service
+    # yet, so the podSelector matches nothing. Without this row, the chart
+    # deployment that adopts the service would boot green and answer every
+    # agentic run with a refused hop — this policy's egress list admits
+    # specific ports only, and a missing row on a rejecting CNI is an
+    # ECONNREFUSED with no error naming the policy. A ClusterIP Service is
+    # enough once the row exists (the port is admitted regardless of the
+    # Service shape).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: agent-service
+      ports:
+        - protocol: TCP
+          port: 8010
     {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") }}
     # In-cluster translation model (VLLM_TRANSLATION_ENDPOINT default).
     - to:

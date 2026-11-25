@@ -33,6 +33,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { parseEnvTemplate } = require('../validators/parse-env');
+const { withTree } = require('../validators/temp-tree');
 
 const REPO_ROOT = path.join(__dirname, '..', '..', '..');
 const ENV_FILE = 'env.strixhalo';
@@ -162,6 +163,54 @@ function runComposeConfig(files, profiles, options = {}) {
     throw new Error(`docker compose config could not run: ${result.error.message}`);
   }
   return { status: result.status, stdout: result.stdout || '', stderr: result.stderr || '' };
+}
+
+/**
+ * The launcher script of the main vLLM service, unescaped for execution.
+ *
+ * compose re-escapes `$` as `$$` in its config output (round-trip
+ * validity) — the runtime receives single `$`, so everything that runs or
+ * inspects the script text goes through this.
+ *
+ * @param {{ vllm: { entrypoint: string[] } }} services - a rendered
+ *   `services` map of one compose shape
+ * @returns {string}
+ */
+function scriptOf(services) {
+  return String(services.vllm.entrypoint[2]).replace(/\$\$/g, '$');
+}
+
+/**
+ * Run the main vLLM service's launcher script the way the container would.
+ *
+ * The entrypoint is `/bin/sh -ec <script>`; the tool-calling flags are
+ * derived at container start, so resolving the argv is the only way to pin
+ * the parser a shape really boots with. A stub `vllm` on PATH echoes its
+ * argv; the script's environment is the service's rendered environment,
+ * with `extraEnv` overriding single values (e.g. to resolve the derivation
+ * against a model id a shape does not carry).
+ *
+ * @param {{ vllm: { entrypoint: string[], environment: Object<string,string> } }} services -
+ *   the rendered `services` map of one compose shape
+ * @param {Object<string, string>} [extraEnv] - environment overrides on top
+ *   of the rendered values
+ * @returns {string[]} the argv `vllm serve` would have been launched with
+ */
+function runVllmEntrypoint(services, extraEnv = {}) {
+  const script = scriptOf(services);
+  return withTree('vllm-stub-', { vllm: '#!/bin/sh\necho "$@"\n' }, (stubDir) => {
+    fs.chmodSync(path.join(stubDir, 'vllm'), 0o755);
+    const env = { PATH: `${stubDir}:/usr/bin:/bin` };
+    for (const [key, value] of Object.entries(services.vllm.environment || {})) {
+      env[key] = String(value);
+    }
+    Object.assign(env, extraEnv);
+    const result = spawnSync('/bin/sh', ['-ec', script], { env, encoding: 'utf8', timeout: COMPOSE_TIMEOUT_MS });
+    if (result.error || result.status !== 0) {
+      throw new Error(`the vLLM launcher script failed: ${(result.stderr || '') + (result.stdout || '')}`);
+    }
+    return (result.stdout || '').trim().split(/\s+/);
+  });
 }
 
 /**
@@ -327,13 +376,14 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       expect(services.tei_reranker.image).toBe(envValue(envValues, 'TEI_RERANKING_IMAGE'));
     });
 
-    test('the vLLM services carry the serve entrypoint (repairs the ROCm image)', () => {
+    test('the pooling vLLM services carry the serve entrypoint (repairs the ROCm image)', () => {
       // The ROCm image ships ENTRYPOINT=null, CMD=/bin/bash; the NVIDIA
       // image's own entrypoint IS `vllm serve`. One explicit entrypoint on
-      // the service makes the flag `command:` attach on both vendors from
-      // the same definition.
+      // each pooling service makes the flag `command:` attach on both
+      // vendors from the same definition. The main `vllm` service carries
+      // its own launcher (the derived-flags script, pinned below).
       const services = JSON.parse(single.stdout).services;
-      for (const name of ['vllm', 'vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {
+      for (const name of ['vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {
         expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
           service: name,
           entrypoint: ['vllm', 'serve']
@@ -341,27 +391,45 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       }
     });
 
-    test('the vLLM tool-calling pin resolves per vendor shape (#2052)', () => {
+    test('the main vLLM entrypoint is the derived-flags launcher script', () => {
+      // The launcher is /bin/sh -ec <script>: the tool-calling flags are
+      // DERIVED at container start, so the render cannot pin a resolved
+      // parser into the file. The script's BEHAVIOR is pinned by the argv
+      // resolution test below; this pins the launcher shape itself — the
+      // shell wrapper (what makes derivation possible) and the exec tail
+      // (vLLM replaces the shell as PID 1, signals included).
+      const services = JSON.parse(single.stdout).services;
+      const entrypoint = services.vllm.entrypoint;
+      expect(entrypoint.slice(0, 2)).toEqual(['/bin/sh', '-ec']);
+      expect(scriptOf(services).trim().endsWith('exec vllm serve "$@"')).toBe(true);
+    });
+
+    test('the tool-calling pin resolves per vendor shape through the launcher script', () => {
       // granite4 is the vLLM 0.29 parser for Granite 4.x (the base files'
       // default model); env.strixhalo serves granite-3.1-2b and pins
-      // VLLM_TOOL_CALL_PARSER=granite. The RESOLVED command must carry the
+      // VLLM_TOOL_CALL_PARSER=granite. The RESOLVED argv must carry the
       // right parser per shape — a flipped or dropped pin silently misparses
-      // the model's tool output (checked on the resolved render, not the raw
-      // file: the interpolation default is part of the contract). compose-go
-      // marshals a folded command scalar as a string and list-form as an
-      // array — parserOf reads both shapes.
-      const tokensOf = (command) => (Array.isArray(command) ? command : String(command).split(/\s+/));
-      const parserOf = (services) => {
-        const parts = tokensOf(services.vllm.command);
-        return parts[parts.indexOf('--tool-call-parser') + 1];
-      };
+      // the model's tool output. The pin is derived at container start, so
+      // the proof RUNS the launcher script: the service's rendered
+      // environment in, argv out (a stub `vllm` echoes its argv).
       const singleServices = JSON.parse(single.stdout).services;
       const nvidiaServices = JSON.parse(singleNvidia.stdout).services;
-      expect(parserOf(singleServices)).toBe('granite');
-      expect(parserOf(nvidiaServices)).toBe('granite4');
-      for (const services of [singleServices, nvidiaServices]) {
-        expect(tokensOf(services.vllm.command)).toContain('--enable-auto-tool-choice');
-      }
+      const rocmArgv = runVllmEntrypoint(singleServices);
+      const nvidiaArgv = runVllmEntrypoint(nvidiaServices);
+      expect(rocmArgv).toContain('--enable-auto-tool-choice');
+      expect(nvidiaArgv).toContain('--enable-auto-tool-choice');
+      const parserAfter = (argv) => argv[argv.indexOf('--tool-call-parser') + 1];
+      expect(parserAfter(rocmArgv)).toBe('granite');
+      expect(parserAfter(nvidiaArgv)).toBe('granite4');
+      // The derivation case this whole contract exists for: a model OUTSIDE
+      // Granite 4.x with NO explicit parser boots with NEITHER flag — the
+      // granite4 default must not silently misparse that model's tools.
+      const noPinArgv = runVllmEntrypoint(singleServices, {
+        VLLM_LLM_MODEL_ID: 'ibm-granite/granite-3.3-2b-instruct',
+        VLLM_TOOL_CALL_PARSER: ''
+      });
+      expect(noPinArgv).not.toContain('--enable-auto-tool-choice');
+      expect(noPinArgv).not.toContain('--tool-call-parser');
     });
 
     test('the GPU device mappings come from env.strixhalo', () => {
@@ -501,9 +569,16 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       // that exist on every host — a missing device path is a hard
       // create-time error), the groups are nobody/nogroup (two DISTINCT
       // numbers: the group_add list rejects duplicates), and the
-      // entrypoint restates the NVIDIA image's own (`vllm serve` — the
-      // flag `command:` always attached to it), so it is a no-op there.
+      // translation-guardrail entrypoint restates the NVIDIA image's own
+      // (`vllm serve` — the flag `command:` always attached to it), so it
+      // is a no-op there. The main `vllm` service's launcher is the
+      // derived-flags script, pinned in the ROCm describe.
       const services = JSON.parse(singleNvidia.stdout).services;
+      // The main `vllm` service's entrypoint is the launcher script (pinned
+      // in the ROCm describe); the translation guardrail restates the
+      // NVIDIA image's own serve entrypoint.
+      expect(services.vllm.entrypoint.slice(0, 2)).toEqual(['/bin/sh', '-ec']);
+      expect(services['vllm-translation-guardrail'].entrypoint).toEqual(['vllm', 'serve']);
       for (const name of ['vllm', 'vllm-translation-guardrail']) {
         expect({ service: name, devices: deviceSources(services[name]) }).toEqual({
           service: name,
@@ -512,10 +587,6 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
         expect({ service: name, groupAdd: services[name].group_add }).toEqual({
           service: name,
           groupAdd: ['65534', '65533']
-        });
-        expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
-          service: name,
-          entrypoint: ['vllm', 'serve']
         });
         expect({ service: name, image: services[name].image }).toEqual({
           service: name,

@@ -69,10 +69,7 @@ void main() {
       expect(handled, isTrue);
       expect(fake.resolveCalls, 1);
       expect(find.byType(SnackBar), findsOneWidget);
-      expect(
-        find.text(tr('chatbot.sourceUnavailable')),
-        findsOneWidget,
-      );
+      expect(find.text(tr('chatbot.sourceUnavailable')), findsOneWidget);
       expect(find.byType(ConceptBrowserScreen), findsNothing);
       expect(tester.takeException(), isNull);
     },

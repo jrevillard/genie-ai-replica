@@ -392,10 +392,7 @@ void main() {
         find.byKey(const ValueKey('okf-browser-truncated-notice')),
         findsOneWidget,
       );
-      expect(
-        find.text(tr('sidebar.okfConceptTruncated')),
-        findsOneWidget,
-      );
+      expect(find.text(tr('sidebar.okfConceptTruncated')), findsOneWidget);
       // The rendered body is the BOUNDED preview, not the whole document.
       final rendered = tester
           .widgetList<MarkdownBody>(find.byType(MarkdownBody))

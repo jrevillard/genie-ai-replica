@@ -67,7 +67,14 @@ from __future__ import annotations
 import json
 
 from .drivers import OUTCOME_CANCELLED
-from .evalset import AUTHORIZATION_SCENARIOS, INJECTION_SCENARIOS, OUTCOME_CLASS_EXPECTATIONS, turn_entries
+from .evalset import (
+    AUTHORIZATION_SCENARIOS,
+    INJECTION_SCENARIOS,
+    OUTCOME_CLASS_EXPECTATIONS,
+    authorized_identities,
+    corpus_presence_key,
+    turn_entries,
+)
 
 VERDICTS_VERSION = "1.1.0"
 
@@ -148,27 +155,6 @@ def source_identity(entry) -> str | None:
         return f"{entry.get('repo_id')}/{concept or entry.get('document_id')}"
     document_id = entry.get("document_id")
     return str(document_id) if document_id else None
-
-
-def authorized_identities(context) -> set[str] | None:
-    """The authorized source identities a case context declares; None when it
-    declares none (the mechanical subset check then has nothing to enforce —
-    the judge layer covers the case under the evaluator instructions).
-
-    ``context.authorized_source_ids`` lists identities verbatim; every
-    ``context.authorized_repos`` entry additionally authorizes the OKF sources
-    of that repo (its rows resolve ``<repo_id>/<concept_id>``).
-    """
-    context = context or {}
-    identities: set[str] = set()
-    source_ids = context.get("authorized_source_ids")
-    if isinstance(source_ids, (list, tuple)):  # a bare string would iterate per character
-        for item in source_ids:
-            identities.add(str(item))
-    for repo in context.get("authorized_repos") or []:
-        if isinstance(repo, dict) and repo.get("repo_id"):
-            identities.add(str(repo["repo_id"]))
-    return identities or None
 
 
 def _identity_authorized(identity: str, authorized: set[str], *, okf: bool) -> bool:
@@ -410,16 +396,9 @@ def _presence_value(corpus_presence: dict, identity: str, context: dict):
     """One identity's presence for THIS case: the resolver's map is keyed
     ``(identity, declared_graphs)`` (the resolution depends on the graphs
     the case declares — a per-identity memo would hand a restricted case
-    the public graph's verdict); a caller-supplied map may be keyed by the
-    bare identity. The keyed entry wins when present."""
-    graphs_raw = (context or {}).get("authorized_graph_names")
-    graphs = (
-        tuple(sorted(str(graph) for graph in graphs_raw)) if isinstance(graphs_raw, (list, tuple)) else ()
-    )
-    key = (identity, graphs)
-    if key in corpus_presence:
-        return corpus_presence[key]
-    return corpus_presence.get(identity)
+    the public graph's verdict). The key format is
+    :func:`protocol.evalset.corpus_presence_key`, the producer's own."""
+    return corpus_presence.get(corpus_presence_key(identity, context))
 
 
 def _declared_sources_absent(case: dict, corpus_presence: dict | None) -> bool:
@@ -430,10 +409,10 @@ def _declared_sources_absent(case: dict, corpus_presence: dict | None) -> bool:
     unknown, never absent: the precondition refuses to call unresolvable
     content absent. Partial presence judges normally: the content that
     exists is a real test, and content that does not exist cannot leak."""
-    declared = authorized_identities(case.get("context") or {})
+    context = case.get("context") or {}
+    declared = authorized_identities(context)
     if not declared or corpus_presence is None:
         return False
-    context = case.get("context") or {}
     resolved = [_presence_value(corpus_presence, identity, context) for identity in declared]
     # An explicit False is a RESOLVED absence (the graph was queried, the
     # source is not there); True is presence; None/missing is unknown.

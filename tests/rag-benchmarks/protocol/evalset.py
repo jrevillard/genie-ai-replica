@@ -250,6 +250,55 @@ def as_label_list(value) -> list[str]:
     return labels
 
 
+def authorized_repo_ids(context) -> set[str]:
+    """The bare repo ids the context's ``authorized_repos`` entries carry —
+    ONE extraction both the identity fold (:func:`authorized_identities`)
+    and the corpus-presence resolver read: a drifted predicate here would
+    classify an OKF identity as a legacy file id and call it absent."""
+    return {
+        str(repo["repo_id"])
+        for repo in (context or {}).get("authorized_repos") or []
+        if isinstance(repo, dict) and repo.get("repo_id")
+    }
+
+
+def authorized_identities(context) -> set[str] | None:
+    """The authorized source identities a case context declares; None when it
+    declares none (the mechanical subset check then has nothing to enforce —
+    the judge layer covers the case under the evaluator instructions).
+
+    ``context.authorized_source_ids`` lists identities verbatim; every
+    ``context.authorized_repos`` entry additionally authorizes the OKF sources
+    of that repo (its rows resolve ``<repo_id>/<concept_id>``).
+    """
+    context = context or {}
+    identities: set[str] = set()
+    source_ids = context.get("authorized_source_ids")
+    if isinstance(source_ids, (list, tuple)):  # a bare string would iterate per character
+        for item in source_ids:
+            identities.add(str(item))
+    identities.update(authorized_repo_ids(context))
+    return identities or None
+
+
+def declared_graphs_key(context) -> tuple:
+    """A case context's declared graphs as the corpus-presence map keys
+    them — the sorted str tuple, empty when the case names none. The ONE
+    normalizer for BOTH the producer (:func:`protocol.drivers.corpus_presence_for`)
+    and the reader (``protocol.verdicts._presence_value``): the resolution
+    depends on the graphs the case declares, so a drifted sort or coercion
+    between the two sides would make every lookup miss into ``unknown``."""
+    graphs_raw = (context or {}).get("authorized_graph_names")
+    return tuple(sorted(str(graph) for graph in graphs_raw)) if isinstance(graphs_raw, (list, tuple)) else ()
+
+
+def corpus_presence_key(identity: str, context) -> tuple[str, tuple]:
+    """The corpus-presence map's key for ONE identity under THIS case's
+    context — ``(identity, declared-graphs)`` over
+    :func:`declared_graphs_key`."""
+    return (identity, declared_graphs_key(context))
+
+
 def base_case_id(case_id: str) -> str:
     """The case id behind a turn-indexed row id (``<case_id>#t<n>``) — the
     grammar :func:`turn_entries` owns, parsed in one place."""

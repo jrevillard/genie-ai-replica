@@ -67,7 +67,11 @@ from harness import (
 from .config_b_driver import default_graph as config_b_default_graph
 from .evalset import (
     as_label_list,
+    authorized_identities,
+    authorized_repo_ids,
+    corpus_presence_key,
     coverage_census,
+    declared_graphs_key,
     evaluation_surface,
     turn_entries,
 )
@@ -1189,7 +1193,6 @@ def corpus_presence_for(entries: list[dict], *, file_ids_by_graph: dict[str, set
     """
     if file_ids_by_graph is None:
         return None
-    from .verdicts import authorized_identities
 
     presence: dict[tuple, bool | None] = {}
     for case in entries:
@@ -1197,26 +1200,22 @@ def corpus_presence_for(entries: list[dict], *, file_ids_by_graph: dict[str, set
             continue
         context = case.get("context") or {}
         declared = authorized_identities(context) or set()
-        repo_ids = {
-            str(entry["repo_id"])
-            for entry in (context.get("authorized_repos") or [])
-            if isinstance(entry, dict) and entry.get("repo_id")
-        }
-        graphs_raw = context.get("authorized_graph_names")
-        graphs = tuple(sorted(str(graph) for graph in graphs_raw)) if isinstance(graphs_raw, (list, tuple)) else ()
+        repo_ids = authorized_repo_ids(context)
+        graphs = declared_graphs_key(context)
         graph_sets = [file_ids_by_graph.get(graph) for graph in graphs]
         queried = [file_ids for file_ids in graph_sets if file_ids is not None]
         unqueried = any(file_ids is None for file_ids in graph_sets)
         for identity in declared:
+            key = corpus_presence_key(identity, context)
             if identity in repo_ids or "/" in identity:
                 # OKF identity: not resolvable against SOURCE file ids.
-                presence[(identity, graphs)] = None
+                presence[key] = None
             elif any(identity in file_ids for file_ids in queried):
-                presence[(identity, graphs)] = True
+                presence[key] = True
             elif unqueried or not queried:
-                presence[(identity, graphs)] = None
+                presence[key] = None
             else:
-                presence[(identity, graphs)] = False
+                presence[key] = False
     return presence
 
 

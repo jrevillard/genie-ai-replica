@@ -166,8 +166,9 @@ def resolve_file_ids_by_graph(graph_names: list[str]) -> dict[str, set[str]]:
     eval/match_gold_chunks uses for gold). The ArangoDB connection comes from
     the eval env defaults (ARANGO_URL / ARANGO_DB / ARANGO_USER /
     ARANGO_PASSWORD)."""
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "eval"))
-    import arango  # local import: the shared AQL cursor
+    # Local import: the shared AQL cursor (the eval dir is already importable
+    # — importing protocol.drivers inserted its path).
+    import arango
 
     return {name: arango.source_file_ids(f"{name}_SOURCE") for name in graph_names}
 

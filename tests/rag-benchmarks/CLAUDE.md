@@ -135,6 +135,16 @@ collection and scores gold `expected_chunks[].content_hash` (sha256 of normalize
 text, `chunk_identity.py`) against the converted selection. `chunk_key` (the
 `_key`) is retained in the gold for traceability only.
 
+**The text field the map hashes: the SERVED column (`text`).** The retrieval
+contract reads `text` (hardcoded in the retriever, so ingest and read paths
+cannot drift); `metadata.chunk_text` keeps the verbatim chunk for DISPLAY
+only. The gold identities are content hashes of the served field, so the eval's
+`ARANGO_TEXT_FIELD` default is `text` — hashing the display column instead
+scored a silent all-zero anchor on a contextualized corpus (recall 0.0 /
+noise 1.0 with `n_missed_traces=0`), which reads as a retrieval collapse.
+`dump_chunks.py` probes the other field when the primary returns all-null rows
+(a corpus predating the contextualized-write contract).
+
 **Consequence:** `content_hash` is stable across re-ingests as long as chunking
 params are unchanged — a corpus re-ingest does NOT invalidate the gold. Only a
 chunking-param change (which alters chunk text) changes the hashes: a signal to

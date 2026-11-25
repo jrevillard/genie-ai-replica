@@ -848,6 +848,13 @@ class UrllibRunStream:
     answer JSON, never an event stream); ``events()`` parses the SSE
     ``data:`` frames; ``close()`` is the cancellation point — closing the
     response mid-run is the client disconnect that cancels the run server-side.
+
+    ``trace_id`` is the trace the run is expected to land in: the driver
+    PROPAGATES its own W3C traceparent, so the agent's spans join that trace
+    and the caller can fetch the run's trace by identity instead of guessing
+    it out of a time window. The agent's own spans carry no run id (they
+    carry counters and ids only), so the propagated trace id is the only
+    exact handle on "this run's spans".
     """
 
     def __init__(self, url: str, payload: dict, timeout: float):
@@ -857,6 +864,10 @@ class UrllibRunStream:
         self._url = url
         self._payload = payload
         self._timeout = timeout
+        # The propagated trace id (32 hex chars) and the parent span id
+        # (16 hex chars) — W3C traceparent shape.
+        self.trace_id = os.urandom(16).hex()
+        self.parent_span_id = os.urandom(8).hex()
         # Eval venues are self-signed by default; the context is deliberately
         # unverified (no knob — a verifying venue can wrap the transport).
         self._ctx = ssl._create_unverified_context()
@@ -867,7 +878,10 @@ class UrllibRunStream:
         request = urllib.request.Request(
             self._url,
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "traceparent": f"00-{self.trace_id}-{self.parent_span_id}-01",
+            },
             method="POST",
         )
         try:
@@ -993,6 +1007,7 @@ def run_one_case_c(
     run_id: str | None = None
     usage_record: dict | None = None
     source_documents: list | None = None
+    citations: list | None = None
     outcome: str | None = None
     error_text: str | None = None
     events_seen = 0
@@ -1033,6 +1048,14 @@ def run_one_case_c(
                     verdict_payload = event.get("payload") or {}
                     if isinstance(verdict_payload.get("source_documents"), list):
                         source_documents = verdict_payload["source_documents"]
+                    # The retrieval TUPLE of the agent path: the delivered
+                    # citations (the provenance the answer was composed
+                    # from). The legacy anchor reads its tuple from a
+                    # reranker span; the agent's spans carry no chunk keys,
+                    # so the citations are the tuple the SSE frames carry —
+                    # the agent path's own retrieval record.
+                    if isinstance(verdict_payload.get("citations"), list):
+                        citations = verdict_payload["citations"]
                 if is_cancellation and events_seen >= 1:
                     break
             if is_cancellation and events_seen >= 1 and outcome is None:
@@ -1058,6 +1081,10 @@ def run_one_case_c(
             stream.close()
     row["outcome"] = outcome
     row["run_id"] = run_id
+    # The trace the run's spans land in (the driver propagated its own
+    # traceparent) — the exact handle on the run's trace.
+    if stream is not None:
+        row["trace_id"] = stream.trace_id
     row["events_seen"] = events_seen
     row["wall_ms"] = round((time.monotonic() - started) * 1000.0, 1)
     # The answer surface exists ONLY on an answered terminal: a cancelled or
@@ -1069,6 +1096,8 @@ def run_one_case_c(
         row["usage_record"] = usage_record
     if source_documents is not None:
         row["source_documents"] = source_documents
+    if citations is not None:
+        row["citations"] = citations
     if error_text is not None:
         row["error_text"] = error_text
     # A turn's row records its turn index — the id carries the

@@ -684,6 +684,10 @@ class FakeRunStream:
         self._events = list(events)
         self._fail_after = fail_after
         self.closed = False
+        # The trace the run's spans land in — the real stream propagates its
+        # own traceparent and exposes the id (the agent's spans carry no run
+        # id, so the propagated trace id is the only exact handle).
+        self.trace_id = "f" * 32
 
     def events(self):
         for index, event in enumerate(self._events):
@@ -1187,3 +1191,56 @@ def test_resolve_model_id_reads_both_client_spellings():
     assert module.resolve_model_id(PropertyClient()) == "granite-4.1-8b"
     assert module.resolve_model_id(NoIdClient()) is None
     assert module.resolve_model_id(None) is None
+
+
+def test_the_c_run_propagates_its_own_traceparent():
+    """The run's spans join the driver's trace — the exact handle on them.
+
+    The agent's spans carry no run id (counters and ids only), so the
+    propagated W3C trace id is the only exact way to fetch "this run's
+    trace". Without it, a trace fetch could only guess out of a time
+    window.
+    """
+    import urllib.request
+
+    captured = {}
+
+    class _FakeResponse:
+        status = 200
+
+        def read(self):
+            return b""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def __iter__(self):
+            return iter(())
+
+    def _fake_urlopen(request, timeout=None, context=None):
+        captured["headers"] = dict(request.headers)
+        captured["url"] = request.full_url
+        return _FakeResponse()
+
+    original = urllib.request.urlopen
+    urllib.request.urlopen = _fake_urlopen
+    try:
+        stream = drivers.UrllibRunStream("http://agent/v1/runs", {"q": 1}, 5.0)
+    finally:
+        urllib.request.urlopen = original
+
+    traceparent = captured["headers"].get("traceparent") or captured["headers"].get("Traceparent")
+    assert traceparent, "the run request carries no traceparent"
+    assert traceparent.startswith(f"00-{stream.trace_id}-")
+    assert len(stream.trace_id) == 32
+    assert len(stream.parent_span_id) == 16
+
+
+def test_the_c_row_records_the_trace_id():
+    """The row carries the trace its spans land in."""
+    stream = FakeRunStream(events=[])
+    row = drivers.run_one_case_c({"id": "x", "query": "q"}, base_url="u", transport=FakeCTransport(stream))
+    assert row["trace_id"] == stream.trace_id

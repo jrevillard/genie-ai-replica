@@ -1,0 +1,167 @@
+# Run-scoped agent-service for the #2170 pre-vehicle validation campaign.
+#
+# Shape: the #2167 / #2148 campaign method (rendered manifests, run-prefixed
+# names, full restore behind the ownership guard) applied to the umbrella tip
+# d1648d17f. The umbrella tip's agent-service image is the promoted CI build
+# of that tree:
+#   genie-ai-agent-server:feat-agentic-foundations-chore-prevehicle-validation-f7e884cd
+#   (pipeline 19392 = refs/merge-requests/938/merge @ a2db5f7d; that merge's
+#   tree equals d1648d17f's tree).
+#
+# Why run-scoped and not through the chart: the umbrella chart has NO
+# agent-service template (templates/services/ has no agent entry — the agent
+# tier is deployed out of band), and the campaign must not leave a chart-owned
+# workload behind on the shared venue.
+#
+# The three deployment facts that are NOT defaults:
+#   - the agent binds 8080 through a command override (the image default is
+#     8010): 8080 is the port the venue's backend egress allow-list opens to
+#     0.0.0.0/0 (charts/genieai-umbrella/templates/networking/*.yaml), so the
+#     BFF can reach it without a netpol change on the egress side;
+#   - a HEADLESS Service (clusterIP: None): the venue netpol rejects
+#     pod->ClusterIP egress for these run-scoped peers, and a headless
+#     service resolves to the pod IP directly;
+#   - genieai.io/component: backend on the POD: the chart's per-component
+#     NetworkPolicies trust THIS label at the legacy services' ingress
+#     (document-repository:3001) and the backend egress allow-list covers
+#     every hop this run needs (DNS 53, ArangoDB 8529, doc-repo 3001, the GPU
+#     gateway 444, external 443, the collector 4318).
+#
+# The budget knobs are the SIGNED M-5 ceiling and are fail-closed: the agent
+# answers 503 (budget_configuration_missing) when one is missing.
+#
+# The legacy stack (chatqna / retriever / embedding / reranker / translation /
+# ArangoDB / Keycloak / the external GPU gateway) is SHARED and untouched —
+# the deployment wires to the venue's live deployed values.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e2170-agent
+  namespace: genieai
+  labels:
+    app.kubernetes.io/name: e2170-agent
+    app.kubernetes.io/component: agent-service
+    e2170.genieai.io/run: "2170"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: e2170-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: e2170-agent
+        app.kubernetes.io/component: agent-service
+        genieai.io/component: backend
+        e2170.genieai.io/run: "2170"
+    spec:
+      containers:
+        - name: agent-service
+          image: registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-agent-server:feat-agentic-foundations-chore-prevehicle-validation-f7e884cd
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8080"]
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            # --- the SIGNED budget knobs (fail-closed; the agent answers 503
+            #     when one of them is missing)
+            - { name: AGENT_RUN_MAX_STEPS, value: "8" }
+            - { name: AGENT_RUN_MAX_MODEL_CALLS, value: "12" }
+            - { name: AGENT_RUN_MAX_TOOL_CALLS, value: "12" }
+            - { name: AGENT_RUN_MAX_TOTAL_TOKENS, value: "30000" }
+            - { name: AGENT_RUN_MAX_EVIDENCE_BYTES, value: "200000" }
+            - { name: AGENT_RUN_MAX_WALL_CLOCK_SECONDS, value: "240" }
+            - { name: AGENT_TOOL_TIMEOUT_MS, value: "30000" }
+            - { name: AGENT_TOOL_MAX_RESULTS, value: "10" }
+            - { name: AGENT_TOOL_MAX_RESULT_BYTES, value: "50000" }
+            - { name: AGENT_VERDICT_JUDGE_TIMEOUT_MS, value: "30000" }
+            # --- the model legs (the venue's external GPU gateway)
+            - { name: VLLM_LLM_ENDPOINT, value: "https://ai.assembly.govstack.global:444/llm" }
+            - { name: VLLM_TRANSLATION_ENDPOINT, value: "https://ai.assembly.govstack.global:444/translation" }
+            - { name: VLLM_TRANSLATION_MODEL_ID, value: "google/gemma-3-4b-it" }
+            - { name: VLLM_API_KEY, valueFrom: { secretKeyRef: { name: vllm-api-key, key: VLLM_API_KEY } } }
+            # The translation leg's bearer is OPENAI_API_KEY (the generation
+            # call reads it; VLLM_API_KEY only authenticates the /v1/models
+            # probe) — the compose block maps the same secret onto both
+            # names. Without it the translation calls carry no credential and
+            # the GPU gateway answers 401.
+            - { name: OPENAI_API_KEY, valueFrom: { secretKeyRef: { name: vllm-api-key, key: VLLM_API_KEY } } }
+            - { name: OPEA_SSL_SKIP_VERIFY, value: "1" }
+            # --- the capabilities layer (search_knowledge: doc-repo +
+            #     retriever/embedding/reranker wiring)
+            - { name: AGENT_DOCREPO_URL, value: "http://document-repository.genieai.svc.cluster.local" }
+            - { name: AGENT_OKF_URL, value: "http://okf-server:3002" }
+            - { name: AGENT_AUTHORIZED_GRAPHS, value: "GRAPH" }
+            # The legacy corpus BY NAME — the same value the BFF authorizes.
+            # A divergence (the BFF on another name) makes every legacy hit
+            # read as a foreign graph, and every answer degrades to the
+            # insufficiency statement. The value MUST equal the venue's
+            # chart value (`opea.retriever.arangoGraphName`); a later
+            # change there silently reinstates the defect.
+            - { name: ARANGO_GRAPH_NAME, value: "GRAPH" }
+            - { name: TEI_EMBEDDING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/embed" }
+            - { name: TEI_RERANKING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/rerank" }
+            - { name: ARANGO_URL, value: "http://arangodb-single.genieai.svc.cluster.local:8529" }
+            - { name: ARANGO_DB, value: "_system" }
+            - { name: ARANGO_USERNAME, value: "root" }
+            - { name: ARANGO_PASSWORD, valueFrom: { secretKeyRef: { name: arango-root-secret, key: password } } }
+            # --- the service's own flag (the compose agent-service carries it
+            #     too; the agent reports it on /ready and in its start log)
+            - { name: AGENT_ENABLED, value: "1" }
+            # --- the observability leg (the campaign's trace evidence)
+            - { name: OTEL_SERVICE_NAME, value: "agent-service" }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://genieai-collector-collector.genieai.svc.cluster.local:4318" }
+            - { name: ENABLE_OBSERVABILITY, value: "1" }
+            - { name: LOG_LEVEL, value: "INFO" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: e2170-agent-hl
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: e2170-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# The BFF reaches the agent on 8080. The chart's backend NetworkPolicy
+# selects the agent pod (the pod carries genieai.io/component: backend) and
+# opens its ingress on port 3000 for the frontend / doc-repo / chatqna /
+# dataprep / test peers — the BFF itself is NOT one of them. NetworkPolicy
+# ingress is a UNION of the rules of every policy that selects the pod, so
+# this run-scoped policy adds the missing edge (BFF -> agent:8080) without
+# touching the chart's policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2170-agent
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: e2170-agent
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 8080

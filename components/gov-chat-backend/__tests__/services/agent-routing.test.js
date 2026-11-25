@@ -91,6 +91,43 @@ describe('agentServiceUrl', () => {
   });
 });
 
+describe('agentRunUrl', () => {
+  const originalValue = process.env.AGENT_SERVICE_URL;
+
+  afterEach(() => {
+    if (originalValue === undefined) {
+      delete process.env.AGENT_SERVICE_URL;
+    } else {
+      process.env.AGENT_SERVICE_URL = originalValue;
+    }
+  });
+
+  it('names the run surface on the shipped default (the base alone answered 404 live)', () => {
+    delete process.env.AGENT_SERVICE_URL;
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-service:8010/v1/runs');
+  });
+
+  it('names the run surface on an overridden base', () => {
+    process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999';
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
+  });
+
+  it('uses an override that already names the run surface as it stands', () => {
+    process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999/v1/runs';
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
+  });
+
+  it('tolerates a trailing slash on the base (one run surface, never two)', () => {
+    process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999/';
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
+  });
+
+  it('tolerates a trailing slash on an override that already names the surface', () => {
+    process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999/v1/runs/';
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
+  });
+});
+
 describe('the single-read invariant (story 2.4 — the helper is the only AGENT_ENABLED read)', () => {
   const COMPONENT_ROOT = path.join(__dirname, '..', '..', '..');
 

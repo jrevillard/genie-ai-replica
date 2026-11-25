@@ -398,7 +398,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
 
     expect(axios.post).toHaveBeenCalledTimes(1);
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     // deadline_ms = AGENT_UPSTREAM_TIMEOUT_MS − translation reserve −
     // finalization reserve (the pair rule holds by construction) — asserted
     // as the explicit arithmetic on the shipped constants, not by calling
@@ -471,7 +471,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     });
 
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     expect(body.deadline_ms).toBe(60000 - _internals.TRANSLATION_RESERVE_MS - _internals.FINALIZATION_MARGIN_MS);
     // The wire-level timeout is the configured 60000, not a derived value.
     expect(options.timeout).toBe(60000);
@@ -542,7 +542,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     });
 
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     // The deadline the run paces against AND the timeout the BFF aborts with
     // are the SAME absorbed value — the small configuration aborts nothing
     // ahead of the run's own honest ending.

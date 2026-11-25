@@ -1792,11 +1792,7 @@ services:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
     command: ['--experimental-vector-index=true']
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password "${ARANGO_PASSWORD}" --javascript.execute-string "db._version();"'
-        ]
+      test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password \"${ARANGO_PASSWORD}\" --javascript.execute-string \"db._version();\""]
       interval: 10s
       timeout: 10s
       retries: 12
@@ -1913,11 +1909,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:9000/health'', timeout=3)" || exit 1'
-        ]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -2009,11 +2001,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:8888/health'', timeout=3)" || exit 1'
-        ]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -2049,11 +2037,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:9090/health'', timeout=3)" || exit 1'
-        ]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9090/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -2133,11 +2117,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:6000/health'', timeout=3)" || exit 1'
-        ]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6000/health', timeout=3)\" || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10

@@ -30,7 +30,7 @@ from conftest import (
 
 from agent.budget import RunBudget
 from agent.events import BFF_FRAME_NAMES, AgentEvent
-from agent.loop import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR, ModelTurn
+from agent.loop import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR, ModelTurn, ToolCallRequest
 from agent.orchestrator import (
     AdmissionRefused,
     AgentRunRequest,
@@ -368,7 +368,6 @@ def test_a_successful_retry_after_an_insufficient_hop_records_no_reason(tmp_path
             return canned_read_result()
 
     port = TwoHopPort()
-    from agent.loop import ToolCallRequest
 
     turns = (
         ModelTurn(tool_calls=(ToolCallRequest(call_id="call-1", name="search_knowledge", arguments={"query": "q1"}),)),

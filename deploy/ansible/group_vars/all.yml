@@ -90,7 +90,7 @@ agent_service_url: "http://agent-service:8010"
 # default exists in the enforcement path). Empty = unset = the compose
 # block's own empty default. Sizing guidance (budget/deadline pairs, the
 # translation leg's allowances): docs/agent-budget-deadline-pairs.md.
-agent_upstream_timeout_ms: ""
+agent_upstream_timeout_ms: "3600000"
 agent_translation_max_tokens: ""
 agent_translation_max_calls: ""
 agent_run_max_steps: ""

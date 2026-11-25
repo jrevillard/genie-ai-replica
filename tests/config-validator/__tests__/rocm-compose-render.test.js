@@ -30,6 +30,7 @@
 
 const { spawnSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const { parseEnvTemplate } = require('../validators/parse-env');
@@ -162,6 +163,42 @@ function runComposeConfig(files, profiles, options = {}) {
     throw new Error(`docker compose config could not run: ${result.error.message}`);
   }
   return { status: result.status, stdout: result.stdout || '', stderr: result.stderr || '' };
+}
+
+/**
+ * Run the main vLLM service's launcher script the way the container would.
+ *
+ * The entrypoint is `/bin/sh -ec <script>`; the tool-calling flags are
+ * derived at container start, so resolving the argv is the only way to pin
+ * the parser a shape really boots with. compose re-escapes `$` as `$$` in
+ * its config output (round-trip validity) — the runtime receives single
+ * `$`, so the test unescapes before running. A stub `vllm` on PATH echoes
+ * its argv; the script's environment is the service's rendered environment.
+ *
+ * @param {{ vllm: { entrypoint: string[], environment: Object<string,string> } }} services -
+ *   the rendered `services` map of one compose shape
+ * @returns {string[]} the argv `vllm serve` would have been launched with
+ */
+function runVllmEntrypoint(services) {
+  const entrypoint = services.vllm.entrypoint;
+  const script = String(entrypoint[2]).replace(/\$\$/g, '$');
+  const stubDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vllm-stub-'));
+  const stub = path.join(stubDir, 'vllm');
+  fs.writeFileSync(stub, '#!/bin/sh\necho "$@"\n');
+  fs.chmodSync(stub, 0o755);
+  try {
+    const env = { PATH: `${stubDir}:/usr/bin:/bin` };
+    for (const [key, value] of Object.entries(services.vllm.environment || {})) {
+      env[key] = String(value);
+    }
+    const result = spawnSync('/bin/sh', ['-ec', script], { env, encoding: 'utf8', timeout: COMPOSE_TIMEOUT_MS });
+    if (result.error || result.status !== 0) {
+      throw new Error(`the vLLM launcher script failed: ${(result.stderr || '') + (result.stdout || '')}`);
+    }
+    return (result.stdout || '').trim().split(/\s+/);
+  } finally {
+    fs.rmSync(stubDir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -327,13 +364,14 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       expect(services.tei_reranker.image).toBe(envValue(envValues, 'TEI_RERANKING_IMAGE'));
     });
 
-    test('the vLLM services carry the serve entrypoint (repairs the ROCm image)', () => {
+    test('the pooling vLLM services carry the serve entrypoint (repairs the ROCm image)', () => {
       // The ROCm image ships ENTRYPOINT=null, CMD=/bin/bash; the NVIDIA
       // image's own entrypoint IS `vllm serve`. One explicit entrypoint on
-      // the service makes the flag `command:` attach on both vendors from
-      // the same definition.
+      // each pooling service makes the flag `command:` attach on both
+      // vendors from the same definition. The main `vllm` service carries
+      // its own launcher (the derived-flags script, pinned below).
       const services = JSON.parse(single.stdout).services;
-      for (const name of ['vllm', 'vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {
+      for (const name of ['vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {
         expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
           service: name,
           entrypoint: ['vllm', 'serve']
@@ -341,27 +379,37 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       }
     });
 
-    test('the vLLM tool-calling pin resolves per vendor shape (#2052)', () => {
+    test('the main vLLM entrypoint is the derived-flags launcher script', () => {
+      // The launcher is /bin/sh -ec <script>: the tool-calling flags are
+      // DERIVED at container start (granite4 only for a granite-4.x model
+      // id, an explicit parser winning), so the render cannot pin a
+      // resolved parser into the file — the script's logic is the contract.
+      const services = JSON.parse(single.stdout).services;
+      const entrypoint = services.vllm.entrypoint;
+      expect(entrypoint.slice(0, 2)).toEqual(['/bin/sh', '-ec']);
+      const script = String(entrypoint[2]).replace(/\$\$/g, '$');
+      expect(script).toContain('*granite-4*)');
+      expect(script).toContain('--enable-auto-tool-choice');
+      expect(script.trim().endsWith('exec vllm serve "$@"')).toBe(true);
+    });
+
+    test('the tool-calling pin resolves per vendor shape through the launcher script', () => {
       // granite4 is the vLLM 0.29 parser for Granite 4.x (the base files'
       // default model); env.strixhalo serves granite-3.1-2b and pins
-      // VLLM_TOOL_CALL_PARSER=granite. The RESOLVED command must carry the
+      // VLLM_TOOL_CALL_PARSER=granite. The RESOLVED argv must carry the
       // right parser per shape — a flipped or dropped pin silently misparses
-      // the model's tool output (checked on the resolved render, not the raw
-      // file: the interpolation default is part of the contract). compose-go
-      // marshals a folded command scalar as a string and list-form as an
-      // array — parserOf reads both shapes.
-      const tokensOf = (command) => (Array.isArray(command) ? command : String(command).split(/\s+/));
-      const parserOf = (services) => {
-        const parts = tokensOf(services.vllm.command);
-        return parts[parts.indexOf('--tool-call-parser') + 1];
-      };
+      // the model's tool output. The pin is derived at container start, so
+      // the proof RUNS the launcher script: the service's rendered
+      // environment in, argv out (a stub `vllm` echoes its argv).
       const singleServices = JSON.parse(single.stdout).services;
       const nvidiaServices = JSON.parse(singleNvidia.stdout).services;
-      expect(parserOf(singleServices)).toBe('granite');
-      expect(parserOf(nvidiaServices)).toBe('granite4');
+      const argvOf = (services) => runVllmEntrypoint(services);
       for (const services of [singleServices, nvidiaServices]) {
-        expect(tokensOf(services.vllm.command)).toContain('--enable-auto-tool-choice');
+        expect(argvOf(services)).toContain('--enable-auto-tool-choice');
       }
+      const parserAfter = (argv) => argv[argv.indexOf('--tool-call-parser') + 1];
+      expect(parserAfter(argvOf(singleServices))).toBe('granite');
+      expect(parserAfter(argvOf(nvidiaServices))).toBe('granite4');
     });
 
     test('the GPU device mappings come from env.strixhalo', () => {
@@ -501,8 +549,10 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
       // that exist on every host — a missing device path is a hard
       // create-time error), the groups are nobody/nogroup (two DISTINCT
       // numbers: the group_add list rejects duplicates), and the
-      // entrypoint restates the NVIDIA image's own (`vllm serve` — the
-      // flag `command:` always attached to it), so it is a no-op there.
+      // translation-guardrail entrypoint restates the NVIDIA image's own
+      // (`vllm serve` — the flag `command:` always attached to it), so it
+      // is a no-op there. The main `vllm` service's launcher is the
+      // derived-flags script, pinned in the ROCm describe.
       const services = JSON.parse(singleNvidia.stdout).services;
       for (const name of ['vllm', 'vllm-translation-guardrail']) {
         expect({ service: name, devices: deviceSources(services[name]) }).toEqual({
@@ -513,10 +563,14 @@ describeCompose('ROCm compose render gate (single file set, vendor as values)', 
           service: name,
           groupAdd: ['65534', '65533']
         });
-        expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
-          service: name,
-          entrypoint: ['vllm', 'serve']
-        });
+        if (name === 'vllm') {
+          expect(services[name].entrypoint.slice(0, 2)).toEqual(['/bin/sh', '-ec']);
+        } else {
+          expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
+            service: name,
+            entrypoint: ['vllm', 'serve']
+          });
+        }
         expect({ service: name, image: services[name].image }).toEqual({
           service: name,
           image: 'vllm/vllm-openai:v0.29.0'

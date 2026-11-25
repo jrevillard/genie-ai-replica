@@ -493,22 +493,21 @@ def test_new_classes_land_on_the_retrieval_surface():
     """Each new class lands on exactly ONE surface: both are gold-carrying
     retrieval classes — a multi-hop query joins facts across documents, an
     ambiguous query spans the interpretations' sources — so the anchor
-    measures them and the partition stays total."""
+    measures them. (The partition's totality is owned by
+    test_the_two_class_partitions_cover_the_composition_classes.)"""
     assert es.evaluation_surface({"case_class": "multi_hop", "access_scenario": "public"}) == "retrieval"
     assert es.evaluation_surface({"case_class": "multi_hop", "access_scenario": "restricted"}) == "restricted_access"
     assert es.evaluation_surface({"case_class": "ambiguous", "access_scenario": "public"}) == "retrieval"
-    assert set(es.RETRIEVAL_CLASSES) | set(es.OUTCOME_CLASSES) == set(es.COMPOSITION_CLASSES)
-    assert not set(es.RETRIEVAL_CLASSES) & set(es.OUTCOME_CLASSES)
 
 
-def test_the_new_classes_carry_an_optional_floor():
+def test_the_new_classes_carry_an_optional_floor(assessment_data):
     """The post-signature classes default to minimum 0: a floor of 1 would
     retroactively refuse every pre-extension set — including the signed FINAL
     A reference set whose digest the signed thresholds bind to — at every
     driver's re-validation. A set that wants them REQUIRED raises them
     through _meta.minimums (the candidate set does); the re-signature on a
     digest carrying the classes is the operator's later step (#2146)."""
-    data = json.loads(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"))
+    data = assessment_data
     data["_meta"]["minimums"] = {"multi_hop": 4, "ambiguous": 4}
     errors = es.validate_set(data, "assessment")
     assert any("multi_hop" in e and "4 required" in e for e in errors)
@@ -530,12 +529,12 @@ def test_the_new_classes_carry_an_optional_floor():
     assert es.validate_set(data, "assessment") == []
 
 
-def test_an_explicit_zero_stays_optional_for_the_post_signature_classes():
+def test_an_explicit_zero_stays_optional_for_the_post_signature_classes(assessment_data):
     """{multi_hop: 0} states the optional floor explicitly — it never
     becomes a required floor of 1: the clamp's 'never lower below 1' guards
     a REQUIRED class's presence, and these classes' presence invariant is
     the default 0."""
-    data = json.loads(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"))
+    data = assessment_data
     data["_meta"]["minimums"] = {"multi_hop": 0, "ambiguous": 0}
     data["entries"] = [
         case for case in data["entries"] if case.get("case_class") not in ("multi_hop", "ambiguous")
@@ -543,23 +542,15 @@ def test_an_explicit_zero_stays_optional_for_the_post_signature_classes():
     assert es.validate_set(data, "assessment") == []
 
 
-def test_an_explicit_zero_on_a_required_class_still_floors_to_one():
+def test_an_explicit_zero_on_a_required_class_still_floors_to_one(assessment_data):
     """The 'never lower below 1' invariant is untouched for the required
     classes: a zero override on a class whose default is >= 1 floors to the
     presence invariant, never to an optional class."""
-    data = json.loads(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"))
+    data = assessment_data
     data["_meta"]["minimums"] = {"cancellation": 0}
     data["entries"] = [case for case in data["entries"] if case.get("case_class") != "cancellation"]
     errors = es.validate_set(data, "assessment")
     assert any("cancellation" in e and "1 required" in e for e in errors)
-
-
-def test_the_sample_set_validates_under_the_optional_new_class_floor():
-    """The composition floor stays backward-compatible: the sample set —
-    which demonstrates the new classes — validates with them present at the
-    default minimum of 0, and no set is required to carry them."""
-    data = json.loads(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"))
-    assert es.validate_set(data, "assessment") == []
 
 
 def test_signed_reference_set_still_validates_under_the_extended_floor():

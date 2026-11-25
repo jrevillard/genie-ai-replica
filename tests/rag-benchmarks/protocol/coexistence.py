@@ -624,13 +624,15 @@ def build_coexistence_report(
             " would never take is not applied — refusing before the report is built",
         )
 
-    if isinstance(limits, dict):
+    if limits is not None:
         # The status whitelist: the vocabulary is draft → agreed (the
         # agreement act is the flip), so a status that is PRESENT and not
-        # agreed — a draft, a typo'd flip ("agree", "Agreed"), any
-        # pending-ish word — is refused: an un-agreed artifact must never
-        # open a verdict. An artifact carrying NO status is the pre-existing
-        # shape (a bare operator artifact) and applies unchanged.
+        # agreed — a draft, a typo'd flip ("agree"), any pending-ish word —
+        # is refused: an un-agreed artifact must never open a verdict. A
+        # case variant of "agreed" itself ("Agreed", "AGREED") applies: the
+        # flip's intent is unambiguous. An artifact carrying NO status (no
+        # key or a JSON null) is the pre-existing shape (a bare operator
+        # artifact) and applies unchanged.
         status = limits.get("status")
         if status is not None and str(status).lower() != "agreed":
             raise CoexistenceRefusal(
@@ -641,7 +643,6 @@ def build_coexistence_report(
                 " re-run)",
             )
 
-    if limits is not None:
         for key in ("corpus_fingerprint", "assessment_set_sha256"):
             declared = limits.get(key)
             if declared is None:

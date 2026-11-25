@@ -109,12 +109,16 @@ def _limits(*, regression=True, **overrides):
 
 
 def _report(*, control=None, loaded=None, agent_load=None, limits=_limits(), lineage=True, **kwargs):
+    # ``lineage`` is the boolean switch (the synthetic CORPUS/SET_SHA pair,
+    # or None) or a dict verbatim (a test binding a REAL artifact's lineage).
+    if isinstance(lineage, bool):
+        lineage = {"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA} if lineage else None
     return build_coexistence_report(
         control_measurements=control if control is not None else _control(),
         loaded_measurements=loaded if loaded is not None else _loaded(),
         agent_load=agent_load if agent_load is not None else _agent_load(),
         limits=limits,
-        lineage={"corpus_fingerprint": CORPUS, "assessment_set_sha256": SET_SHA} if lineage else None,
+        lineage=lineage,
         created_utc=CREATED,
         **kwargs,
     )
@@ -586,6 +590,16 @@ def _draft_limits() -> dict:
     return json.loads(DRAFT_LIMITS_FILE.read_text(encoding="utf-8"))
 
 
+def _draft_lineage() -> dict:
+    """The lineage the draft binds: the FINAL A reference's corpus
+    fingerprint and assessment-set digest, read off the draft itself."""
+    draft = _draft_limits()
+    return {
+        "corpus_fingerprint": draft["corpus_fingerprint"],
+        "assessment_set_sha256": draft["assessment_set_sha256"],
+    }
+
+
 def _held_loaded() -> dict:
     """The loaded phase inside the draft's tolerances — the same mix, a few
     milliseconds slower, no new failures."""
@@ -608,13 +622,7 @@ def test_coexistence_refuses_a_draft_limits_artifact():
     before the report is built — the harness applies limits, it never lets a
     proposal open a verdict by accident."""
     with pytest.raises(CoexistenceRefusal) as failed:
-        build_coexistence_report(
-            control_measurements=_control(),
-            loaded_measurements=_held_loaded(),
-            agent_load=_all_answered_load(),
-            limits=_draft_limits(),
-            created_utc=CREATED,
-        )
+        _report(loaded=_held_loaded(), agent_load=_all_answered_load(), limits=_draft_limits())
     assert failed.value.reason == "unagreed_limits"
     assert "'draft'" in str(failed.value)
 
@@ -629,13 +637,7 @@ def test_coexistence_refuses_any_non_agreed_status_not_just_draft():
         limits = _draft_limits()
         limits["status"] = status
         with pytest.raises(CoexistenceRefusal) as failed:
-            build_coexistence_report(
-                control_measurements=_control(),
-                loaded_measurements=_held_loaded(),
-                agent_load=_all_answered_load(),
-                limits=limits,
-                created_utc=CREATED,
-            )
+            _report(loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits)
         assert failed.value.reason == "unagreed_limits", status
 
 
@@ -648,16 +650,8 @@ def test_coexistence_accepts_the_status_flip_in_any_case():
     for name, status in (("agreed", "agreed"), ("AGREED", "AGREED"), ("Agreed", "Agreed")):
         limits = _draft_limits()
         limits["status"] = status
-        report = build_coexistence_report(
-            control_measurements=_control(),
-            loaded_measurements=_held_loaded(),
-            agent_load=_all_answered_load(),
-            limits=limits,
-            lineage={
-                "corpus_fingerprint": limits["corpus_fingerprint"],
-                "assessment_set_sha256": limits["assessment_set_sha256"],
-            },
-            created_utc=CREATED,
+        report = _report(
+            loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits, lineage=_draft_lineage()
         )
         assert report["verdict"]["verdict"] == "pass", name
     for name, absent in (("no-status-key", "pop"), ("json-null-status", "null")):
@@ -666,16 +660,8 @@ def test_coexistence_accepts_the_status_flip_in_any_case():
             limits.pop("status")
         else:
             limits["status"] = None
-        report = build_coexistence_report(
-            control_measurements=_control(),
-            loaded_measurements=_held_loaded(),
-            agent_load=_all_answered_load(),
-            limits=limits,
-            lineage={
-                "corpus_fingerprint": limits["corpus_fingerprint"],
-                "assessment_set_sha256": limits["assessment_set_sha256"],
-            },
-            created_utc=CREATED,
+        report = _report(
+            loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits, lineage=_draft_lineage()
         )
         assert report["verdict"]["verdict"] == "pass", name
 
@@ -687,16 +673,8 @@ def test_coexistence_applies_the_limits_once_agreed():
     verdict stays open for the operator's decision, nothing defaults)."""
     limits = _draft_limits()
     limits["status"] = "agreed"
-    report = build_coexistence_report(
-        control_measurements=_control(),
-        loaded_measurements=_held_loaded(),
-        agent_load=_all_answered_load(),
-        limits=limits,
-        lineage={
-            "corpus_fingerprint": limits["corpus_fingerprint"],
-            "assessment_set_sha256": limits["assessment_set_sha256"],
-        },
-        created_utc=CREATED,
+    report = _report(
+        loaded=_held_loaded(), agent_load=_all_answered_load(), limits=limits, lineage=_draft_lineage()
     )
     assert report["limits"]["present"] is True
     assert all(record["outcome"] == "pass" for record in report["limits"]["limits"])

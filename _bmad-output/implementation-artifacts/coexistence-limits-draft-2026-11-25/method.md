@@ -98,9 +98,9 @@ band, not a guess:
 
 - Not agreed: `status: "draft"`; the harness's status vocabulary is
   `draft → agreed` and it refuses ANY status that is present and not
-  `agreed` (case-insensitive on the flip) — a typo'd agreement never opens
-  a verdict. The verdict stays BLOCKED — the blocker 2 state — until the
-  operator flips the status.
+  `agreed` (typed refusal reason `unagreed_limits`, case-insensitive on the
+  flip) — a typo'd agreement never opens a verdict. The verdict stays
+  BLOCKED — the blocker 2 state — until the operator flips the status.
 - Not signed anywhere: `thresholds.yaml` is untouched (the M-4 ceiling is
   REFERENCED, never edited); the signed thresholds registry's sign-off is
   not this artifact's home.

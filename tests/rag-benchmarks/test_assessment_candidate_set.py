@@ -26,6 +26,11 @@ from pathlib import Path
 from eval.chunk_identity import normalize
 from protocol import evalset as es
 
+# ONE home for the fixture map the #2145 verbatim rule reads (the graded
+# set's gate owns it): a fixture rename or addition lands once, both gates
+# see it.
+from test_assessment_grade_set import GOLD_SOURCE_FIXTURES
+
 BENCH_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BENCH_DIR.parent.parent
 CANDIDATE_DIR = (
@@ -42,17 +47,6 @@ SIGNED_SET = (
     / "e01-final-reference-2026-11-24"
     / "assessment-set.json"
 )
-SECURITY_CORPUS_DIR = REPO_ROOT / "tests" / "rag-benchmarks" / "fixtures" / "security-corpus"
-
-# Every fixture the candidate set may name as a gold source, and the path
-# whose text makes the preview verifiable — the graded set's own map,
-# restated (same fixtures, same rule).
-GOLD_SOURCE_FIXTURES = {
-    "test-document.md": REPO_ROOT / "tests" / "e2e" / "fixtures" / "test-document.md",
-    **{
-        path.name: path for path in sorted(SECURITY_CORPUS_DIR.glob("e01-sec-doc-*.md"))
-    },
-}
 
 NEW_CLASSES = ("multi_hop", "ambiguous")
 
@@ -110,7 +104,6 @@ def test_candidate_set_new_class_gold_is_verbatim_fixture_text():
     toolchain's normalizer, named by its source_doc, and every new-class case
     is a public retrieval-class case (the chunk-level surface scores it)."""
     for case in new_class_cases():
-        assert case.get("case_class") in NEW_CLASSES
         assert case.get("access_scenario") == "public", case["id"]
         assert case.get("expected_chunks"), case["id"]
         for chunk in case["expected_chunks"]:
@@ -125,13 +118,16 @@ def test_candidate_set_new_class_gold_is_verbatim_fixture_text():
 def test_multi_hop_cases_join_at_least_two_documents():
     """The join is the multi_hop class's point: a multi_hop case's gold names
     at least TWO distinct source documents, and an ambiguous case's gold
-    spans more than one interpretation's passage."""
+    spans more than one interpretation's passage. An unnamed class falls
+    through LOUDLY, never into a neighbour's rule."""
     for case in new_class_cases():
         sources = {chunk.get("source_doc") for chunk in case["expected_chunks"]}
         if case["case_class"] == "multi_hop":
             assert len(sources) >= 2, case["id"]
-        else:
+        elif case["case_class"] == "ambiguous":
             assert len(case["expected_chunks"]) >= 2, case["id"]
+        else:
+            raise AssertionError(f"{case['id']}: class outside the candidate's declared additions")
 
 
 def test_the_readme_states_the_set_digest():
@@ -172,6 +168,7 @@ def test_the_committed_set_is_the_build_script_s_output():
             capture_output=True,
             text=True,
             timeout=60,
+            check=False,  # the return code IS the assertion, stderr its message
         )
         assert result.returncode == 0, (
             f"the build script failed against the temp path:\n{result.stderr}"

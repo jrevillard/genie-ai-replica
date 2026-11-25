@@ -89,9 +89,19 @@ def test_deployed_env_names_set_their_knobs():
     assert config.tls_verify is False
 
 
+def test_the_gpu_node_key_backs_the_data_call_bearer_up():
+    """An in-process run inherits the operator's shell, not the compose
+    mapping that fills OPENAI_API_KEY from VLLM_API_KEY — a venue carrying
+    only the GPU-node key must still authenticate the translation call and
+    its /tokenize count, while an explicit OPENAI_API_KEY keeps winning."""
+    assert PreparationConfig.load(env={"VLLM_API_KEY": "sk-probe"}).bearer == "sk-probe"
+    assert PreparationConfig.load(env={"OPENAI_API_KEY": "sk-data", "VLLM_API_KEY": "sk-probe"}).bearer == "sk-data"
+    assert PreparationConfig.load(env={}).bearer is None
+
+
 def test_an_unset_max_translation_chars_caps_nothing():
     """The DEFAULT (env unset) must not lower the derived budget: the venue's
-    derived budget was 11520, not 2000 (V02 §5.3)."""
+    derived budget was 11520, not 2000, as recorded."""
     config = PreparationConfig.load(env={})
     assert config.max_translation_chars_cap == 0
 

@@ -9,8 +9,8 @@ the /tokenize counter :2378-2444, the prompt builders :3994-4082 and
 ``genie-ai-overlay/core/model_cache.py``, reimplemented — clean-slate,
 no shared library with the overlay).
 
-The behavior is frozen to the V02 record (§5.3 bounds, §5.4 failure
-classes):
+The behavior is frozen to the recorded preparation contract (the bounds,
+the failure classes):
 
 * the completion budget is MEASURED (the translation server's own
   ``/tokenize`` count of the payload's prompt half) whenever the server can
@@ -61,7 +61,7 @@ _LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})?$")
 class TranslationInputTooLongError(RuntimeError):
     """Raised when the input does not fit the translation window.
 
-    The refusal class — the abstention class of the V02 §5.4 record: the
+    The refusal class — the recorded abstention class: the
     turn is refused, never answered with an untranslated fallback. The
     single-message shape refuses at the character budget (before the
     language map — the refusal must not depend on registry health); either
@@ -85,7 +85,7 @@ class TranslationTimeoutError(TranslationFailedError):
 
     A subtype, not a separate family: every ``except TranslationFailedError``
     keeps working, while the caller reports ``fallback_timeout`` for this one
-    — the V02 vocabulary separates "the service was slow" from "the service
+    — the recorded vocabulary separates "the service was slow" from "the service
     is broken".
     """
 
@@ -109,6 +109,12 @@ def coerce_int(value) -> int | None:
     Shared stance for every numeric field read out of a model-server payload
     (context windows, tokenize counts): proxies serialize numbers as digit
     strings, and a boolean is never a count.
+
+    A digit string is a plain run of ASCII decimal digits. The ``int()``
+    builtin is looser — it also accepts PEP 515 underscore separators
+    (``"1_0"`` becomes 10), a leading sign (``"+5"``) and non-ASCII decimal
+    digits (``"١٢٣"`` becomes 123) — and a mangled count silently
+    miscounts the served tokens.
     """
     if isinstance(value, bool):
         return None
@@ -118,10 +124,8 @@ def coerce_int(value) -> int | None:
         # 12.0 is a serialization of 12; 12.5 is garbage.
         return int(value) if math.isfinite(value) and int(value) == value else None
     if isinstance(value, str):
-        try:
-            return int(value.strip())
-        except ValueError:
-            return None
+        text = value.strip()
+        return int(text) if text.isascii() and text.isdecimal() else None
     return None
 
 

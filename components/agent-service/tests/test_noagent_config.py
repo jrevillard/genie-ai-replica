@@ -7,6 +7,7 @@ conventions and answer their documented defaults when unset.
 """
 
 import dataclasses
+import logging
 
 import pytest
 
@@ -87,6 +88,24 @@ def test_enforce_abstention_predicate_is_the_deployed_exact_match():
     assert NoAgentConfig.load(env={"CHATQNA_ENFORCE_ABSTENTION": "TRUE"}).enforce_abstention is True
     assert NoAgentConfig.load(env={"CHATQNA_ENFORCE_ABSTENTION": "0"}).enforce_abstention is False
     assert NoAgentConfig.load(env={"CHATQNA_ENFORCE_ABSTENTION": "garbage"}).enforce_abstention is False
+
+
+def test_answer_translation_flag_follows_the_0_1_convention(caplog):
+    """The feature flag reads the repository's 0/1 flag convention: `1`
+    enables it (a flag set by the documented convention and silently off
+    would leave the operator with no signal), `true` still enables it, and
+    a malformed value falls back to the default with a warning naming the
+    knob. The abstention guardrail keeps its own deployed exact-match
+    predicate — widening THAT one would enable a guardrail the deployed
+    service leaves off."""
+    assert NoAgentConfig.load(env={}).answer_translation_enabled is False
+    assert NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "1"}).answer_translation_enabled is True
+    assert NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "true"}).answer_translation_enabled is True
+    assert NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "0"}).answer_translation_enabled is False
+    assert NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "false"}).answer_translation_enabled is False
+    assert NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "garbage"}).answer_translation_enabled is False
+    warnings = [record for record in caplog.records if "AGENT_ANSWER_TRANSLATION_ENABLED" in record.getMessage()]
+    assert warnings and warnings[0].levelno == logging.WARNING
 
 
 def test_prompt_overrides_ride_the_config_verbatim():

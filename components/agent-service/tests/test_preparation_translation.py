@@ -64,6 +64,16 @@ class TestCoerceInt:
         assert coerce_int(None) is None
         assert coerce_int([]) is None
 
+    def test_a_digit_string_is_a_plain_run_of_ascii_digits(self):
+        """The int() builtin also accepts PEP 515 separators, a leading sign
+        and non-ASCII decimal digits — each of them a mangled count that
+        would silently miscount the served tokens."""
+        assert coerce_int("1_000") is None
+        assert coerce_int("+5") is None
+        assert coerce_int("-5") is None
+        assert coerce_int("١٢٣") is None
+        assert coerce_int("") is None
+
 
 class TestOverflowClassification:
     def test_the_recorded_markers(self):

@@ -41,7 +41,20 @@ VM_PF=$!
 kubectl -n "$NS" port-forward svc/genieai-grafana-service 3000:80 >/tmp/grafana-pf.log 2>&1 &
 GF_PF=$!
 trap 'kill $VT_PF $VM_PF $GF_PF 2>/dev/null' EXIT
-sleep 6
+# The port-forwards need a moment (and kubectl binds lazily) — poll until
+# each endpoint answers, so the verification never reads a connection error
+# as "no traces".
+wait_for() {
+  local url="$1" i
+  for i in $(seq 1 30); do
+    if curl -s -o /dev/null --max-time 3 "$url"; then return 0; fi
+    sleep 2
+  done
+  echo "WARN: $url did not answer within the wait window"
+}
+wait_for "http://127.0.0.1:10428/select/jaeger/api/services"
+wait_for "http://127.0.0.1:8428/api/v1/query?query=up"
+wait_for "http://127.0.0.1:3000/api/health"
 
 echo "--- 1. VictoriaTraces: the agent-service spans (Jaeger query API)"
 curl -s "http://127.0.0.1:10428/select/jaeger/api/traces?service=agent-service&start=${START_US}&end=${END_US}&limit=100" \
@@ -55,20 +68,24 @@ except Exception as e:
 traces=d.get('data') or []
 print(f'traces: {len(traces)}')
 n_span=0
+names={}
 for t in traces:
     procs=t.get('processes') or {}
-    for sid, sp in (t.get('spans') or {}).items():
+    for sp in (t.get('spans') or []):
         n_span+=1
         proc=procs.get(sp.get('processID'),{}).get('serviceName','?')
         refs=sp.get('references') or []
         parent=refs[0].get('spanID') if refs else None
+        op=sp.get('operationName')
+        names[op]=names.get(op,0)+1
         tags={t2.get('key'):t2.get('value') for t2 in (sp.get('tags') or [])}
         interesting={k:v for k,v in tags.items() if k in (
             'genie.agent.tool','genie.agent.model','agent.run_id','genie.agent.step',
             'genie.agent.evidence_bytes','genie.agent.tool_calls','genie.agent.model_calls',
             'genie.agent.total_tokens','service.name','genie.agent.outcome')}
-        print(f"  span {sid} | {sp.get('operationName')} | svc={proc} | parent={parent} | {interesting}")
+        print(f"  span {sp.get('spanID')} | {op} | svc={proc} | parent={parent} | {interesting}")
 print(f'spans total: {n_span}')
+print('span names:', names)
 PY
 
 echo "--- 2. the same through the Grafana datasource path (proxy -> jaeger)"
@@ -88,7 +105,7 @@ except Exception as e:
 traces=d.get('data') or []
 print(f'proxied traces: {len(traces)}')
 for t in traces:
-    ops=[sp.get('operationName') for sp in (t.get('spans') or {}).values()]
+    ops=[sp.get('operationName') for sp in (t.get('spans') or [])]
     print('  trace', t.get('traceID'), 'spans:', len(ops), sorted(set(ops))[:12])
 PY
 fi
@@ -125,7 +142,7 @@ for x in d:
     print(f"  {x.get('title')} (uid={x.get('uid')}, folder={x.get('folderTitle','')})")
 PY
   echo "  -- the service-health dashboard's service discovery query"
-  curl -s -u "admin:${GRAFANA_TOKEN}" "http://127.0.0.1:3000/api/dashboards/uid/service-health" \
+  curl -s -u "admin:${GRAFANA_TOKEN}" "http://127.0.0.1:3000/api/dashboards/uid/genieai-service-health" \
     -o /tmp/grafana-service-health.json -w "  dashboard http=%{http_code}\n"
   python3 - <<'PY'
 import json,re

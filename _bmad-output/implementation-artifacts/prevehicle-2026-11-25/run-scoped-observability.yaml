@@ -28229,6 +28229,8 @@ spec:
       requests:
         storage: "5Gi"
   replicaCount: 1
+  extraArgs:
+    fs.disableMmap: 'true'
 ---
 # Source: genieai-umbrella/templates/observability/vtsingle.yaml
 apiVersion: operator.victoriametrics.com/v1
@@ -28255,3 +28257,5 @@ spec:
       requests:
         storage: "20Gi"
   replicaCount: 1
+  extraArgs:
+    fs.disableMmap: 'true'

@@ -8,6 +8,11 @@ change requires manual action from deployers.
 
 ## Unreleased
 
+## v3.0.0 → v3.1.0
+
+v3.1.0 carries breaking changes across deployment, configuration and
+API. Read this section in full before upgrading.
+
 ### Breaking Changes
 
 #### Keycloak moves to 26.8.2 — the runtime fix for CVE-2026-114938 ("Java4Shell")
@@ -235,6 +240,18 @@ service module — most deployments need no change). A file left in the old
 flat shape is refused: the chatqna service logs an error and answers every
 request in English.
 
+#### The OKF model listing follows the chat path's URL rule
+
+The OKF admin panel lists the models of a saved configuration at
+`{base}/models` when the base carries no version segment; it now lists at
+`{base}/v1/models` — the one rule the chat call uses, so the listing and
+the chat can never disagree about where `/v1` goes.
+
+**Migration**: a saved configuration whose base serves the model list at the
+root (`http://my-proxy:8080/models`) must carry its version segment
+(`http://my-proxy:8080/v1`). The chat call already resolved that base with
+the `/v1` prefix, so only the listing path changes.
+
 ---
 
 ## v2.1.0 → v3.0.0
@@ -315,18 +332,6 @@ Knowledge Hierarchy tab of the Admin Dashboard (or
 `services` and `categoryServices` before running the script, and back on
 afterwards); read `GET /api/analytics/dashboard` instead of the removed
 route.
-
-#### The OKF model listing follows the chat path's URL rule
-
-The OKF admin panel lists the models of a saved configuration at
-`{base}/models` when the base carries no version segment; it now lists at
-`{base}/v1/models` — the one rule the chat call uses, so the listing and
-the chat can never disagree about where `/v1` goes.
-
-**Migration**: a saved configuration whose base serves the model list at the
-root (`http://my-proxy:8080/models`) must carry its version segment
-(`http://my-proxy:8080/v1`). The chat call already resolved that base with
-the `/v1` prefix, so only the listing path changes.
 
 #### The deployment vLLM bearer no longer reaches foreign endpoints
 

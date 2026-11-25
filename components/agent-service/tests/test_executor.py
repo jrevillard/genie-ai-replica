@@ -349,9 +349,7 @@ def test_search_threads_the_abstention_sink_into_the_inner_port():
     (config B) records, not a null reason beside it."""
     reasons = []
     inner = FakeSearchPort()
-    result = asyncio.run(
-        executor(search=inner).search_knowledge(ctx(), QUERY, BUDGET, abstention_sink=reasons.append)
-    )
+    result = asyncio.run(executor(search=inner).search_knowledge(ctx(), QUERY, BUDGET, abstention_sink=reasons.append))
     assert result.outcome is OutcomeCode.INSUFFICIENT_EVIDENCE
     # The sink travelled WITH the call to the inner port...
     assert inner.calls[-1]["abstention_sink"] is not None

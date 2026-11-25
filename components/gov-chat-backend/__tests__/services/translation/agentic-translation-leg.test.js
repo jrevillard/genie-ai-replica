@@ -1,5 +1,3 @@
-const { EventEmitter } = require('events');
-
 // The markdown libraries are ESM-only (the leg loads them through a lazy
 // require, which the jest VM resolves to these virtual mocks). The suite
 // replaces them with a minimal mdast-shaped pipeline whose behavior is
@@ -62,7 +60,6 @@ jest.mock('remark-parse', () => ({ default: {} }), { virtual: true });
 jest.mock('remark-stringify', () => ({ default: {} }), { virtual: true });
 jest.mock('unist-util-visit', () => ({ visit: mockMiniMarkdown.visit }), { virtual: true });
 
-const http = require('http');
 const { logger } = require('../../../shared-lib');
 const {
   createAgenticTranslationLeg,

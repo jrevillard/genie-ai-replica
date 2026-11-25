@@ -63,7 +63,7 @@ function serveTranslationHttp({ health = {}, models = {}, chat = {} } = {}) {
     const { req, res } = createRequestDouble({
       captureWrite: (chunk) => {
         if (path.includes('/chat/completions')) chatWrites.push(JSON.parse(chunk));
-      },
+      }
     });
     req.end = jest.fn();
     process.nextTick(() => {
@@ -77,10 +77,7 @@ function serveTranslationHttp({ health = {}, models = {}, chat = {} } = {}) {
         if (health.emitErrorAfterMs) {
           // Answers with an error on a later tick — past the budget timer
           // a won race would have settled on.
-          setTimeout(
-            () => req.emit('error', new Error('connect ETIMEDOUT after the budget')),
-            health.emitErrorAfterMs
-          );
+          setTimeout(() => req.emit('error', new Error('connect ETIMEDOUT after the budget')), health.emitErrorAfterMs);
           return;
         }
         if (health.emitError) {

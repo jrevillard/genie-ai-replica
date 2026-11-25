@@ -1,5 +1,3 @@
-const { EventEmitter } = require('events');
-
 // The additive integration pin (NO BFF
 // production change): the answer-translation leg, asserted against the
 // CANONICAL run usage record the agent-service emits — the terminal frame's
@@ -51,7 +49,6 @@ jest.mock(
   { virtual: true }
 );
 
-const http = require('http');
 const { createAgenticTranslationLeg } = require('../../../services/translation/agentic-translation-leg');
 const { computeResidual, planTranslation } = require('../../../services/agent-residual-budget');
 const { serveTranslationHttp } = require('../../helpers/translation-http-stub');

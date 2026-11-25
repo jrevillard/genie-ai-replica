@@ -581,12 +581,24 @@ describe('GpuTranslateBackend usage-returning entry point and per-call options (
   it('shrinks the timeout across texts so a later one cannot start past the deadline', async () => {
     const probe = serveHola();
     // A 50ms budget with two texts: after the first call the elapsed time is
-    // subtracted before the second request is built. Both requests carry a
-    // positive, non-increasing timeout bounded by the caller's value.
+    // subtracted before the second request is built. The wall clock advances
+    // a readable step on EVERY Date.now read, so the shrink is discriminable
+    // even when the two requests are built inside one real millisecond — the
+    // second timeout is STRICTLY smaller than the first, and a production
+    // that skipped the elapsed subtraction would build two equal timeouts
+    // and turn this red.
+    const realNow = Date.now.bind(Date);
+    let reads = 0;
+    const dateSpy = jest.spyOn(Date, 'now').mockImplementation(() => {
+      reads += 1;
+      return realNow() + reads * 10;
+    });
     await backend.translateWithUsage(['Hello', 'world'], 'en', 'es', { timeoutMs: 50 });
+    dateSpy.mockRestore();
     expect(probe.capturedOpts).toHaveLength(2);
     expect(probe.capturedOpts[0].timeout).toBeLessThanOrEqual(50);
     expect(probe.capturedOpts[1].timeout).toBeLessThanOrEqual(probe.capturedOpts[0].timeout);
+    expect(probe.capturedOpts[1].timeout).toBeLessThan(probe.capturedOpts[0].timeout);
     expect(probe.capturedOpts[1].timeout).toBeGreaterThan(0);
   });
 

@@ -226,8 +226,11 @@ def as_label_list(value) -> list[str]:
     compares the two legs' scopes as sets — so the dedup carries no scope
     meaning.
 
-    ONE documented divergence, on the SERVICE field: the server takes its
-    service branch on any service label that is not ``None`` and not ``""``
+    TWO documented divergences. The DEDUP: the server's filter builder
+    dedups the labels it builds while this coercion keeps the request's own
+    list — no scope meaning, the report compares the legs' scopes as sets.
+    The SERVICE field: the server takes its service branch on any service
+    label that is not ``None`` and not ``""``
     — a falsy ``0`` keeps the branch and ECLIPSES the declared category, so
     the server's filter ends up EMPTY (the retriever runs unfiltered). This
     coercion drops the falsy service label, so the protocol's record of the

@@ -419,7 +419,12 @@ def _prepare_anchor_bearer() -> None:
 
     if not run_eval._refresh_configured():
         return
-    run_eval._token_ts = time.time()
+    # The seed reads THE ANCHOR'S OWN clock (run_eval.time): the TTL check
+    # reads that module's clock, and a seed taken from another module's
+    # `time` silently splits the clock in two — under any module-scoped
+    # clock fake the seeded elapsed time goes negative and the run never
+    # refreshes.
+    run_eval._token_ts = run_eval.time.time()
     if not os.getenv("E2E_BEARER_TOKEN"):
         run_eval._maybe_refresh_token(force=True)
 

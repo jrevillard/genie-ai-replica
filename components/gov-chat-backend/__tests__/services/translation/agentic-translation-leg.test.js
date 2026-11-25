@@ -832,9 +832,18 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(r.text).toBeNull();
       expect(r.queryTranslationStatus).toBe('fallback_error');
       expect(r.error).toBeInstanceOf(Error);
-      expect(r.accounting).toEqual(
-        expect.objectContaining({ outcome: 'failed', queryTranslationStatus: 'fallback_error' })
-      );
+      // The defect path returns the FULL accounting block — the shape the
+      // callers persist, not a two-field stub.
+      expect(r.accounting).toEqual({
+        backend: 'gpu-vllm',
+        decision: 'translate',
+        status: null,
+        outcome: 'failed',
+        queryTranslationStatus: 'fallback_error',
+        usage: null,
+        configError: null,
+        mode: 'full-answer'
+      });
     });
 
     it('a leg resolving a non-object outcome maps onto the failed fallback, never raises', async () => {
@@ -846,9 +855,16 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(r.failed).toBe(true);
       expect(r.text).toBeNull();
       expect(r.queryTranslationStatus).toBe('fallback_error');
-      expect(r.accounting).toEqual(
-        expect.objectContaining({ outcome: 'failed', queryTranslationStatus: 'fallback_error' })
-      );
+      expect(r.accounting).toEqual({
+        backend: 'gpu-vllm',
+        decision: 'translate',
+        status: null,
+        outcome: 'failed',
+        queryTranslationStatus: 'fallback_error',
+        usage: null,
+        configError: null,
+        mode: 'full-answer'
+      });
     });
 
     it('a leg resolving without an accounting block still delivers a classifiable status', async () => {

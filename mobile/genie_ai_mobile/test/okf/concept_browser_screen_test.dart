@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
@@ -319,8 +320,8 @@ void main() {
     (tester) async {
       final body = List.generate(
         120,
-        (i) => '## Heading $i\n\nParagraph $i ${'z' * 280}.\n\n',
-      ).join(); // ~36k chars -> ~9 chunks at 4000
+        (i) => '## Heading $i\n\nParagraph $i ${'z' * 130}.\n\n',
+      ).join(); // ~19k chars -> ~5 chunks at 4096 (under the 20k preview cap)
       fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
       fake.cardsByRepo['repo-a'] = {
         'c1': card(
@@ -337,7 +338,7 @@ void main() {
       final chunks = chunkMarkdownBody(body);
       expect(chunks.length, greaterThan(3));
       // The first chunk is on screen and keyed; the viewport only ever
-      // parses the visible slice of a 36k body.
+      // parses the visible slice of a 19k body.
       expect(
         find.byKey(const ValueKey('okf-browser-md-chunk-0')),
         findsOneWidget,
@@ -362,8 +363,59 @@ void main() {
       }
       expect(scrolled, isTrue, reason: 'the chips tail follows the full body');
       expect(find.text('Heading 119', findRichText: true), findsOneWidget);
+      // Under the preview cap: nothing was dropped, so no notice.
+      expect(
+        find.byKey(const ValueKey('okf-browser-truncated-notice')),
+        findsNothing,
+      );
     },
   );
+
+  testWidgets(
+    // #2169: the pane renders a BOUNDED preview. A concept may carry up to
+    // the deployment's ceiling (~250 000 characters); the pane shows the
+    // first 20 000 and says so — the user learns the document continues
+    // instead of believing it ended here.
+    'an over-long body renders a bounded preview with the truncation notice',
+    (tester) async {
+      final body = List.generate(
+        100,
+        (i) => 'Paragraph $i ${'z' * 280}.\n\n',
+      ).join(); // ~30k chars -> past the 20k preview cap
+      fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
+      fake.cardsByRepo['repo-a'] = {'c1': card('repo-a', 'c1', body: body)};
+      await pumpBrowser(tester);
+      await tester.tap(find.text('Title c1'));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('okf-browser-truncated-notice')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('a fenced code block is never broken by the preview bound', (
+    tester,
+  ) async {
+    // The runs inside a fenced block are DATA (a base64 blob, a hex
+    // digest): a soft space every 500 characters makes the blob
+    // undecodable, and the truncation notice does not say the preview
+    // rewrote it.
+    final blob = 'A' * 1200;
+    final body = 'Intro\n\n```\n$blob\n```\n\nTail';
+    fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
+    fake.cardsByRepo['repo-a'] = {'c1': card('repo-a', 'c1', body: body)};
+    await pumpBrowser(tester);
+    await tester.tap(find.text('Title c1'));
+    await tester.pump();
+
+    final rendered = tester
+        .widgetList<MarkdownBody>(find.byType(MarkdownBody))
+        .map((body) => body.data)
+        .join();
+    expect(rendered, contains(blob));
+  });
 
   testWidgets('a single-paragraph body still renders exactly one chunk', (
     tester,

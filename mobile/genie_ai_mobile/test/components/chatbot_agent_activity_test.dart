@@ -87,7 +87,11 @@ class _RestoredVerdictMockClient extends ChatbotMockClient {
 /// root translationFailed latch — the two inputs the JSON path's truth
 /// table and caption must read.
 class _QueriesJsonMockClient extends QuickHelpTreeMockClient {
-  _QueriesJsonMockClient(super.tree);
+  _QueriesJsonMockClient(super.tree, {this.translationFailed = true});
+
+  /// The root translation latch the JSON path reads. Null = the backend
+  /// reported no failure at all (an answer that was never translated).
+  final bool? translationFailed;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -95,13 +99,39 @@ class _QueriesJsonMockClient extends QuickHelpTreeMockClient {
       return httpResponseJson(<String, dynamic>{
         'queryId': 'q-json',
         'response': 'Answer text',
-        'translationFailed': true,
+        if (translationFailed != null) 'translationFailed': translationFailed,
         'metadata': <String, dynamic>{
           'sources': <dynamic>[],
           'confidence_score': 0.9,
           'is_grounded': false,
         },
       }, 201);
+    }
+    return super.send(request);
+  }
+}
+
+/// The JSON client that also plays the SAVE side: every messages-post body
+/// is captured — the record the restore reads.
+class _SavingJsonMockClient extends _QueriesJsonMockClient {
+  _SavingJsonMockClient(super.tree, {super.translationFailed});
+
+  final List<Map<String, dynamic>> savedMessageBodies = [];
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.method == 'POST' &&
+        request.url.path.endsWith('/api/chat/conversations')) {
+      return httpResponseJson(<String, dynamic>{'_key': 'conv-save'}, 200);
+    }
+    if (request.method == 'POST' &&
+        request.url.path.contains('/api/chat/conversations/') &&
+        request.url.path.endsWith('/messages')) {
+      savedMessageBodies.add(
+        jsonDecode(utf8.decode((request as http.Request).bodyBytes))
+            as Map<String, dynamic>,
+      );
+      return httpResponseJson(<String, dynamic>{'_id': 'm-saved'}, 200);
     }
     return super.send(request);
   }
@@ -663,6 +693,132 @@ void main() {
     },
   );
 
+  /// Mounts the saving mock, feeds [frames], saves the conversation and
+  /// returns the assistant message's saved metadata map — the record the
+  /// restore reads (isTranslationFailed).
+  Future<Map<String, dynamic>> savedMetadataOf(
+    WidgetTester tester,
+    List<Map<String, dynamic>> frames,
+  ) async {
+    final chatKey = GlobalKey<ChatBotComponentState>();
+    final saving = _SavingStreamMockClient(tree);
+    final controller = await mountStreaming(
+      tester,
+      mock: saving,
+      chatKey: chatKey,
+    );
+
+    controller.add(_frames(frames));
+    await controller.close();
+    await tester.pumpAndSettle();
+
+    await chatKey.currentState!.saveConversation();
+    await tester.pumpAndSettle();
+
+    final assistantBodies = saving.savedMessageBodies
+        .where((body) => body['metadata'] != null)
+        .toList();
+    expect(assistantBodies, hasLength(1));
+    return assistantBodies.single['metadata'] as Map<String, dynamic>;
+  }
+
+  testWidgets(
+    'the save omits translation_status when no translation was delivered',
+    (tester) async {
+      // The field is PRESENCE-KEYED: the key is present only when a
+      // translation was actually attempted. A turn that never translated
+      // (an English UI, a skipped translation) carries no key at all —
+      // stamping 'ok' there claimed a translation that never happened.
+      final metadata = await savedMetadataOf(tester, [
+        {'type': 'chunk', 'content': 'Answer'},
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+        },
+        {'type': 'done', 'queryId': 'q-no-translation'},
+      ]);
+
+      expect(metadata.containsKey('translation_status'), isFalse);
+    },
+  );
+
+  testWidgets(
+    'the save carries the query-translation status the done frame reported',
+    (tester) async {
+      // The V05 status rides the DONE frame: the metadata frame is written
+      // before the translation settles (the sources must reach the client
+      // with the answer), so the terminal frame is the live carrier.
+      final metadata = await savedMetadataOf(tester, [
+        {'type': 'chunk', 'content': 'Answer'},
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+        },
+        {
+          'type': 'done',
+          'queryId': 'q-status',
+          'queryTranslationStatus': 'fallback_timeout',
+        },
+      ]);
+
+      expect(metadata['query_translation_status'], 'fallback_timeout');
+    },
+  );
+
+  testWidgets('the save stamps ok when the translation was delivered', (
+    tester,
+  ) async {
+    // The whole-answer translation frame IS the delivery ('post-stream').
+    final metadata = await savedMetadataOf(tester, [
+      {'type': 'chunk', 'content': 'The verified English answer'},
+      {
+        'type': 'metadata',
+        'source_documents': <dynamic>[],
+        'confidence_score': 0.9,
+        'grounding_status': 'grounded',
+        'is_grounded': true,
+      },
+      {'type': 'translation', 'content': 'La réponse vérifiée'},
+      {'type': 'done', 'queryId': 'q-translated'},
+    ]);
+
+    expect(metadata['translation_status'], 'ok');
+  });
+
+  testWidgets(
+    'the save stamps ok when the verdict reported relayed translated units',
+    (tester) async {
+      // The relay path: the translated units were the delivery
+      // ('streaming-units' on the verdict frame).
+      final metadata = await savedMetadataOf(tester, [
+        {'type': 'chunk', 'content': 'Réponse'},
+        {
+          'type': 'agent_verdict',
+          'version': 1,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+          'translation_mode': 'streaming-units',
+        },
+        {
+          'type': 'metadata',
+          'source_documents': <dynamic>[],
+          'confidence_score': 0.9,
+          'grounding_status': 'grounded',
+          'is_grounded': true,
+        },
+        {'type': 'done', 'queryId': 'q-streaming-units'},
+      ]);
+
+      expect(metadata['translation_status'], 'ok');
+    },
+  );
+
   testWidgets(
     'the save uploads the answer-translation outcome the restore reads',
     (tester) async {
@@ -910,6 +1066,42 @@ void main() {
       // settle would never return.
       await tester.pump();
       expect(tester.widget<Text>(find.text('Reading source…')).maxLines, 1);
+    },
+  );
+
+  testWidgets(
+    'the JSON lane never stamps ok when the backend recorded no translation',
+    (tester) async {
+      // The backend's own key is presence-keyed: it carries 'ok' when a
+      // translation was delivered and stays ABSENT when none was. The
+      // mobile must not write an 'ok' on its own — that would claim a
+      // translation that never happened (the streaming path's rule).
+      usePhoneSurface(tester);
+      mockChatbotConfigAsset(tester, config);
+      final chatKey = GlobalKey<ChatBotComponentState>();
+      final jsonMock = _SavingJsonMockClient(tree, translationFailed: null);
+      await pumpChatBot(
+        tester,
+        jsonMock,
+        chatKey: chatKey,
+        queriesApi: QueriesApi(ApiClient()..client = jsonMock),
+      );
+      await tester.tap(find.text('Births Card'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'question');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      await chatKey.currentState!.saveConversation();
+      await tester.pumpAndSettle();
+
+      final assistantBodies = jsonMock.savedMessageBodies
+          .where((body) => body['metadata'] != null)
+          .toList();
+      expect(assistantBodies, hasLength(1));
+      final metadata =
+          assistantBodies.single['metadata'] as Map<String, dynamic>;
+      expect(metadata.containsKey('translation_status'), isFalse);
     },
   );
 

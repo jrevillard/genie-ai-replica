@@ -3,8 +3,15 @@
 // The BFF's answer-translation leg for the agentic path.
 //
 // The legacy path (translation-service.js + query-routes.js) keeps its
-// deployed behavior untouched — this module is additive shared code that only
-// the agentic route consumes. Three rules shape it:
+// deployed behavior untouched — this module is additive shared code the
+// AGENTIC entries consume: the streaming terminal's post-stream whole-answer
+// translation (the frame writer's terminal, when the streaming relay is off)
+// and the non-streaming JSON entry. The STREAMING-UNIT mode is not the
+// leg's: the relay translates the units before the run's terminal usage
+// record exists, and the residual plan needs that record — the relay
+// therefore stays on the request-resolved translator (the drift a reader
+// must know about: the leg's unit mode has no production consumer).
+// Three rules shape it:
 //
 // 1. GPU-only, keyed on the routing decision. The leg is constructed with
 //    the routing decision as an explicit input and serves only the agentic
@@ -46,7 +53,7 @@
 // budget-accounted, so every answer is served by not caching.
 
 const { logger, parsePositiveInt } = require('../../shared-lib');
-const { planTranslation, SKIP_STATUSES } = require('../agent-residual-budget');
+const { planTranslation, SKIP_STATUSES, usageAvailable } = require('../agent-residual-budget');
 const GpuTranslateBackend = require('./gpu-translate-backend');
 const { normalizeInlineSpacing } = require('./markdown-normalize');
 const { splitEdges } = require('./text-edges');
@@ -157,38 +164,24 @@ function skipAccounting(
 }
 
 /**
- * Whether the run's terminal usage record can bound anything. The same
- * degradation rule `computeResidual` applies: a missing record, or one with
- * a non-finite token field or call-count field, bounds nothing — translation
- * is skipped, and the run's usage is never estimated up to the allowance.
- * The call counts are checked too: a string `model_calls` would poison the
- * call-allowance arithmetic (`NaN` remaining) and silently unbound it.
- * @param {Object|null} runUsage
- * @returns {boolean}
- */
-function runUsageAvailable(runUsage) {
-  return (
-    runUsage !== null &&
-    runUsage !== undefined &&
-    Number.isFinite(runUsage.prompt_tokens) &&
-    Number.isFinite(runUsage.completion_tokens) &&
-    Number.isFinite(runUsage.model_calls) &&
-    Number.isFinite(runUsage.aux_model_calls)
-  );
-}
-
-/**
  * The usage the plan sees: the run's record plus what the leg itself has
  * spent so far (the leg's own calls are auxiliary model calls, and its
  * tokens are counted where the endpoint served them or estimated where it
  * discarded them — an estimate that accounts for SPENT work, never one that
  * inflates an allowance).
+ *
+ * The availability rule is the SHARED one (agent-residual-budget.js
+ * `usageAvailable` — the same predicate the residual contract applies): a
+ * missing record, or one with a non-finite token field or call-count field,
+ * bounds nothing — the plan skips and the run's usage is never estimated up
+ * to the allowance. ONE home for the rule: this gate and the residual
+ * contract cannot disagree about what "available" means.
  * @param {Object|null} runUsage
  * @param {{promptTokens: number, completionTokens: number, calls: number}} spent
  * @returns {Object|null} null when the run's record is unavailable
  */
 function mergedPlanUsage(runUsage, spent) {
-  if (!runUsageAvailable(runUsage)) return null;
+  if (!usageAvailable(runUsage)) return null;
   return {
     prompt_tokens: runUsage.prompt_tokens + spent.promptTokens,
     completion_tokens: runUsage.completion_tokens + spent.completionTokens,
@@ -704,10 +697,18 @@ async function translateWholeAnswerWithLeg(leg, { text, remainingMs, signal }) {
     text: result.outcome === 'translated' ? result.translated : null,
     failed: result.outcome === 'failed',
     queryTranslationStatus: accounting?.queryTranslationStatus ?? V05_STATUS.FALLBACK_ERROR,
-    accounting: accounting || {
-      outcome: result.outcome ?? 'failed',
-      queryTranslationStatus: V05_STATUS.FALLBACK_ERROR
-    },
+    // The defect path (the leg rejected past its contract, or resolved a
+    // non-object): the accounting block keeps the SHAPE the callers persist
+    // — built through the same home as every other block, not a two-field
+    // stub that would leave the persisted record unreadable.
+    accounting:
+      accounting ||
+      accountingBlock({
+        decision: 'translate',
+        outcome: result.outcome ?? 'failed',
+        queryTranslationStatus: V05_STATUS.FALLBACK_ERROR,
+        mode: MODE_FULL
+      }),
     error
   };
 }

@@ -748,6 +748,44 @@ describe('ChatBotComponent', () => {
       expect(msg.isGrounded).toBe(true);
       expect(msg.userFeedback).toBe('up');
     });
+
+    it('restores the answer-translation outcome: the live warning survives the reload', async () => {
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        messages: [
+          { sender: 'user', content: 'q' },
+          {
+            sender: 'assistant',
+            content: 'failed answer',
+            queryId: 'q-2',
+            metadata: { translation_status: 'failed' }
+          },
+          {
+            sender: 'assistant',
+            content: 'translated answer',
+            queryId: 'q-3',
+            metadata: { translation_status: 'ok' }
+          },
+          {
+            sender: 'assistant',
+            content: 'english answer',
+            queryId: 'q-4',
+            metadata: { is_grounded: true }
+          }
+        ]
+      });
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      await wrapper.vm.loadExistingConversation('conv-1');
+      await flushPromises();
+      const byContent = (content) => wrapper.vm.openMessages.find((m) => m.content === content);
+      // Only an attempted-and-failed translation is a warning — the key is
+      // presence-keyed ('ok' and absent are not failures).
+      expect(byContent('failed answer').translationFailed).toBe(true);
+      expect(byContent('translated answer').translationFailed).toBe(false);
+      expect(byContent('english answer').translationFailed).toBe(false);
+      wrapper.unmount();
+    });
   });
 
   // #1817 — the restore rebuilds the citations the live path had: per-message
@@ -6722,6 +6760,29 @@ describe('W9 browse affordance (answer cards)', () => {
         // A message with no mode on it saves none — legacy turns persist
         // metadata with nothing added.
         expect(wrapper.vm.storableMetadata({ metadata: { is_grounded: false } }).translation_mode).toBeUndefined();
+        wrapper.unmount();
+      });
+
+      it('persistence records the answer-translation outcome, presence-keyed', () => {
+        const wrapper = createChatBotWrapper({});
+        // A delivered translation: the key says so.
+        expect(wrapper.vm.storableMetadata({ metadata: {}, translationMode: 'post-stream' }).translation_status).toBe(
+          'ok'
+        );
+        expect(
+          wrapper.vm.storableMetadata({ metadata: {}, translationMode: 'streaming-units' }).translation_status
+        ).toBe('ok');
+        // An attempted-and-failed translation: the warning's own fact.
+        expect(
+          wrapper.vm.storableMetadata({ metadata: {}, translationMode: 'post-stream', translationFailed: true })
+            .translation_status
+        ).toBe('failed');
+        // No translation asked for, none delivered: the key stays ABSENT —
+        // it must never claim a translation that never happened.
+        expect(wrapper.vm.storableMetadata({ metadata: {} }).translation_status).toBeUndefined();
+        expect(
+          wrapper.vm.storableMetadata({ metadata: {}, translationMode: 'none' }).translation_status
+        ).toBeUndefined();
         wrapper.unmount();
       });
 

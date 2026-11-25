@@ -83,4 +83,29 @@ void main() {
     expect(screen.repoId, 'repo-9');
     expect(screen.initialConceptId, 'svc');
   });
+
+  testWidgets('an OKF citation row without a repo id resolves it live', (
+    tester,
+  ) async {
+    // #2169: the citation row carries the concept id but no repo_id (the
+    // backend did not resolve the repository). The sidebar's opener resolves
+    // it through okf-server and opens the browser anyway.
+    fake.repoByConcept['svc'] = 'repo-9';
+    fake.pagesByRepo['repo-9'] = page(1, [row('svc')]);
+    const doc = {
+      'source': 'okf-concept',
+      'concept_id': 'svc',
+      'document_name': 'Service Directory',
+    };
+    await pumpSidebar(tester, documents: [doc]);
+
+    await tester.tap(find.text('Service Directory'));
+    await tester.pumpAndSettle();
+    expect(fake.resolveCalls, 1);
+    final screen = tester.widget<ConceptBrowserScreen>(
+      find.byType(ConceptBrowserScreen),
+    );
+    expect(screen.repoId, 'repo-9');
+    expect(screen.initialConceptId, 'svc');
+  });
 }

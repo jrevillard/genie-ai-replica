@@ -216,6 +216,11 @@ const emptyStreamMetadata = () => ({
  *   Carried with `finished_at` on the assembled
  *   block; the BFF-terminal paths write theirs through the outcome patch
  *   instead (query-service persistAgentRunOutcome).
+ * @param {string[]|null} [params.filterLabels] - The scope the run applied
+ *   (`requested_labels` — the request's own narrowing). Recorded so the doc
+ *   states the scope instead of the base's "not recorded" null; an empty
+ *   array is the honest "ran unfiltered", the same value the noagent lane
+ *   records. Omitted (or null) keeps the base's null.
  * @returns {Object}
  */
 function assembleAgentMetadata({
@@ -224,11 +229,15 @@ function assembleAgentMetadata({
   runId,
   usageRecord,
   runStart,
-  outcome
+  outcome,
+  filterLabels
 }) {
   // ONE deliberate override on the legacy empty-stream base:
   // analytics vocabulary parity with the legacy answered path.
   const metadata = { ...baseFactory(), abstained: false };
+  if (Array.isArray(filterLabels)) {
+    metadata.filter_labels = [...filterLabels];
+  }
   if (verdict) {
     metadata.grounding_status = verdict.grounding_status;
     metadata.is_grounded = verdict.is_grounded === true;
@@ -316,6 +325,12 @@ function seamRunOutcome(event, usageRecord) {
  */
 function createAgentRunAttribution({ queryService, queryId, logPrefix, gate }) {
   let outcomePersisted = false;
+  // The latched terminal fact (the first one wins). Exposed so a terminal
+  // that assembles its own metadata block can HONOR the latch instead of
+  // overwriting it: the success finalize replaces the whole `metadata`
+  // field, so a block assembled as `answered` would clobber a `timed_out`
+  // the deadline already declared.
+  let latchedOutcome = null;
   const fireAndForget = (write, event) => {
     Promise.resolve(write()).catch((err) =>
       logger.error(`${logPrefix}.attribution_persist_failed`, { queryId, event, error: err.message })
@@ -328,7 +343,16 @@ function createAgentRunAttribution({ queryService, queryId, logPrefix, gate }) {
     persistRunOutcome(outcome) {
       if (outcomePersisted || !outcome || !gate()) return;
       outcomePersisted = true;
+      latchedOutcome = outcome;
       fireAndForget(() => queryService.persistAgentRunOutcome(queryId, outcome), 'run_outcome');
+    },
+    /**
+     * The terminal outcome already latched (null when none was recorded).
+     *
+     * @returns {string|null}
+     */
+    latchedOutcome() {
+      return latchedOutcome;
     }
   };
 }
@@ -405,8 +429,12 @@ function readUpstreamBody(data, status) {
         status,
         error: error?.message
       });
-      settled = true;
-      resolve({ text: '', parsed: null });
+      // The buffered prefix is still the upstream's answer: a body that died
+      // mid-read has already received its head (the upstream's own error
+      // payload, typically), and discarding it would replace a NAMED refusal
+      // with the generic fallback. The same concat+parse as 'end'/'close'
+      // runs here — the settled flag keeps it to one run.
+      finish();
     });
   });
 }

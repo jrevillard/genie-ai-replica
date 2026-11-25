@@ -365,6 +365,23 @@ describe('TranslationService', () => {
     });
   });
 
+  describe('createMarkdownTranslator', () => {
+    it('carries the selected backend type — the caller can ask before it schedules a translation', () => {
+      // The agentic path's contract is GPU-only (AD-14): it must be able to
+      // ASK which backend would do the work before it commits to a
+      // translation, and the answer travels with the translator.
+      translationService.initialized = true;
+      translationService.backend = new CpuTranslateBackend();
+      translationService.backendType = 'cpu';
+      const cpuTranslator = translationService.createMarkdownTranslator('en', 'fr');
+      expect(cpuTranslator.backendType).toBe('cpu');
+      expect(typeof cpuTranslator.translate).toBe('function');
+
+      translationService.backendType = 'gpu';
+      expect(translationService.createMarkdownTranslator('en', 'fr').backendType).toBe('gpu');
+    });
+  });
+
   describe('translate', () => {
     it('should throw when not initialized', async () => {
       translationService.initialized = false;

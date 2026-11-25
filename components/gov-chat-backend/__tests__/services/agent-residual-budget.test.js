@@ -64,6 +64,20 @@ describe('computeResidual', () => {
     expect(residual.remainingTokens).toBeNull();
   });
 
+  it('treats a record without the call counts as unavailable (the call allowance cannot be bounded)', () => {
+    // ONE rule, shared with the leg's gate: all four fields must be finite.
+    // A missing call count leaves the call allowance unbounded — the strict
+    // rule is the honest one, and the two homes cannot disagree about it.
+    const residual = computeResidual({
+      deadline: { remainingMs: 3000 },
+      usage: { prompt_tokens: 10, completion_tokens: 5 },
+      allowances: ALLOWANCES
+    });
+    expect(residual.usageAvailable).toBe(false);
+    expect(residual.remainingTokens).toBeNull();
+    expect(residual.remainingCalls).toBeNull();
+  });
+
   it('refuses to compute without a deadline or without allowances', () => {
     expect(() => computeResidual({ usage: SERVED_USAGE, allowances: ALLOWANCES })).toThrow(/remainingMs/);
     expect(() => computeResidual({ deadline: { remainingMs: 1 }, usage: SERVED_USAGE })).toThrow(/allowances/);

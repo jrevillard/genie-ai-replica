@@ -136,9 +136,7 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
         { _key: 'rx-1', kind: 'ragas_suite', suite_key: 'rx-1', name: 'Benchmark B' }
       ]
     });
-    const err = await evalCtx
-      .deleteContext(doc._key, { actor: { user_id: 'u-admin' } })
-      .catch((e) => e);
+    const err = await evalCtx.deleteContext(doc._key, { actor: { user_id: 'u-admin' } }).catch((e) => e);
     expect(err.code).toBe('CONTEXT_IN_USE');
     expect(err.status).toBe(409);
     // The refusal NAMES what holds the context in place.
@@ -186,9 +184,9 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
   });
 
   test('updating or deleting a context that does not exist says CONTEXT_NOT_FOUND', async () => {
-    await expect(evalCtx.updateContext('ghost', { name: 'x' }, { actor: { user_id: 'u-admin' } })).rejects.toMatchObject(
-      { code: 'CONTEXT_NOT_FOUND', status: 404 }
-    );
+    await expect(
+      evalCtx.updateContext('ghost', { name: 'x' }, { actor: { user_id: 'u-admin' } })
+    ).rejects.toMatchObject({ code: 'CONTEXT_NOT_FOUND', status: 404 });
     await expect(evalCtx.deleteContext('ghost', { actor: { user_id: 'u-admin' } })).rejects.toMatchObject({
       code: 'CONTEXT_NOT_FOUND',
       status: 404

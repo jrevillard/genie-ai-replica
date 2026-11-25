@@ -394,16 +394,8 @@ router.post(
 // #2061 phase-4 amendment (David, 2026-11-25): contexts are MANAGEABLE —
 // rename/add/remove memberships (update) and delete, with the in-use guard
 // answering 409 CONTEXT_IN_USE naming the bound suites.
-router.post(
-  '/eval-contexts/:id/update',
-  evalContextController.requireSuperadmin,
-  evalContextController.updateContext
-);
-router.delete(
-  '/eval-contexts/:id',
-  evalContextController.requireSuperadmin,
-  evalContextController.deleteContext
-);
+router.post('/eval-contexts/:id/update', evalContextController.requireSuperadmin, evalContextController.updateContext);
+router.delete('/eval-contexts/:id', evalContextController.requireSuperadmin, evalContextController.deleteContext);
 
 // Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the governance
 // write is tools-admin only and audited before→after in the service.

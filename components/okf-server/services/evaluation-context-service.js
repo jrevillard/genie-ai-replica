@@ -615,7 +615,8 @@ async function updateContext(id, payload = {}, opts = {}) {
     if (!Array.isArray(payload.principal_refs) || payload.principal_refs.some((r) => typeof r !== 'string')) {
       throw new EvalContextError('INVALID_REFS', 'principal_refs must be an array of group names', 400);
     }
-    const changed = JSON.stringify([...payload.principal_refs].sort()) !== JSON.stringify([...doc.principal_refs].sort());
+    const changed =
+      JSON.stringify([...payload.principal_refs].sort()) !== JSON.stringify([...doc.principal_refs].sort());
     if (changed) {
       reResolved = await resolveContext({ scopes: doc.scopes, principal_refs: payload.principal_refs });
       if (reResolved.unreadable.length) {

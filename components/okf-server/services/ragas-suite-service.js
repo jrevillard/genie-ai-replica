@@ -3417,7 +3417,12 @@ async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
   // "no explain found" for minutes. The pairing is validated HERE, before
   // the job exists, so the impossible request gets its honest 404 now.
   const pairingDoc = await loadDoc(db, runKey, 'RUN_NOT_FOUND', `run ${runKey}`).catch(() => null);
-  if (!pairingDoc || pairingDoc.repo_id !== repoId || pairingDoc.suite_key !== suiteKey || pairingDoc.kind !== 'ragas_run') {
+  if (
+    !pairingDoc ||
+    pairingDoc.repo_id !== repoId ||
+    pairingDoc.suite_key !== suiteKey ||
+    pairingDoc.kind !== 'ragas_run'
+  ) {
     const err = new Error(`run ${runKey} not found for suite ${suiteKey}`);
     err.code = 'RUN_NOT_FOUND';
     err.status = 404;
@@ -3450,9 +3455,7 @@ async function beginExplainFailures(repoId, suiteKey, payload = {}, opts = {}) {
   const failTerminal = async (e) => {
     const code = typeof e.code === 'string' && e.code ? e.code : 'EXPLAIN_FAILED';
     try {
-      await db
-        .collection(COLLECTION)
-        .update(explainKey, { status: 'failed', error: { code, message: e.message } });
+      await db.collection(COLLECTION).update(explainKey, { status: 'failed', error: { code, message: e.message } });
     } catch (updateErr) {
       logger.error('ragas-suite.explain.failed_doc_unwritable', {
         repo_id: repoId,

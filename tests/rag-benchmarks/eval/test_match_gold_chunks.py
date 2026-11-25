@@ -63,7 +63,7 @@ class TestFindMatchesWindowFallback:
 
 
 class TestParseArgsChunkTextField:
-    """The default --chunk-text-field is `chunk_text`, matching the chunk_text schema."""
+    """The default --chunk-text-field is the SERVED column (`text`), matching run_eval's own default; the env overrides it."""
 
     def test_default_is_the_served_column(self, monkeypatch):
         # The served column (`text`) is the default, matching run_eval's own

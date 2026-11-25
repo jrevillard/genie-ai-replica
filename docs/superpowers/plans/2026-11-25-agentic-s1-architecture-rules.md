@@ -2,17 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give the agent service its architecture test — four `pytestarch` rules, with the violations that remain written as a list that can only shrink — and close the two leaks of the design that need no code to move.
+**Goal:** Give the agent service its architecture test — six `pytestarch` rules, with the violations that remain written as a list that can only shrink — and close the two leaks of the design that need no code to move.
 
-**Architecture:** `pytestarch` reads the import graph of `components/agent-service` at test time. Rule R1 (a core module imports no I/O library) and rule R2 (a core module imports no adapter code) are ratchets: the set of violations found on the tree is asserted equal to a listed set in `tests/test_architecture.py`, so closing a leak turns the test red until the list shrinks, and a new leak turns it red as well. Rules L1 and L2 are layer rules that hold on the whole tree today. The executor then stops naming concrete adapters (three Protocols in `capabilities/sources.py`), and the reranker abstention text moves from the capability module to the contract.
+**Architecture:** `pytestarch` reads the import graph of `components/agent-service` at test time. Every module is first classified into one layer (host, core, leaf adapters, capability), so nothing sits outside the rules. Rule R1 (a core module imports no I/O library) and rule R2 (a core module imports nothing of another layer) are ratchets: the set of violations found on the tree, named by the file that causes each one, is asserted equal to a listed set in `tests/test_architecture.py`. Closing a leak turns the test red until the list shrinks; a new leak turns it red as well. Rule T confines the telemetry SDK to `tracing.py`; rules L1 and L2 are layer rules that hold on the whole tree today. The executor then stops naming concrete adapters (three Protocols in `capabilities/sources.py`), and the reranker abstention text moves from the capability module to the contract.
 
 **Tech Stack:** Python 3.11, pytest 9.1.1, pytestarch 5.1.1 (its one requirement, networkx, pinned to 3.6.1), ruff 0.16.3.
 
-**Spec:** `docs/superpowers/specs/2026-11-25-agentic-iteration-2-architecture-design.md` — §2 (the hexagonal map, the five leaks of §2.3, the rules of §2.5), §9.2 (the NFR-2 adoption rule), §10.1 (the architecture tests), §10.8 probe P1, §11 (slice S1).
+**Spec:** `docs/superpowers/specs/2026-11-25-agentic-iteration-2-architecture-design.md` — §2 (the hexagonal map, the six leaks of §2.3, the rules of §2.5), §9.2 (the NFR-2 adoption rule), §10.1 (the architecture tests), §10.8 probe P1, §11 (slice S1).
 
 ## Global Constraints
 
-- **Where the work lands.** Worktree `/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture`, branch `feat/agentic-foundations/architecture` (stacked on `feat/agentic-foundations/prd`; merge request !1088). Every path below is relative to that worktree. Commit on this branch only. Do not push, do not touch `main` or the PRD branch, never run `git stash`, never run `git reset --hard`.
+- **Where the work lands.** Branch `feat/agentic-foundations/architecture` (stacked on `feat/agentic-foundations/prd`; merge request !1088). Commit on this branch only. Do not push, do not touch `main` or the PRD branch, never run `git stash`, never run `git reset --hard`.
+- **No path is written in this plan.** Every command block starts with the same guard, which moves to the root of the checkout it is run from and refuses anything but that branch. Run the blocks from the worktree that carries the branch.
 - **Python floor.** `requires-python = ">=3.11"`; the CI lanes run `python:3.11-slim`. `networkx` stays at `3.6.1`: 3.7 requires Python 3.12 or later.
 - **Test-only dependency.** `pytestarch` goes into `requirements-test.txt` and the `test` extra of `pyproject.toml`. It never goes into `requirements.txt`: the image installs only that file.
 - **NFR-2.** Every pin carries an exact-version licence row and a defaults-audit verdict in `docs/dependencies/agent-service-dependency-evidence.json`. The offline verifier must print `OK`.
@@ -23,11 +24,22 @@
 
 ## Environment
 
-The commands below use a virtual environment outside the repository: `.gitignore` ignores only `genie-ai-overlay/.venv/`, so a venv created inside `components/agent-service` would show as untracked files. Shell state does not carry between two commands, so every block repeats the paths it needs.
+The commands use a virtual environment outside the repository: `.gitignore` ignores only `genie-ai-overlay/.venv/`, so a venv created inside `components/agent-service` would show as untracked files. Shell state does not carry between two commands, so every block repeats what it needs.
+
+The guard every block starts with:
 
 ```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+```
+
+Create the environment and take the baseline:
+
+- [ ] **Step 0: Create the environment and take the baseline**
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 command -v uv
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd components/agent-service
 uv venv --python 3.11 /tmp/genie-agent-service-venv
 uv pip install --python /tmp/genie-agent-service-venv/bin/python -r requirements-test.txt
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
@@ -41,17 +53,19 @@ Slice S1 of the design is delivered as three plans. This is the first.
 
 | Plan | Content | State it leaves |
 |---|---|---|
-| **This one** | the rules; leak 4 (executor) and the constant of leak 5 | five listed violations remain |
-| Plan 2 — composition out of the core | `agent/probe.py` split, `agent/v06_harness.py` moved, `HttpxTransport` moved, `SearchKnowledgeCapability.create()` moved to the composition root | no listed violation; rule R3 switched on |
+| **This one** | the rules; leak 4 (executor) and the constant of leak 5 | six listed violations remain |
+| Plan 2 — composition out of the core | `agent/probe.py` split, `agent/v06_harness.py` moved, `HttpxTransport` moved and no longer a constructor default, `SearchKnowledgeCapability.create()` moved, the admission lane moved to the host | no listed violation; rule R3 switched on |
 | Plan 3 — runtime port, step 1 | `RuntimeDriver` extraction behind a byte-identical event stream | stream gate recorded |
 
-After this plan the two ratchets list these violations, all in the three leaks plan 2 closes:
+After this plan the two ratchets list these violations, all closed by plan 2:
 
 | Rule | Pair left | Caused by |
 |---|---|---|
-| R1 | `("agent", "arango")`, `("agent", "httpx")` | `agent/probe.py`, `agent/v06_harness.py` |
-| R1 | `("preparation", "httpx")` | `preparation/translation.py` |
-| R2 | `("agent", "capabilities.adapters")`, `("agent", "capabilities.search_knowledge")` | `agent/probe.py` |
+| R1 | `("agent.probe", "arango")` | `agent/probe.py` |
+| R1 | `("agent.v06_harness", "httpx")` | `agent/v06_harness.py` |
+| R1 | `("noagent.lane", "fcntl")` | `noagent/lane.py` |
+| R1 | `("preparation.translation", "httpx")` | `preparation/translation.py` |
+| R2 | `("agent.probe", "capabilities.adapters")`, `("agent.probe", "capabilities.search_knowledge")` | `agent/probe.py` |
 
 ## File map
 
@@ -61,7 +75,7 @@ After this plan the two ratchets list these violations, all in the three leaks p
 | `docs/dependencies/agent-service-dependency-evidence.json` | the licence and defaults evidence, one row per pin | 1 |
 | `components/agent-service/pyproject.toml` | the `test` extra, kept equal to the pins | 1 |
 | `THIRD_PARTY.md` | the disclosure of the new dependency | 1 |
-| `components/agent-service/tests/test_architecture.py` | the four rules, the two lists, the planted-violation test | 2 (edited in 3 and 4) |
+| `components/agent-service/tests/test_architecture.py` | the layers, the six rules, the two lists, the planted-violation test | 2 (edited in 3 and 4) |
 | `components/agent-service/capabilities/sources.py` | the three Protocols the executor reads through | 3 |
 | `components/agent-service/tests/test_sources.py` | the adapters satisfy the Protocols | 3 |
 | `components/agent-service/capabilities/executor.py` | annotations name the Protocols | 3 |
@@ -73,11 +87,13 @@ After this plan the two ratchets list these violations, all in the three leaks p
 
 Each was checked on a copy of the service before being written here.
 
-- **A node is named after the root folder.** `pytestarch` names the modules `agent-service.agent`, `agent-service.capabilities.adapters`, not `agent`. Every name the test builds carries that prefix.
+- **A node is named after the root folder.** `pytestarch` names the modules `agent-service.agent.probe`, `agent-service.capabilities.adapters`, not `agent.probe`. The test strips the prefix once and works with names relative to the service.
+- **A violation is named by its file, not by its package.** A pair keyed on the package (`agent`, `httpx`) cannot tell a new leak in `agent/registry.py` from the listed one in `agent/v06_harness.py`. Keyed on the module, the new leak is a new pair and the test goes red.
+- **Every module is classified first.** R1 and R2 look at direct imports. A module outside every layer — a new root-level `wiring.py` that imports `httpx`, say — would give the core a path no rule sees. The classification test refuses such a module until it is given a layer.
+- **The telemetry facade is an allowed dependency, bounded.** Four core modules import `tracing`, where the OpenTelemetry SDK is wired. Rule T pins that the SDK is imported by `tracing` and nothing else outside the host.
 - **A library nobody imports is absent from the graph**, and a rule that names it raises `ModuleUnknown`. The I/O list is therefore filtered by presence before any rule is built.
 - **A deny-list, presence-filtered.** An allow-list of what the core may import was rejected: every new standard-library import would need an edit of the test.
 - **Set equality, not one test per pair.** One test per rule prints the complete list of what changed; a fix and a regression are both one visible diff.
-- **Direct imports for R1 and R2.** `import_modules_that` looks at direct imports. That is enough here because every module that imports adapter code is itself listed as adapter code (`capabilities.search_knowledge`), so a transitive path from the core to an adapter always starts with a direct import the rule sees.
 
 ---
 
@@ -124,10 +140,8 @@ pytestarch==5.1.1
 
 - [ ] **Step 2: Run the licence verifier — it must fail**
 
-Run:
-
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 python3 scripts/dependencies/verify-dependency-licenses.py --verify components/agent-service/requirements.txt components/agent-service/requirements-test.txt --evidence docs/dependencies/agent-service-dependency-evidence.json
 ```
 
@@ -145,11 +159,11 @@ This is the red step of the task: a pin without an audit is refused.
 
 Both rows were resolved with the repository's own script (`resolve(name, version)` of `verify-dependency-licenses.py`) on 2026-11-25: `networkx` 3.6.1 is `BSD-3-Clause`, `pytestarch` 5.1.1 is `Apache-2.0`, each declared as a license expression on PyPI. The defaults verdicts rest on a static scan of the two installed packages: neither imports `socket`, `ssl`, `urllib`, `http`, `requests`, `httpx`, `subprocess`, `smtplib`, `xmlrpc`, nor any telemetry library. `pytestarch` imports `networkx` and the standard library (`ast`, `pathlib`, `collections`, …); its single `matplotlib` import sits in the optional graph-visualisation method of `eval_structure/networkxgraph.py`. `networkx` has no required dependency.
 
-In `docs/dependencies/agent-service-dependency-evidence.json`, the rows are sorted by name. Insert the `networkx` row between the `numpy` row and the `opentelemetry-api` row. Replace:
+In `docs/dependencies/agent-service-dependency-evidence.json`, the rows are sorted by name (`networkx` sorts before `numpy`). Insert the `networkx` row between the `langdetect` row and the `numpy` row. Replace:
 
 ```
     {
-      "name": "opentelemetry-api",
+      "name": "numpy",
 ```
 
 with:
@@ -169,7 +183,7 @@ with:
       }
     },
     {
-      "name": "opentelemetry-api",
+      "name": "numpy",
 ```
 
 Then insert the `pytestarch` row between the `pytest` row and the `python-arango` row. Replace:
@@ -255,9 +269,10 @@ with:
 
 **Usage:** Enforces the dependency rules of the agent service
 (`components/agent-service/tests/test_architecture.py`): a core module
-imports no I/O library and no adapter. A test-only dependency of the agent
-service - it never reaches a runtime image. Its one requirement, `networkx`
-(3.6.1, BSD-3-Clause), is pinned to the last line that accepts Python 3.11.
+imports no I/O library and nothing of another layer. A test-only dependency of
+the agent service - it never reaches a runtime image. Its one requirement,
+`networkx` (3.6.1, BSD-3-Clause), is pinned to the last line that accepts
+Python 3.11.
 
 ---
 
@@ -280,10 +295,9 @@ with:
 
 - [ ] **Step 8: Install the audited tree and confirm the suite did not move**
 
-Run:
-
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 uv pip install --python /tmp/genie-agent-service-venv/bin/python -r requirements-test.txt
 /tmp/genie-agent-service-venv/bin/python -c "import importlib.metadata as m; print(m.version('pytestarch'), m.version('networkx'))"
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
@@ -296,7 +310,8 @@ Expected: `5.1.1 3.6.1`, then `922 passed, 2 warnings in <a few seconds>`. No te
 The config-validator suite asserts the same invariants as the verifier, over the same files.
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/tests/config-validator
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd tests/config-validator
 npm ci --no-audit --no-fund
 npx jest __tests__/agent-service.test.js
 ```
@@ -311,7 +326,7 @@ Tests:       23 passed, 23 total
 - [ ] **Step 10: Commit**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 git add components/agent-service/requirements-test.txt components/agent-service/pyproject.toml docs/dependencies/agent-service-dependency-evidence.json THIRD_PARTY.md docs/superpowers/specs/2026-11-25-agentic-iteration-2-architecture-design.md
 git commit -m "build(agent-service): pin pytestarch and networkx for the architecture tests"
 ```
@@ -320,7 +335,7 @@ git commit -m "build(agent-service): pin pytestarch and networkx for the archite
 
 ### Task 2: The architecture rules
 
-The module written here is the guard for everything that follows. It has no red-first step of its own: it passes as soon as it lands, with the current violations listed. What must be proven is that it can fail. Steps 4 to 6 plant one violation at a time in a real core module and check the exact pair the test reports. They answer probe P1 of the design (§10.8).
+The module written here is the guard for everything that follows. It has no red-first step of its own: it passes as soon as it lands, with the current violations listed. What must be proven is that it can fail. Steps 4 to 8 plant one violation at a time in the real tree and check what the test reports. They answer probe P1 of the design (§10.8) and the two blind spots a package-level ratchet would have.
 
 **Files:**
 - Create: `components/agent-service/tests/test_architecture.py`
@@ -329,8 +344,9 @@ The module written here is the guard for everything that follows. It has no red-
 - Consumes: the five `pytestarch` names of Task 1.
 - Produces (read by Tasks 3 and 4):
   - `KNOWN_IO_VIOLATIONS: set[tuple[str, str]]` — pairs `(core module, library)`.
-  - `KNOWN_ADAPTER_VIOLATIONS: set[tuple[str, str]]` — pairs `(core module, adapter code)`, where adapter code is `LEAF_ADAPTERS` (`"capabilities.adapters"`) or `CAPABILITY` (`"capabilities.search_knowledge"`).
-  - the test names `test_core_modules_import_no_io_library` and `test_core_modules_import_no_adapter_code`.
+  - `KNOWN_INTERNAL_VIOLATIONS: set[tuple[str, str]]` — pairs `(core module, module of another layer)`, the second name being `SERVICE_LAYOUT.leaf_adapters` (`"capabilities.adapters"`) or `SERVICE_LAYOUT.capability` (`"capabilities.search_knowledge"`).
+  - `SERVICE_LAYOUT.core_modules` and `PORTS` — where a new port module is declared (Task 3).
+  - the test names `test_every_module_belongs_to_a_layer`, `test_core_modules_import_no_io_library`, `test_core_modules_import_no_other_layer`.
 
 - [ ] **Step 1: Write the module**
 
@@ -341,20 +357,32 @@ Create `components/agent-service/tests/test_architecture.py` with exactly this c
 # SPDX-License-Identifier: Apache-2.0
 """The dependency rules of the agent service.
 
-The service is layered top to bottom: the host (``app.py``) composes, the core
-decides, the ports declare what the core needs from the outside, the adapters
-reach the outside. Four rules keep the layers apart:
+Every module of the service belongs to one of four layers:
 
+* HOST — ``app.py`` composes; ``tracing.py`` wires the telemetry SDK.
+* CORE — decides: ``agent/``, ``noagent/``, ``preparation/`` and the contract
+  modules of ``capabilities/``.
+* LEAF ADAPTERS — ``capabilities/adapters/``: reach the corpus.
+* CAPABILITY — ``capabilities/search_knowledge.py``: the search capability,
+  which builds its own adapters today.
+
+Six rules keep the layers apart:
+
+* **C** — every module is classified. A module outside the layers would have
+  no rule looking at it.
 * **R1** — a core module imports no I/O library.
-* **R2** — a core module imports no adapter code.
-* **L1** — a leaf adapter accesses only the ports it implements.
-* **L2** — the search capability accesses only the ports and the leaf adapters.
+* **R2** — a core module imports nothing of another layer, the telemetry
+  facade ``tracing`` excepted.
+* **T** — the telemetry SDK is imported by ``tracing`` only.
+* **L1**, **L2** — a leaf adapter accesses only the ports it implements; the
+  capability accesses only the ports and the leaf adapters.
 
 R1 and R2 do not hold on the whole tree yet. They are written as a ratchet:
 the violations found on the tree are asserted equal to a listed set
-(``KNOWN_IO_VIOLATIONS``, ``KNOWN_ADAPTER_VIOLATIONS``). Closing a leak removes
+(``KNOWN_IO_VIOLATIONS``, ``KNOWN_INTERNAL_VIOLATIONS``). A violation is a
+(module, import) pair, named by the file that causes it. Closing a leak removes
 its pair from the tree and the test goes red until the list shrinks with it; a
-new leak grows the set and the test goes red as well. The lists change only
+new leak adds a pair and the test goes red as well. The lists change only
 through a visible edit of this file.
 
 ``pytestarch`` reads imports from the syntax tree: a function-local ``import``
@@ -364,29 +392,46 @@ it.
 """
 
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 from pytestarch import EvaluableArchitecture, LayeredArchitecture, LayerRule, Rule, get_evaluable_architecture
 
 SERVICE = Path(__file__).resolve().parents[1]
 
-# The modules that decide. None of them reaches the outside by itself.
-CORE = (
-    "agent",
-    "noagent",
-    "preparation",
-    "capabilities.contract",
-    "capabilities.executor",
-    "capabilities.citations",
-    "capabilities.identifiers",
+
+class Layout(NamedTuple):
+    """What each layer is made of, by module name relative to the service root."""
+
+    host: tuple[str, ...]
+    core_packages: tuple[str, ...]
+    core_modules: tuple[str, ...]
+    leaf_adapters: str
+    capability: str
+
+
+SERVICE_LAYOUT = Layout(
+    host=("app", "tracing"),
+    core_packages=("agent", "noagent", "preparation"),
+    core_modules=(
+        "capabilities",
+        "capabilities.__init__",
+        "capabilities.contract",
+        "capabilities.executor",
+        "capabilities.citations",
+        "capabilities.identifiers",
+    ),
+    leaf_adapters="capabilities.adapters",
+    capability="capabilities.search_knowledge",
 )
-# The code that reaches the corpus on behalf of the document capability.
-LEAF_ADAPTERS = "capabilities.adapters"
-# The search capability builds its own adapters today, so it is adapter code.
-CAPABILITY = "capabilities.search_knowledge"
-ADAPTER_CODE = (LEAF_ADAPTERS, CAPABILITY)
+
 # What the core and the adapters exchange.
 PORTS = ("capabilities.contract", "capabilities.identifiers")
+# What a core module never imports from another layer: the composition root,
+# the adapters and the capability. The telemetry facade is left out on purpose.
+NON_CORE_MODULES = ("app", SERVICE_LAYOUT.leaf_adapters, SERVICE_LAYOUT.capability)
+# The layers a rule covers when it excludes the host.
+OUTSIDE_HOST = ("core", "leaf adapters", "capability")
 # The import names a core module never imports. The list names, it does not
 # match: a new I/O library is added here when the service adopts it.
 IO_LIBRARIES = (
@@ -405,32 +450,39 @@ IO_LIBRARIES = (
     "mcp",
     "openai",
     "subprocess",
+    "fcntl",
 )
+TELEMETRY_SDK = "opentelemetry"
 
-# R1 — (core module, library): the modules that still import an I/O library.
+# R1 — (core module, library): the files that still import an I/O library.
 KNOWN_IO_VIOLATIONS = {
-    ("agent", "arango"),  # agent/probe.py: the adapter assembly still lives in the seam package
-    ("agent", "httpx"),  # agent/v06_harness.py: the measurement harness still lives in the seam package
-    ("preparation", "httpx"),  # preparation/translation.py: the HTTP transport still lives in the core module
+    ("agent.probe", "arango"),  # agent/probe.py: the adapter assembly still lives in the seam package
+    ("agent.v06_harness", "httpx"),  # agent/v06_harness.py: the measurement harness lives in the seam package
+    ("noagent.lane", "fcntl"),  # noagent/lane.py: the admission lane takes file locks from inside a core package
+    ("preparation.translation", "httpx"),  # preparation/translation.py: the HTTP transport lives in the core module
 }
-# R2 — (core module, adapter code): the modules that still import adapter code.
-KNOWN_ADAPTER_VIOLATIONS = {
-    ("agent", LEAF_ADAPTERS),  # agent/probe.py: the adapter assembly still lives in the seam package
-    ("agent", CAPABILITY),  # agent/probe.py: the adapter assembly still lives in the seam package
-    ("capabilities.executor", LEAF_ADAPTERS),  # the executor names three concrete adapters
-    ("noagent", CAPABILITY),  # noagent/prompt.py imports the reranker abstention text from the capability
+# R2 — (core module, module of another layer): the files that still reach another layer.
+KNOWN_INTERNAL_VIOLATIONS = {
+    ("agent.probe", SERVICE_LAYOUT.leaf_adapters),  # agent/probe.py: the adapter assembly lives in the seam package
+    ("agent.probe", SERVICE_LAYOUT.capability),  # agent/probe.py: the adapter assembly lives in the seam package
+    ("capabilities.executor", SERVICE_LAYOUT.leaf_adapters),  # the executor names three concrete adapters
+    ("noagent.prompt", SERVICE_LAYOUT.capability),  # noagent/prompt.py imports the reranker abstention text
 }
 
-LAYERS = {"ports": PORTS, "leaf adapters": (LEAF_ADAPTERS,), "capability": (CAPABILITY,)}
+LAYERS = {
+    "ports": PORTS,
+    "leaf adapters": (SERVICE_LAYOUT.leaf_adapters,),
+    "capability": (SERVICE_LAYOUT.capability,),
+}
 
 
 def _graph(root: Path, *, with_libraries: bool) -> EvaluableArchitecture:
-    """The dependency graph of one package tree; ``tests`` and ``.venv`` left out."""
+    """The dependency graph of one package tree; its tests, caches and environments left out."""
 
     return get_evaluable_architecture(
         root,
         root,
-        exclusions=(f"*{root.name}/tests*", "*/.venv/*"),
+        exclusions=(f"*{root.name}/tests*", "*__pycache__*", "*/.venv/*"),
         exclude_external_libraries=not with_libraries,
     )
 
@@ -440,7 +492,7 @@ def _named(root: str, module: str) -> str:
 
 
 def _imports_no_library(root: str, subject: str, library: str) -> Rule:
-    """``root.subject`` and its submodules do not import ``library`` or its submodules."""
+    """``root.subject`` does not import ``library`` nor any of its submodules."""
 
     return (
         Rule().modules_that().are_named([_named(root, subject)]).should_not().import_modules_that().are_named([library])
@@ -448,7 +500,7 @@ def _imports_no_library(root: str, subject: str, library: str) -> Rule:
 
 
 def _imports_no_module(root: str, subject: str, forbidden: str) -> Rule:
-    """``root.subject`` and its submodules do not import ``root.forbidden`` or its submodules."""
+    """``root.subject`` does not import ``root.forbidden`` nor any of its submodules."""
 
     return _imports_no_library(root, subject, _named(root, forbidden))
 
@@ -463,13 +515,62 @@ def _violated(rule: Rule, graph: EvaluableArchitecture) -> bool:
     return False
 
 
-def _io_violations(root: str, core: tuple[str, ...], graph: EvaluableArchitecture) -> set[tuple[str, str]]:
-    """The (core module, library) pairs of ``core`` that break R1 on ``graph``."""
+def _is_module(name: str, prefix: str) -> bool:
+    """True for the node of a source file under ``prefix``.
+
+    ``pytestarch`` keeps a node for a cache or an environment directory even
+    when its files are excluded; the nodes of such directories are not modules.
+    """
+
+    if not name.startswith(prefix):
+        return False
+    relative = name[len(prefix) :]
+    return bool(relative) and not relative.startswith(".") and ".." not in relative and "__pycache__" not in relative
+
+
+def _modules(graph: EvaluableArchitecture, root: str) -> list[str]:
+    """The modules of the tree, relative to ``root``."""
+
+    return sorted(name[len(root) + 1 :] for name in graph.modules if _is_module(name, root + "."))
+
+
+def _within(module: str, package: str) -> bool:
+    return module == package or module.startswith(package + ".")
+
+
+def _layer_of(module: str, layout: Layout) -> str | None:
+    """The layer a module belongs to, or ``None`` when it belongs to none."""
+
+    if module in layout.host:
+        return "host"
+    if _within(module, layout.leaf_adapters):
+        return "leaf adapters"
+    if module == layout.capability:
+        return "capability"
+    if module in layout.core_modules or any(_within(module, package) for package in layout.core_packages):
+        return "core"
+    return None
+
+
+def _in_layers(modules: list[str], layers: tuple[str, ...], layout: Layout) -> list[str]:
+    """The modules of the given layers that hold imports of their own.
+
+    A package node carries none: the imports of its ``__init__.py`` sit in its
+    ``__init__`` node.
+    """
+
+    return [module for module in modules if _layer_of(module, layout) in layers and f"{module}.__init__" not in modules]
+
+
+def _io_violations(
+    root: str, subjects: list[str], graph: EvaluableArchitecture, libraries: tuple[str, ...] = IO_LIBRARIES
+) -> set[tuple[str, str]]:
+    """The (module, library) pairs of ``subjects`` that import a library of ``libraries``."""
 
     modules = graph.modules
     violations = set()
-    for module in core:
-        for library in IO_LIBRARIES:
+    for module in subjects:
+        for library in libraries:
             if not any(name == library or name.startswith(library + ".") for name in modules):
                 continue  # nothing imports this library: the rule has nothing to check
             if _violated(_imports_no_library(root, module, library), graph):
@@ -477,16 +578,16 @@ def _io_violations(root: str, core: tuple[str, ...], graph: EvaluableArchitectur
     return violations
 
 
-def _adapter_violations(
-    root: str, core: tuple[str, ...], adapter_code: tuple[str, ...], graph: EvaluableArchitecture
+def _internal_violations(
+    root: str, subjects: list[str], forbidden: tuple[str, ...], graph: EvaluableArchitecture
 ) -> set[tuple[str, str]]:
-    """The (core module, adapter code) pairs of ``core`` that break R2 on ``graph``."""
+    """The (module, forbidden module) pairs of ``subjects`` that import a module of ``forbidden``."""
 
     return {
-        (module, adapter)
-        for module in core
-        for adapter in adapter_code
-        if _violated(_imports_no_module(root, module, adapter), graph)
+        (module, other)
+        for module in subjects
+        for other in forbidden
+        if _violated(_imports_no_module(root, module, other), graph)
     }
 
 
@@ -517,21 +618,30 @@ def internal() -> EvaluableArchitecture:
     return _graph(SERVICE, with_libraries=False)
 
 
-def test_the_rules_name_the_real_tree(with_libraries: EvaluableArchitecture) -> None:
-    """A rule that names a module absent from the graph raises; this pins the names."""
-
-    root = SERVICE.name
-    assert _named(root, "agent") in with_libraries.modules
-    assert _named(root, LEAF_ADAPTERS) in with_libraries.modules
-    assert not [name for name in with_libraries.modules if f"{root}.tests" in name]
+def test_every_module_belongs_to_a_layer(internal: EvaluableArchitecture) -> None:
+    modules = _modules(internal, SERVICE.name)
+    assert "app" in modules
+    assert [module for module in modules if _layer_of(module, SERVICE_LAYOUT) is None] == []
 
 
 def test_core_modules_import_no_io_library(with_libraries: EvaluableArchitecture) -> None:
-    assert _io_violations(SERVICE.name, CORE, with_libraries) == KNOWN_IO_VIOLATIONS
+    core = _in_layers(_modules(with_libraries, SERVICE.name), ("core",), SERVICE_LAYOUT)
+    assert _io_violations(SERVICE.name, core, with_libraries) == KNOWN_IO_VIOLATIONS
 
 
-def test_core_modules_import_no_adapter_code(internal: EvaluableArchitecture) -> None:
-    assert _adapter_violations(SERVICE.name, CORE, ADAPTER_CODE, internal) == KNOWN_ADAPTER_VIOLATIONS
+def test_core_modules_import_no_other_layer(internal: EvaluableArchitecture) -> None:
+    core = _in_layers(_modules(internal, SERVICE.name), ("core",), SERVICE_LAYOUT)
+    assert _internal_violations(SERVICE.name, core, NON_CORE_MODULES, internal) == KNOWN_INTERNAL_VIOLATIONS
+
+
+def test_the_telemetry_sdk_is_imported_by_the_tracing_module_only(with_libraries: EvaluableArchitecture) -> None:
+    modules = _modules(with_libraries, SERVICE.name)
+    assert (
+        _io_violations(
+            SERVICE.name, _in_layers(modules, OUTSIDE_HOST, SERVICE_LAYOUT), with_libraries, (TELEMETRY_SDK,)
+        )
+        == set()
+    )
 
 
 def test_leaf_adapters_access_only_the_ports(internal: EvaluableArchitecture) -> None:
@@ -552,59 +662,109 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
     """Each rule is checked on a synthetic package that breaks it, then repaired."""
 
     package = tmp_path / "fakepkg"
-    layers = {"ports": ("contract",), "leaf adapters": ("adapters",)}
-    _plant(package, "__init__.py", "")
-    _plant(package, "app.py", "import fakepkg.adapters.x\nimport requests\n")
-    _plant(package, "contract.py", "")
-    _plant(package, "core/__init__.py", "")
-    _plant(package, "core/clean.py", "import fakepkg.contract\n")
-    _plant(package, "core/leaky.py", "import fakepkg.adapters.x\nimport httpx\n")
-    _plant(package, "adapters/__init__.py", "")
-    _plant(package, "adapters/x.py", "import fakepkg.contract\n")
-    _plant(package, ".venv/lib/python3.11/site-packages/hidden.py", "import socket\n")
+    root = package.name
+    layout = Layout(
+        host=("app", "tracing"),
+        core_packages=("core",),
+        core_modules=("contract",),
+        leaf_adapters="adapters",
+        capability="capability",
+    )
+    layers = {"ports": ("contract",), "leaf adapters": ("adapters",), "capability": ("capability",)}
+    clean = {
+        "app.py": "import fakepkg.adapters.x\nimport requests\n",
+        "tracing.py": "import opentelemetry\n",
+        "contract.py": "",
+        "core/__init__.py": "",
+        "core/clean.py": "import fakepkg.contract\n",
+        "core/leaky.py": "import fakepkg.adapters.x\nimport httpx\n",
+        "adapters/__init__.py": "",
+        "adapters/x.py": "import fakepkg.contract\n",
+        "capability.py": "import fakepkg.adapters.x\nimport fakepkg.contract\n",
+        "wiring.py": "import socket\n",
+        ".venv/lib/python3.11/site-packages/hidden.py": "import ssl\n",
+    }
+    for relative, source in clean.items():
+        _plant(package, relative, source)
 
-    # R1: the planted import is reported; the host's library and the virtual environment are not.
-    graph = _graph(package, with_libraries=True)
-    assert "socket" not in graph.modules
-    assert _io_violations("fakepkg", ("core",), graph) == {("core", "httpx")}
+    def core_modules(with_libraries: bool) -> list[str]:
+        graph = _graph(package, with_libraries=with_libraries)
+        return _in_layers(_modules(graph, root), ("core",), layout)
 
-    # R2: the planted import is reported, the clean module is not.
-    assert _adapter_violations("fakepkg", ("core",), ("adapters",), graph) == {("core", "adapters")}
+    # An environment directory is not part of the architecture.
+    assert "ssl" not in _graph(package, with_libraries=True).modules
 
-    # L1: it holds, then an adapter reaching the core breaks it - a module outside every layer counts.
-    _accesses_only("fakepkg", "leaf adapters", ["ports"], layers).assert_applies(_graph(package, with_libraries=False))
-    _plant(package, "adapters/x.py", "import fakepkg.contract\nimport fakepkg.core.clean\n")
+    # C: the module outside every layer is named, and it is gone once deleted.
+    modules = _modules(_graph(package, with_libraries=True), root)
+    assert [module for module in modules if _layer_of(module, layout) is None] == ["wiring"]
+    (package / "wiring.py").unlink()
+
+    # R1: the planted import is reported by its file; the clean module and the host are not.
+    assert _io_violations(root, core_modules(True), _graph(package, with_libraries=True)) == {("core.leaky", "httpx")}
+
+    # R2: the same for a core module that reaches another layer.
+    assert _internal_violations(
+        root, core_modules(False), ("app", "adapters", "capability"), _graph(package, with_libraries=False)
+    ) == {("core.leaky", "adapters")}
+
+    # T: the SDK sits in the host; a module outside the host importing it is reported.
+    def outside_host() -> list[str]:
+        return _in_layers(
+            _modules(_graph(package, with_libraries=True), root), ("core", "leaf adapters", "capability"), layout
+        )
+
+    assert _io_violations(root, outside_host(), _graph(package, with_libraries=True), (TELEMETRY_SDK,)) == set()
+    _plant(package, "capability.py", clean["capability.py"] + "import opentelemetry\n")
+    assert _io_violations(root, outside_host(), _graph(package, with_libraries=True), (TELEMETRY_SDK,)) == {
+        ("capability", "opentelemetry")
+    }
+
+    # L1 and L2: they hold, then a cross-layer import breaks each.
+    _accesses_only(root, "leaf adapters", ["ports"], layers).assert_applies(_graph(package, with_libraries=False))
+    _accesses_only(root, "capability", ["ports", "leaf adapters"], layers).assert_applies(
+        _graph(package, with_libraries=False)
+    )
+    _plant(package, "adapters/x.py", clean["adapters/x.py"] + "import fakepkg.core.clean\n")
     with pytest.raises(AssertionError):
-        _accesses_only("fakepkg", "leaf adapters", ["ports"], layers).assert_applies(
+        _accesses_only(root, "leaf adapters", ["ports"], layers).assert_applies(_graph(package, with_libraries=False))
+    _plant(package, "capability.py", clean["capability.py"] + "import fakepkg.core.clean\n")
+    with pytest.raises(AssertionError):
+        _accesses_only(root, "capability", ["ports", "leaf adapters"], layers).assert_applies(
             _graph(package, with_libraries=False)
         )
 
     # The ratchet releases: a repaired tree reports no violation at all.
-    _plant(package, "core/leaky.py", "import fakepkg.contract\n")
-    graph = _graph(package, with_libraries=True)
-    assert _io_violations("fakepkg", ("core",), graph) == set()
-    assert _adapter_violations("fakepkg", ("core",), ("adapters",), graph) == set()
+    _plant(package, "core/leaky.py", clean["core/clean.py"])
+    assert _io_violations(root, core_modules(True), _graph(package, with_libraries=True)) == set()
+    assert (
+        _internal_violations(
+            root, core_modules(False), ("app", "adapters", "capability"), _graph(package, with_libraries=False)
+        )
+        == set()
+    )
 ```
 
 How to read it:
 
-- `CORE` names the seven modules that decide. `LEAF_ADAPTERS` and `CAPABILITY` name the adapter code: the search capability is counted as adapter code because it builds its own adapters today (leak 5 of the design).
-- `IO_LIBRARIES` names fifteen import names. Four are imported somewhere in the service today (`httpx`, `requests`, `fastapi`, `arango`); the other eleven wait for the day the service adopts them. A name is checked by its exact import name: `urllib.parse` is imported today and is not on the list, `urllib.request` is on the list and is not imported.
+- `SERVICE_LAYOUT` names the four layers. `core_packages` are whole packages; `core_modules` are the modules of `capabilities/` that belong to the core. The search capability is its own layer, counted as adapter code by rule R2, because it builds its own adapters today (leak 5 of the design). `capabilities/sources` is not there yet: Task 3 creates it and classifies it.
+- `IO_LIBRARIES` names sixteen import names. Five are imported somewhere in the service today (`httpx`, `requests`, `fastapi`, `arango`, `fcntl`); the other eleven wait for the day the service adopts them. A name is checked by its exact import name: `urllib.parse` is imported today and is not on the list, `urllib.request` is on the list and is not imported.
 - The two `KNOWN_*` sets are the ratchet. Do not edit them in this task.
 
 - [ ] **Step 2: Run the module**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -v
 ```
 
-Expected: six lines ending in `PASSED`, then `6 passed in < 1s`:
+Expected: seven lines ending in `PASSED`, then `7 passed in < 1s`:
 
 ```
-tests/test_architecture.py::test_the_rules_name_the_real_tree PASSED
+tests/test_architecture.py::test_every_module_belongs_to_a_layer PASSED
 tests/test_architecture.py::test_core_modules_import_no_io_library PASSED
-tests/test_architecture.py::test_core_modules_import_no_adapter_code PASSED
+tests/test_architecture.py::test_core_modules_import_no_other_layer PASSED
+tests/test_architecture.py::test_the_telemetry_sdk_is_imported_by_the_tracing_module_only PASSED
 tests/test_architecture.py::test_leaf_adapters_access_only_the_ports PASSED
 tests/test_architecture.py::test_the_capability_accesses_only_ports_and_leaf_adapters PASSED
 tests/test_architecture.py::test_the_rules_go_red_on_a_planted_violation PASSED
@@ -613,7 +773,8 @@ tests/test_architecture.py::test_the_rules_go_red_on_a_planted_violation PASSED
 - [ ] **Step 3: Confirm the module is lint-clean at the CI pin**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 uvx ruff@0.16.3 check tests/test_architecture.py
 uvx ruff@0.16.3 format --check tests/test_architecture.py
 ```
@@ -625,7 +786,8 @@ Expected: `All checks passed!` and `1 file already formatted`.
 Plant, look, run, restore:
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 sed -i '1i import socket' noagent/config.py
 git diff --stat noagent/config.py
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
@@ -633,11 +795,11 @@ git restore noagent/config.py
 git status --short noagent/config.py
 ```
 
-Expected, in order: ` 1 file changed, 1 insertion(+)`; then `1 failed, 5 passed` with these lines in the failure of `test_core_modules_import_no_io_library`:
+Expected, in order: ` 1 file changed, 1 insertion(+)`; then `1 failed, 6 passed` with these lines in the failure of `test_core_modules_import_no_io_library`:
 
 ```
 E         Extra items in the left set:
-E         ('noagent', 'socket')
+E         ('noagent.config', 'socket')
 ```
 
 then nothing: the file is back to the committed content.
@@ -645,7 +807,8 @@ then nothing: the file is back to the committed content.
 - [ ] **Step 5: Probe P1, second half — an illegal import inside a function**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 printf '\n\ndef _planted_probe() -> None:\n    import sqlite3\n' >> noagent/config.py
 git diff --stat noagent/config.py
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
@@ -653,11 +816,11 @@ git restore noagent/config.py
 git status --short noagent/config.py
 ```
 
-Expected: ` 1 file changed, 4 insertions(+)` (two blank lines, the `def` line, the `import` line); then `1 failed, 5 passed` with:
+Expected: ` 1 file changed, 4 insertions(+)` (two blank lines, the `def` line, the `import` line); then `1 failed, 6 passed` with:
 
 ```
 E         Extra items in the left set:
-E         ('noagent', 'sqlite3')
+E         ('noagent.config', 'sqlite3')
 ```
 
 then nothing.
@@ -665,7 +828,8 @@ then nothing.
 - [ ] **Step 6: Probe — a core module that imports an adapter**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 sed -i '1i from capabilities.adapters.http import RequestsTransport' noagent/config.py
 git diff --stat noagent/config.py
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
@@ -673,30 +837,73 @@ git restore noagent/config.py
 git status --short noagent/config.py
 ```
 
-Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 5 passed`, this time in `test_core_modules_import_no_adapter_code`, with:
+Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 6 passed`, this time in `test_core_modules_import_no_other_layer`, with:
 
 ```
 E         Extra items in the left set:
-E         ('noagent', 'capabilities.adapters')
+E         ('noagent.config', 'capabilities.adapters')
 ```
 
 then nothing.
 
-- [ ] **Step 7: Run the whole suite and the lint job's checks**
+- [ ] **Step 7: Probe — a new leak in a file whose package already has one**
+
+`agent/v06_harness.py` is listed for `httpx`. A second `httpx` import in another file of `agent/` must still be reported.
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
+echo "import httpx" >> agent/registry.py
+git diff --stat agent/registry.py
+/tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
+git restore agent/registry.py
+git status --short agent/registry.py
+```
+
+Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 6 passed` with:
+
+```
+E         Extra items in the left set:
+E         ('agent.registry', 'httpx')
+```
+
+then nothing.
+
+- [ ] **Step 8: Probe — a module outside every layer**
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
+echo "import socket" > wiring.py
+/tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
+rm wiring.py
+git status --short wiring.py
+```
+
+Expected: `1 failed, 6 passed` in `test_every_module_belongs_to_a_layer`, with:
+
+```
+E         Left contains one more item: 'wiring'
+```
+
+then nothing.
+
+- [ ] **Step 9: Run the whole suite and the lint job's checks**
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
 uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
-Expected: `928 passed, 2 warnings` (the 922 of the baseline plus six); `All checks passed!`; `90 files already formatted`.
+Expected: `929 passed, 2 warnings` (the 922 of the baseline plus seven); `All checks passed!`; `90 files already formatted`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 git add components/agent-service/tests/test_architecture.py
 git commit -m "test(agent-service): the dependency rules of the hexagonal map, as a ratchet"
 ```
@@ -705,16 +912,16 @@ git commit -m "test(agent-service): the dependency rules of the hexagonal map, a
 
 ### Task 3: The executor depends on Protocols, not on adapters
 
-`capabilities/executor.py` enforces the document capability's contract. It imports three concrete adapters (`LegacyChunkAdapter`, `DocRepoAdapter`, `OkfAdapter`) for type annotations only. The annotations become three Protocols; nothing else changes, and no existing test is edited. The test that goes red is the ratchet of Task 2.
+`capabilities/executor.py` enforces the document capability's contract. It imports three concrete adapters (`LegacyChunkAdapter`, `DocRepoAdapter`, `OkfAdapter`) for type annotations only. The annotations become three Protocols; nothing else changes, and no existing test is edited. The new module is a port: the architecture test refuses it until it is declared one. The test that goes red then is the ratchet of Task 2.
 
 **Files:**
 - Create: `components/agent-service/capabilities/sources.py`
 - Create: `components/agent-service/tests/test_sources.py`
 - Modify: `components/agent-service/capabilities/executor.py` (imports, lines 40–42 and 59–64; annotations, lines 85–87)
-- Modify: `components/agent-service/tests/test_architecture.py` (`KNOWN_ADAPTER_VIOLATIONS`)
+- Modify: `components/agent-service/tests/test_architecture.py` (`SERVICE_LAYOUT.core_modules`, `PORTS`, `KNOWN_INTERNAL_VIOLATIONS`)
 
 **Interfaces:**
-- Consumes: `KNOWN_ADAPTER_VIOLATIONS` and `LEAF_ADAPTERS` from Task 2.
+- Consumes: `KNOWN_INTERNAL_VIOLATIONS`, `SERVICE_LAYOUT` and `PORTS` from Task 2.
 - Produces (used by the composition root today and by plan 2 tomorrow): `capabilities/sources.py` exports three `@runtime_checkable` Protocols —
   - `DocumentMetadataSource.fetch_metadata(self, file_id: str, bearer: str | None) -> dict[str, Any] | None`
   - `ConceptSource.fetch_concept(self, repo_id: str, concept_id: str, bearer: str | None) -> dict[str, Any] | None`
@@ -747,7 +954,8 @@ def test_the_corpus_adapters_satisfy_the_driven_ports() -> None:
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_sources.py -q
 ```
 
@@ -812,7 +1020,56 @@ Rename it back (`read_chunk_rows` to `read_chunks`) and run the command again.
 
 Expected: `1 passed in < 1s`.
 
-- [ ] **Step 6: Point the executor at the Protocols**
+- [ ] **Step 6: Classify the new module — the architecture test must go red, then green**
+
+The new module is not in any layer yet.
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
+/tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
+```
+
+Expected: `1 failed, 6 passed` in `test_every_module_belongs_to_a_layer`, with:
+
+```
+E         Left contains one more item: 'capabilities.sources'
+```
+
+Declare it in `tests/test_architecture.py`: it is a port, and a port is core. First, replace:
+
+```python
+        "capabilities.identifiers",
+    ),
+    leaf_adapters="capabilities.adapters",
+```
+
+with:
+
+```python
+        "capabilities.identifiers",
+        "capabilities.sources",
+    ),
+    leaf_adapters="capabilities.adapters",
+```
+
+Second, replace:
+
+```python
+PORTS = ("capabilities.contract", "capabilities.identifiers")
+```
+
+with:
+
+```python
+PORTS = ("capabilities.contract", "capabilities.identifiers", "capabilities.sources")
+```
+
+Run the command of this step again.
+
+Expected: `7 passed in < 1s`.
+
+- [ ] **Step 7: Point the executor at the Protocols**
 
 Three edits in `components/agent-service/capabilities/executor.py`.
 
@@ -870,14 +1127,15 @@ with:
         chunks: ChunkReader,
 ```
 
-- [ ] **Step 7: Run the architecture test — the ratchet must go red**
+- [ ] **Step 8: Run the architecture test — the ratchet must go red**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
 ```
 
-Expected: `1 failed, 5 passed` in `test_core_modules_import_no_adapter_code`, with:
+Expected: `1 failed, 6 passed` in `test_core_modules_import_no_other_layer`, with:
 
 ```
 E         Extra items in the right set:
@@ -886,33 +1144,34 @@ E         ('capabilities.executor', 'capabilities.adapters')
 
 The right set is the list. The tree no longer has the violation, so the list is now too long.
 
-- [ ] **Step 8: Shrink the list**
+- [ ] **Step 9: Shrink the list**
 
-In `components/agent-service/tests/test_architecture.py`, delete this line from `KNOWN_ADAPTER_VIOLATIONS`:
+In `components/agent-service/tests/test_architecture.py`, delete this line from `KNOWN_INTERNAL_VIOLATIONS`:
 
 ```python
-    ("capabilities.executor", LEAF_ADAPTERS),  # the executor names three concrete adapters
+    ("capabilities.executor", SERVICE_LAYOUT.leaf_adapters),  # the executor names three concrete adapters
 ```
 
-Run the command of Step 7 again.
+Run the command of Step 8 again.
 
-Expected: `6 passed in < 1s`.
+Expected: `7 passed in < 1s`.
 
-- [ ] **Step 9: Run the whole suite and the lint job's checks**
+- [ ] **Step 10: Run the whole suite and the lint job's checks**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
 uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
-Expected: `929 passed, 2 warnings` (one more than Task 2: the test of Step 1); `All checks passed!`; `92 files already formatted`.
+Expected: `930 passed, 2 warnings` (one more than Task 2: the test of Step 1); `All checks passed!`; `92 files already formatted`.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 git add components/agent-service/capabilities/sources.py components/agent-service/capabilities/executor.py components/agent-service/tests/test_sources.py components/agent-service/tests/test_architecture.py
 git commit -m "refactor(agent-service): the executor depends on Protocols, not on adapters"
 ```
@@ -927,10 +1186,10 @@ git commit -m "refactor(agent-service): the executor depends on Protocols, not o
 - Modify: `components/agent-service/capabilities/contract.py` (one constant, above `class SearchKnowledgeResult`)
 - Modify: `components/agent-service/capabilities/search_knowledge.py` (the definition goes; the contract import grows)
 - Modify: `components/agent-service/noagent/prompt.py` (the import source)
-- Modify: `components/agent-service/tests/test_architecture.py` (`KNOWN_ADAPTER_VIOLATIONS`)
+- Modify: `components/agent-service/tests/test_architecture.py` (`KNOWN_INTERNAL_VIOLATIONS`)
 
 **Interfaces:**
-- Consumes: `KNOWN_ADAPTER_VIOLATIONS` and `CAPABILITY` from Task 2.
+- Consumes: `KNOWN_INTERNAL_VIOLATIONS` and `SERVICE_LAYOUT` from Task 2.
 - Produces: `capabilities.contract.RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT` (a `str`), re-exported as `noagent.prompt.RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT`.
 
 - [ ] **Step 1: Define the text in the contract**
@@ -1027,44 +1286,46 @@ The `as` form keeps the re-export explicit, which is this file's convention for 
 - [ ] **Step 4: Run the architecture test — the ratchet must go red**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
 ```
 
-Expected: `1 failed, 5 passed` in `test_core_modules_import_no_adapter_code`, with:
+Expected: `1 failed, 6 passed` in `test_core_modules_import_no_other_layer`, with:
 
 ```
 E         Extra items in the right set:
-E         ('noagent', 'capabilities.search_knowledge')
+E         ('noagent.prompt', 'capabilities.search_knowledge')
 ```
 
 - [ ] **Step 5: Shrink the list**
 
-In `components/agent-service/tests/test_architecture.py`, delete this line from `KNOWN_ADAPTER_VIOLATIONS`:
+In `components/agent-service/tests/test_architecture.py`, delete this line from `KNOWN_INTERNAL_VIOLATIONS`:
 
 ```python
-    ("noagent", CAPABILITY),  # noagent/prompt.py imports the reranker abstention text from the capability
+    ("noagent.prompt", SERVICE_LAYOUT.capability),  # noagent/prompt.py imports the reranker abstention text
 ```
 
 Run the command of Step 4 again.
 
-Expected: `6 passed in < 1s`.
+Expected: `7 passed in < 1s`.
 
 - [ ] **Step 6: Run the whole suite and the lint job's checks**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture/components/agent-service
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
 uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
-Expected: `929 passed, 2 warnings` — the same count as Task 3, because no test was added or removed; `All checks passed!`; `92 files already formatted`.
+Expected: `930 passed, 2 warnings` — the same count as Task 3, because no test was added or removed; `All checks passed!`; `92 files already formatted`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 git add components/agent-service/capabilities/contract.py components/agent-service/capabilities/search_knowledge.py components/agent-service/noagent/prompt.py components/agent-service/tests/test_architecture.py
 git commit -m "refactor(agent-service): the reranker abstention text lives in the contract"
 ```
@@ -1073,10 +1334,8 @@ git commit -m "refactor(agent-service): the reranker abstention text lives in th
 
 ## Final verification
 
-Run from the worktree; every line is one the plan already produced on a copy of the service.
-
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 python3 scripts/dependencies/verify-dependency-licenses.py --verify components/agent-service/requirements.txt components/agent-service/requirements-test.txt --evidence docs/dependencies/agent-service-dependency-evidence.json
 git log --oneline -4
 git status --short
@@ -1089,34 +1348,37 @@ uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noag
 Expected:
 
 - `OK 51 pinned package(s): licence verified, defaults audit recorded.`
-- four commits on top of `4890f2eb4`: `build(agent-service): pin pytestarch…`, `test(agent-service): the dependency rules…`, `refactor(agent-service): the executor depends on Protocols…`, `refactor(agent-service): the reranker abstention text…`.
+- The last four commits are the four this plan makes, newest first: `refactor(agent-service): the reranker abstention text…`, `refactor(agent-service): the executor depends on Protocols…`, `test(agent-service): the dependency rules…`, `build(agent-service): pin pytestarch…`.
 - `git status --short` prints nothing. If it prints a line, it names a file this plan does not touch: stop and report it.
-- `929 passed, 2 warnings`.
+- `930 passed, 2 warnings`.
 - `All checks passed!` and `92 files already formatted`.
 
 ### What this plan establishes
 
 | Design item | Where | Evidence |
 |---|---|---|
-| R1, R2 as ratchets (§2.5) | `test_core_modules_import_no_io_library`, `test_core_modules_import_no_adapter_code` | Steps 4 to 6 of Task 2: three planted imports, three reported pairs |
-| L1, L2 (§2.5) | `test_leaf_adapters_access_only_the_ports`, `test_the_capability_accesses_only_ports_and_leaf_adapters` | green on the tree; red on a planted cross-layer import (Task 2, Step 1, last test) |
+| C — every module classified (§2.5) | `test_every_module_belongs_to_a_layer` | Step 8 of Task 2: a root-level `wiring.py` turns it red; Task 3, Step 6: a new module turns it red until declared |
+| R1 as a ratchet, named by file (§2.5) | `test_core_modules_import_no_io_library` | Steps 4, 5 and 7 of Task 2: a module-level import, a function-local import, a second leak in a listed package |
+| R2 as a ratchet (§2.5) | `test_core_modules_import_no_other_layer` | Step 6 of Task 2: a core module importing an adapter; Tasks 3 and 4: the ratchet goes red when each leak closes |
+| T — the SDK in `tracing` only (§2.5) | `test_the_telemetry_sdk_is_imported_by_the_tracing_module_only` | green on the tree; red on a planted SDK import (Task 2, Step 1, last test) |
+| L1, L2 (§2.5) | `test_leaf_adapters_access_only_the_ports`, `test_the_capability_accesses_only_ports_and_leaf_adapters` | green on the tree; each red on a planted cross-layer import (Task 2, Step 1, last test) |
 | Probe P1 (§10.8) | Task 2, Steps 4 and 5 | an illegal import at module level and one inside a function each turn the suite red |
 | Leak 4 closed (§2.3) | `capabilities/sources.py`, `capabilities/executor.py` | the pair leaves the ratchet; `test_the_corpus_adapters_satisfy_the_driven_ports` |
 | Leak 5, constant half (§2.3) | `capabilities/contract.py` | the pair leaves the ratchet; `test_equivalence_v02.py` untouched and green |
 
 ### What it leaves open
 
-- Five listed violations, closed by plan 2 (composition out of the core). Until then the docstring of the test module is right to say that R1 and R2 "do not hold on the whole tree yet"; plan 2 rewrites that sentence when the lists become empty.
+- Six listed violations, closed by plan 2 (composition out of the core). Until then the docstring of the test module is right to say that R1 and R2 "do not hold on the whole tree yet"; plan 2 rewrites that sentence when the lists become empty.
 - Rule R3 (only the composition root imports the adapters) is not switched on: it would fail on every module that reaches an adapter through `agent/probe.py` or the capability today.
 - `pytestarch` reads the syntax tree. A dynamic `importlib.import_module` in a core module is invisible to it. The design keeps that as a code-review item.
-- Probe P1's third form — the synthetic-package test — covers the `.venv` exclusion as well; the two other probes ran on `noagent/config.py` only.
+- `anyio` and `langdetect` are imported by the core and are not on the I/O list: neither performs I/O where the service uses it (`anyio.to_thread` in the admission lane, `langdetect.detect` in language detection). Adding either to `IO_LIBRARIES` is a one-line change if that stops being true.
 
 ## Landing
 
 The four commits stay on `feat/agentic-foundations/architecture` until the operator says otherwise. On their word:
 
 ```bash
-cd /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/agentic-architecture
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 git push
 ```
 

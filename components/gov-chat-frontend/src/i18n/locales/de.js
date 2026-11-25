@@ -3652,6 +3652,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept} von {requested} Fragen verankert — {discarded} ließen sich nicht dem evaluierten Korpus zuordnen ({rounds} Nachfrage-Runde(n))'
+      },
       dropped: {
         note: '{kept} von {requested} Fragen — {dropped} konnten nicht erzeugt werden',
         reason: {

@@ -3558,6 +3558,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: 'ตรึงคำถามได้ {kept} จาก {requested} — {discarded} ข้อเชื่อมโยงกับคลังเนื้อหาที่ประเมินไม่ได้ (ขอซ้ำ {rounds} รอบ)'
+      },
       dropped: {
         note: 'สร้างได้ {kept} จาก {requested} คำถาม — สร้างไม่ได้ {dropped} คำถาม',
         reason: {

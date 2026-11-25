@@ -3636,6 +3636,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept} de {requested} preguntas ancladas — {discarded} no pudieron vincularse al corpus evaluado (reintentos: {rounds} ronda(s))'
+      },
       dropped: {
         note: '{kept} de {requested} preguntas — {dropped} no se pudieron generar',
         reason: {

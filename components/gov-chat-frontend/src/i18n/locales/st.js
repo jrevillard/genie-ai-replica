@@ -3622,6 +3622,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: 'dipotseko {kept} ho tse {requested} li kwalehile — {discarded} ea ka ke ea hokahana le corpus eo e neng e hlajoa ({rounds} dikou tsa kopo hape)'
+      },
       dropped: {
         note: '{kept} ho {requested} — {dropped} ha ka etsohleha ho hlaha',
         reason: {

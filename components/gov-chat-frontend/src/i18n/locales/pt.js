@@ -3623,6 +3623,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept} de {requested} perguntas ancoradas — {discarded} não puderam ser vinculadas ao corpus avaliado (novo pedido: {rounds} rodada(s))'
+      },
       dropped: {
         note: '{kept} de {requested} perguntas — {dropped} não puderam ser geradas',
         reason: {

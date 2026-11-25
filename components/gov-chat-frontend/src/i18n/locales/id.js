@@ -3603,6 +3603,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept} dari {requested} pertanyaan ditanamkan — {discarded} tidak dapat dikaitkan ke korpus yang dievaluasi (minta ulang {rounds} putaran)'
+      },
       dropped: {
         note: '{kept} dari {requested} pertanyaan — {dropped} tidak dapat dibuat',
         reason: {

@@ -237,6 +237,11 @@
              dropped to upstream 429s and the panel said nothing — the user
              could not tell a short suite from a throttled one). -->
         <span v-if="droppedNote" class="okf-ragas__muted okf-ragas__dropped-note">{{ droppedNote }}</span>
+        <!-- The GROUNDING tally (David, 2026-11-25): a generation that keeps
+             less than was asked owes the operator the difference — the
+             server re-asks for the shortfall and records the tally; the
+             panel says it here, never only in a log. -->
+        <span v-if="groundingNote" class="okf-ragas__muted okf-ragas__dropped-note">{{ groundingNote }}</span>
       </div>
 
       <!-- metrics selection -->
@@ -1462,6 +1467,23 @@ export default {
         .replace('{dropped}', String(dropped));
       if (reasonText) note += ` (${reasonText})`;
       return note;
+    },
+    /** The GROUNDING tally (David, 2026-11-25): requested vs kept vs
+     *  discarded, and how many rounds it took. Silent when the request was
+     *  fully met — a generate that kept everything owes no explanation. */
+    groundingNote() {
+      const g =
+        this.suite && this.suite.payload && this.suite.payload.dimensions
+          ? this.suite.payload.dimensions.grounding
+          : null;
+      if (!g) return '';
+      const discarded = Number(g.discarded_unattributed || 0) + Number(g.discarded_duplicate || 0);
+      if (!discarded) return '';
+      return this.translate(
+        'okf.ragas.grounding.note',
+        '{kept} of {requested} questions grounded — {discarded} could not be tied to the evaluated corpus (re-asked {rounds} round(s))',
+        { kept: Number(g.kept || 0), requested: Number(g.requested || 0), discarded, rounds: Number(g.rounds || 1) }
+      );
     },
     /** The sub-step line: active transform + counts + ETA + elapsed
      * (David 2026-10-20: "the user needs more feedback than this" — a

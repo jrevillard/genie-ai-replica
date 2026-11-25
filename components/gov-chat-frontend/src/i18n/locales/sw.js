@@ -3602,6 +3602,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: 'maswali {kept} kati ya {requested} yamegundwa — {discarded} hayakuweza kuhusishwa na mkusanyiko uliopimwa (kombora tena: {rounds})'
+      },
       dropped: {
         note: '{kept} kati {requested} swali — {dropped} haweziwezi kutengenezwa',
         reason: {

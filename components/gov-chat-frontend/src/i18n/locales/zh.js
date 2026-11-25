@@ -3489,6 +3489,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept}/{requested} 个问题已锚定语料 — {discarded} 个无法关联到被评测语料（重问 {rounds} 轮）'
+      },
       dropped: {
         note: '{requested} 个问题中生成了 {kept} 个 — 有 {dropped} 个无法生成',
         reason: {

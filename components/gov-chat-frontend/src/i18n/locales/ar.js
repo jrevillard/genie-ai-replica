@@ -3550,6 +3550,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: 'تم تثبيت {kept} من {requested} أسئلة — تعذّر ربط {discarded} بالمتن المُقيَّم (إعادة طلب: {rounds})'
+      },
       dropped: {
         note: '{kept} من {requested} سؤال — تعذّر توليد {dropped}',
         reason: {

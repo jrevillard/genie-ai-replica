@@ -3639,6 +3639,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept} questions sur {requested} ancrées — {discarded} n’ont pas pu être rattachées au corpus évalué (relance : {rounds} tour(s))'
+      },
       dropped: {
         note: '{kept} questions sur {requested} — {dropped} n’ont pas pu être générées',
         reason: {

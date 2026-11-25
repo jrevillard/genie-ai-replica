@@ -169,14 +169,14 @@ def _make_search_executor(
             # English query, and a foreign-language hint would send that
             # English query through a translation pass that can reword it.
             # A model that echoes the user's language is translated. When
-            # the detector cannot classify the query at all, no locale may
-            # speak for it either: the honest answer is the module's own
-            # unknown-language status — never a claimed English that was
-            # not established, whose raw text would be embedded into the
-            # English-only space with a prepared label.
+            # the detector cannot classify the query at all, the request's
+            # locale (the preparer's own default) speaks for it — the
+            # search the caller can still have; with no locale anywhere,
+            # the module's own unknown-language status refuses it — never
+            # a claimed English that was not established, whose raw text
+            # would be embedded into the English-only space with a
+            # prepared label.
             query_language = detect_language(query_text)
-            if query_language is None:
-                return _unprepared_envelope(QueryPreparationStatus.PASSTHROUGH_UNKNOWN_LANGUAGE)
             # The call is BOUNDED at the dispatch's operation budget — its
             # own pieces only know the translation service's generous
             # timeout, and the run's wall clock is checked only BETWEEN

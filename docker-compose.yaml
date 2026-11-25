@@ -1601,9 +1601,11 @@ services:
       # query the MODEL writes is prepared in ITS OWN language — the
       # request locale never forces a translation pass over an English
       # query (the model's query rides the translation leg only when the
-      # query itself is not English); and the CALLER's question (the
-      # no-agent path) whose detection fails with NO locale named is
-      # refused as an insufficiency, never searched raw.
+      # query itself is not English); when the detector cannot classify
+      # the query at all, the request locale speaks for it, and with no
+      # locale anywhere the query is refused as an insufficiency, never
+      # searched raw. The CALLER's question (the no-agent path) whose
+      # detection fails with NO locale named behaves the same way.
       - TRANSLATION_SERVICE_HOST_IP=${TRANSLATION_SERVICE_HOST_IP:-vllm-translation-guardrail}
       - TRANSLATION_SERVICE_PORT=${TRANSLATION_SERVICE_PORT:-9031}
       - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}

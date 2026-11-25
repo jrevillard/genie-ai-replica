@@ -256,7 +256,7 @@ def test_a_cancellation_during_the_claim_releases_the_slot(lane_dir):
 
     async def scenario():
         task = asyncio.ensure_future(lane.acquire().__aenter__())
-        await asyncio.get_event_loop().run_in_executor(None, slow.wait, 2)
+        await asyncio.get_running_loop().run_in_executor(None, slow.wait, 2)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task

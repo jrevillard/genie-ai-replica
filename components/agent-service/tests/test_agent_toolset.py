@@ -158,23 +158,31 @@ def test_an_unprepared_preparation_answers_insufficiency_and_never_touches_the_p
     assert statuses == ["fallback_timeout"]
 
 
-def test_an_unclassifiable_query_is_never_claimed_english(monkeypatch):
-    """When the detector cannot classify the query at all, no locale may
-    speak for it either: the tool answers the module's own
-    unknown-language status — never passthrough_english, whose raw text
-    would be embedded into the English-only space with a prepared label."""
-    import agent.toolset as toolset_module
+def test_an_unclassifiable_query_rides_the_locale_and_never_claims_english(monkeypatch, tmp_path):
+    """When the detector cannot classify the query at all, the request's
+    locale (the preparer's own default) speaks for it — the search the
+    caller can still have. With no locale anywhere, the module's own
+    unknown-language status refuses the query: never passthrough_english,
+    whose raw text would be embedded into the English-only space with a
+    prepared label."""
+    import preparation.detection as detection_module
+    from preparation import PreparationConfig, QueryPreparer
+    from preparation.registry import LanguageRegistry
 
-    monkeypatch.setattr(toolset_module, "detect_language", lambda text: None)
-    preparer = FakePreparer(_preparation_result(QueryPreparationStatus.PASSTHROUGH_ENGLISH))
+    monkeypatch.setattr(detection_module, "detect_language", lambda text: None)
+    env = {"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
+    config = PreparationConfig.load(env=env)
+    registry = LanguageRegistry(config.registry_path)
+
+    # No locale anywhere: the refusal, on the module's own status.
+    translator = RecordingTranslator(config, registry)
+    preparer = QueryPreparer(config, registry, translator, default_source_language=None)
     statuses: list[str] = []
     port = AgentFakePort(search_result=canned_search_result())
-    registry = document_toolset(
+    registry_tools = document_toolset(
         port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer, on_preparation_status=statuses.append
     )
-
-    result = asyncio.run(registry.dispatch("search_knowledge", {"query": "???"}))
-
+    result = asyncio.run(registry_tools.dispatch("search_knowledge", {"query": "???"}))
     assert result == {
         "outcome": "insufficient_evidence",
         "hits": [],
@@ -183,7 +191,17 @@ def test_an_unclassifiable_query_is_never_claimed_english(monkeypatch):
     }
     assert port.search_calls == []
     assert statuses == ["passthrough_unknown_language"]
-    assert preparer.calls == []  # nothing is prepared from an unclassified query
+    assert translator.prompts == []  # nothing was translated from nothing
+
+    # A named locale speaks for the query: the search runs, prepared.
+    translator = RecordingTranslator(config, registry)
+    preparer = QueryPreparer(config, registry, translator, default_source_language="fr")
+    port = AgentFakePort(search_result=canned_search_result())
+    registry_tools = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
+    result = asyncio.run(registry_tools.dispatch("search_knowledge", {"query": "???"}))
+    assert result["outcome"] == "success"
+    assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.TRANSLATED
+    assert len(translator.prompts) == 1
 
 
 def test_an_over_budget_query_is_the_contract_transient_carrier():

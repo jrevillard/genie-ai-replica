@@ -1515,9 +1515,8 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   the ArangoDB host the retrieval legs read. Unset = the code default
 #   (localhost), which inside the container is the container itself.
 # ARANGO_USERNAME:
-#   the database user the retrieval legs authenticate with. The core
-#   services spell the same knob ARANGO_USER — either line configures the
-#   agent's legs (ARANGO_USERNAME wins when both are set).
+#   the database user the retrieval legs authenticate with. This is the
+#   one spelling the agent service reads.
 # TEI_EMBEDDING_ENDPOINT=
 # TEI_RERANKING_ENDPOINT=
 # ARANGO_URL=

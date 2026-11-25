@@ -1569,10 +1569,9 @@ services:
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
-      # The database user: the core services spell it ARANGO_USER, the
-      # adapters read ARANGO_USERNAME — either spelling reaches the
-      # retrieval legs, ARANGO_USERNAME winning when both are set.
-      - ARANGO_USERNAME=${ARANGO_USERNAME:-${ARANGO_USER:-root}}
+      # The database user the retrieval legs authenticate with: one
+      # spelling, ARANGO_USERNAME, everywhere the agent service reads.
+      - ARANGO_USERNAME=${ARANGO_USERNAME:-root}
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
       # The LLM endpoint the generation leg calls (the model discovery

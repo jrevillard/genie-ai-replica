@@ -350,8 +350,7 @@ const passthroughBody = (parsed) => (parsed && typeof parsed === 'object' && !Ar
  * when it can) and warns: an operator must know a real body was cut, not see
  * a silent degrade to the fallback.
  *
- * The event name carries THIS module's prefix (the helper moved here in
- * 2.4b from the frame writer; the suite pins followed the rename).
+ * The event name carries THIS module's prefix.
  *
  * @param {Object} data - The axios response data (a Node stream).
  * @param {number} [status] - The upstream status, for the truncation warning.

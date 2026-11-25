@@ -29,7 +29,7 @@
 #     (VictoriaMetrics, VictoriaTraces, tempo-proxy, Grafana) in compose up;
 #     Swarm ignores profiles and uses ENABLE_OBSERVABILITY env var instead
 #     (default: 0 = disabled)
-#   - profiles: [agent] controls the agent-service (Epic 1) in compose up;
+#   - profiles: [agent] controls the agent-service in compose up;
 #     Swarm ignores profiles and uses AGENT_ENABLED env var instead
 #     (default: 0 = parked)
 #   - the admin-logs substrate (VictoriaLogs + OTel Collector + otel-collector-init)
@@ -850,7 +850,7 @@ services:
       # translates chat answers client-side, so with this off non-English UIs
       # get English answers). Set 0 to disable.
       - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-1}
-      # Agentic translation-leg allowances (story 2.10) — REQUIRED on the
+      # Agentic translation-leg allowances — REQUIRED on the
       # agentic path, read fail-closed by the BFF: a missing or unusable knob
       # means answer translation cannot be bounded and is skipped (the English
       # answer stays) with the knob named in an ERROR log and in the execution
@@ -877,7 +877,7 @@ services:
       - EMAIL_FROM=${EMAIL_FROM:-}
       # OPEA AI/ML service (the code default is the same service name)
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
-      # Story 1.1 (BFF fan-out wire-up): okf-server internal endpoint for the
+      # okf-server internal endpoint for the
       # retrieval posture + per-caller authz graph resolution. Code default
       # matches (http://okf-server:3002); the entry exists so an operator can
       # override it without an image rebuild.
@@ -889,12 +889,12 @@ services:
       # The legacy graph name the BFF prepends in hybrid mode — MUST match the
       # retriever's ARANGO_GRAPH_NAME or the legacy leg diverges.
       - ARANGO_GRAPH_NAME=${ARANGO_GRAPH_NAME:-GRAPH}
-      # Story 1.1 cache tuning (code defaults 30000/3000; clamped ≥1000/≥100):
+      # Cache tuning (code defaults 30000/3000; clamped ≥1000/≥100):
       # the posture/authz window and per-call timeout. Defaults mirror the
       # authz-resolver's SERVING_TTL_MS — override only for latency tuning.
       - OKF_RETRIEVAL_CONFIG_TTL_MS=${OKF_RETRIEVAL_CONFIG_TTL_MS:-30000}
       - OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=${OKF_RETRIEVAL_CONFIG_TIMEOUT_MS:-3000}
-      # Story 2.4 — the BFF's agent leg (the branch is gated in code by
+      # The BFF's agent leg (the branch is gated in code by
       # AGENT_ENABLED through the shared routing helper; these entries carry
       # the operator-visible knobs). AGENT_ENABLED must reach the backend
       # explicitly (same no-passthrough rule as OKF_ENABLED above): flipping
@@ -1052,16 +1052,16 @@ services:
       - RETRIEVER_ROUTE_HEAD_FLOOR=${RETRIEVER_ROUTE_HEAD_FLOOR:-0.55}
       - RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX=${RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX:-0.55}
       - RETRIEVER_ROUTE_HEADS_SUPERSEDE=${RETRIEVER_ROUTE_HEADS_SUPERSEDE:-true}
-      # ArangoDB — same database as the graphs (ADR-okf-018); direct arangojs, no ORM.
+      # ArangoDB — same database as the graphs; direct arangojs, no ORM.
       - ARANGO_URL=${ARANGO_URL:-http://arango-vector-db:8529}
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_USER=${ARANGO_USER:-root}
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
-      # Repository soft-delete grace window (hours) before hard delete (sweep deferred to Story 4.6).
+      # Repository soft-delete grace window (hours) before hard delete.
       - OKF_DELETE_GRACE_HOURS=${OKF_DELETE_GRACE_HOURS:-168}
       # Bundle-store POST timeout during publish (large bundles + ClamAV scan)
       - OKF_BUNDLE_STORE_TIMEOUT_MS=${OKF_BUNDLE_STORE_TIMEOUT_MS:-300000}
-      # Story 6.1 (RFC 8707): activate audience binding by setting e.g. okf-server.
+      # Activate audience binding (RFC 8707) by setting e.g. okf-server.
       # Empty default = off (deployments without the audience mapper keep working).
       - OKF_AUDIENCE=${OKF_AUDIENCE:-}
       # DEFAULT-OPEN OKF read authorization (product decision 2026-10-16):
@@ -1074,18 +1074,18 @@ services:
       # reach the container as explicit garbage and degrade to closed (with
       # a warning), per the env-file contract — not silently become open.
       - OKF_SCOPE_MODE=${OKF_SCOPE_MODE-open}
-      # Story 2.9.1: service-account credentials for okf-server → doc-repo HTTP
-      # (the okf-server Keycloak client provisioned by Story 6.1). Empty = calls
+      # Service-account credentials for okf-server → doc-repo HTTP
+      # (the okf-server Keycloak client). Empty = calls
       # go unauthenticated and doc-repo rejects them (loud one-time warning).
       - KC_OKF_SERVER_CLIENT_ID=${KC_OKF_SERVER_CLIENT_ID:-okf-server}
       - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
-      # Story 6-1c: credentials for the OKF access-control GRANT/REVOKE facility
+      # Credentials for the OKF access-control GRANT/REVOKE facility
       # (Keycloak Admin API via the genie-proxy-client service account). Empty
       # secret = the facility answers 503 ACCESS_CONTROL_UNCONFIGURED; the
       # read-path RESTRICTION enforcement needs no Keycloak and keeps working.
       - KC_OKF_ACCESS_CLIENT_ID=${KC_OKF_ACCESS_CLIENT_ID:-genie-proxy-client}
       - KC_OKF_ACCESS_CLIENT_SECRET=${KC_OKF_ACCESS_CLIENT_SECRET:-}
-      # Story 2.9.4: the ingestion worker (crawlWorker pattern — poll loop over
+      # The ingestion worker (crawlWorker pattern — poll loop over
       # Pending OKF files docs; sequential by design, dataprep is single-flight).
       - OKF_INGEST_WORKER_ENABLED=${OKF_INGEST_WORKER_ENABLED:-true}
       - OKF_INGEST_WORKER_INTERVAL_MS=${OKF_INGEST_WORKER_INTERVAL_MS:-15000}
@@ -1162,26 +1162,26 @@ services:
       # Model-endpoint externalization (David 2026-10-08: all OKF env vars
       # live in .env with documented defaults — compose is only the pipe).
       # TEI embed base for tag embedding + vectorized-head build + the
-      # Story 1-8 head tests (frontmatter-service appends /embed). Same
+      # Head tests (frontmatter-service appends /embed). Same
       # host:port as the inference server; unset = local full-stack TEI.
       - TEI_EMBED_HOST=${TEI_EMBED_HOST:-http://tei:80}
       # Embedding model id — keys the BGE query-instruction prefix for
       # the head-test query embeds (production chatqna parity). Unset =
       # no prefix, honestly reported by the lab as "unknown (no prefix)".
       - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID:-}
-      # Story 1-8d teaching-loop guardrail — mechanical rejection of suggested
+      # Teaching-loop guardrail — mechanical rejection of suggested
       # forbidden tags that are self-forbidding (cosine vs the repo's OWN
       # topic/entity/keyword vectors >= threshold; the 2026-10-09 poisoning
       # forbade 'lung-cancer', the repo's own entity tag) or near-duplicates
       # of already-forbidden tags. Defaults live in the service (0.55 / 0.9).
       - OKF_GUARD_SELF_SUBJECT=${OKF_GUARD_SELF_SUBJECT:-}
       - OKF_GUARD_DUPLICATE_FORBIDDEN=${OKF_GUARD_DUPLICATE_FORBIDDEN:-}
-      # Story 1-8g — the Lab click-test reranks a query against the repo
+      # The Lab click-test reranks a query against the repo
       # corpus through the SAME TEI /rerank the pipeline grounds on. Empty =
       # the probe reports verdict unknown with an honest note.
       - OKF_RERANK_ENDPOINT=${OKF_RERANK_ENDPOINT:-}
       - OKF_RERANK_TOKEN=${OKF_RERANK_TOKEN:-}
-      # Story 8-6 — the RAGAS benchmark sidecar. URL of the ragas-service
+      # The RAGAS benchmark sidecar. URL of the ragas-service
       # container; the suite/run/explain/xlsx routes degrade to honest 503
       # RAGAS_UNAVAILABLE when it is unreachable. Concurrency/size knobs
       # bound LLM cost on the shared GPU (defaults live in the service).
@@ -1236,7 +1236,7 @@ services:
       - CHATQNA_SYSTEM_PROMPT=${CHATQNA_SYSTEM_PROMPT:-}
       - OKF_CURATION_TIMEOUT_MS=${OKF_CURATION_TIMEOUT_MS:-}
       - OKF_CURATION_LANES=${OKF_CURATION_LANES:-}
-      # Story 1-8g-p: whole-corpus TOPIC-LINK AUTHORING. The import wizard runs
+      # Whole-corpus TOPIC-LINK AUTHORING. The import wizard runs
       # it automatically and the editor re-runs it on demand; it authors the
       # cross-links a corpus that never cites itself is born without. Generic
       # by construction (no domain lexicon), so it behaves identically for any
@@ -1252,7 +1252,7 @@ services:
       # times, is dead-lettered. WAITING rows are never reaped.
       - OKF_INGEST_WORKER_REAP_GRACE_MS=${OKF_INGEST_WORKER_REAP_GRACE_MS:-3600000}
       - OKF_INGEST_WORKER_MAX_CLAIMS=${OKF_INGEST_WORKER_MAX_CLAIMS:-8}
-      # Story 4.8-amend: content-only chunking — the worker POSTs the concept's
+      # Content-only chunking — the worker POSTs the concept's
       # markdown DIRECTLY to dataprep (no doc-repo files doc). Empty default =
       # fail-closed; the controller refuses every callback without a secret
       # configured, so the .env / deployment MUST set both ends to the same value.
@@ -1380,7 +1380,7 @@ services:
         delay: 5s
         max_attempts: 10
 
-  # Story 8-6 (ADR-okf-043) — RAGAS benchmarking sidecar. Stateless Python
+  # RAGAS benchmarking sidecar. Stateless Python
   # (ragas 0.4.3, deps frozen to the tests/rag-benchmarks runner's pins):
   # testset generation, metric evaluation, and xlsx serialization. INTERNAL
   # only — the okf-server calls it container-to-container on genieai_network
@@ -1483,7 +1483,7 @@ services:
         delay: 5s
         max_attempts: 10
 
-  # GENIE.AI agent service (Epic 1) — internal-only FastAPI service. Ships
+  # GENIE.AI agent service — internal-only FastAPI service. Ships
   # DARK (profile + replicas PAIR, the okf-server/certbot shape): the `agent`
   # profile keeps it out of a plain `docker compose up -d`, AGENT_ENABLED
   # decides the replica count, and it declares no host port and no gateway
@@ -2712,7 +2712,7 @@ services:
       RETRIEVER_ARANGO_NUM_CENTROIDS: ${RETRIEVER_ARANGO_NUM_CENTROIDS:-1}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
-      # Story 4.8-amend: content-only chunking — OKF concept completion callbacks
+      # Content-only chunking — OKF concept completion callbacks
       # (dataprep → okf-server internal endpoint) instead of doc-repo. Empty
       # default = fail-closed; the okf-server controller refuses every callback
       # without a matching shared secret, so the .env / deployment MUST set both
@@ -2931,7 +2931,7 @@ services:
       # for the adaptive reranker (keep aligned with chatqna's RERANKING_STRATEGY).
       RERANKING_STRATEGY: ${RERANKING_STRATEGY:-slice}
       RETRIEVER_SUMMARIZER_ENABLED: ${RETRIEVER_SUMMARIZER_ENABLED:-false}
-      # Story 1-8 routing head — OKF graph affinity + the forbidden/noise gate
+      # OKF routing head — graph affinity + the forbidden/noise gate
       # (read only by the retriever's graph routing; knob semantics + calibration
       # in genie-ai-overlay/retriever/config.py; rollback: WEIGHT=0.0).
       RETRIEVER_ROUTE_HEAD_WEIGHT: ${RETRIEVER_ROUTE_HEAD_WEIGHT:-1.0}

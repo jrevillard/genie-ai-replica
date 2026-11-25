@@ -1,0 +1,1034 @@
+=== local e2e run ===
+venue: https://genieai-forge.local:4443
+slot: acquired (checkout /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/.e2e-run.lock, venue /tmp/genieai-e2e-e3c5d7be792d.lock)
+admin credentials: the shared stack's keycloak-admin-credentials secret (namespace genieai)
+venue mapping: genieai-forge.local -> 10.42.0.240
+pre-flight
+pre-flight: venue https://genieai-forge.local:4443 (mapped genieai-forge.local -> 10.42.0.240)
+pre-flight: runner @playwright/test 1.62.1 — chromium 1234, chromium-headless-shell 1234
+pre-flight: the browser reached the venue (HTTP 200).
+pre-flight: venue build: STALE — the venue serves a2db5f7d36dd495b74d1d1123b6f318256e3b647, the checkout is 93fd29b26c8c59b52ad7f6ca0a27e3c8fdf6ca29: the served product differs (10 path(s), e.g. components/agent-service/capabilities/adapters/http.py, components/agent-service/tests/test_adapters_http.py, components/gov-chat-backend/__tests__/routes/agent-frame-writer.test.js) — every red below is suspect (the stale-venue remedy: docs/e2e-tests/local-run.md)
+provisioning the venue fixtures
+e2e fixtures ready: testuser, testadmin, testplain
+running the whole tests/e2e/ tree
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+
+Running 571 tests using 1 worker
+
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+  ✓    1 [chromium] › tests/e2e/admin/analytics-satisfaction.spec.js:134:3 › Analytics satisfaction charts › renders the gauge trends with the active locale labels and payload values (46.0s)
+  ✓    2 [chromium] › tests/e2e/admin/analytics-satisfaction.spec.js:165:3 › Analytics satisfaction charts › renders the heatmap with its title and the locale week axis (10.4s)
+  ✓    3 [chromium] › tests/e2e/admin/authz.spec.js:65:3 › Admin route authorization › admin role renders the admin dashboard (11.4s)
+  ✓    4 [chromium] › tests/e2e/admin/authz.spec.js:86:3 › Admin route authorization › non-admin session is refused by the backend and the navbar (8.5s)
+  ✓    5 [chromium] › tests/e2e/admin/data-wiring.spec.js:48:3 › Admin overview data wiring › stat tiles render the system-health payload values (8.5s)
+  ✓    6 [chromium] › tests/e2e/admin/data-wiring.spec.js:67:3 › Admin overview data wiring › health services and resource usage render from the payload (10.0s)
+  ✓    7 [chromium] › tests/e2e/admin/failure-states.spec.js:58:3 › Admin overview failure states › renders the error notification when system-health returns 500 (8.9s)
+  ✓    8 [chromium] › tests/e2e/admin/failure-states.spec.js:77:3 › Admin overview failure states › recovers on the next successful load after a 503 (9.6s)
+  ✓    9 [chromium] › tests/e2e/admin/hierarchy-translations-failure.spec.js:116:3 › Hierarchy form failed-translations dead-end › renders the notice, disables the controls, and recovers on Retry (9.9s)
+  ✓   10 [chromium] › tests/e2e/admin/hierarchy-translations-failure.spec.js:156:3 › Hierarchy form failed-translations dead-end › renders no notice and leaves the controls editable on a healthy load (10.0s)
+  ✓   11 [chromium] › tests/e2e/admin/logs-view.spec.js:74:3 › Admin logs view › warning rows render from the logs summary payload (10.5s)
+  ✓   12 [chromium] › tests/e2e/admin/logs-view.spec.js:99:3 › Admin logs view › an empty summary renders the explicit empty row (12.0s)
+  ✓   13 [chromium] › tests/e2e/auth/a1-login-redirect.spec.js:9:1 › redirects to Keycloak login page when accessing app root (2.5s)
+  ✓   14 [chromium] › tests/e2e/auth/a2-full-login-flow.spec.js:12:1 › completes full login flow from app to Keycloak and back (7.0s)
+  ✓   15 [chromium] › tests/e2e/auth/a3-legacy-routes-redirect.spec.js:19:3 › legacy route /login redirects to the Keycloak login page (2.8s)
+  ✓   16 [chromium] › tests/e2e/auth/a3-legacy-routes-redirect.spec.js:19:3 › legacy route /register redirects to the Keycloak login page (2.6s)
+  ✓   17 [chromium] › tests/e2e/auth/a3-legacy-routes-redirect.spec.js:19:3 › legacy route /forgot-password redirects to the Keycloak login page (2.9s)
+  ✓   18 [chromium] › tests/e2e/auth/d7a-external-idp-button.spec.js:28:1 › external IdP button is visible on Keycloak login page (5.0s)
+  ✓   19 [chromium] › tests/e2e/auth/d7b-external-idp-login-flow.spec.js:53:1 › completes full external IdP brokered login flow (22.9s)
+  ✓   20 [chromium] › tests/e2e/auth/g1-swagger-authorize.spec.js:7:3 › Swagger UI OAuth2 › Swagger spec contains OAuth2 security scheme (114ms)
+  ✓   21 [chromium] › tests/e2e/auth/g1-swagger-authorize.spec.js:26:3 › Swagger UI OAuth2 › Swagger UI loads with Authorize button (2.4s)
+  ✓   22 [chromium] › tests/e2e/auth/g1-swagger-authorize.spec.js:39:3 › Swagger UI OAuth2 › the authorize dialog exposes the genie OIDC config (2.6s)
+  ✓   23 [chromium] › tests/e2e/auth/h1-jwks-force-refresh.spec.js:49:3 › Phase H: JWKS Force-Refresh › H.1 — valid token passes with cached JWKS (1.4s)
+  ✓   24 [chromium] › tests/e2e/auth/h1-jwks-force-refresh.spec.js:56:3 › Phase H: JWKS Force-Refresh › H.2 — rotate realm signing keys (5.5s)
+  ✓   25 [chromium] › tests/e2e/auth/h1-jwks-force-refresh.spec.js:81:3 › Phase H: JWKS Force-Refresh › H.3 — old token succeeds via force-refresh after key rotation (451ms)
+  ✓   26 [chromium] › tests/e2e/auth/h1-jwks-force-refresh.spec.js:90:3 › Phase H: JWKS Force-Refresh › H.4 — corrupted token is rejected without retry (139ms)
+  -   27 [chromium] › tests/e2e/auth/i1-multi-realm.spec.js:114:3 › Phase I: Multi-Realm Configuration › I.1 — backend validates token from additional realm
+  -   28 [chromium] › tests/e2e/auth/i1-multi-realm.spec.js:129:3 › Phase I: Multi-Realm Configuration › I.2 — tokens from different realms have different issuers
+  -   29 [chromium] › tests/e2e/auth/i1-multi-realm.spec.js:144:3 › Phase I: Multi-Realm Configuration › I.3 — backend validates tokens from both realms simultaneously
+  ✓   30 [chromium] › tests/e2e/auth/j1-opea-continuity.spec.js:17:3 › Phase J: OPEA Continuity › J.1 — OPEA callback returns sanitized profile via Bearer token (674ms)
+  ✓   31 [chromium] › tests/e2e/auth/j1-opea-continuity.spec.js:30:3 › Phase J: OPEA Continuity › J.2 — OPEA callback rejects unauthenticated requests (431ms)
+  ✓   32 [chromium] › tests/e2e/auth/j1-opea-continuity.spec.js:42:3 › Phase J: OPEA Continuity › J.3 — no Keycloak artifacts leak to OPEA (492ms)
+  ✓   33 [chromium] › tests/e2e/auth/k1-auth-error-display.spec.js:154:3 › Phase K: Auth Error Display › K.1 — TOKEN_INVALID (modified token) (8.0s)
+  ✓   34 [chromium] › tests/e2e/auth/k1-auth-error-display.spec.js:173:3 › Phase K: Auth Error Display › K.2 — TOKEN_EXPIRED (short-lived token) (17.4s)
+  ✓   35 [chromium] › tests/e2e/auth/k1-auth-error-display.spec.js:251:3 › Phase K: Auth Error Display › K.3 — FORBIDDEN (user without roles) (8.2s)
+  ✓   36 [chromium] › tests/e2e/auth/k1-auth-error-display.spec.js:279:3 › Phase K: Auth Error Display › K.4 — TOKEN_INVALID (invalid token string) (307ms)
+  ✓   37 [chromium] › tests/e2e/auth/l1-frontend-logout-redirect.spec.js:11:1 › clicks logout button and redirects to Keycloak login page (13.0s)
+  ✓   38 [chromium] › tests/e2e/auth/l2-localstorage-cleanup.spec.js:13:1 › clears legacy localStorage items after logout (12.9s)
+  ✓   39 [chromium] › tests/e2e/auth/l3-vuex-state-cleared.spec.js:16:1 › clears Vuex auth state after logout — lands on the Keycloak login page (13.8s)
+  ✓   40 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:137:3 › chat-composer mounted state › welcome screen has exactly one composer, inside the welcome panel (14.0s)
+  ✓   41 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:171:3 › chat-composer mounted state › chat view has exactly one composer (the v-else slot) (12.4s)
+  ✓   42 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:198:3 › composer send pathway › welcome composer Enter sends and switches to the chat view (11.5s)
+  ✓   43 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:223:3 › composer send pathway › Shift+Enter inserts a newline and does NOT send (11.7s)
+  ✓   44 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:251:3 › composer send pathway › Enter on an empty composer does NOT send (10.8s)
+  ✓   45 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:274:3 › grid after placement extraction › grid holds exactly the fixture tiles; the composer entry is not among them (9.6s)
+  ✓   46 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:308:3 › config / composer identity › welcome composer carries the reference's leading mark, the entry's tint and its accessible name (12.2s)
+  ✓   47 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:345:3 › config / composer identity › the composer's background follows the theme, not the entry's light-mode colour (20.5s)
+  ✓   48 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:390:3 › config / composer identity › disabled attach and mic carry a "not available yet" tooltip (10.0s)
+  ✓   49 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:406:3 › config / composer identity › send button has an accessible name and is disabled on empty content (11.8s)
+  ✓   50 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:432:3 › visual-layer off › composer works with data-visual="off" (11.6s)
+  ✓   51 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:462:3 › composer field › the field inside the pill draws no border and no background of its own (11.2s)
+  ✓   52 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:497:3 › composer field › the pill carries the focus ring, not the field inside it (11.7s)
+  ✓   53 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:650:5 › welcome bar measure › bar measure, and the field grows with what is typed into it (1920x1080 light) (9.7s)
+  ✓   54 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:650:5 › welcome bar measure › bar measure, and the field grows with what is typed into it (1920x1080 dark) (8.5s)
+  ✓   55 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:650:5 › welcome bar measure › bar measure, and the field grows with what is typed into it (1440x900 light) (9.6s)
+  ✓   56 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:650:5 › welcome bar measure › bar measure, and the field grows with what is typed into it (1440x900 dark) (8.8s)
+[placeholder-fit @ 1440]
+  1440=rendered/content (field_h bar_h)
+  ar  =190.54  / 321.81  (h=25 bar=50)
+  bn  =169.82  / 321.81  (h=26 bar=50)
+  de  =302.64  / 321.81  (h=25 bar=50)
+  en  =242.99  / 321.81  (h=25 bar=50)
+  es  =287.45  / 321.81  (h=25 bar=50)
+  fr  =280.51  / 321.81  (h=25 bar=50)
+  id  =280.36  / 321.81  (h=25 bar=50)
+  man =242.99  / 321.81  (h=25 bar=50)
+  pt  =306.89  / 321.81  (h=25 bar=50)
+  ru  =234.1   / 321.81  (h=25 bar=50)
+  st  =195.51  / 321.81  (h=25 bar=50)
+  sw  =209.12  / 321.81  (h=25 bar=50)
+  th  =166.04  / 321.81  (h=30 bar=50)
+  zh  =110.1   / 321.81  (h=27 bar=50)
+[placeholder-fit @ 1400]
+  1400=rendered/content (field_h bar_h)
+  ar  =190.54  / 289.41  (h=25 bar=50)
+  bn  =169.82  / 289.41  (h=26 bar=50)
+  de  =302.64  / 289.41  (h=42 bar=52)
+  en  =242.99  / 289.41  (h=25 bar=50)
+  es  =287.45  / 289.41  (h=25 bar=50)
+  fr  =280.51  / 289.41  (h=25 bar=50)
+  id  =280.36  / 289.41  (h=25 bar=50)
+  man =242.99  / 289.41  (h=25 bar=50)
+  pt  =306.89  / 289.41  (h=42 bar=52)
+  ru  =234.1   / 289.41  (h=25 bar=50)
+  st  =195.51  / 289.41  (h=25 bar=50)
+  sw  =209.12  / 289.41  (h=25 bar=50)
+  th  =166.04  / 289.41  (h=30 bar=50)
+  zh  =110.1   / 289.41  (h=27 bar=50)
+  ✓   57 [chromium] › tests/e2e/chatbot/chat-composer.spec.js:769:3 › welcome bar measure › every locale's placeholder fits the welcome composer at 1440 (one line) and at 1400 (at most two lines) (22.1s)
+  ✓   58 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:36:3 › Conversation V1 › the header names the conversation and × returns to the welcome screen, keeping history (12.1s)
+  ✓   59 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:64:3 › Conversation V1 › the wave is fixed behind the conversation and does not scroll with the messages (8.0s)
+  ✓   60 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:136:3 › Conversation V1 › the composer keeps its disabled attach and mic placeholders and grows to five lines (6.8s)
+  ✓   61 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:166:3 › Conversation V1 › each turn carries its avatar: the product tile for the assistant, initials for the user (8.6s)
+  ✓   62 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:211:3 › Conversation — sources › the answer card carries its own collapsible sources (8.7s)
+  ✓   63 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:264:3 › Conversation — actions › the answer carries thumbs that record a rating and a copy that fills the clipboard (9.4s)
+  ✓   64 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:306:3 › Conversation — warning and error › an ungrounded answer shows the amber warning inside the card and no empty sources (8.8s)
+  ✓   65 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:326:3 › Conversation — warning and error › a failed turn shows a retry that re-sends the same query (9.8s)
+  ✓   66 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:355:3 › Conversation — status pill › the navbar pill reports the online state; a failed turn flips it to an explained offline (9.3s)
+  ✓   67 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:382:3 › Conversation — documents panel › the documents panel shows a neutral empty state and keeps the FAQs (7.9s)
+  ✓   68 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:408:3 › Conversation — contrast › the amber warning and the initials clear a 4.5:1 contrast floor (8.5s)
+  ✓   69 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:461:3 › Conversation — answer card › the assistant answer renders inside one elevated card, from the first frame (8.6s)
+  ✓   70 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:522:3 › Conversation — surface invariants › a Just Chat turn adds no context chip and the header stays Just Chat (7.6s)
+  ✓   71 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:574:3 › Conversation — surface invariants › the header title reflects the QuickHelp option that opened the chat (8.0s)
+  ✓   72 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:615:3 › Conversation — surface invariants › navigating away never prompts and never loses the conversation (9.3s)
+  ✓   73 [chromium] › tests/e2e/chatbot/chat-conversation.spec.js:675:3 › Conversation — surface invariants › a reload keeps the turns; an interrupted generation offers a retry (12.4s)
+  ✓   74 [chromium] › tests/e2e/chatbot/conversation-history.spec.js:272:3 › Conversation history persistence › saves a conversation and restores it in a new session (20.0s)
+  ✓   75 [chromium] › tests/e2e/chatbot/conversation-history.spec.js:365:3 › Conversation history persistence › list conversations endpoint returns conversations for authenticated user (8.1s)
+  ✓   76 [chromium] › tests/e2e/chatbot/conversation-history.spec.js:384:3 › Conversation history persistence › messages are restored in correct order when loading a saved conversation (11.2s)
+  ✓   77 [chromium] › tests/e2e/chatbot/error-handling.spec.js:96:3 › RAG error handling › displays error message when backend returns error (10.1s)
+  ✓   78 [chromium] › tests/e2e/chatbot/quick-help-scope.spec.js:206:3 › Quick Help scope states › the grid waits for the hierarchy, then renders its cards (6.6s)
+  ✓   79 [chromium] › tests/e2e/chatbot/quick-help-scope.spec.js:225:3 › Quick Help scope states › a card whose label the hierarchy cannot name renders the error state and sends nothing (7.8s)
+  ✓   80 [chromium] › tests/e2e/chatbot/quick-help-scope.spec.js:265:3 › Quick Help scope states › the caption names WHICH part of the scope is gone (7.3s)
+  ✓   81 [chromium] › tests/e2e/chatbot/quick-help-scope.spec.js:305:3 › Quick Help scope states › a card whose title resolves to nothing renders the error state, and its caption names the title (7.9s)
+  ✓   82 [chromium] › tests/e2e/chatbot/quick-help-scope.spec.js:329:3 › Quick Help scope states › a healthy card is NOT an error card and its click does reach the query path (7.9s)
+  -   83 [chromium] › tests/e2e/chatbot/real-rag-citation.spec.js:102:3 › Chatbot — a real answer cites its real source › the answer carries the fixture fact and the sources cite the fixture file
+  ✓   84 [chromium] › tests/e2e/chatbot/send-message-and-stream.spec.js:127:3 › Chatbot message sending and SSE streaming › sends a message and displays it verbatim as the only user bubble (7.8s)
+  ✘   85 [chromium] › tests/e2e/chatbot/send-message-and-stream.spec.js:139:3 › Chatbot message sending and SSE streaming › receives a bot response carrying the stream metadata after sending a message (7.6s)
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+  ✘   86 [chromium] › tests/e2e/chatbot/send-message-and-stream.spec.js:252:3 › Chatbot message sending and SSE streaming — the French answer › the streamed answer is in French when the UI locale is fr (14.6s)
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+  ✓   87 [chromium] › tests/e2e/chatbot/sse-contract.spec.js:61:3 › SSE contract — graceful degradation (story 2.9) › an extended stream renders exactly as a legacy one and the activity line ends collapsed (9.1s)
+  ✓   88 [chromium] › tests/e2e/chatbot/sse-contract.spec.js:92:3 › SSE contract — graceful degradation (story 2.9) › the ungrounded warning path is unchanged with the new frames riding (7.2s)
+  ✓   89 [chromium] › tests/e2e/chatbot/sse-contract.spec.js:125:3 › SSE contract — the agent activity line › pre-chunk activity renders the line, the first chunk collapses it, and post-chunk frames stay unrendered (6.8s)
+  ✓   90 [chromium] › tests/e2e/chatbot/sse-contract.spec.js:222:3 › SSE contract — the agent activity line › grounded with no translation: neither warning, note nor caption (8.5s)
+  ✓   91 [chromium] › tests/e2e/chatbot/sse-contract.spec.js:236:3 › SSE contract — the agent activity line › grounded with a delivered translation: the scope caption only (7.8s)
+  ✓   92 [chromium] › tests/e2e/chatbot/sse-contract.spec.js:256:3 › SSE contract — the agent activity line › unverified renders the neutral note and NEVER the ungrounded warning (8.0s)
+  ✓   93 [chromium] › tests/e2e/documents/search.spec.js:30:3 › Document Search › search by partial file name returns matching documents (15.7s)
+  ✓   94 [chromium] › tests/e2e/documents/search.spec.js:45:3 › Document Search › search for non-existent file name shows no results message (10.8s)
+  ✓   95 [chromium] › tests/e2e/documents/search.spec.js:54:3 › Document Search › clear search shows all documents again (12.3s)
+  ✓   96 [chromium] › tests/e2e/documents/search.spec.js:68:3 › Document Search › filter by Pending status shows only pending documents (10.7s)
+  ✓   97 [chromium] › tests/e2e/documents/upload.spec.js:56:5 › Document Upload › upload a .txt file and verify it appears in the document table (9.5s)
+  ✓   98 [chromium] › tests/e2e/documents/upload.spec.js:56:5 › Document Upload › upload a .md file and verify it appears in the document table (14.0s)
+  ✓   99 [chromium] › tests/e2e/documents/upload.spec.js:56:5 › Document Upload › upload a .pdf file and verify it appears in the document table (11.6s)
+  ✓  100 [chromium] › tests/e2e/documents/upload.spec.js:73:3 › Document Upload › reject .exe file and display error message (8.4s)
+  -  101 [chromium] › tests/e2e/documents/upload.spec.js:132:3 › Document Upload — the ingest chain › ingest an uploaded file and reach the Ingested status
+  ✓  102 [chromium] › tests/e2e/helpers/auth-request.spec.js:92:3 › the transport response contract (auth.request at its own boundary) › a JSON body resolves parsed, with the status and headers (33ms)
+  ✓  103 [chromium] › tests/e2e/helpers/auth-request.spec.js:103:3 › the transport response contract (auth.request at its own boundary) › an empty body resolves data: null — a 204-style success (13ms)
+  ✓  104 [chromium] › tests/e2e/helpers/auth-request.spec.js:113:3 › the transport response contract (auth.request at its own boundary) › an empty body wins over raw — still null, not an empty string (12ms)
+  ✓  105 [chromium] › tests/e2e/helpers/auth-request.spec.js:125:3 › the transport response contract (auth.request at its own boundary) › raw: true resolves the body AS TEXT (13ms)
+  ✓  106 [chromium] › tests/e2e/helpers/auth-request.spec.js:138:3 › the transport response contract (auth.request at its own boundary) › a non-JSON body rejects with nonJsonBody and the status (16ms)
+  ✓  107 [chromium] › tests/e2e/helpers/auth-request.spec.js:208:3 › the edge upstream-reset retry (auth.request) › a GET on the edge reset is retried and recovers on the first healthy answer (28ms)
+  ✓  108 [chromium] › tests/e2e/helpers/auth-request.spec.js:219:3 › the edge upstream-reset retry (auth.request) › the bound holds and the LAST observed reset is rethrown verbatim (30ms)
+  ✓  109 [chromium] › tests/e2e/helpers/auth-request.spec.js:230:3 › the edge upstream-reset retry (auth.request) › a product 503 — a JSON body — resolves once and is never retried (17ms)
+  ✓  110 [chromium] › tests/e2e/helpers/auth-request.spec.js:243:3 › the edge upstream-reset retry (auth.request) › a POST on the edge reset is never retried — only idempotent methods are (15ms)
+  ✓  111 [chromium] › tests/e2e/helpers/auth-request.spec.js:257:3 › the edge upstream-reset retry (auth.request) › a PUT on the edge reset is retried — RFC 7231 idempotent (23ms)
+  ✓  112 [chromium] › tests/e2e/helpers/auth-request.spec.js:271:3 › the edge upstream-reset retry (auth.request) › a plain-text 503 without the reset signature is answered once (11ms)
+  ✓  113 [chromium] › tests/e2e/helpers/auth-request.spec.js:283:3 › the edge upstream-reset retry (auth.request) › a 502 carrying the reset text is answered once — the status gate is exact (11ms)
+  ✓  114 [chromium] › tests/e2e/helpers/auth-request.spec.js:295:3 › the edge upstream-reset retry (auth.request) › a raw:true GET on the reset reply is retried and recovers — the resolution arm (22ms)
+  ✓  115 [chromium] › tests/e2e/helpers/auth-request.spec.js:308:3 › the edge upstream-reset retry (auth.request) › a raw:true 503 without the reset signature is answered once (9ms)
+  ✓  116 [chromium] › tests/e2e/helpers/auth-request.spec.js:319:3 › the edge upstream-reset retry (auth.request) › a raw:true 502 carrying the reset text is answered once — the arm mirrors the status gate (13ms)
+  ✓  117 [chromium] › tests/e2e/helpers/auth-request.spec.js:329:3 › the edge upstream-reset retry (auth.request) › a DELETE on the edge reset is retried — RFC 7231 idempotent (14ms)
+  ✓  118 [chromium] › tests/e2e/helpers/auth-request.spec.js:341:3 › the edge upstream-reset retry (auth.request) › a connection killed before any headers (ECONNRESET) is retried (17ms)
+  ✓  119 [chromium] › tests/e2e/helpers/auth-request.spec.js:355:3 › the edge upstream-reset retry (auth.request) › the resolution arm honours the same bound — exhaustion returns the 503 verbatim (30ms)
+  ✓  120 [chromium] › tests/e2e/helpers/auth-request.spec.js:370:3 › the edge upstream-reset retry (auth.request) › the pre-headers shape honours the bound — the LAST reset error travels verbatim (21ms)
+  ✓  121 [chromium] › tests/e2e/helpers/auth-request.spec.js:382:3 › the edge upstream-reset retry (auth.request) › a raw:true 503 whose JSON body embeds the reset text is answered once (31ms)
+  ✓  122 [chromium] › tests/e2e/helpers/auth-request.spec.js:397:3 › the edge upstream-reset retry (auth.request) › an invalid path rejects — the helper always returns a promise (2ms)
+  ✓  123 [chromium] › tests/e2e/helpers/auth.spec.js:11:3 › getUserToken primary-realm guard › rejects a missing realm with a message naming the requirement (2ms)
+  ✓  124 [chromium] › tests/e2e/helpers/auth.spec.js:17:3 › getUserToken primary-realm guard › rejects the primary realm with the design decision named (2ms)
+  ✓  125 [chromium] › tests/e2e/helpers/auth.spec.js:39:3 › the master-realm admin credential › ADMIN_TOKEN wins over the environment password, without a round trip (2ms)
+  ✓  126 [chromium] › tests/e2e/helpers/auth.spec.js:45:3 › the master-realm admin credential › without a token and without a password, the requirement is named (3ms)
+  ✓  127 [chromium] › tests/e2e/helpers/auth.spec.js:78:3 › getAdminToken's no-access_token verdict › a 200 with an empty body names the missing access_token (2ms)
+  ✓  128 [chromium] › tests/e2e/helpers/auth.spec.js:85:3 › getAdminToken's no-access_token verdict › a 200 shaped as JSON but carrying no access_token names it, with the body excerpt (2ms)
+  ✓  129 [chromium] › tests/e2e/helpers/auth.spec.js:120:3 › getSessionTokenViaUI's error-priority contract › a clean run returns what the session saw (2ms)
+  ✓  130 [chromium] › tests/e2e/helpers/auth.spec.js:128:3 › getSessionTokenViaUI's error-priority contract › a teardown failure on a login that SUCCEEDED is thrown, token discarded (2ms)
+  ✓  131 [chromium] › tests/e2e/helpers/auth.spec.js:135:3 › getSessionTokenViaUI's error-priority contract › a login failure is thrown as-is when the teardown held (3ms)
+  ✓  132 [chromium] › tests/e2e/helpers/auth.spec.js:140:3 › getSessionTokenViaUI's error-priority contract › a teardown failure rides along as the login failure’s cause (3ms)
+  ✓  133 [chromium] › tests/e2e/helpers/auth.spec.js:160:3 › dedupeByIds › keeps the first occurrence and drops later duplicates, order preserved (2ms)
+  ✓  134 [chromium] › tests/e2e/helpers/auth.spec.js:165:3 › dedupeByIds › dedupes within one page and across pages alike — the Set spans the whole array (1ms)
+  ✓  135 [chromium] › tests/e2e/helpers/auth.spec.js:178:3 › dedupeByIds › keeps rows whose id cannot be derived — each stands alone (2ms)
+  ✓  136 [chromium] › tests/e2e/helpers/base-url.spec.js:63:3 › the venue address has one spelling › the trailing slashes are stripped (260ms)
+  ✓  137 [chromium] › tests/e2e/helpers/base-url.spec.js:69:3 › the venue address has one spelling › no configured address means a URL of its own (83ms)
+  ✓  138 [chromium] › tests/e2e/helpers/base-url.spec.js:80:3 › the venue address has one spelling › the published value is the CANONICAL origin (139ms)
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+  ✓  139 [chromium] › tests/e2e/helpers/base-url.spec.js:92:3 › the venue address must be an http(s) origin with a host › an explicitly empty address is refused, not swallowed into the default (82ms)
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "localhost:3000" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+  ✓  140 [chromium] › tests/e2e/helpers/base-url.spec.js:101:3 › the venue address must be an http(s) origin with a host › a scheme-less address is refused, naming the value (62ms)
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "not a venue address" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "example.com" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+  ✓  141 [chromium] › tests/e2e/helpers/base-url.spec.js:110:3 › the venue address must be an http(s) origin with a host › an unparseable address is refused (122ms)
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "ftp://example.com" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+  ✓  142 [chromium] › tests/e2e/helpers/base-url.spec.js:116:3 › the venue address must be an http(s) origin with a host › a non-http scheme is refused (70ms)
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "https://example.com:4443/k8s-path/" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "https://example.com:4443?x=1" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "https://example.com:4443#fragment" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72
+    throw new Error(
+    ^
+
+Error: the venue address is not an http(s) origin with a host: "https://user@example.com:4443/" — a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would map an empty host, and the browser would navigate to an address that means nothing (#1805). BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or credentials (e.g. "https://genieai-forge.local:4443").
+    at normalizeVenue (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:72:11)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/base-url.js:90:18)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)
+    at Object.<anonymous> (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/venue-launch-args.js:27:22)
+
+Node.js v24.22.3
+  ✓  143 [chromium] › tests/e2e/helpers/base-url.spec.js:120:3 › the venue address must be an http(s) origin with a host › a path, a query, a hash and credentials are refused (252ms)
+  ✓  144 [chromium] › tests/e2e/helpers/base-url.spec.js:129:3 › the venue address must be an http(s) origin with a host › an http origin still passes (65ms)
+  ✓  145 [chromium] › tests/e2e/helpers/chatbot.spec.js:25:3 › the streaming flag is read through the store getter › a store without the getter is a broken contract, named (3ms)
+  ✓  146 [chromium] › tests/e2e/helpers/chatbot.spec.js:40:3 › the streaming flag is read through the store getter › no bot message yet is NOT "not streaming" — the wait continues (2ms)
+  ✓  147 [chromium] › tests/e2e/helpers/chatbot.spec.js:49:3 › the streaming flag is read through the store getter › the WELCOME bubble is not the turn — the wait continues (1ms)
+  ✓  148 [chromium] › tests/e2e/helpers/chatbot.spec.js:56:3 › the streaming flag is read through the store getter › the LAST bot message decides the flag (2ms)
+  ✓  149 [chromium] › tests/e2e/helpers/chatbot.spec.js:72:3 › the streaming flag is read through the store getter › a conversation without bot messages is empty, not broken (2ms)
+  ✓  150 [chromium] › tests/e2e/helpers/chatbot.spec.js:111:3 › the page-side read keeps the flag's ABSENCE an absence › the WAIT reads the flag through this read — not the old store path (108ms)
+  ✓  151 [chromium] › tests/e2e/helpers/chatbot.spec.js:145:3 › the page-side read keeps the flag's ABSENCE an absence › a message with no flag crosses the wire with no flag (97ms)
+  ✓  152 [chromium] › tests/e2e/helpers/chatbot.spec.js:160:3 › the page-side read keeps the flag's ABSENCE an absence › a message that HAS the flag crosses with its value (77ms)
+  ✓  153 [chromium] › tests/e2e/helpers/chatbot.spec.js:167:3 › the page-side read keeps the flag's ABSENCE an absence › a finished turn crosses with false — which is NOT the absence (74ms)
+  ✓  154 [chromium] › tests/e2e/helpers/chatbot.spec.js:175:3 › the page-side read keeps the flag's ABSENCE an absence › the welcome bubble before the turn does not end the wait (98ms)
+  ✓  155 [chromium] › tests/e2e/helpers/chatbot.spec.js:186:3 › the page-side read keeps the flag's ABSENCE an absence › an app that is not booted is transient, not broken (96ms)
+  ✓  156 [chromium] › tests/e2e/helpers/chatbot.spec.js:193:3 › the page-side read keeps the flag's ABSENCE an absence › a booted app without the getter is a broken contract, named (86ms)
+  ✓  157 [chromium] › tests/e2e/helpers/chatbot.spec.js:205:3 › the page-side read keeps the flag's ABSENCE an absence › a getter that returns nothing means no conversation is open yet (83ms)
+  ✓  158 [chromium] › tests/e2e/helpers/chatbot.spec.js:225:3 › the last bot message metadata responseTime is read through the same store getter › a completed turn whose metadata frame landed carries the numeric response time (1ms)
+  ✓  159 [chromium] › tests/e2e/helpers/chatbot.spec.js:236:3 › the last bot message metadata responseTime is read through the same store getter › a completed turn whose metadata frame has not landed reports undefined, not a contract break (1ms)
+  ✓  160 [chromium] › tests/e2e/helpers/chatbot.spec.js:241:3 › the last bot message metadata responseTime is read through the same store getter › a welcome-only transcript (a bot row carrying no metadata) reports undefined (2ms)
+  ✓  161 [chromium] › tests/e2e/helpers/chatbot.spec.js:250:3 › the last bot message metadata responseTime is read through the same store getter › a broken store contract is NOT_READABLE — the caller reports it by name (5ms)
+  ✓  162 [chromium] › tests/e2e/helpers/chatbot.spec.js:258:3 › the last bot message metadata responseTime is read through the same store getter › not-booted is NOT_READABLE here — the deliberate asymmetry with the flag reader is the contract (2ms)
+  ✓  163 [chromium] › tests/e2e/helpers/chatbot.spec.js:267:3 › the last bot message metadata responseTime is read through the same store getter › an open-but-empty conversation is not a contract break (2ms)
+  ✓  164 [chromium] › tests/e2e/helpers/chatbot.spec.js:273:3 › the login budget the login specs consume (#1798) › LOGIN_BUDGET_TIMEOUT_MS stays at the value the six login budgets were raised to (2ms)
+  ✓  165 [chromium] › tests/e2e/helpers/chatbot.spec.js:291:3 › the done frame translation verdict is read through the same store getter › a completed turn whose done frame landed carries the verdict (3ms)
+  ✓  166 [chromium] › tests/e2e/helpers/chatbot.spec.js:305:3 › the done frame translation verdict is read through the same store getter › a message with no verdict crosses the wire with no verdict (101ms)
+  ✓  167 [chromium] › tests/e2e/helpers/chatbot.spec.js:329:3 › the done frame translation verdict is read through the same store getter › an empty transcript reports undefined — there is no bot message at all (2ms)
+  ✓  168 [chromium] › tests/e2e/helpers/chatbot.spec.js:336:3 › the done frame translation verdict is read through the same store getter › a broken store contract is NOT_READABLE — the caller reports it by name (5ms)
+  ✓  169 [chromium] › tests/e2e/helpers/chatbot.spec.js:345:3 › the done frame translation verdict is read through the same store getter › an open-but-empty conversation is not a contract break (2ms)
+  ✓  170 [chromium] › tests/e2e/helpers/documents.spec.js:49:3 › the document status predicate › 'all' lists every document, with or without a dataprep block (3ms)
+  ✓  171 [chromium] › tests/e2e/helpers/documents.spec.js:54:3 › the document status predicate › a selection lists only the documents whose status equals it — case and padding don't matter (4ms)
+  ✓  172 [chromium] › tests/e2e/helpers/documents.spec.js:62:3 › the document status predicate › a document without a dataprep block is never in a filtered selection (4ms)
+  ✓  173 [chromium] › tests/e2e/helpers/documents.spec.js:71:3 › the document status predicate › the require-of-ESM floor is named at load, not a bare SyntaxError (2ms)
+  ✓  174 [chromium] › tests/e2e/helpers/documents.spec.js:81:3 › the document status predicate › the predicate IS the shared vocabulary, on behaviour, across a sample (45ms)
+  ✓  175 [chromium] › tests/e2e/helpers/documents.spec.js:110:3 › the document status predicate › no private normalisation is spelled inside matchesStatus (4ms)
+  ✓  176 [chromium] › tests/e2e/helpers/documents.spec.js:167:3 › the sweep per-file delete (retract-then-delete, #1864) › a clean delete is one DELETE and no retract, with the bearer header (3ms)
+  ✓  177 [chromium] › tests/e2e/helpers/documents.spec.js:173:3 › the sweep per-file delete (retract-then-delete, #1864) › a STILL_SERVING refusal retracts and deletes again, in that order (3ms)
+  ✓  178 [chromium] › tests/e2e/helpers/documents.spec.js:189:3 › the sweep per-file delete (retract-then-delete, #1864) › a failed retract names the retract step and never re-attempts the delete (3ms)
+  ✓  179 [chromium] › tests/e2e/helpers/documents.spec.js:201:3 › the sweep per-file delete (retract-then-delete, #1864) › a failed retract surfaces the server details field (2ms)
+  ✓  180 [chromium] › tests/e2e/helpers/documents.spec.js:225:3 › the sweep per-file delete (retract-then-delete, #1864) › a 401 on the retract leg keeps the token-expiry diagnosis (3ms)
+  ✓  181 [chromium] › tests/e2e/helpers/documents.spec.js:236:3 › the sweep per-file delete (retract-then-delete, #1864) › a delete that still refuses after a successful retract carries the refusal (3ms)
+  ✓  182 [chromium] › tests/e2e/helpers/documents.spec.js:253:3 › the sweep per-file delete (retract-then-delete, #1864) › another 409 code takes no retract — the remedy keys on STILL_SERVING (2ms)
+  ✓  183 [chromium] › tests/e2e/helpers/documents.spec.js:260:3 › the sweep per-file delete (retract-then-delete, #1864) › a 401 keeps the unauthorized description, without a retract (3ms)
+  ✓  184 [chromium] › tests/e2e/helpers/documents.spec.js:267:3 › the sweep per-file delete (retract-then-delete, #1864) › a 409 with an empty body takes no retract and reads as a bare status (5ms)
+  ✓  185 [chromium] › tests/e2e/helpers/documents.spec.js:276:3 › the sweep per-file delete (retract-then-delete, #1864) › a plain server failure names its status and the server error (5ms)
+  ✓  186 [chromium] › tests/e2e/helpers/documents.spec.js:282:3 › the sweep per-file delete (retract-then-delete, #1864) › a transport error is named in the failure string, not thrown (2ms)
+  ✓  187 [chromium] › tests/e2e/helpers/documents.spec.js:295:3 › the API upload (multipart, the repository upload route) › the upload rides a multipart body carrying the file part and the bearer (11ms)
+  ✓  188 [chromium] › tests/e2e/helpers/documents.spec.js:322:3 › the API upload (multipart, the repository upload route) › a non-201 answer is a named failure carrying the status and the file (2ms)
+  ✓  189 [chromium] › tests/e2e/helpers/documents.spec.js:331:3 › the API upload (multipart, the repository upload route) › a 201 without a file record is a named failure, not an undefined id (2ms)
+  ✓  190 [chromium] › tests/e2e/helpers/documents.spec.js:338:3 › the ingest trigger (the repository ingest route) › an accepted ingest is one POST with the bearer, and the payload returns (3ms)
+  ✓  191 [chromium] › tests/e2e/helpers/documents.spec.js:344:3 › the ingest trigger (the repository ingest route) › a 207 multi-status envelope is accepted too (1ms)
+  ✓  192 [chromium] › tests/e2e/helpers/documents.spec.js:349:3 › the ingest trigger (the repository ingest route) › the repository's OWN 409 body ('An ingest for this file is already running') is the accepted state (4ms)
+  ✓  193 [chromium] › tests/e2e/helpers/documents.spec.js:370:3 › the ingest trigger (the repository ingest route) › dataprep's 409 idempotency guard (ingest_already_running) is the accepted state (2ms)
+  ✓  194 [chromium] › tests/e2e/helpers/documents.spec.js:375:3 › the ingest trigger (the repository ingest route) › a 409 without the code, and any other status, fail loud with the status named (2ms)
+  ✓  195 [chromium] › tests/e2e/helpers/documents.spec.js:388:3 › the ingest wait (the dataprep status over the API) › a file already ingested costs ONE read and returns the record (1ms)
+  ✓  196 [chromium] › tests/e2e/helpers/documents.spec.js:395:3 › the ingest wait (the dataprep status over the API) › pending then ingested: the wait holds until the shared vocabulary reads ingested (1.0s)
+  ✓  197 [chromium] › tests/e2e/helpers/documents.spec.js:403:3 › the ingest wait (the dataprep status over the API) › an Ingestion Error is terminal and fails AT ONCE with the status named (8ms)
+  ✓  198 [chromium] › tests/e2e/helpers/documents.spec.js:411:3 › the ingest wait (the dataprep status over the API) › a budget spent on pending expires with the observed value in the failure (11ms)
+  ✓  199 [chromium] › tests/e2e/helpers/documents.spec.js:423:3 › the ingest wait (the dataprep status over the API) › a non-200 record read is a named failure, not a poll tick (4ms)
+  ✓  200 [chromium] › tests/e2e/helpers/documents.spec.js:429:3 › the ingest wait (the dataprep status over the API) › an expired session (401) is named as the session, not as a missing file (3ms)
+  ✓  201 [chromium] › tests/e2e/helpers/documents.spec.js:441:3 › the ingest wait (the dataprep status over the API) › a killed ingest is terminal and fails AT ONCE with the status named (3ms)
+  ✓  202 [chromium] › tests/e2e/helpers/documents.spec.js:449:3 › the ingest wait (the dataprep status over the API) › the degraded ingest is terminal too — it is not the Ingested the callers assert (4ms)
+  ✓  203 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:132:3 › assignRealmRoles resolves roles through the single-role endpoint › resolves the role by exact name and posts its id (3ms)
+  ✓  204 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:146:3 › assignRealmRoles resolves roles through the single-role endpoint › names a missing role and never posts the assignment (34ms)
+  ✓  205 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:161:3 › assignRealmRoles resolves roles through the single-role endpoint › a 404 on a realm that does not exist fails loudly instead of blaming the role (8ms)
+  ✓  206 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:171:3 › assignRealmRoles resolves roles through the single-role endpoint › a realm read that the admin API refuses is not reported as a missing realm (5ms)
+  ✓  207 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:182:3 › assignRealmRoles resolves roles through the single-role endpoint › a 200 without a usable representation is a hard failure naming the role (3ms)
+  ✓  208 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:190:3 › assignRealmRoles resolves roles through the single-role endpoint › a lookup the admin API refuses is a hard failure naming the role (10ms)
+  ✓  209 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:199:3 › assignRealmRoles resolves roles through the single-role endpoint › a failed lookup with no body says so instead of printing undefined (3ms)
+  ✓  210 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:207:3 › assignRealmRoles resolves roles through the single-role endpoint › a Keycloak outage during the role lookup is transient, so the retry budget can save the run (5ms)
+  ✓  211 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:222:3 › assignRealmRoles resolves roles through the single-role endpoint › a non-JSON 5xx to the create is an outage: transient, so the retry budget saves the run (6ms)
+  ✓  212 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:242:3 › assignRealmRoles resolves roles through the single-role endpoint › a non-JSON 4xx to the create is permanent (4ms)
+  ✓  213 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:262:3 › assignRealmRoles resolves roles through the single-role endpoint › a non-JSON answer is a permanent failure, not a transport break (5ms)
+  ✓  214 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:284:3 › assignRealmRoles resolves roles through the single-role endpoint › a transport failure during the role lookup is transient too (3ms)
+  ✓  215 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:301:3 › removeRealmRoles › removes an existing role mapping and reports the removed name (2ms)
+  ✓  216 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:316:3 › removeRealmRoles › a role the realm does not carry is skipped without a DELETE (3ms)
+  ✓  217 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:328:3 › removeRealmRoles › a transport break during the removal names the removal (3ms)
+  ✓  218 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:342:3 › removeRealmRoles › a realm that does not exist leaves nothing to remove (3ms)
+  ✓  219 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:356:3 › effectiveRealmRoles reads the role MAPPINGS, not the realm role list › returns the effective names from the composite mappings and never reads the roles listing (4ms)
+  ✓  220 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:382:3 › convergeUser diagnoses a 409 whose username lookup misses › an account owning the fixture email is named as an email conflict (4ms)
+  ✓  221 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:394:3 › convergeUser diagnoses a 409 whose username lookup misses › an empty email probe names the account as deleted mid-provisioning (4ms)
+  ✓  222 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:412:3 › convergeUser diagnoses a 409 whose username lookup misses › a failed email probe fails loudly instead of guessing (3ms)
+  ✓  223 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:420:3 › convergeUser diagnoses a 409 whose username lookup misses › a non-JSON probe answer is a permanent failure, not a transport break (6ms)
+  ✓  224 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:442:3 › convergeUser diagnoses a 409 whose username lookup misses › a transport failure of the probe is transient, so the retry budget can save the provisioning (6ms)
+  ✓  225 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:464:3 › convergeUser diagnoses a 409 whose username lookup misses › a username lookup that FAILED diagnoses nothing about the account (6ms)
+  ✓  226 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:483:3 › convergeUser diagnoses a 409 whose username lookup misses › a transport failure of the username lookup stays transient and probes nothing (4ms)
+  ✓  227 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:501:3 › convergeUser diagnoses a 409 whose username lookup misses › a broken lookup payload is a failed lookup, not a missing account (4ms)
+  ✓  228 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:518:3 › convergeUser diagnoses a password reset on a vanished account › a 404 reset names the account as deleted between lookup and reset (3ms)
+  ✓  229 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:539:3 › createUser diagnoses a 409 whose username lookup misses › an account owning the fixture email is named as an email conflict (5ms)
+  ✓  230 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:552:3 › createUser diagnoses a 409 whose username lookup misses › an empty email probe names the account as deleted mid-provisioning (4ms)
+  ✓  231 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:567:3 › createUser diagnoses a 409 whose username lookup misses › a failed email probe fails loudly instead of guessing (2ms)
+  ✓  232 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:577:3 › createUser diagnoses a 409 whose username lookup misses › a username lookup that FAILED diagnoses nothing about the account (5ms)
+  ✓  233 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:595:3 › createUser diagnoses a 409 whose username lookup misses › a create that did NOT answer 409 is reported as-is, with no probe (5ms)
+  ✓  234 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:618:3 › createUser is the create-only path: no password convergence, no health gate › a fresh create resolves the account, assigns the roles and returns the id (3ms)
+  ✓  235 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:640:3 › createUser is the create-only path: no password convergence, no health gate › a 409 whose account exists converges nothing — an account the realm left disabled still proceeds (3ms)
+  ✓  236 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:669:3 › createUser is the create-only path: no password convergence, no health gate › a create the realm refuses is reported as-is, with no follow-up read (4ms)
+  ✓  237 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:686:3 › convergeUser on a fresh create and on an existing account › a fresh create answers the id without a password reset (4ms)
+  ✓  238 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:709:3 › convergeUser on a fresh create and on an existing account › a fresh create resolving to an unhealthy account refuses to provision (5ms)
+  ✓  239 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:724:3 › convergeUser on a fresh create and on an existing account › a 409 whose account exists converges the password BEFORE assigning the roles (6ms)
+  ✓  240 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:750:3 › convergeUser on a fresh create and on an existing account › an account carrying a required action refuses to provision, naming the state (5ms)
+  ✓  241 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:775:3 › convergeUser on a fresh create and on an existing account › a disabled account refuses to provision, naming the state (5ms)
+  ✓  242 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:791:3 › convergeUser on a fresh create and on an existing account › a 409 whose fixture declares attributes converges the FULL payload, then health-checks the CONVERGED account (6ms)
+  ✓  243 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:846:3 › convergeUser on a fresh create and on an existing account › a failed attribute convergence refuses the provisioning, naming the write (6ms)
+  ✓  244 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:865:3 › convergeUser keeps a transport break retryable › a transport break during the role assignment stays transient, so the retry budget can save the provisioning (3ms)
+  ✓  245 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:885:3 › convergeUser keeps a transport break retryable › a transport break during the password convergence names the convergence (3ms)
+  ✓  246 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:929:3 › rotateRealmKeys reads the new key id from the Location header › returns the id parsed from the Location header, not the empty body (5ms)
+  ✓  247 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:953:3 › rotateRealmKeys reads the new key id from the Location header › a 201 without a Location header fails loudly instead of returning null (6ms)
+  ✓  248 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:972:3 › rotateRealmKeys reads the new key id from the Location header › a components read the admin API refuses fails loudly instead of feeding its body to .map() (4ms)
+  ✓  249 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:994:3 › rotateRealmKeys reads the new key id from the Location header › a transport break while minting the rotated key names the rotation (4ms)
+  ✓  250 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1005:3 › rotateRealmKeys reads the new key id from the Location header › a components read answering 200 with a non-array payload fails loudly instead of demoting nothing (5ms)
+  ✓  251 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1025:3 › rotateRealmKeys reads the new key id from the Location header › a failed demotion names the new key that is already the active signer (6ms)
+  ✓  252 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1055:3 › rotateRealmKeys reads the new key id from the Location header › a demotion transport break carries the half-mutation diagnosis (6ms)
+  ✓  253 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1082:3 › rotateRealmKeys reads the new key id from the Location header › a Location header carrying no id segment fails loudly instead of yielding garbage (6ms)
+  ✓  254 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1163:3 › rotateRealmKeys rotates the RSA signing keys only › demotes the RSA signing key and leaves the encryption, HMAC and AES providers alone (4ms)
+  ✓  255 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1181:3 › rotateRealmKeys rotates the RSA signing keys only › reuses the active rotated key instead of minting a second one (4ms)
+  ✓  256 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1211:3 › rotateRealmKeys rotates the RSA signing keys only › a rotated key that is no longer active is not reused (4ms)
+  ✓  257 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1248:3 › rotateRealmKeys rotates the RSA signing keys only › a rotated key that carries no active flag is reused — Keycloak reads a missing flag as active (2ms)
+  ✓  258 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1271:3 › rotateRealmKeys rotates the RSA signing keys only › a disabled rotated key is not reused — a disabled provider never signs (5ms)
+  ✓  259 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1299:3 › rotateRealmKeys rotates the RSA signing keys only › a rotated name on a provider that is no RSA signing key is not reused (4ms)
+  ✓  260 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1333:3 › rotateRealmKeys rotates the RSA signing keys only › a provider whose flag carries no value does not break the rotation (3ms)
+  ✓  261 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1359:3 › getRealmSettings reports a failure with the module verdict › a realm read the admin API refuses names the read (4ms)
+  ✓  262 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1365:3 › getRealmSettings reports a failure with the module verdict › a realm read whose body carries no representation fails loudly (2ms)
+  ✓  263 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1376:3 › getRealmSettings reports a failure with the module verdict › a transport break on a realm read names the read and stays transient (3ms)
+  ✓  264 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1385:3 › getRealmSettings reports a failure with the module verdict › an answered but unusable reply is not a transport break, and the verdict does not rewrite it (4ms)
+  ✓  265 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1403:3 › deleteUser reports a failure with the module verdict › a refused deletion names the user and carries the status (4ms)
+  ✓  266 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1413:3 › deleteUser reports a failure with the module verdict › a user that is already gone is the end state every caller wants (2ms)
+  ✓  267 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1424:3 › enableDirectAccessGrants reads the client list like every other read › an outage is not reported as a missing client (5ms)
+  ✓  268 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1436:3 › enableDirectAccessGrants reads the client list like every other read › a realm that carries no client of that name says so (2ms)
+  ✓  269 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1444:3 › enableDirectAccessGrants reads the client list like every other read › a transport break while enabling ROPC names the enablement (3ms)
+  ✓  270 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1456:3 › enableDirectAccessGrants reads the client list like every other read › a refused enable PUT reports the status and the body verbatim (5ms)
+  ✓  271 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1476:3 › enableDirectAccessGrants reads the client list like every other read › enabling ROPC puts the whole client representation with the grant flipped, then reads the state back (3ms)
+  ✓  272 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1509:3 › enableDirectAccessGrants reads the client list like every other read › an already-enabled client is left untouched (2ms)
+  ✓  273 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1517:3 › enableDirectAccessGrants reads the client list like every other read › a read-back that still shows the grant off is a loud failure (2ms)
+  ✓  274 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1534:3 › enableDirectAccessGrants reads the client list like every other read › a read-back whose representation omits the grant reports the observed value, not an assumed one (3ms)
+  ✓  275 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1551:3 › enableDirectAccessGrants reads the client list like every other read › a client that vanishes between the PUT and the read-back is a loud failure, not a verified enable (3ms)
+  ✓  276 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1580:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › a realm that carries no client of that name says so (2ms)
+  ✓  277 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1588:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › a transport break while reverting ROPC names the revert (3ms)
+  ✓  278 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1600:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › a refused revert PUT reports the status and the body verbatim (5ms)
+  ✓  279 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1618:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › reverting puts the whole representation with the grant flipped, then reads the state back (6ms)
+  ✓  280 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1646:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › an already-disabled client is left untouched (2ms)
+  ✓  281 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1654:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › a read-back that still shows the grant is a loud failure (3ms)
+  ✓  282 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1671:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › a read-back whose representation omits the grant reports the observed value, not an assumed one (3ms)
+  ✓  283 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1688:3 › disableDirectAccessGrants — the verified ROPC revert (#1879) › a client that vanishes between the PUT and the read-back holds the revert by absence (1ms)
+  ✓  284 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1722:3 › the client helpers behind the K.2 expiry client › findClient returns the representation on a hit and null on a miss (2ms)
+  ✓  285 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1731:3 › the client helpers behind the K.2 expiry client › createClient posts the representation verbatim and accepts 201 (2ms)
+  ✓  286 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1744:3 › the client helpers behind the K.2 expiry client › createClient names the refused create in its verdict (3ms)
+  ✓  287 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1751:3 › the client helpers behind the K.2 expiry client › deleteClient accepts 204 and tolerates 404 (2ms)
+  ✓  288 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1760:3 › the client helpers behind the K.2 expiry client › deleteClient names the refused delete in its verdict (2ms)
+  ✓  289 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1771:3 › assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846) › the sweep reads the whole client list once — not a pair search (2ms)
+  ✓  290 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1794:3 › assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846) › a grant on ANY client throws, naming realm, client, uuid and the verified one-field revert (3ms)
+  ✓  291 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1816:3 › assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846) › the two undeclarable built-ins stay exempt — their grant is a server default the export cannot pin (3ms)
+  ✓  292 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1843:3 › assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846) › a pinned built-in carrying the grant is a violation — the export owns it now (2ms)
+  ✓  293 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1865:3 › assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846) › an absent realm fails loudly — a venue without its primary realm is not a clean posture (2ms)
+  ✓  294 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1874:3 › assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846) › a client list at the sweep boundary refuses to answer clean (2ms)
+  ✓  295 [chromium] › tests/e2e/helpers/keycloak-admin.spec.js:1886:3 › assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846) › an outage is transient, not a posture verdict (3ms)
+  ✓  296 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:17:3 › the fixture-card factory produces schema-valid cards › a bare id produces the full card with the defaults (2ms)
+  ✓  297 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:27:3 › the fixture-card factory produces schema-valid cards › a title STRING is wrapped as the locale map the schema requires (4ms)
+  ✓  298 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:31:3 › the fixture-card factory produces schema-valid cards › a title locale map passes through verbatim — including the empty map (3ms)
+  ✓  299 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:39:3 › the fixture-card factory produces schema-valid cards › an icon PATH STRING is wrapped as the icon object the schema requires (2ms)
+  ✓  300 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:46:3 › the fixture-card factory produces schema-valid cards › an icon OBJECT passes through verbatim (2ms)
+  ✓  301 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:51:3 › the fixture-card factory produces schema-valid cards › scope and action overrides land on the card verbatim (4ms)
+  ✓  302 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:67:3 › the fixture-card factory produces schema-valid cards › the composer entry the scope spec serves is deep-equal to the card it replaced (1ms)
+  ✓  303 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:86:3 › the fixture-card factory produces schema-valid cards › a missing, non-string or blank id is rejected by name (5ms)
+  ✓  304 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:93:3 › the fixture-card factory produces schema-valid cards › a null title is rejected by name (2ms)
+  ✓  305 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:97:3 › the fixture-card factory produces schema-valid cards › a number title is rejected by name (2ms)
+  ✓  306 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:101:3 › the fixture-card factory produces schema-valid cards › an array title is rejected by name (2ms)
+  ✓  307 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:105:3 › the fixture-card factory produces schema-valid cards › an icon object missing type is rejected by name (2ms)
+  ✓  308 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:109:3 › the fixture-card factory produces schema-valid cards › an icon object missing value is rejected by name (2ms)
+  ✓  309 [chromium] › tests/e2e/helpers/quick-help-stubs.spec.js:113:3 › the fixture-card factory produces schema-valid cards › a null icon is rejected by name, not by a bare V8 TypeError (2ms)
+  ✓  310 [chromium] › tests/e2e/helpers/route.spec.js:59:3 › runRouteHandler › tolerates the target-closed error when the page closed — the named race (1ms)
+  ✓  311 [chromium] › tests/e2e/helpers/route.spec.js:68:3 › runRouteHandler › tolerates the target-closed error when the context closed — the named race (2ms)
+  ✓  312 [chromium] › tests/e2e/helpers/route.spec.js:77:3 › runRouteHandler › tolerates the race when the target closes while the handler is in flight (2ms)
+  ✓  313 [chromium] › tests/e2e/helpers/route.spec.js:90:3 › runRouteHandler › tolerates an in-process instance of the class, whatever its message (2ms)
+  ✓  314 [chromium] › tests/e2e/helpers/route.spec.js:103:3 › runRouteHandler › tolerates an error that carries the NAME only — the defensive arm (1ms)
+  ✓  315 [chromium] › tests/e2e/helpers/route.spec.js:119:3 › runRouteHandler › tolerates the client shape of the race — the class survives, renamed (1ms)
+  ✓  316 [chromium] › tests/e2e/helpers/route.spec.js:134:3 › runRouteHandler › rethrows a plain error that merely QUOTES the race wording — the wording is not the signal (1ms)
+  ✓  317 [chromium] › tests/e2e/helpers/route.spec.js:148:3 › runRouteHandler › rethrows a plain error that QUOTES the PROTOCOL wording — the wording is not the signal (1ms)
+  ✓  318 [chromium] › tests/e2e/helpers/route.spec.js:161:3 › runRouteHandler › rethrows a mock defect with its own message — the target is alive (1ms)
+  ✓  319 [chromium] › tests/e2e/helpers/route.spec.js:170:3 › runRouteHandler › rethrows a mock defect that lands while the target is closing (1ms)
+  ✓  320 [chromium] › tests/e2e/helpers/route.spec.js:182:3 › runRouteHandler › rethrows a mock defect even when its text names the race (2ms)
+  ✓  321 [chromium] › tests/e2e/helpers/route.spec.js:194:3 › runRouteHandler › rethrows when the browser process died — not the named race (1ms)
+  ✓  322 [chromium] › tests/e2e/helpers/route.spec.js:205:3 › runRouteHandler › returns the handler result when nothing throws (2ms)
+  ✓  323 [chromium] › tests/e2e/helpers/route.spec.js:233:3 › runPostOnlyRouteHandler › a non-POST request continues to the network and never reaches the handler (5ms)
+  ✓  324 [chromium] › tests/e2e/helpers/route.spec.js:245:3 › runPostOnlyRouteHandler › a POST request reaches the handler and is not continued (3ms)
+  ✘  325 [chromium] › tests/e2e/helpers/stream-route.spec.js:32:3 › sseBody — the legacy five-type dialect › two-arg call builds exactly the legacy bytes (4ms)
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+  ✓  326 [chromium] › tests/e2e/helpers/stream-route.spec.js:45:3 › sseBody — the legacy five-type dialect › no metadata means no metadata frame, done still last (16ms)
+  ✓  327 [chromium] › tests/e2e/helpers/stream-route.spec.js:54:3 › sseBody — the agentic extension (story 2.9) › activity frames interleave with the chunks at their pinned positions (6ms)
+  ✓  328 [chromium] › tests/e2e/helpers/stream-route.spec.js:80:3 › sseBody — the agentic extension (story 2.9) › the verdict frame lands after the last chunk, before metadata, done last (4ms)
+  ✓  329 [chromium] › tests/e2e/helpers/stream-route.spec.js:87:3 › sseBody — the agentic extension (story 2.9) › activity without verdict, and verdict without activity, are independent (5ms)
+  ✓  330 [chromium] › tests/e2e/helpers/stream-route.spec.js:94:3 › sseBody — the agentic extension (story 2.9) › a verdict payload cannot override the frame discriminator or version (3ms)
+  ✓  331 [chromium] › tests/e2e/helpers/stream-route.spec.js:102:3 › sseBody — the agentic extension (story 2.9) › an activity array that does not match the chunk count throws (6ms)
+  ✓  332 [chromium] › tests/e2e/helpers/stream-route.spec.js:115:3 › sseFulfill — the shared envelope › fulfills 200, text/event-stream, the CORS header, the given body (7ms)
+  ✓  333 [chromium] › tests/e2e/helpers/stream-route.spec.js:128:3 › sseFrame — one line outside a full body › a frame is the data prefix, the verbatim JSON, and a terminator (4ms)
+  ✓  334 [chromium] › tests/e2e/helpers/stream-route.spec.js:139:3 › sseFrame — one line outside a full body › staged frames splice into the body dialect without changing it (4ms)
+  ✓  335 [chromium] › tests/e2e/helpers/stream-route.spec.js:151:3 › the interception route › the route pattern is the stream path globbed at both ends (3ms)
+  ✓  336 [chromium] › tests/e2e/helpers/venue-launch-args.spec.js:38:3 › the venue mapping names a bad value where it is read › no mapping at all — the runner resolves the name itself (3ms)
+  ✓  337 [chromium] › tests/e2e/helpers/venue-launch-args.spec.js:46:3 › the venue mapping names a bad value where it is read › an address is carried through (3ms)
+  ✓  338 [chromium] › tests/e2e/helpers/venue-launch-args.spec.js:54:3 › the venue mapping names a bad value where it is read › an IPv6 address is an address (8ms)
+  ✓  339 [chromium] › tests/e2e/helpers/venue-launch-args.spec.js:60:3 › the venue mapping names a bad value where it is read › a value that is not an address is NAMED (10ms)
+  ✓  340 [chromium] › tests/e2e/helpers/venue-launch-args.spec.js:75:3 › the SAFE reader turns that cause into a value › a bad address is a REASON, not a throw (5ms)
+  ✓  341 [chromium] › tests/e2e/helpers/venue-launch-args.spec.js:90:3 › the SAFE reader turns that cause into a value › a good address is carried through, and no reason with it (4ms)
+  ✓  342 [chromium] › tests/e2e/helpers/venue-launch-args.spec.js:98:3 › the SAFE reader turns that cause into a value › no mapping at all is not a reason (6ms)
+  ✓  343 [chromium] › tests/e2e/helpers/venue-profile.spec.js:81:3 › the OKF probe reads the venue like the frontend reads it › the string '1' enables the OKF surfaces (12ms)
+  ✓  344 [chromium] › tests/e2e/helpers/venue-profile.spec.js:87:3 › the OKF probe reads the venue like the frontend reads it › the string '0' parks them (5ms)
+  ✓  345 [chromium] › tests/e2e/helpers/venue-profile.spec.js:93:3 › the OKF probe reads the venue like the frontend reads it › any other value fails closed, exactly like the frontend (6ms)
+  ✓  346 [chromium] › tests/e2e/helpers/venue-profile.spec.js:101:3 › the OKF probe reads the venue like the frontend reads it › a config without the knob fails closed too (7ms)
+  ✓  347 [chromium] › tests/e2e/helpers/venue-profile.spec.js:107:3 › the OKF probe reads the venue like the frontend reads it › no runtime config at all means the surfaces render (the dev-build arm) (4ms)
+  ✓  348 [chromium] › tests/e2e/helpers/venue-profile.spec.js:113:3 › the OKF probe reads the venue like the frontend reads it › the runtime config is read RAW — it is JavaScript, not JSON (8ms)
+  ✓  349 [chromium] › tests/e2e/helpers/venue-profile.spec.js:125:3 › the OKF probe reads the venue like the frontend reads it › a numeric 1 is a different writer and does not enable them (10ms)
+  ✓  350 [chromium] › tests/e2e/helpers/venue-profile.spec.js:132:3 › the OKF probe reads the venue like the frontend reads it › a comment naming the knob before the assignment is not the assignment (9ms)
+  ✓  351 [chromium] › tests/e2e/helpers/venue-profile.spec.js:145:3 › the OKF probe reads the venue like the frontend reads it › a foreign key that merely contains the name is not the knob (6ms)
+  ✓  352 [chromium] › tests/e2e/helpers/venue-profile.spec.js:151:3 › the OKF probe reads the venue like the frontend reads it › the skip reason names the value the venue carries (8ms)
+  ✓  353 [chromium] › tests/e2e/helpers/venue-profile.spec.js:163:3 › the OKF probe reads the venue like the frontend reads it › an unreadable venue fails loudly — it is not an absent surface (11ms)
+  ✓  354 [chromium] › tests/e2e/helpers/venue-profile.spec.js:169:3 › the OKF probe reads the venue like the frontend reads it › a failed probe is not cached: the next read sees the venue again (6ms)
+  ✓  355 [chromium] › tests/e2e/helpers/venue-profile.spec.js:182:3 › the OKF probe reads the venue like the frontend reads it › a successful probe is cached: one read per process (6ms)
+  ✓  356 [chromium] › tests/e2e/helpers/venue-profile.spec.js:192:3 › the realm probes read the admin API › a realm that answers 404 does not exist (6ms)
+  ✓  357 [chromium] › tests/e2e/helpers/venue-profile.spec.js:198:3 › the realm probes read the admin API › a realm that answers 200 exists (5ms)
+  ✓  358 [chromium] › tests/e2e/helpers/venue-profile.spec.js:204:3 › the realm probes read the admin API › an admin API that refuses fails loudly — the profile is UNKNOWN (6ms)
+  ✓  359 [chromium] › tests/e2e/helpers/venue-profile.spec.js:210:3 › the realm probes read the admin API › a realm with no identity provider answers false (5ms)
+  ✓  360 [chromium] › tests/e2e/helpers/venue-profile.spec.js:216:3 › the realm probes read the admin API › a realm with an identity provider answers true (4ms)
+  ✓  361 [chromium] › tests/e2e/helpers/venue-profile.spec.js:222:3 › the realm probes read the admin API › the missing-realm reason names the prerequisite and the unexercised surface (7ms)
+  ✓  362 [chromium] › tests/e2e/helpers/venue-profile.spec.js:230:3 › the realm probes read the admin API › the missing-IdP reason names the prerequisite and the unexercised surface (5ms)
+  ✓  363 [chromium] › tests/e2e/helpers/venue-profile.spec.js:247:3 › the venue-skip wiring (#1773) › skipUnlessVenue skips with the reason when the probe fails (5ms)
+  ✓  364 [chromium] › tests/e2e/helpers/venue-profile.spec.js:258:3 › the venue-skip wiring (#1773) › skipUnlessVenue calls skip(false) when the probe holds (4ms)
+  ✓  365 [chromium] › tests/e2e/helpers/venue-profile.spec.js:269:3 › the venue-skip wiring (#1773) › skipUnlessVenue awaits an async reason (5ms)
+  ✓  366 [chromium] › tests/e2e/helpers/venue-profile.spec.js:279:3 › the venue-skip wiring (#1773) › skipUnlessVenue passes the probe verdict through, not its inverse (5ms)
+  -  367 [chromium] › tests/e2e/helpers/venue-profile.spec.js:306:5 › the hook-skip contract the guarded specs stand on (#1773) › a group whose first hook skips › never runs
+  ✓  368 [chromium] › tests/e2e/helpers/venue-profile.spec.js:311:3 › the hook-skip contract the guarded specs stand on (#1773) › the hook after the skipped hook did not run (1ms)
+  ✓  369 [chromium] › tests/e2e/helpers/venue-profile.spec.js:317:3 › the locale whitelist probe reads the config the frontend reads › an empty whitelist keeps every locale active (4ms)
+  ✓  370 [chromium] › tests/e2e/helpers/venue-profile.spec.js:323:3 › the locale whitelist probe reads the config the frontend reads › a config without the knob keeps every locale active (5ms)
+  ✓  371 [chromium] › tests/e2e/helpers/venue-profile.spec.js:329:3 › the locale whitelist probe reads the config the frontend reads › no runtime config at all keeps every locale active (the dev-build arm) (3ms)
+  ✓  372 [chromium] › tests/e2e/helpers/venue-profile.spec.js:335:3 › the locale whitelist probe reads the config the frontend reads › the probe applies the frontend's OWN rule, arm for arm (421ms)
+  ✓  373 [chromium] › tests/e2e/helpers/venue-profile.spec.js:363:3 › the locale whitelist probe reads the config the frontend reads › a whitelist that excludes the locale excludes it — and matches case-insensitively (6ms)
+  ✓  374 [chromium] › tests/e2e/helpers/venue-profile.spec.js:372:3 › the locale whitelist probe reads the config the frontend reads › a whitelist carrying the locale in another case still admits it (5ms)
+  ✓  375 [chromium] › tests/e2e/helpers/venue-profile.spec.js:378:3 › the locale whitelist probe reads the config the frontend reads › 'en' stays active even when the whitelist does not name it (8ms)
+  ✓  376 [chromium] › tests/e2e/helpers/venue-profile.spec.js:390:3 › the locale whitelist probe reads the config the frontend reads › the skip reason renders the whitelist exactly and names the NOT-exercised verdict (7ms)
+  ✓  377 [chromium] › tests/e2e/helpers/venue-profile.spec.js:403:3 › the translation probe reads the venue through its own endpoint › a venue that translates the probe answers true, with the en→fr body (11ms)
+  ✓  378 [chromium] › tests/e2e/helpers/venue-profile.spec.js:416:3 › the translation probe reads the venue through its own endpoint › the typed UNSUPPORTED_LANGUAGE refusal is the venue saying the language is absent (6ms)
+  ✓  379 [chromium] › tests/e2e/helpers/venue-profile.spec.js:425:3 › the translation probe reads the venue through its own endpoint › a 200 that echoes the source is a bug in the chain — it REDS, and it is not retried (6ms)
+  ✓  380 [chromium] › tests/e2e/helpers/venue-profile.spec.js:438:3 › the translation probe reads the venue through its own endpoint › a 200 with no translated text is the same failure (6ms)
+  ✓  381 [chromium] › tests/e2e/helpers/venue-profile.spec.js:446:3 › the translation probe reads the venue through its own endpoint › any other 400 is an unreadable venue, not an absent one (5ms)
+  ✓  382 [chromium] › tests/e2e/helpers/venue-profile.spec.js:453:3 › the translation probe reads the venue through its own endpoint › a 5xx is an unreadable venue too — loud, and never cached (6ms)
+  ✓  383 [chromium] › tests/e2e/helpers/venue-profile.spec.js:468:3 › the French streaming premise combines the venue facts › a venue without the locale never asks the translation endpoint (7ms)
+  ✓  384 [chromium] › tests/e2e/helpers/venue-profile.spec.js:481:3 › the French streaming premise combines the venue facts › an active locale with no translation chain is a false, and the reason names the chain (8ms)
+  ✓  385 [chromium] › tests/e2e/helpers/venue-profile.spec.js:494:3 › the French streaming premise combines the venue facts › both facts present is a ready venue (5ms)
+  ✓  386 [chromium] › tests/e2e/helpers/venue-profile.spec.js:504:3 › the French streaming premise combines the venue facts › a build that does not carry the locale file fails the premise, and the reason says so (7ms)
+  ✓  387 [chromium] › tests/e2e/helpers/venue-profile.spec.js:538:3 › the ingest-chain canary uploads, ingests, and cleans up › a canary that reaches Ingested is a ready venue — and leaves nothing behind (12ms)
+  ✓  388 [chromium] › tests/e2e/helpers/venue-profile.spec.js:560:3 › the ingest-chain canary uploads, ingests, and cleans up › a canary that lands Ingestion Error is NOT a ready venue, and the reason says what happened (6ms)
+  ✓  389 [chromium] › tests/e2e/helpers/venue-profile.spec.js:576:3 › the ingest-chain canary uploads, ingests, and cleans up › a venue that cannot accept the upload is UNREADABLE — loud, not a false verdict (4ms)
+  ✓  390 [chromium] › tests/e2e/helpers/venue-profile.spec.js:587:3 › the ingest-chain canary uploads, ingests, and cleans up › a canary that lands Ingested with Warnings is NOT a ready venue — the specs assert the exact status (7ms)
+  ✓  391 [chromium] › tests/e2e/helpers/venue-profile.spec.js:610:3 › the ingest-chain canary uploads, ingests, and cleans up › a canary that lands Ingested with Warnings MID-WAIT ends the wait at once, named (16ms)
+  ✓  392 [chromium] › tests/e2e/helpers/venue-profile.spec.js:634:3 › the ingest-chain canary uploads, ingests, and cleans up › a canary that cannot be removed FAILS the probe — a leftover stays in the venue corpus (6ms)
+  ✓  393 [chromium] › tests/e2e/helpers/venue-profile.spec.js:656:3 › the venue session is bounded by its own age › a session past the bound is re-opened — a realm token lives 300 s (8ms)
+  ✓  394 [chromium] › tests/e2e/helpers/venue-profile.spec.js:667:3 › the venue session is bounded by its own age › a session inside the bound is reused — one login, not one per probe (7ms)
+  ✓  395 [chromium] › tests/e2e/helpers/welcome.spec.js:191:1 › the session viewport is a COPY of the default viewport, not the shared object (3ms)
+  ✓  396 [chromium] › tests/e2e/helpers/welcome.spec.js:197:3 › the welcome session closes itself › a body that succeeds returns its value, and the context is closed once (4ms)
+  ✓  397 [chromium] › tests/e2e/helpers/welcome.spec.js:206:3 › the welcome session closes itself › a close that fails after a successful body throws the TEARDOWN failure (5ms)
+  ✓  398 [chromium] › tests/e2e/helpers/welcome.spec.js:217:3 › the welcome session closes itself › a body that throws is rethrown AS ITSELF, and the context is still closed (5ms)
+  ✓  399 [chromium] › tests/e2e/helpers/welcome.spec.js:232:3 › the welcome session closes itself › a close that fails after a failed body JOINS the body error, which stays the verdict (4ms)
+  ✓  400 [chromium] › tests/e2e/helpers/welcome.spec.js:250:3 › a session that fails to open closes itself too › a login that fails closes the context and rethrows the login error (2ms)
+  ✓  401 [chromium] › tests/e2e/helpers/welcome.spec.js:263:3 › a session that fails to open closes itself too › a close that fails during the unwind JOINS the open error (4ms)
+  ✓  402 [chromium] › tests/e2e/helpers/welcome.spec.js:280:3 › the composer session waits for the composer › it waits for the composer by its declared handle (2ms)
+  ✓  403 [chromium] › tests/e2e/helpers/welcome.spec.js:292:3 › the seeded locale is proved, not assumed › a seeded locale with no reload is refused BEFORE a context exists (2ms)
+  ✓  404 [chromium] › tests/e2e/helpers/welcome.spec.js:304:3 › the seeded locale is proved, not assumed › a locale the app adopted is accepted (3ms)
+  ✓  405 [chromium] › tests/e2e/helpers/welcome.spec.js:312:3 › the seeded locale is proved, not assumed › a locale the app did NOT adopt fails the session (5ms)
+  ✓  406 [chromium] › tests/e2e/helpers/welcome.spec.js:347:3 › the session refuses a banner the gate rejects › a banner that is not mounted does not open the session (2ms)
+  ✓  407 [chromium] › tests/e2e/helpers/welcome.spec.js:351:3 › the session refuses a banner the gate rejects › a banner with no box does not open the session (3ms)
+  ✓  408 [chromium] › tests/e2e/helpers/welcome.spec.js:358:3 › the session refuses a banner the gate rejects › a hidden banner does not open the session (2ms)
+  ✓  409 [chromium] › tests/e2e/helpers/welcome.spec.js:362:3 › the session refuses a banner the gate rejects › a banner whose entrance animation still runs does not open the session (2ms)
+  ✓  410 [chromium] › tests/e2e/helpers/welcome.spec.js:366:3 › the session refuses a banner the gate rejects › a visible, settled banner opens the session (3ms)
+  -  411 [chromium] › tests/e2e/okf/artifacts-view.spec.js:130:3 › the OKF artifacts view › the two views ask for two different things (artifacts vs documents)
+  -  412 [chromium] › tests/e2e/okf/artifacts-view.spec.js:139:3 › the OKF artifacts view › a row carries the artifact and its provenance
+  -  413 [chromium] › tests/e2e/okf/artifacts-view.spec.js:153:3 › the OKF artifacts view › an artifact with no version says the version is unknown (never a guess)
+  -  414 [chromium] › tests/e2e/okf/artifacts-view.spec.js:163:3 › the OKF artifacts view › the artifacts view offers NO delete — the server would refuse it
+  -  415 [chromium] › tests/e2e/okf/artifacts-view.spec.js:176:3 › the OKF artifacts view › the deep link opens the artifacts view directly
+  -  416 [chromium] › tests/e2e/okf/concept-ceiling.spec.js:170:3 › the concept-document ceiling in the concept editor › the advisory carries the SERVER's ceiling
+  -  417 [chromium] › tests/e2e/okf/concept-ceiling.spec.js:193:3 › the concept-document ceiling in the concept editor › going OVER the ceiling turns the warning on BEFORE the save is refused
+  -  418 [chromium] › tests/e2e/okf/concept-ceiling.spec.js:211:3 › the concept-document ceiling in the concept editor › a refused save shows the SERVER's message, not "retry"
+  -  419 [chromium] › tests/e2e/okf/concept-ceiling.spec.js:358:3 › the split affordance in the concept editor (#1577 story 2) › the dialog renders the seam preview BEFORE any write
+  -  420 [chromium] › tests/e2e/okf/concept-ceiling.spec.js:376:3 › the split affordance in the concept editor (#1577 story 2) › confirming POSTs the split once and closes the dialog
+  -  421 [chromium] › tests/e2e/okf/concept-ceiling.spec.js:387:3 › the split affordance in the concept editor (#1577 story 2) › a typed refusal renders the SERVER message verbatim and confirm stays disabled
+  -  422 [chromium] › tests/e2e/okf/ragas-guide-errors.spec.js:69:3 › the RAGAS guide documents what each error state does to the result › the errors chapter is reachable and its table renders a row per state
+  -  423 [chromium] › tests/e2e/okf/ragas-judge-selector.spec.js:66:3 › the RAGAS model selection is in the UI › the judge dropdown is on screen in the RAGAS Benchmarks tab, with the .env default among its options
+  -  424 [chromium] › tests/e2e/okf/ragas-judge-selector.spec.js:128:3 › the RAGAS model selection is in the UI › the admin Models tab lists the configured models — the same envelope feeds it
+  -  425 [chromium] › tests/e2e/okf/ragas-rescore-tracking.spec.js:66:3 › the RAGAS guide explains the output, and a re-score is a tracked run › the read chapter renders the output table, and a re-score is tracked and cancellable
+  -  426 [chromium] › tests/e2e/okf/studio-draft-notice.spec.js:77:3 › OKF Studio degraded-draft banner › renders the degraded-draft banner when the draft endpoint is not served
+  -  427 [chromium] › tests/e2e/okf/studio-draft-notice.spec.js:91:3 › OKF Studio degraded-draft banner › does not render the banner when the 404 names the repo gone
+  -  428 [chromium] › tests/e2e/okf/wizard-split-note.spec.js:97:3 › OKF wizard split report note › names the file and the part count when the server splits the document
+  -  429 [chromium] › tests/e2e/okf/wizard-split-note.spec.js:119:3 › OKF wizard split report note › renders no note when the server splits nothing
+  ✓  430 [chromium] › tests/e2e/run/check-ropc-posture.spec.js:47:3 › the posture gate refuses to green an unchecked venue › a ROPC_POSTURE_REALMS parsing to no realm exits 1 with the remedy (766ms)
+  ✓  431 [chromium] › tests/e2e/run/check-ropc-posture.spec.js:56:3 › the posture gate refuses to green an unchecked venue › the pre-rename pair variables warn instead of degrading silently (810ms)
+  ✓  432 [chromium] › tests/e2e/run/check-ropc-posture.spec.js:67:3 › the posture gate refuses to green an unchecked venue › the legacy REALM value is HONORED — it rescues a vacuous ROPC_POSTURE_REALMS parse (982ms)
+  ✓  433 [chromium] › tests/e2e/run/check-ropc-posture.spec.js:79:3 › the posture gate refuses to green an unchecked venue › clean env reaches the credential check, not a realm error (868ms)
+  ✓  434 [chromium] › tests/e2e/run/file-failure-issues.spec.js:39:3 › a failure carrying an edge-transport signature is venue noise (#1783) › the refused, reset, closed and unresolved-edge signatures match (3ms)
+  ✓  435 [chromium] › tests/e2e/run/file-failure-issues.spec.js:50:3 › a failure carrying an edge-transport signature is venue noise (#1783) › a product failure does not match — slow-venue signatures stay product findings (5ms)
+  ✓  436 [chromium] › tests/e2e/run/file-failure-issues.spec.js:61:3 › a failure carrying an edge-transport signature is venue noise (#1783) › a missing or empty error carries no signature (6ms)
+  ✓  437 [chromium] › tests/e2e/run/file-failure-issues.spec.js:67:3 › a failure carrying an edge-transport signature is venue noise (#1783) › the partition keeps product failures per-spec and moves the signature ones to the report (8ms)
+  ✓  438 [chromium] › tests/e2e/run/file-failure-issues.spec.js:109:3 › a failure carrying an edge-transport signature is venue noise (#1783) › the venue-availability report names the venue, the files and the verdict (6ms)
+  ✓  439 [chromium] › tests/e2e/run/file-failure-issues.spec.js:136:3 › the report names the CONTEXT of the red › the locator line names the handles the failure waited for (6ms)
+  ✓  440 [chromium] › tests/e2e/run/file-failure-issues.spec.js:146:3 › the report names the CONTEXT of the red › every locator line of a failure is read, not only the first (8ms)
+  ✓  441 [chromium] › tests/e2e/run/file-failure-issues.spec.js:158:3 › the report names the CONTEXT of the red › a handle is matched as a QUOTED value (3ms)
+  ✓  442 [chromium] › tests/e2e/run/file-failure-issues.spec.js:165:3 › the report names the CONTEXT of the red › the report names the venue build, this checkout, and the relation (5ms)
+  ✓  443 [chromium] › tests/e2e/run/file-failure-issues.spec.js:184:3 › the report names the CONTEXT of the red › a venue that is NOT behind the checkout is told so (2ms)
+  ✓  444 [chromium] › tests/e2e/run/file-failure-issues.spec.js:197:3 › the report names the CONTEXT of the red › a handle no source declares is named as such (1ms)
+  ✓  445 [chromium] › tests/e2e/run/file-failure-issues.spec.js:209:3 › the report names the CONTEXT of the red › a run with no build marker says so, unknown — not a fabricated sha (3ms)
+  ✓  446 [chromium] › tests/e2e/run/file-failure-issues.spec.js:217:3 › the report names the CONTEXT of the red › the checkout's HEAD is read from the repository (16ms)
+  ✓  447 [chromium] › tests/e2e/run/file-failure-issues.spec.js:222:3 › the report names the CONTEXT of the red › a build behind the checkout is behind it; the checkout ITSELF is not (73ms)
+  ✓  448 [chromium] › tests/e2e/run/file-failure-issues.spec.js:238:3 › the report names the CONTEXT of the red › the declaring file is the one that declares the handle (95ms)
+  ✓  449 [chromium] › tests/e2e/run/file-failure-issues.spec.js:245:3 › the report names the CONTEXT of the red › the frontend's OWN test tree declares no handle — its mocks are not the app (38ms)
+  ✓  450 [chromium] › tests/e2e/run/file-failure-issues.spec.js:253:3 › the report names the CONTEXT of the red › the handles a file waited for are the union of its failures' locators (1ms)
+  ✓  451 [chromium] › tests/e2e/run/install-browsers.spec.js:163:1 › the pinned versions come from the lockfile, for every package of the chain (4ms)
+  ✓  452 [chromium] › tests/e2e/run/install-browsers.spec.js:173:1 › a lockfile that pins no playwright fails loudly (5ms)
+  ✓  453 [chromium] › tests/e2e/run/install-browsers.spec.js:178:1 › the runner's chain is resolved the way the runner resolves it (4ms)
+  ✓  454 [chromium] › tests/e2e/run/install-browsers.spec.js:188:1 › the loaded versions are read from the chain, one package at a time (2ms)
+  ✓  455 [chromium] › tests/e2e/run/install-browsers.spec.js:197:1 › a NESTED chain is loaded, not the hoisted sibling (2ms)
+  ✓  456 [chromium] › tests/e2e/run/install-browsers.spec.js:209:1 › a NESTED chain is pinned by its own lockfile entry (5ms)
+  ✓  457 [chromium] › tests/e2e/run/install-browsers.spec.js:224:1 › the revisions come from the resolved playwright-core browsers.json (4ms)
+  ✓  458 [chromium] › tests/e2e/run/install-browsers.spec.js:232:1 › a NESTED chain names its own revisions, not the hoisted sibling's (4ms)
+  ✓  459 [chromium] › tests/e2e/run/install-browsers.spec.js:240:1 › a browser the installed Playwright does not name fails loudly (4ms)
+  ✓  460 [chromium] › tests/e2e/run/install-browsers.spec.js:252:1 › the browser build is installed by the CHECKOUT Playwright, not a global one (5ms)
+  ✓  461 [chromium] › tests/e2e/run/install-browsers.spec.js:261:1 › a NESTED chain is installed by its own CLI (7ms)
+  ✓  462 [chromium] › tests/e2e/run/install-browsers.spec.js:271:1 › the runner describes the versions loaded and the revisions they name (3ms)
+  ✓  463 [chromium] › tests/e2e/run/install-browsers.spec.js:280:1 › a checkout without @playwright/test cannot describe a runner, and says so (3ms)
+  ✓  464 [chromium] › tests/e2e/run/install-browsers.spec.js:351:1 › a matching checkout is not reinstalled, and a complete tree is not reinstalled either (8ms)
+  ✓  465 [chromium] › tests/e2e/run/install-browsers.spec.js:363:1 › a missing build is installed by the CHECKOUT Playwright, not a global one (8ms)
+install-browsers: the checkout's runner chain does not match the lockfile (@playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 1.0.0-older-core vs @playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 9.9.9-fixture) — running npm ci
+  ✓  466 [chromium] › tests/e2e/run/install-browsers.spec.js:374:1 › a checkout that does not match the lockfile is reinstalled with the dev dependencies (6ms)
+install-browsers: the checkout's runner chain does not match the lockfile (@playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 1.0.0-older-core vs @playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 9.9.9-fixture) — running npm ci
+  ✓  467 [chromium] › tests/e2e/run/install-browsers.spec.js:391:1 › a checkout that STILL does not match after npm ci fails loudly, and names the path (5ms)
+  ✓  468 [chromium] › tests/e2e/run/install-browsers.spec.js:403:1 › the chain is resolved on the disk, not from a stale resolution cache (6ms)
+  ✓  469 [chromium] › tests/e2e/run/install-browsers.spec.js:420:1 › the walk does not escape ABOVE the checkout (8ms)
+  ✓  470 [chromium] › tests/e2e/run/install-browsers.spec.js:441:1 › the walk does not probe a node_modules level for another one (4ms)
+  ✓  471 [chromium] › tests/e2e/run/install-browsers.spec.js:458:1 › the runner reported is the @playwright/test of the chain, not another link of it (7ms)
+  ✓  472 [chromium] › tests/e2e/run/install-browsers.spec.js:473:1 › the lockfile walk does not read a pin from a node_modules level either (3ms)
+  ✓  473 [chromium] › tests/e2e/run/install-browsers.spec.js:492:1 › the chain is the ROOT project's — the suite project does not own the runtime (5ms)
+install-browsers: the checkout's runner chain does not match the lockfile (@playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 1.0.0-older-core vs @playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 9.9.9-fixture) — running npm ci
+  ✓  474 [chromium] › tests/e2e/run/install-browsers.spec.js:509:1 › a repaired checkout reports the runtime npm ci installed, not the one it replaced (7ms)
+install-browsers: the checkout's runner chain does not match the lockfile (@playwright/test nothing, playwright nothing, playwright-core nothing vs @playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 9.9.9-fixture) — running npm ci
+  ✓  475 [chromium] › tests/e2e/run/install-browsers.spec.js:526:1 › a checkout with no node_modules at all is repaired and reported (7ms)
+  ✓  476 [chromium] › tests/e2e/run/install-browsers.spec.js:543:1 › the HEADLESS SHELL is verified — the build the runner launches (6ms)
+  ✓  477 [chromium] › tests/e2e/run/install-browsers.spec.js:559:1 › a build without the completion marker is not a complete build (6ms)
+  ✓  478 [chromium] › tests/e2e/run/install-browsers.spec.js:567:1 › a checkout without a Playwright CLI fails loudly (4ms)
+  ✓  479 [chromium] › tests/e2e/run/install-browsers.spec.js:574:1 › an install that fails is not reported as a reconciled tree (5ms)
+  ✓  480 [chromium] › tests/e2e/run/install-browsers.spec.js:584:1 › a dry run that fails is not reported as a reconciled tree (4ms)
+install-browsers: the checkout's runner chain does not match the lockfile (@playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 1.0.0-older-core vs @playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 9.9.9-fixture) — running npm ci
+  ✓  481 [chromium] › tests/e2e/run/install-browsers.spec.js:590:1 › a failed npm ci says that node_modules may be gone — npm ci removes it first (4ms)
+install-browsers: the checkout's runner chain does not match the lockfile (@playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 1.0.0-older-core vs @playwright/test 9.9.9-fixture, playwright 9.9.9-fixture, playwright-core 9.9.9-fixture) — running npm ci
+  ✓  482 [chromium] › tests/e2e/run/install-browsers.spec.js:596:1 › an npm that cannot be started is named, not reported as an exit code (4ms)
+  ✓  483 [chromium] › tests/e2e/run/install-browsers.spec.js:603:1 › the installer locations are read from the installer itself (4ms)
+  ✓  484 [chromium] › tests/e2e/run/install-browsers.spec.js:620:1 › a browser path with a space in it is read whole (1ms)
+  ✓  485 [chromium] › tests/e2e/run/install-browsers.spec.js:634:1 › the runner the pod uses reads the output as text (57ms)
+  ✓  486 [chromium] › tests/e2e/run/install-browsers.spec.js:645:1 › a checkout with no readable lockfile says so (3ms)
+  ✓  487 [chromium] › tests/e2e/run/install-browsers.spec.js:650:1 › an installer that names no location fails loudly (3ms)
+  ✓  488 [chromium] › tests/e2e/run/preflight.spec.js:31:3 › the pre-flight names the finding the venue status carries › no answer at all is its own finding (3ms)
+  ✓  489 [chromium] › tests/e2e/run/preflight.spec.js:38:3 › the pre-flight names the finding the venue status carries › a 5xx is the deployment being down (2ms)
+  ✓  490 [chromium] › tests/e2e/run/preflight.spec.js:44:3 › the pre-flight names the finding the venue status carries › a 4xx is the edge refusing — and both of its causes are named (2ms)
+  ✓  491 [chromium] › tests/e2e/run/preflight.spec.js:51:3 › the pre-flight names the finding the venue status carries › a status that is not a failure has no diagnosis (2ms)
+  ✓  492 [chromium] › tests/e2e/run/preflight.spec.js:58:3 › the pre-flight names the finding the venue status carries › the venue address is in the message (2ms)
+  ✓  493 [chromium] › tests/e2e/run/preflight.spec.js:65:3 › every cause the pre-flight names carries the remedy › a runner that cannot load names the cause and what the runner needs (5ms)
+  ✓  494 [chromium] › tests/e2e/run/preflight.spec.js:76:3 › every cause the pre-flight names carries the remedy › a browser that will not launch names the cause and what the runner needs (5ms)
+  ✓  495 [chromium] › tests/e2e/run/preflight.spec.js:86:3 › the pre-flight NAMES a cause it cannot use › a mapping that cannot be read is named, and the run stops with 1 (869ms)
+  ✓  496 [chromium] › tests/e2e/run/preflight.spec.js:212:3 › the pre-flight reports a FAILED CLEANUP › a close that fails is reported beside the first cause (89ms)
+  ✓  497 [chromium] › tests/e2e/run/preflight.spec.js:234:3 › the pre-flight reports a FAILED CLEANUP › a close that fails ALONE still stops the run (87ms)
+  ✓  498 [chromium] › tests/e2e/run/preflight.spec.js:259:3 › the venue build marker parser (#1851) › a marker the contract wrote parses to its git sha (2ms)
+  ✓  499 [chromium] › tests/e2e/run/preflight.spec.js:264:3 › the venue build marker parser (#1851) › the SPA fallback is a venue that predates the marker contract (2ms)
+  ✓  500 [chromium] › tests/e2e/run/preflight.spec.js:273:3 › the venue build marker parser (#1851) › a non-200 with a non-JSON body is still the missing marker (2ms)
+  ✓  501 [chromium] › tests/e2e/run/preflight.spec.js:278:3 › the venue build marker parser (#1851) › a marker present but malformed stops the run as a contract violation (7ms)
+  ✓  502 [chromium] › tests/e2e/run/preflight.spec.js:315:3 › the venue build freshness verdict (#1851) › a marker equal to the checkout HEAD is fresh (2ms)
+  ✓  503 [chromium] › tests/e2e/run/preflight.spec.js:321:3 › the venue build freshness verdict (#1851) › a marker behind the checkout HEAD is STALE, naming both shas (4ms)
+  ✓  504 [chromium] › tests/e2e/run/preflight.spec.js:331:3 › the venue build freshness verdict (#1851) › an unreadable checkout HEAD is its own verdict, not a crash (2ms)
+  ✓  505 [chromium] › tests/e2e/run/preflight.spec.js:339:3 › the freshness verdict names WHAT differs (#1987) › the classifier sorts a path into the class that matters (5ms)
+  ✓  506 [chromium] › tests/e2e/run/preflight.spec.js:351:3 › the freshness verdict names WHAT differs (#1987) › a build context outside the product tree is still served (2ms)
+  ✓  507 [chromium] › tests/e2e/run/preflight.spec.js:359:3 › the freshness verdict names WHAT differs (#1987) › a path the table does not know is treated as served (4ms)
+  ✓  508 [chromium] › tests/e2e/run/preflight.spec.js:369:3 › the freshness verdict names WHAT differs (#1987) › a difference in the served product is STALE, naming the paths (5ms)
+  ✓  509 [chromium] › tests/e2e/run/preflight.spec.js:380:3 › the freshness verdict names WHAT differs (#1987) › a difference only in the deployment definition is NOT a stale product (3ms)
+  ✓  510 [chromium] › tests/e2e/run/preflight.spec.js:396:3 › the freshness verdict names WHAT differs (#1987) › a difference outside everything that is served says so plainly (3ms)
+  ✓  511 [chromium] › tests/e2e/run/preflight.spec.js:404:3 › the freshness verdict names WHAT differs (#1987) › a difference that could not be computed keeps the STALE claim (2ms)
+  ✓  512 [chromium] › tests/e2e/run/venue-dns.spec.js:163:3 › the preload maps the venue name in Node's resolver › all four entry points answer the mapped address (144ms)
+  ✓  513 [chromium] › tests/e2e/run/venue-dns.spec.js:217:3 › the preload maps the venue name in Node's resolver › a name that is not the venue is left to the resolver (101ms)
+  ✓  514 [chromium] › tests/e2e/run/venue-dns.spec.js:226:3 › the preload maps the venue name in Node's resolver › an unusable mapping does not kill the process that loads the preload (71ms)
+  ✓  515 [chromium] › tests/e2e/theme/living-intelligence.spec.js:21:3 › Living Intelligence visual layer › the decoration assets are served from /config/ and revalidated (357ms)
+  ✓  516 [chromium] › tests/e2e/theme/living-intelligence.spec.js:47:3 › Living Intelligence visual layer › the layer writes data-visual=on and resolves --visual-hero at the document root (5.4s)
+  ✓  517 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:189:3 › Resizable sidebars behind one handle › both handles exist, sit flush on their panel edge, and are in the tab order (8.0s)
+  ✓  518 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:292:3 › Resizable sidebars behind one handle › the three controls name their own side (7.6s)
+  ✓  519 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:333:3 › Resizable sidebars behind one handle › dragging the left handle resizes the left and the centre correspondingly (9.7s)
+  ✓  520 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:354:3 › Resizable sidebars behind one handle › dragging the right handle resizes the right and the centre correspondingly (10.0s)
+  ✓  521 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:374:3 › Resizable sidebars behind one handle › a collapsed rail sits flush against the centre (12.4s)
+  ✓  522 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:424:3 › Resizable sidebars behind one handle › the handle stays on the inner edge in both states (11.7s)
+  ✓  523 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:479:3 › Resizable sidebars behind one handle › a collapse survives a reload on both sides, and "true" means open (18.2s)
+  ✓  524 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:547:3 › Resizable sidebars behind one handle › nothing overflows the viewport with a tooltip hovered, in the longest locale (12.8s)
+  ✓  525 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:634:3 › Resizable sidebars behind one handle › the waves span the panel and the panel clips what bleeds (11.0s)
+  ✓  526 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:801:3 › Resizable sidebars behind one handle › a drag that starts on the chevron resizes the panel (11.5s)
+  ✓  527 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:837:3 › Resizable sidebars behind one handle › a press on the chevron that never travels collapses instead of resizing (11.8s)
+  ✓  528 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:873:3 › Resizable sidebars behind one handle › a drag that ends over the chevron does not also collapse (9.4s)
+  ✓  529 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:890:3 › Resizable sidebars behind one handle › the handle is keyboard-operable from both sides (11.7s)
+  ✓  530 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:918:3 › Resizable sidebars behind one handle › the chevron collapses, and expanding returns the panel to its previous width (11.3s)
+  ✓  531 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:947:3 › Resizable sidebars behind one handle › double-click restores that side default width (13.0s)
+  ✓  532 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:970:3 › Resizable sidebars behind one handle › a width restored from storage is clamped to the current viewport, not applied blind (16.7s)
+
+[both hard caps] stored left=600 right=480
+  breakpoint step: centre 1280 px at 1280 -> 504 px at 1400 (reserved 896 px)
+  414: centre=414 left=24 right=414 cols=1
+  769: centre=769 left=24 right=480 cols=3
+  1024: centre=1024 left=24 right=480 cols=4
+  1280: centre=1280 left=24 right=480 cols=4
+  1400: centre=504 left=600 right=296 cols=1
+  1600: centre=520 left=600 right=480 cols=2
+  1920: centre=840 left=600 right=480 cols=3
+  ✓  533 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:1140:3 › Resizable sidebars behind one handle › ladder monotonic at both hard caps (29.7s)
+
+[wide left, default right] stored left=600 right=320
+  breakpoint step: centre 1280 px at 1280 -> 504 px at 1400 (reserved 896 px)
+  414: centre=414 left=24 right=414 cols=1
+  769: centre=769 left=24 right=480 cols=3
+  1024: centre=1024 left=24 right=480 cols=4
+  1280: centre=1280 left=24 right=480 cols=4
+  1400: centre=504 left=600 right=296 cols=1
+  1600: centre=680 left=600 right=320 cols=2
+  1920: centre=1000 left=600 right=320 cols=3
+  ✓  534 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:1145:3 › Resizable sidebars behind one handle › ladder monotonic with a wide left and a default right (30.6s)
+
+[out-of-range stored widths] stored left=4000 right=4000
+  breakpoint step: centre 1280 px at 1280 -> 504 px at 1400 (reserved 896 px)
+  414: centre=414 left=24 right=414 cols=1
+  769: centre=769 left=24 right=480 cols=3
+  1024: centre=1024 left=24 right=480 cols=4
+  1280: centre=1280 left=24 right=480 cols=4
+  1400: centre=504 left=600 right=296 cols=1
+  1600: centre=520 left=600 right=480 cols=2
+  1920: centre=840 left=600 right=480 cols=3
+  ✓  535 [chromium] › tests/e2e/theme/resizable-sidebars.spec.js:1153:3 › Resizable sidebars behind one handle › ladder monotonic with a stored width far above any legal maximum (31.2s)
+  ✓  536 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 2400x800: layout is non-zero, column count follows the invariant, no overlap (7.9s)
+  ✓  537 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 1920x800: layout is non-zero, column count follows the invariant, no overlap (7.3s)
+  ✓  538 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 1600x800: layout is non-zero, column count follows the invariant, no overlap (7.7s)
+  ✓  539 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 1400x800: layout is non-zero, column count follows the invariant, no overlap (7.9s)
+  ✓  540 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 1280x800: layout is non-zero, column count follows the invariant, no overlap (8.1s)
+  ✓  541 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 1024x800: layout is non-zero, column count follows the invariant, no overlap (8.7s)
+  ✓  542 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 769x800: layout is non-zero, column count follows the invariant, no overlap (10.1s)
+  ✓  543 [chromium] › tests/e2e/theme/responsive-layout.spec.js:206:5 › Responsive layout (quick-help grid + sidebar policy) › 414x800: layout is non-zero, column count follows the invariant, no overlap (8.0s)
+  ✓  544 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 2400px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (7.5s)
+  ✓  545 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 2400px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (6.3s)
+  ✓  546 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1920px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (8.2s)
+  ✓  547 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1920px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (9.7s)
+  ✓  548 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1600px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (8.4s)
+  ✓  549 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1600px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (8.2s)
+  ✓  550 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1400px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (21.6s)
+  ✓  551 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1400px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (9.5s)
+  ✘  552 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1280px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (165ms)
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+  ✘  553 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1280px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (239ms)
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+  ✓  554 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1024px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (7.5s)
+  ✓  555 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1024px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (6.8s)
+  ✓  556 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 769px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (9.3s)
+  ✓  557 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 769px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (11.6s)
+  ✓  558 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 414px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (13.9s)
+  ✓  559 [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 414px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width (7.2s)
+  ✓  560 [chromium] › tests/e2e/theme/theme-runtime-config.spec.js:20:3 › Runtime theme config cache headers › operator-editable theme stylesheet is revalidated (112ms)
+  ✓  561 [chromium] › tests/e2e/theme/theme-runtime-config.spec.js:25:3 › Runtime theme config cache headers › startup-generated runtime config is revalidated (34ms)
+  ✓  562 [chromium] › tests/e2e/theme/theme-runtime-config.spec.js:30:3 › Runtime theme config cache headers › image-baked theme fallback is revalidated (30ms)
+  ✓  563 [chromium] › tests/e2e/theme/theme-runtime-config.spec.js:35:3 › Runtime theme config cache headers › hashed build assets keep the immutable cache (247ms)
+  ✓  564 [chromium] › tests/e2e/theme/theme-runtime-config.spec.js:56:3 › Keycloak runtime theme mount › realm is reachable through the gateway (91ms)
+  ✓  565 [chromium] › tests/e2e/theme/theme-runtime-config.spec.js:84:3 › Keycloak runtime theme mount › login page renders the mounted genie theme (331ms)
+  ✓  566 [chromium] › tests/e2e/theme/welcome-banner.spec.js:1097:3 › Welcome banner invariants › 1. the scrim alpha is at or above its theme floor and is the alpha it paints with (1.6m)
+  ✓  567 [chromium] › tests/e2e/theme/welcome-banner.spec.js:1128:3 › Welcome banner invariants › 2. the wordmark's worst RENDERED local contrast clears 3:1 (1.8m)
+  ✓  568 [chromium] › tests/e2e/theme/welcome-banner.spec.js:1154:3 › Welcome banner invariants › 3-4-6. the scrim ramps, the veil wraps the title and blends, the subtitle clears the AA floor (2.1m)
+  ✓  569 [chromium] › tests/e2e/theme/welcome-banner.spec.js:1305:3 › Welcome banner invariants › 5. the banner box holds the ink band and stays full-bleed (1.4m)
+  ✓  570 [chromium] › tests/e2e/theme/welcome-banner.spec.js:1350:3 › Welcome banner invariants › 7. the title holds one line in the narrow panel, and the veil is its measure (5.8m)
+  ✓  571 [chromium] › tests/e2e/theme/welcome-banner.spec.js:1428:3 › Welcome banner invariants › 8. the narrow-panel adaptation is the app's own — with the Living Intelligence layer OFF the panel is still a query container and the tokens it steps are unchanged (1.9m)
+
+
+  1) [chromium] › tests/e2e/chatbot/send-message-and-stream.spec.js:139:3 › Chatbot message sending and SSE streaming › receives a bot response carrying the stream metadata after sending a message 
+
+    Error: the backend's responseTime rode the metadata frame (got undefined)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "number"
+    Received: "undefined"
+
+      183 |       typeof responseTime,
+      184 |       `the backend's responseTime rode the metadata frame (got ${JSON.stringify(responseTime)})`
+    > 185 |     ).toBe('number');
+          |       ^
+      186 |   });
+      187 | });
+      188 |
+        at /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/chatbot/send-message-and-stream.spec.js:185:7
+
+    Error Context: test-results/chatbot-send-message-and-s-c9dc3-ata-after-sending-a-message-chromium/error-context.md
+
+  2) [chromium] › tests/e2e/chatbot/send-message-and-stream.spec.js:252:3 › Chatbot message sending and SSE streaming — the French answer › the streamed answer is in French when the UI locale is fr 
+
+    Error: the answer still names the subject of the question
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected substring: "GENIE"
+    Received string:    "Je n'ai pas trouvé de preuves corroborantes dans la base de connaissances pour répondre à cette question."
+
+      268 |
+      269 |     const botText = await getLastBotMessage(page);
+    > 270 |     expect(botText, 'the answer still names the subject of the question').toContain('GENIE');
+          |                                                                           ^
+      271 |
+      272 |     // The answer is FRENCH, not merely untranslated: a venue whose
+      273 |     // translation chain silently answered with the English text would
+        at /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/chatbot/send-message-and-stream.spec.js:270:75
+
+    Error Context: test-results/chatbot-send-message-and-s-c9301-ch-when-the-UI-locale-is-fr-chromium/error-context.md
+
+  3) [chromium] › tests/e2e/helpers/stream-route.spec.js:32:3 › sseBody — the legacy five-type dialect › two-arg call builds exactly the legacy bytes 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    - Expected  - 0
+    + Received  + 8
+
+      data: {"type":"chunk","content":"a"}
+    +
+    +
+      data: {"type":"chunk","content":"b"}
+    +
+    +
+      data: {"type":"metadata","is_grounded":true}
+
+    +
+    +
+      data: {"type":"done","queryId":"mock-query-1"}
+
+    +
+    +
+
+      31 | test.describe('sseBody — the legacy five-type dialect', () => {
+      32 |   test('two-arg call builds exactly the legacy bytes', () => {
+    > 33 |     expect(sseBody(['a', 'b'], { is_grounded: true })).toBe(
+         |                                                        ^
+      34 |       [
+      35 |         'data: {"type":"chunk","content":"a"}',
+      36 |         'data: {"type":"chunk","content":"b"}',
+        at /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/stream-route.spec.js:33:56
+
+    Error Context: test-results/helpers-stream-route-sseBo-5c212-ds-exactly-the-legacy-bytes-chromium/error-context.md
+
+  4) [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1280px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width 
+
+    Error: loginViaUI failed on both attempts.
+      attempt 1 (budget 30000ms): page.goto: net::ERR_CONNECTION_REFUSED at https://genieai-forge.local:4443/
+    Call log:
+      - navigating to "https://genieai-forge.local:4443/", waiting until "networkidle"
+
+      attempt 2 (budget 15000ms): page.goto: net::ERR_CONNECTION_REFUSED at https://genieai-forge.local:4443/
+    Call log:
+      - navigating to "https://genieai-forge.local:4443/", waiting until "networkidle"
+
+
+       at helpers/chatbot.js:89
+
+      87 |   }
+      88 |
+    > 89 |   throw new Error(
+         |         ^
+      90 |     `loginViaUI failed on both attempts.\n` +
+      91 |       `  attempt 1 (budget ${AUTH_BUDGET_MS}ms): ${firstError.message}\n` +
+      92 |       `  attempt 2 (budget ${AUTH_RETRY_BUDGET_MS}ms): ${secondError.message}`
+        at Object.loginViaUI (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/chatbot.js:89:9)
+        at openWelcomeScreen (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/welcome.js:205:5)
+        at withWelcomeSession (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/welcome.js:340:25)
+        at /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/theme/responsive-layout.spec.js:312:9
+
+    Error Context: test-results/theme-responsive-layout-We-d90db--and-the-wave-adds-no-width-chromium/error-context.md
+
+  5) [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1280px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width 
+
+    Error: loginViaUI failed on both attempts.
+      attempt 1 (budget 30000ms): page.goto: net::ERR_CONNECTION_REFUSED at https://genieai-forge.local:4443/
+    Call log:
+      - navigating to "https://genieai-forge.local:4443/", waiting until "networkidle"
+
+      attempt 2 (budget 15000ms): page.goto: net::ERR_CONNECTION_REFUSED at https://genieai-forge.local:4443/
+    Call log:
+      - navigating to "https://genieai-forge.local:4443/", waiting until "networkidle"
+
+
+       at helpers/chatbot.js:89
+
+      87 |   }
+      88 |
+    > 89 |   throw new Error(
+         |         ^
+      90 |     `loginViaUI failed on both attempts.\n` +
+      91 |       `  attempt 1 (budget ${AUTH_BUDGET_MS}ms): ${firstError.message}\n` +
+      92 |       `  attempt 2 (budget ${AUTH_RETRY_BUDGET_MS}ms): ${secondError.message}`
+        at Object.loginViaUI (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/chatbot.js:89:9)
+        at openWelcomeScreen (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/welcome.js:205:5)
+        at withWelcomeSession (/home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/helpers/welcome.js:340:25)
+        at /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/issue-2170/tests/e2e/theme/responsive-layout.spec.js:312:9
+
+    Error Context: test-results/theme-responsive-layout-We-4cb10--and-the-wave-adds-no-width-chromium/error-context.md
+
+  Slow test file: [chromium] › tests/e2e/theme/welcome-banner.spec.js (14.6m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  5 failed
+    [chromium] › tests/e2e/chatbot/send-message-and-stream.spec.js:139:3 › Chatbot message sending and SSE streaming › receives a bot response carrying the stream metadata after sending a message 
+    [chromium] › tests/e2e/chatbot/send-message-and-stream.spec.js:252:3 › Chatbot message sending and SSE streaming — the French answer › the streamed answer is in French when the UI locale is fr 
+    [chromium] › tests/e2e/helpers/stream-route.spec.js:32:3 › sseBody — the legacy five-type dialect › two-arg call builds exactly the legacy bytes 
+    [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1280px @light: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width 
+    [chromium] › tests/e2e/theme/responsive-layout.spec.js:309:7 › Welcome panel does not scroll horizontally › 1280px @dark: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width 
+  25 skipped
+  541 passed (40.1m)
+report: reports/playwright-report-run-20261125T121403Z.json
+post-run ROPC posture gate
+ROPC posture: realm genie carries no direct access grants — OK
+
+e2e run: https://genieai-forge.local:4443 (2026-11-25T11:33:55.250Z)
+tests: 571  passed: 541  failed: 5  skipped: 25
+
+skipped (each with the venue profile that skipped it):
+  - tests/e2e/auth/i1-multi-realm.spec.js › Phase I: Multi-Realm Configuration › I.1 — backend validates token from additional realm
+      venue profile: the venue exposes no realm "genie2" (Phase 0 step 0.6 — KEYCLOAK_ADDITIONAL_REALMS=genie2 — was not provisioned here) — this spec drives a multi-realm surface, which a single-realm deployment does not answer, and that surface is therefore NOT exercised by this run
+  - tests/e2e/auth/i1-multi-realm.spec.js › Phase I: Multi-Realm Configuration › I.2 — tokens from different realms have different issuers
+      venue profile: the venue exposes no realm "genie2" (Phase 0 step 0.6 — KEYCLOAK_ADDITIONAL_REALMS=genie2 — was not provisioned here) — this spec drives a multi-realm surface, which a single-realm deployment does not answer, and that surface is therefore NOT exercised by this run
+  - tests/e2e/auth/i1-multi-realm.spec.js › Phase I: Multi-Realm Configuration › I.3 — backend validates tokens from both realms simultaneously
+      venue profile: the venue exposes no realm "genie2" (Phase 0 step 0.6 — KEYCLOAK_ADDITIONAL_REALMS=genie2 — was not provisioned here) — this spec drives a multi-realm surface, which a single-realm deployment does not answer, and that surface is therefore NOT exercised by this run
+  - tests/e2e/chatbot/real-rag-citation.spec.js › Chatbot — a real answer cites its real source › the answer carries the fixture fact and the sources cite the fixture file
+      venue profile: the ingest chain did not reach 'ingested' for the canary upload (the ingest of file 1795607213060_fa1678d8 did not reach 'Ingested' — the dataprep status is 'Ingestion Error', and that status will not change) — the dataprep chain this spec drives is absent or unhealthy on this venue, and that surface is therefore NOT exercised by this run
+  - tests/e2e/documents/upload.spec.js › Document Upload — the ingest chain › ingest an uploaded file and reach the Ingested status
+      venue profile: the ingest chain did not reach 'ingested' for the canary upload (the ingest of file 1795607443147_ddd90d0c did not reach 'Ingested' — the dataprep status is 'Ingestion Error', and that status will not change) — the dataprep chain this spec drives is absent or unhealthy on this venue, and that surface is therefore NOT exercised by this run
+  - tests/e2e/helpers/venue-profile.spec.js › the hook-skip contract the guarded specs stand on (#1773) › a group whose first hook skips › never runs
+      the venue lacks the surface
+  - tests/e2e/okf/artifacts-view.spec.js › the OKF artifacts view › the two views ask for two different things (artifacts vs documents)
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/artifacts-view.spec.js › the OKF artifacts view › a row carries the artifact and its provenance
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/artifacts-view.spec.js › the OKF artifacts view › an artifact with no version says the version is unknown (never a guess)
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/artifacts-view.spec.js › the OKF artifacts view › the artifacts view offers NO delete — the server would refuse it
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/artifacts-view.spec.js › the OKF artifacts view › the deep link opens the artifacts view directly
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/concept-ceiling.spec.js › the concept-document ceiling in the concept editor › the advisory carries the SERVER's ceiling
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/concept-ceiling.spec.js › the concept-document ceiling in the concept editor › going OVER the ceiling turns the warning on BEFORE the save is refused
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/concept-ceiling.spec.js › the concept-document ceiling in the concept editor › a refused save shows the SERVER's message, not "retry"
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/concept-ceiling.spec.js › the split affordance in the concept editor (#1577 story 2) › the dialog renders the seam preview BEFORE any write
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/concept-ceiling.spec.js › the split affordance in the concept editor (#1577 story 2) › confirming POSTs the split once and closes the dialog
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/concept-ceiling.spec.js › the split affordance in the concept editor (#1577 story 2) › a typed refusal renders the SERVER message verbatim and confirm stays disabled
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/ragas-guide-errors.spec.js › the RAGAS guide documents what each error state does to the result › the errors chapter is reachable and its table renders a row per state
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/ragas-judge-selector.spec.js › the RAGAS model selection is in the UI › the judge dropdown is on screen in the RAGAS Benchmarks tab, with the .env default among its options
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/ragas-judge-selector.spec.js › the RAGAS model selection is in the UI › the admin Models tab lists the configured models — the same envelope feeds it
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/ragas-rescore-tracking.spec.js › the RAGAS guide explains the output, and a re-score is a tracked run › the read chapter renders the output table, and a re-score is tracked and cancellable
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/studio-draft-notice.spec.js › OKF Studio degraded-draft banner › renders the degraded-draft banner when the draft endpoint is not served
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/studio-draft-notice.spec.js › OKF Studio degraded-draft banner › does not render the banner when the 404 names the repo gone
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/wizard-split-note.spec.js › OKF wizard split report note › names the file and the part count when the server splits the document
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+  - tests/e2e/okf/wizard-split-note.spec.js › OKF wizard split report note › renders no note when the server splits nothing
+      venue profile: the OKF pillar is parked (okfEnabled="0" in https://genieai-forge.local:4443/runtime/config.js) — this spec drives an OKF surface, which a core-profile deployment does not render, and that surface is therefore NOT exercised by this run
+pre-flight: venue https://genieai-forge.local:4443 (mapped genieai-forge.local -> 10.42.0.240)
+pre-flight: runner @playwright/test 1.62.1 — chromium 1234, chromium-headless-shell 1234
+pre-flight: the browser reached the venue (HTTP 200).
+pre-flight: venue build: STALE — the venue serves a2db5f7d36dd495b74d1d1123b6f318256e3b647, the checkout is 366d9e1704593054bee750d0c57b1f044c6bae5c: the served product differs (11 path(s), e.g. components/agent-service/capabilities/adapters/http.py, components/agent-service/tests/test_adapters_http.py, components/gov-chat-backend/__tests__/routes/agent-frame-writer.test.js) — every red below is suspect (the stale-venue remedy: docs/e2e-tests/local-run.md)
+
+venue-availability report: 2 failure(s) across 1 spec file(s) carry an edge-transport signature — the browser never reached the app:
+  - tests/e2e/theme/responsive-layout.spec.js: 2 (e.g. net::ERR_CONNECTION_REFUSED)
+The venue answered the re-probe at https://genieai-forge.local:4443 — these look like a venue outage that healed mid-run, NOT product findings: nothing is reported per spec for them. The run is still RED; check the venue events (kubectl get events -A) and re-run the suite once the venue has been stable.
+
+failing spec files: 2
+the red, in facts:
+  - venue build: `a2db5f7d36dd495b74d1d1123b6f318256e3b647`
+  - this checkout: `366d9e1704593054bee750d0c57b1f044c6bae5c`
+  - the venue is NOT behind this checkout — a missing handle is the PRODUCT's, not the venue's
+  - tests/e2e/chatbot/send-message-and-stream.spec.js (2 failure(s))
+  - tests/e2e/helpers/stream-route.spec.js (1 failure(s))
+
+file the issue by hand: the failures, the venue build and this checkout are the facts a reader needs.
+
+the run is RED (playwright exit 1)

@@ -17,7 +17,9 @@ CONTROLLED COMPARISON, not a sentence in a report:
 The honesty rules are the point:
 
 * a limit nobody agreed makes the verdict BLOCKED — never a pass, never a
-  default limit;
+  default limit; a limits artifact still marked ``draft`` is refused outright
+  — a draft is the derivation's proposal for the operator's agreement, never
+  an agreed limit;
 * a limit whose metric the measurement does not carry is NOT MEASURABLE — it
   blocks the verdict, it never passes it;
 * a regression nobody agreed a tolerance for is NOT MEASURABLE — the
@@ -620,6 +622,15 @@ def build_coexistence_report(
             "invalid_limits",
             "the legacy limits artifact is not a mapping — an artifact the operator's decision"
             " would never take is not applied — refusing before the report is built",
+        )
+
+    if isinstance(limits, dict) and limits.get("status") == "draft":
+        raise CoexistenceRefusal(
+            "draft_limits",
+            "the legacy limits artifact carries status 'draft' — a draft is the derivation's"
+            " proposal for the operator's agreement, never an agreed limit; the criterion"
+            " applies agreed limits only (record the agreement by flipping the status, then"
+            " re-run)",
         )
 
     if limits is not None:

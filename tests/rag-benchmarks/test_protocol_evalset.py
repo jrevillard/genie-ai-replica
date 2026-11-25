@@ -383,10 +383,10 @@ def test_coverage_census_counts_every_case_on_its_surface(assessment_data):
     """The census is the set's coverage statement: every case lands on exactly
     one surface, and a valid set has a resolved surface for all of them."""
     census = es.coverage_census(assessment_data["entries"])
-    assert census["n_set_cases"] == 16
+    assert census["n_set_cases"] == 20
     assert census["n_cases_with_a_resolved_surface"] == census["n_set_cases"]
     assert census["retrieval_cases_without_gold"] == []
-    assert census["by_surface"]["retrieval"] == 4
+    assert census["by_surface"]["retrieval"] == 8
     assert census["by_surface"]["restricted_access"] == 2
     assert census["by_surface"]["outcome"] == 3
     assert census["by_surface"]["security"] == 7
@@ -458,3 +458,90 @@ def test_validator_refuses_a_denial_expectation_on_an_outcome_case():
     with pytest.raises(es.SetValidationError) as failed:
         es.validate_set_or_raise(data, "assessment")
     assert any("expect_denied" in e for e in failed.value.errors)
+
+
+# ---------------------------------------------------------------------------
+# The post-signature classes (multi_hop, ambiguous) — issue #2146 blocker 3
+# ---------------------------------------------------------------------------
+
+SIGNED_REFERENCE_SET = (
+    Path(__file__).resolve().parent.parent.parent
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "e01-final-reference-2026-11-24"
+    / "assessment-set.json"
+)
+
+
+def test_multi_hop_and_ambiguous_are_valid_case_classes():
+    """The PRD §4.1 classes are first-class vocabulary: a case whose class is
+    multi_hop or ambiguous validates — the extension blocker 3 asks for, so a
+    set can carry the classes the gains layer reports per class."""
+    base = {
+        "id": "x",
+        "query": "q",
+        "language": "en",
+        "access_scenario": "public",
+        "provenance": "tuning",
+    }
+    for case_class in ("multi_hop", "ambiguous"):
+        data = {"_meta": {"provenance": "tuning"}, "entries": [{**base, "case_class": case_class}]}
+        assert es.validate_set(data, "tuning") == []
+
+
+def test_new_classes_land_on_the_retrieval_surface():
+    """Each new class lands on exactly ONE surface: both are gold-carrying
+    retrieval classes — a multi-hop query joins facts across documents, an
+    ambiguous query spans the interpretations' sources — so the anchor
+    measures them and the partition stays total."""
+    assert es.evaluation_surface({"case_class": "multi_hop", "access_scenario": "public"}) == "retrieval"
+    assert es.evaluation_surface({"case_class": "multi_hop", "access_scenario": "restricted"}) == "restricted_access"
+    assert es.evaluation_surface({"case_class": "ambiguous", "access_scenario": "public"}) == "retrieval"
+    assert set(es.RETRIEVAL_CLASSES) | set(es.OUTCOME_CLASSES) == set(es.COMPOSITION_CLASSES)
+    assert not set(es.RETRIEVAL_CLASSES) & set(es.OUTCOME_CLASSES)
+
+
+def test_the_new_classes_carry_an_optional_floor():
+    """The post-signature classes default to minimum 0: a floor of 1 would
+    retroactively refuse every pre-extension set — including the signed FINAL
+    A reference set whose digest the signed thresholds bind to — at every
+    driver's re-validation. A set that wants them REQUIRED raises them
+    through _meta.minimums (the candidate set does); the re-signature on a
+    digest carrying the classes is the operator's later step (#2146)."""
+    data = json.loads(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"))
+    data["_meta"]["minimums"] = {"multi_hop": 4, "ambiguous": 4}
+    errors = es.validate_set(data, "assessment")
+    assert any("multi_hop" in e and "4 required" in e for e in errors)
+    assert any("ambiguous" in e and "4 required" in e for e in errors)
+    for case_class, n in (("multi_hop", 2), ("ambiguous", 2)):
+        for i in range(n):
+            data["entries"].append(
+                {
+                    "id": f"added-{case_class}-{i}",
+                    "query": "q",
+                    "language": "en",
+                    "reference_answer": "",
+                    "expected_chunks": [{"chunk_key": "k", "content_hash": "h", "preview": "p"}],
+                    "case_class": case_class,
+                    "access_scenario": "public",
+                    "provenance": "assessment",
+                }
+            )
+    assert es.validate_set(data, "assessment") == []
+
+
+def test_the_sample_set_validates_under_the_optional_new_class_floor():
+    """The composition floor stays backward-compatible: the sample set —
+    which demonstrates the new classes — validates with them present at the
+    default minimum of 0, and no set is required to carry them."""
+    data = json.loads(ASSESSMENT_SAMPLE.read_text(encoding="utf-8"))
+    assert es.validate_set(data, "assessment") == []
+
+
+def test_signed_reference_set_still_validates_under_the_extended_floor():
+    """The FINAL A reference set — the digest the signed thresholds bind to —
+    keeps validating under the extended vocabulary: the semantic half of
+    'the signed set digest must not be touched'."""
+    _, entries = es.load_set(SIGNED_REFERENCE_SET, "assessment")
+    assert len(entries) == 67
+    assert not any(c.get("case_class") in ("multi_hop", "ambiguous") for c in entries)

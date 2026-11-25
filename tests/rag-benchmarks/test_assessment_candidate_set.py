@@ -1,0 +1,134 @@
+# Copyright (C) 2026 International Telecommunication Union (ITU)
+# SPDX-License-Identifier: Apache-2.0
+"""The CANDIDATE assessment set for the multi-hop/ambiguous classes (#2146).
+
+Blocker 3 of issue #2146: the PRD §4.1 note positions the agentic benefit on
+multi-hop and ambiguous queries, and the protocol's composition vocabulary
+carries neither class. The candidate set is the PROPOSAL artifact: the signed
+FINAL A reference set (67 cases, digest ``cb371f1a…``) extended with the two
+new classes REQUIRED through ``_meta.minimums`` — clearly marked candidate,
+never signed. The signed set file is untouched; the candidate's digest moves
+by addition only (the expected, documented outcome), and the re-signature on
+this set's own digest is the operator's later step.
+
+The gate encodes the #2145 rule mechanically for the additions: every
+new-class case's gold preview must appear VERBATIM (under the toolchain's own
+normalizer) inside the committed fixture its ``source_doc`` names — no
+invented gold can enter the set without this test failing. The new-class gold
+carries the Phase-1 shape (``preview`` + ``source_doc``, no identity): the
+content hashes are venue-resolved by the Phase-2 pass during the ingestion
+campaign, exactly like the graded ``e01g-`` cases.
+"""
+
+import json
+from pathlib import Path
+
+from eval.chunk_identity import normalize
+from protocol import evalset as es
+
+BENCH_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BENCH_DIR.parent.parent
+CANDIDATE_DIR = (
+    REPO_ROOT
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "assessment-set-candidate-2026-11-25"
+)
+CANDIDATE_SET = CANDIDATE_DIR / "assessment-set.json"
+SIGNED_SET = (
+    REPO_ROOT
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "e01-final-reference-2026-11-24"
+    / "assessment-set.json"
+)
+SECURITY_CORPUS_DIR = REPO_ROOT / "tests" / "rag-benchmarks" / "fixtures" / "security-corpus"
+
+# Every fixture the candidate set may name as a gold source, and the path
+# whose text makes the preview verifiable — the graded set's own map,
+# restated (same fixtures, same rule).
+GOLD_SOURCE_FIXTURES = {
+    "test-document.md": REPO_ROOT / "tests" / "e2e" / "fixtures" / "test-document.md",
+    **{
+        path.name: path for path in sorted(SECURITY_CORPUS_DIR.glob("e01-sec-doc-*.md"))
+    },
+}
+
+NEW_CLASSES = ("multi_hop", "ambiguous")
+
+
+def candidate_data() -> dict:
+    return json.loads(CANDIDATE_SET.read_text(encoding="utf-8"))
+
+
+def new_class_cases() -> list[dict]:
+    """The candidate's additions — the cases carrying the post-signature
+    classes (one partition, shared by the verbatim and multi-document
+    gates)."""
+    return [
+        case
+        for case in candidate_data()["entries"]
+        if case.get("case_class") in NEW_CLASSES
+    ]
+
+
+def test_candidate_set_exists_and_validates():
+    """The candidate set is a valid ASSESSMENT set under the extended
+    vocabulary, marked candidate, and it declares the new classes REQUIRED
+    through ``_meta.minimums`` (the candidate's own floor, above the default
+    0 the post-signature classes carry)."""
+    data, entries = es.load_set(CANDIDATE_SET, "assessment")
+    assert data["_meta"]["provenance"] == "assessment"
+    assert data["_meta"]["status"] == "candidate"
+    minimums = data["_meta"]["minimums"]
+    for case_class in NEW_CLASSES:
+        assert minimums.get(case_class, 0) >= 2
+        present = sum(1 for case in entries if case.get("case_class") == case_class)
+        assert present >= minimums[case_class]
+
+
+def test_candidate_set_extends_the_signed_reference_by_addition_only():
+    """Every signed case survives byte-identical — the candidate EXTENDS the
+    measurement instrument, it never rewrites a case the signed thresholds'
+    digest pins — and the only additions are the new-class cases."""
+    signed = {
+        case["id"]: case
+        for case in json.loads(SIGNED_SET.read_text(encoding="utf-8"))["entries"]
+    }
+    entries = {case["id"]: case for case in candidate_data()["entries"]}
+    for inherited_id, source_entry in signed.items():
+        assert entries.get(inherited_id) == source_entry, (
+            f"inherited case {inherited_id} dropped or drifted from the signed set"
+        )
+    added_ids = set(entries) - set(signed)
+    assert added_ids == {case["id"] for case in new_class_cases()}
+
+
+def test_candidate_set_new_class_gold_is_verbatim_fixture_text():
+    """The #2145 rule, applied to the additions: no invented gold — every
+    new-class preview is verbatim committed-fixture text under the
+    toolchain's normalizer, named by its source_doc, and every new-class case
+    is a public retrieval-class case (the chunk-level surface scores it)."""
+    for case in new_class_cases():
+        assert case.get("case_class") in NEW_CLASSES
+        assert case.get("access_scenario") == "public", case["id"]
+        assert case.get("expected_chunks"), case["id"]
+        for chunk in case["expected_chunks"]:
+            preview, source_doc = chunk.get("preview"), chunk.get("source_doc")
+            assert preview and source_doc, case["id"]
+            fixture = GOLD_SOURCE_FIXTURES.get(source_doc)
+            assert fixture is not None, f"{case['id']}: unknown source_doc {source_doc!r}"
+            assert fixture.exists(), fixture
+            assert normalize(preview) in normalize(fixture.read_text(encoding="utf-8")), case["id"]
+
+
+def test_multi_hop_cases_join_at_least_two_documents():
+    """The join is the multi_hop class's point: a multi_hop case's gold names
+    at least TWO distinct source documents, and an ambiguous case's gold
+    spans more than one interpretation's passage."""
+    for case in new_class_cases():
+        sources = {chunk.get("source_doc") for chunk in case["expected_chunks"]}
+        if case["case_class"] == "multi_hop":
+            assert len(sources) >= 2, case["id"]
+        else:
+            assert len(case["expected_chunks"]) >= 2, case["id"]

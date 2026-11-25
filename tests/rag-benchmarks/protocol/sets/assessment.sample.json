@@ -1,5 +1,5 @@
 {
-  "_doc": "Assessment-set SAMPLE — a CI fixture proving the composition validator (stories 4.1 and 4.2), NOT deployment case content. Every composition class is present and countable: answerable (10), unanswerable (1), citation_check (1), representative_language (2, one non-Latin), failure (1), cancellation (1); access public (9) + restricted (7). The security floor (story 4.2) is demonstrated too: restricted_repo (1), cross_user_id (a pair — 2 cases differing only in user_id), narrowed_scope (1), permission_change (1, a two-turn case whose second turn narrows the authorized set), injection_document (1), injection_tool_output (1). The restricted cases declare graphs — and `context.authorized_source_ids` (the SUITE's stricter assertion: a source inside an authorized graph but outside the ids is a legal service answer) only when the test demands that narrower citation set. Deployment sets follow the same shape with real corpus queries (see protocol/evalset.py). The four RETRIEVAL-surface cases (sample-ans-pub-1, sample-cite-pub-1, sample-lang-ru-1, sample-lang-es-1) carry gold: the chunk-level surface is the only one that scores passages, so a retrieval case without gold is measured by nothing and the config-A anchor driver refuses such a set. The other cases carry none BY DESIGN — the outcome and security surfaces are judged from the recorded outcome and the retrieved document ids, never from passages. The gold entries here are synthetic (no corpus, no hash matches anything).",
+  "_doc": "Assessment-set SAMPLE — a CI fixture proving the composition validator (stories 4.1 and 4.2), NOT deployment case content. Every composition class is present and countable: answerable (10), unanswerable (1), citation_check (1), representative_language (2, one non-Latin), multi_hop (2), ambiguous (2), failure (1), cancellation (1); access public (13) + restricted (7). The post-signature classes (#2146) default to an optional floor (minimum 0 — a required floor would retroactively refuse the signed reference set); this sample demonstrates them with 2 cases each, the count the candidate set requires through _meta.minimums. The security floor (story 4.2) is demonstrated too: restricted_repo (1), cross_user_id (a pair — 2 cases differing only in user_id), narrowed_scope (1), permission_change (1, a two-turn case whose second turn narrows the authorized set), injection_document (1), injection_tool_output (1). The restricted cases declare graphs — and `context.authorized_source_ids` (the SUITE's stricter assertion: a source inside an authorized graph but outside the ids is a legal service answer) only when the test demands that narrower citation set. Deployment sets follow the same shape with real corpus queries (see protocol/evalset.py). The eight RETRIEVAL-surface cases (sample-ans-pub-1, sample-cite-pub-1, sample-lang-ru-1, sample-lang-es-1 and the four multi_hop/ambiguous cases) carry gold: the chunk-level surface is the only one that scores passages, so a retrieval case without gold is measured by nothing and the config-A anchor driver refuses such a set. The other cases carry none BY DESIGN — the outcome and security surfaces are judged from the recorded outcome and the retrieved document ids, never from passages. The gold entries here are synthetic (no corpus, no hash matches anything).",
   "_meta": {
     "provenance": "assessment"
   },
@@ -122,6 +122,104 @@
         }
       ],
       "case_class": "representative_language",
+      "access_scenario": "public",
+      "provenance": "assessment"
+    },
+    {
+      "id": "sample-mh-pub-1",
+      "query": "Which unit reviews request SR-1, and which desk handles commercial filings?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "SR-1 is under review by the permits office; the business desk on the first floor handles commercial filings.",
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-mh-pub-1-chunk-1",
+          "content_hash": "e5f6071829304152",
+          "preview": "Service request SR-1 is under review by the permits office."
+        },
+        {
+          "chunk_key": "sample-mh-pub-1-chunk-2",
+          "content_hash": "f607182930415263",
+          "preview": "The business desk on the first floor handles commercial filings."
+        }
+      ],
+      "case_class": "multi_hop",
+      "access_scenario": "public",
+      "provenance": "assessment",
+      "expectations": {"require_citation": true}
+    },
+    {
+      "id": "sample-mh-pub-2",
+      "query": "Where does an applicant follow up on a request, and where is that desk located?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "Follow-up happens at the citizen desk by quoting the request number; the catalogue places the citizen desk on the ground floor.",
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-mh-pub-2-chunk-1",
+          "content_hash": "0718293041526374",
+          "preview": "Applicants follow up on a service request by quoting the request number at the citizen desk."
+        },
+        {
+          "chunk_key": "sample-mh-pub-2-chunk-2",
+          "content_hash": "1829304152637485",
+          "preview": "The citizen desk on the ground floor handles new registrations."
+        }
+      ],
+      "case_class": "multi_hop",
+      "access_scenario": "public",
+      "provenance": "assessment"
+    },
+    {
+      "id": "sample-amb-pub-1",
+      "query": "How long does a permit take to be decided?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "It depends on the permit type: dredging permits within thirty days, building permits within sixty days.",
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-amb-pub-1-chunk-1",
+          "content_hash": "2930415263748596",
+          "preview": "Dredging permits are decided within thirty days of a complete application."
+        },
+        {
+          "chunk_key": "sample-amb-pub-1-chunk-2",
+          "content_hash": "30415263748596a7",
+          "preview": "Building permits require the site plan annex and are decided within sixty days."
+        }
+      ],
+      "case_class": "ambiguous",
+      "access_scenario": "public",
+      "provenance": "assessment"
+    },
+    {
+      "id": "sample-amb-pub-2",
+      "query": "What is the status of the service request?",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "language": "en",
+      "reference_answer": "The bulletin carries three statuses: SR-1 under review, SR-2 completed, SR-3 waiting for the applicant's consent.",
+      "expected_chunks": [
+        {
+          "chunk_key": "sample-amb-pub-2-chunk-1",
+          "content_hash": "415263748596a7b8",
+          "preview": "Service request SR-1 is under review by the permits office."
+        },
+        {
+          "chunk_key": "sample-amb-pub-2-chunk-2",
+          "content_hash": "5263748596a7b8c9",
+          "preview": "Service request SR-2 was completed on 28 October 2026."
+        },
+        {
+          "chunk_key": "sample-amb-pub-2-chunk-3",
+          "content_hash": "63748596a7b8c9d0",
+          "preview": "Service request SR-3 waits for the applicant's site-access consent."
+        }
+      ],
+      "case_class": "ambiguous",
       "access_scenario": "public",
       "provenance": "assessment"
     },

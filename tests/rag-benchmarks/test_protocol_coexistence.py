@@ -558,3 +558,96 @@ def test_coexistence_keeps_the_measurement_reason_for_a_known_unmeasured_metric(
     by_metric = {record["metric"]: record for record in report["limits"]["limits"]}
     assert by_metric["latency_median_ms"]["outcome"] == "not_measurable"
     assert "the measurement carries no" in by_metric["latency_median_ms"]["reason"]
+
+
+# ---------------------------------------------------------------------------
+# The draft legacy-limits artifact (issue #2146) — proposal, never an agreed
+# limit
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DRAFT_LIMITS_FILE = (
+    REPO_ROOT
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "coexistence-limits-draft-2026-11-25"
+    / "legacy-limits.draft.json"
+)
+FINAL_A_MANIFEST = (
+    REPO_ROOT
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "e01-final-reference-2026-11-24"
+    / "reference.manifest.json"
+)
+
+
+def _draft_limits() -> dict:
+    return json.loads(DRAFT_LIMITS_FILE.read_text(encoding="utf-8"))
+
+
+def _held_loaded() -> dict:
+    """The loaded phase inside the draft's tolerances — the same mix, a few
+    milliseconds slower, no new failures."""
+    return {
+        case_id: {"http_status": 200, "wall_ms": measurement["wall_ms"] + 10.0}
+        for case_id, measurement in _control().items()
+    }
+
+
+def _all_answered_load() -> dict:
+    load = _agent_load()
+    load["outcomes"] = {"answered": 4}
+    load["n_admission_refusals"] = 0
+    return load
+
+
+def test_coexistence_refuses_a_draft_limits_artifact():
+    """A draft is the derivation's proposal for the operator's agreement,
+    never an agreed limit: passing it as the criterion's --limits is refused
+    before the report is built — the harness applies limits, it never lets a
+    proposal open a verdict by accident."""
+    with pytest.raises(CoexistenceRefusal) as failed:
+        build_coexistence_report(
+            control_measurements=_control(),
+            loaded_measurements=_held_loaded(),
+            agent_load=_all_answered_load(),
+            limits=_draft_limits(),
+            created_utc=CREATED,
+        )
+    assert failed.value.reason == "draft_limits"
+
+
+def test_coexistence_applies_the_limits_once_agreed():
+    """The agreement act is the status flip: the same artifact with the draft
+    status agreed applies cleanly — every limit and every regression tolerance
+    interpretable, and a loaded phase inside the derived bounds PASSes (the
+    verdict stays open for the operator's decision, nothing defaults)."""
+    limits = _draft_limits()
+    limits["status"] = "agreed"
+    report = build_coexistence_report(
+        control_measurements=_control(),
+        loaded_measurements=_held_loaded(),
+        agent_load=_all_answered_load(),
+        limits=limits,
+        lineage={
+            "corpus_fingerprint": limits["corpus_fingerprint"],
+            "assessment_set_sha256": limits["assessment_set_sha256"],
+        },
+        created_utc=CREATED,
+    )
+    assert report["limits"]["present"] is True
+    assert all(record["outcome"] == "pass" for record in report["limits"]["limits"])
+    assert all(metric["outcome"] == "pass" for metric in report["regression_verdict"]["metrics"])
+    assert report["verdict"]["verdict"] == "pass"
+
+
+def test_draft_limits_lineage_matches_the_final_a_reference():
+    """The draft binds the lineage it was derived from — the FINAL A
+    reference (issue #2162): the corpus fingerprint and the assessment-set
+    digest the signed thresholds carry."""
+    manifest = json.loads(FINAL_A_MANIFEST.read_text(encoding="utf-8"))
+    draft = _draft_limits()
+    assert draft["corpus_fingerprint"] == manifest["corpus"]["fingerprint"]
+    assert draft["assessment_set_sha256"] == manifest["sets"]["assessment"]["sha256"]
+    assert draft["status"] == "draft"

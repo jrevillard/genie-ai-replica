@@ -3,7 +3,7 @@
 const axios = require('axios');
 const { trace } = require('@opentelemetry/api');
 const { logger, spanAttrs } = require('../shared-lib');
-const { agentServiceUrl } = require('./agent-routing');
+const { agentRunUrl } = require('./agent-routing');
 const { parseAgentSeamLine } = require('./agent-seam-parser');
 const {
   resolveUpstreamTimeoutMs,
@@ -267,7 +267,7 @@ async function proxyAgentRun({
   // client JSON BEFORE any SSE byte ──
   let response;
   try {
-    response = await axios.post(agentServiceUrl(), runBody, {
+    response = await axios.post(agentRunUrl(), runBody, {
       headers: {
         'Content-Type': 'application/json'
       },

@@ -2,7 +2,7 @@
 
 const axios = require('axios');
 const { logger } = require('../shared-lib');
-const { agentServiceUrl } = require('./agent-routing');
+const { agentRunUrl } = require('./agent-routing');
 const { parseAgentSeamLine } = require('./agent-seam-parser');
 const {
   resolveUpstreamTimeoutMs,
@@ -212,7 +212,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // so the doc stays unanswered (createQuery's tail never runs on a throw).
   let response;
   try {
-    response = await axios.post(agentServiceUrl(), runBody, {
+    response = await axios.post(agentRunUrl(), runBody, {
       headers: {
         'Content-Type': 'application/json'
       },

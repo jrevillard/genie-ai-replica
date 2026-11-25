@@ -69,14 +69,15 @@ The core knows no HTTP, no MCP, no database driver and no agent framework. It sp
 
 Apart from the leaks in §2.3, the core imports no I/O library: only `pydantic` appears in `agent/`, `capabilities/contract.py`, `noagent/pipeline.py` and `preparation/`.
 
-### 2.3 Four leaks to close
+### 2.3 Five leaks to close
 
 | Leak | Why it is a leak | Fix |
 |---|---|---|
-| `agent/probe.py` hosts the production model client and `build_stateless_adapters` | an adapter and composition code inside the runtime-seam package | move both to adapters; `app.py` composes |
+| `agent/probe.py` hosts the production model client and `build_stateless_adapters`, which imports four adapters, the search capability and, inside a function, `arango` | an adapter and composition code inside the runtime-seam package | move both to adapters; `app.py` composes |
 | `agent/v06_harness.py` imports `httpx` | a measurement harness inside the seam | move to a measurement package outside `agent/` |
 | `preparation/translation.py` imports `httpx` | a core module that performs I/O | inject a translation client; the HTTP client becomes an adapter |
 | `capabilities/executor.py` imports three adapter classes (`LegacyChunkAdapter`, `DocRepoAdapter`, `OkfAdapter`) for type annotations | an enforcing implementation of the port that names concrete adapters | depend on Protocols declared next to the port |
+| `capabilities/search_knowledge.py` builds its own adapters in `create()` and imports the retrieval, embedding and reranking adapters; `noagent/prompt.py` imports one constant from it | composition inside a core module, and a core module importing that module | `create()` moves to the composition root; the shared constant moves to the contract |
 
 ### 2.4 Layers, ports, adapters
 
@@ -102,22 +103,27 @@ The map deliberately contains **no storage port**. The application that owns the
 
 | # | Rule | `pytestarch` form |
 |---|---|---|
-| R1 | The core imports the core and its Protocols only: never an adapter, never an I/O or storage library | `Rule().modules_that().are_named("agent").should_not().import_modules_that().are_named([...])`, with `get_evaluable_architecture(..., exclude_external_libraries=False)` |
-| R2 | An adapter implements a port of the core; never the reverse | `LayeredArchitecture` plus `LayerRule().layers_that().are_named("adapters").should_only().access_layers_that().are_named("core")` |
-| R3 | Only `app.py` imports the adapters | `Rule().modules_that().are_sub_modules_of("capabilities.adapters").should_not().be_imported_by_modules_except_modules_that().are_named("app")` |
+| R1 | A core module imports no I/O library | `Rule().modules_that().are_named(<core module>).should_not().import_modules_that().are_named(<library>)`, on a graph built with `exclude_external_libraries=False` |
+| R2 | A core module imports no adapter code | the same form, with an adapter module in place of the library |
+| L1 | A leaf adapter accesses only the ports it implements | `LayeredArchitecture` plus `LayerRule().layers_that().are_named("leaf adapters").should_only().access_layers_that().are_named(["ports"])` |
+| L2 | The search capability accesses only the ports and the leaf adapters | the same layer rule for the `capability` layer, allowed `["ports", "leaf adapters"]` |
+| R3 | Only the composition root imports the adapters | `Rule().modules_that().are_named(<adapters>).should_not().be_imported_by_modules_except_modules_that().are_named(<composition root>)`; it is switched on once composition has left the core (§2.3) |
 | R4 | The event vocabulary never carries a BFF frame name | already enforced at import (`agent/events.py`) |
 
-Properties of `pytestarch` that the rules rely on, read from its documentation:
+Properties of `pytestarch` 5.1.1 that the rules rely on. All but the last were checked against the service or on a synthetic package; the last is read from its documentation:
 
+- A node is named after the root folder: `agent-service.agent`, not `agent`.
 - External libraries are excluded by default; R1 needs `exclude_external_libraries=False`.
-- A rule that names a module absent from the graph raises `ModuleUnknown`: a typo fails the test.
-- A module outside every layer still counts: a layer rule raises `AssertionError` when the core layer accesses it. This is the practical equivalent of an exhaustive check for the core.
+- A rule that names a module absent from the graph raises `ModuleUnknown`: a typo fails the test. A library that no module imports is absent too, so the I/O list is filtered by presence first.
+- A module outside every layer still counts: a layer rule raises `AssertionError` when a listed layer accesses it.
+- `import_modules_that` and `should_not().be_imported_by_modules_that()` look at direct imports; the `…except…` and `should_only().be_imported_by…()` forms evaluate the transitive importers, and the latter also requires that the named module imports the subject.
 - Regex negations are not supported: modules are named explicitly.
-- `should_only().be_imported_by(X)` also requires that `X` imports the subject; R3 uses the `should_not().be_imported_by_modules_except_modules_that()` form.
 
-The rules are pytest tests (session fixture, `pytest.mark.parametrize`, `rule.assert_applies`), so they run in the existing pytest job. `pytestarch` is a test-only dependency.
+**R1 and R2 are ratchets.** The violations found on the tree are asserted equal to a listed set (`KNOWN_IO_VIOLATIONS`, `KNOWN_ADAPTER_VIOLATIONS` in `tests/test_architecture.py`). Closing a leak removes its pair from the tree, and the test goes red until the list shrinks with it; a new leak grows the set and the test goes red. The lists change only through a visible edit of the test file.
 
-**Planted-violation probe.** One temporary illegal import (core importing an adapter) and one function-local illegal import must each turn the suite red. `pytestarch` extracts imports from an AST, so a dynamic `importlib` call is invisible to it: that blind spot is recorded, and R1 is backed by a code-review item for `importlib` in the core.
+The rules are pytest tests in the existing pytest job: two session-scoped graphs (with and without external libraries), one test per rule, and one test that plants each violation on a synthetic package and checks that the same helpers report it. `pytestarch` is a test-only dependency (`pytestarch==5.1.1`; its one requirement, `networkx`, is pinned to `3.6.1`, the last line that accepts Python 3.11).
+
+**Planted-violation probe.** One temporary illegal import at module level and one inside a function must each turn the suite red. `pytestarch` extracts imports from an AST, so a dynamic `importlib` call is invisible to it: that blind spot is recorded, and R1 is backed by a code-review item for `importlib` in the core.
 
 ---
 
@@ -572,13 +578,15 @@ Smallest first. Each slice is one implementation plan with its own gate.
 | Slice | Content | Gate |
 |---|---|---|
 | S0 | The records of §12 | records accepted |
-| S1 | Architecture tests; the four leaks closed; migration step 1 | architecture suite green; stream identical |
+| S1 | Architecture tests; the five leaks closed; migration step 1 | architecture suite green; stream identical |
 | S2 | Migration step 2: dispatcher, orchestrator-owned lifecycle | contract suite green, violators red; stream identical |
 | S3 | `ToolSource`; `DocumentToolSource`; catalog; `web_search` in the simple run; PII egress; web citation variant on web and mobile | tool-source suites; runtime gate; end to end |
 | S4 | `turns` in the request; BFF assembly | budget and bounds tests |
 | S5 | Pipeline core; extended research | pipeline tests; evaluation comparison |
 | S6 | Scheduler mock MCP server; `McpToolSource`; `UserCredentials`; write path with pause; client frame; decision endpoint; approval on web and mobile | pause round-trip; BFF contract tests; end to end |
 | S7 | pydantic-ai spike, out of tree | spike report |
+
+S1 is delivered as three plans, each landing on its own: the architecture tests and the two leaks that need no code to move; composition out of the core, which closes the other three; migration step 1.
 
 New deployment knobs go into the `env` template and the config validator's coverage.
 

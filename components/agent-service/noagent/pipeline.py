@@ -22,11 +22,14 @@ The verdict, as deployed:
   ``no_documents_retrieved``, ``reranker_selected_nothing`` (both answer a
   generation WITH the abstention instructions and no documents),
   ``reranker_input_too_long`` (the fixed English abstention text IS the
-  answer; NO generation call), and the pipeline's own honest
-  ``preparation_degraded`` for an unprepared preparation result (no
-  retrieval runs; the abstention instructions drive a generation without
-  documents, and the exact ``query_translation_status`` rides the
-  metadata — never a prepared label on source text);
+  answer; NO generation call), ``result_budget_exhausted`` (the
+  capability's result budget spent the hits before any survived) and
+  ``no_resolvable_candidates`` (no candidate resolved to a serving graph),
+  plus the pipeline's own honest ``preparation_degraded`` for an
+  unprepared preparation result (no retrieval runs; the abstention
+  instructions drive a generation without documents, and the exact
+  ``query_translation_status`` rides the metadata — never a prepared
+  label on source text);
 * ``CHATQNA_ENFORCE_ABSTENTION`` (default true) gates both the instruction
   injection and the ``abstained`` flag — the same predicate on both, so a
   deployment that turned the guardrail off answers instead of abstaining;

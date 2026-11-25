@@ -65,19 +65,20 @@ The core knows no HTTP, no MCP, no database driver and no agent framework. It sp
 
 - **Core:** `capabilities/contract.py` (models, `OperationSpec`, `DocumentCapabilityPort`); `agent/` (event envelope and kinds, registry, budget, cancellation, loop, verification, toolset); `noagent/` (configuration B, the fixed single-pass pipeline used by the evaluation); `preparation/`.
 - **Adapters:** `capabilities/adapters/` (Arango retrieval, document repository, OKF, TEI embedding and reranking).
-- **Host and composition root:** `app.py`.
+- **Host:** `app.py`, the composition root, and `tracing.py`, the telemetry facade.
 
-Apart from the leaks in §2.3, the core imports no I/O library: only `pydantic` appears in `agent/`, `capabilities/contract.py`, `noagent/pipeline.py` and `preparation/`.
+Apart from the leaks in §2.3, the core imports three things from outside itself: `pydantic` (the models), `langdetect` (language detection, which performs no I/O) and the telemetry facade `tracing` — the root module where the OpenTelemetry SDK and its exporters are wired. Four core modules import it (`agent/loop.py`, `agent/verification.py`, `noagent/pipeline.py`, `preparation/prepare.py`). That last dependency is bounded by a rule: only `tracing` imports the SDK (rule T, §2.5).
 
-### 2.3 Five leaks to close
+### 2.3 Six leaks to close
 
 | Leak | Why it is a leak | Fix |
 |---|---|---|
 | `agent/probe.py` hosts the production model client and `build_stateless_adapters`, which imports four adapters, the search capability and, inside a function, `arango` | an adapter and composition code inside the runtime-seam package | move both to adapters; `app.py` composes |
 | `agent/v06_harness.py` imports `httpx` | a measurement harness inside the seam | move to a measurement package outside `agent/` |
-| `preparation/translation.py` imports `httpx` | a core module that performs I/O | inject a translation client; the HTTP client becomes an adapter |
+| `preparation/translation.py` defines `HttpxTransport`, the HTTP client that six construction sites default to (`preparation/translation.py`, `noagent/pipeline.py`, `noagent/generation.py`, `agent/probe.py`, `agent/orchestrator.py`, `agent/v06_harness.py`) | a core module that performs I/O, and a concrete transport chosen inside the core | the transport moves to the adapters; the constructors stop defaulting to it — the composition root supplies it |
 | `capabilities/executor.py` imports three adapter classes (`LegacyChunkAdapter`, `DocRepoAdapter`, `OkfAdapter`) for type annotations | an enforcing implementation of the port that names concrete adapters | depend on Protocols declared next to the port |
 | `capabilities/search_knowledge.py` builds its own adapters in `create()` and imports the retrieval, embedding and reranking adapters; `noagent/prompt.py` imports one constant from it | composition inside a core module, and a core module importing that module | `create()` moves to the composition root; the shared constant moves to the contract |
+| `noagent/lane.py` takes file locks (`fcntl`, inside a function) and runs the slot scan off the event loop with `anyio` | the admission lane is host infrastructure inside a core package: it does I/O | move the lane to the host, next to `app.py`, its only production importer |
 
 ### 2.4 Layers, ports, adapters
 
@@ -103,8 +104,10 @@ The map deliberately contains **no storage port**. The application that owns the
 
 | # | Rule | `pytestarch` form |
 |---|---|---|
+| C | Every module of the service belongs to one layer: host, core, leaf adapters, capability | the module list of the graph, each name passed through one classification function; the modules left over are asserted to be none |
 | R1 | A core module imports no I/O library | `Rule().modules_that().are_named(<core module>).should_not().import_modules_that().are_named(<library>)`, on a graph built with `exclude_external_libraries=False` |
-| R2 | A core module imports no adapter code | the same form, with an adapter module in place of the library |
+| R2 | A core module imports nothing of another layer, the telemetry facade excepted | the same form, with `app` and the adapter modules in place of the library |
+| T | The telemetry SDK is imported by `tracing` only | R1's form for `opentelemetry`, over every module outside the host |
 | L1 | A leaf adapter accesses only the ports it implements | `LayeredArchitecture` plus `LayerRule().layers_that().are_named("leaf adapters").should_only().access_layers_that().are_named(["ports"])` |
 | L2 | The search capability accesses only the ports and the leaf adapters | the same layer rule for the `capability` layer, allowed `["ports", "leaf adapters"]` |
 | R3 | Only the composition root imports the adapters | `Rule().modules_that().are_named(<adapters>).should_not().be_imported_by_modules_except_modules_that().are_named(<composition root>)`; it is switched on once composition has left the core (§2.3) |
@@ -116,10 +119,13 @@ Properties of `pytestarch` 5.1.1 that the rules rely on. All but the last were c
 - External libraries are excluded by default; R1 needs `exclude_external_libraries=False`.
 - A rule that names a module absent from the graph raises `ModuleUnknown`: a typo fails the test. A library that no module imports is absent too, so the I/O list is filtered by presence first.
 - A module outside every layer still counts: a layer rule raises `AssertionError` when a listed layer accesses it.
+- A cache or environment directory (`__pycache__`, `.venv`, `.ruff_cache`) leaves a node in the graph even when its files are excluded; the module list drops those nodes.
 - `import_modules_that` and `should_not().be_imported_by_modules_that()` look at direct imports; the `…except…` and `should_only().be_imported_by…()` forms evaluate the transitive importers, and the latter also requires that the named module imports the subject.
 - Regex negations are not supported: modules are named explicitly.
 
-**R1 and R2 are ratchets.** The violations found on the tree are asserted equal to a listed set (`KNOWN_IO_VIOLATIONS`, `KNOWN_ADAPTER_VIOLATIONS` in `tests/test_architecture.py`). Closing a leak removes its pair from the tree, and the test goes red until the list shrinks with it; a new leak grows the set and the test goes red. The lists change only through a visible edit of the test file.
+R1 and R2 look at direct imports. That is enough only because of C: every module is classified, so a path from the core to an I/O library or to an adapter has a first edge a rule sees — unless it goes through `tracing`, which rule T bounds.
+
+**R1 and R2 are ratchets.** The violations found on the tree are asserted equal to a listed set (`KNOWN_IO_VIOLATIONS`, `KNOWN_INTERNAL_VIOLATIONS` in `tests/test_architecture.py`). A violation is a (module, import) pair, named by the file that causes it: a new leak in a file that already has one is a new pair. Closing a leak removes its pair from the tree, and the test goes red until the list shrinks with it; a new leak adds a pair and the test goes red. The lists change only through a visible edit of the test file.
 
 The rules are pytest tests in the existing pytest job: two session-scoped graphs (with and without external libraries), one test per rule, and one test that plants each violation on a synthetic package and checks that the same helpers report it. `pytestarch` is a test-only dependency (`pytestarch==5.1.1`; its one requirement, `networkx`, is pinned to `3.6.1`, the last line that accepts Python 3.11).
 
@@ -139,6 +145,9 @@ Today `AgentLoop` does three jobs: the loop itself, governance (budget checks, e
 @dataclass(frozen=True)
 class RunInputs:
     question: str
+    instruction: str                  # the system prompt of this run or step
+    tools: Sequence[ToolDefinition]   # what the model may call: the registered tools
+    model: LoopModelClient            # bounded by the monitor through a core-owned decorator
     dispatcher: ToolDispatcher
     monitor: RunBudgetMonitor
     token: CancellationToken
@@ -156,6 +165,8 @@ class RuntimeDriver(Protocol):
 | returns the drafted text and its `RunResult` | verifies, scans, or keeps anything between two runs |
 | lets `CancelledError` propagate | knows a BFF frame name |
 
+The inputs are what the current loop takes per run: the question, the system prompt (`instruction`), the definitions of the registered tools (`tools`, from `registry.definitions()`) and the model client. The orchestrator builds that client per request, as it does today, bounds it with the core's decorator, hands it to the runtime in `RunInputs.model`, and keeps it: the verification judge and the record's model axis (`model_identity()`) use the same object.
+
 `ToolDispatcher` is the body of the current `_dispatch_tool` in `agent/loop.py`, moved: budget and token checks, `tool_call_started`, execution through the registry, declared errors mapped to data, evidence-ledger feed, injection scan, `tool_call_finished`.
 
 ### 3.3 Control signals travel through the token
@@ -166,7 +177,7 @@ LangChain, the base of Deep Agents, converts a tool's exception into a message f
 
 The order on the wire is unchanged: `run_started` → tool events → `text_message_started`, `text_message_content`, `text_message_finished` → `verdict` → `run_finished`.
 
-1. Mint `run_id`; build monitor, token, emitter and the execution-version record (which already carries `runtime_id`).
+1. Mint `run_id`; build monitor, token, emitter and the execution-version record. The record gains a `runtime` axis, `{"id": runtime_id}`, beside implementation, model, prompt and configuration: today's record (`build_execution_version_record` in `agent/version_record.py`) carries no runtime id. The BFF stores the record as one object, so nothing changes on its side; the test that pins the record's keys does.
 2. Emit `run_started`.
 3. Call the runtime.
 4. On a drafted answer: apply the mechanical insufficiency decision, emit the text events with the delivered text, run the verification pipeline, emit `verdict`, emit `run_finished`.
@@ -311,6 +322,7 @@ A pipeline is core code above the runtime port: ordered, typed steps that pass s
 | Agent step | one run on the runtime port, with its instruction and its tool subset |
 | Direct step | code without a model (formatting, a fixed tool call), as `noagent/` already does |
 | Fan-out step | N parallel runs under one share of budget |
+| Pause step | declared by the pipeline: ends the segment with a pause of kind `input` (§5.4) |
 
 A step is `required` or `optional`. On failure a required step ends the run with `run_error`; an optional step is skipped and recorded. No silent fallback.
 
@@ -333,9 +345,11 @@ BFF                                     agent-service
  │◄─ run_finished ───────────────────────│ 3. confirm
 ```
 
+- Two triggers create a pause. **Approval:** the dispatcher intercepts a write call that requires approval; the pending call is the model's, with its arguments as written. **Input:** a pause step the pipeline declares; the pipeline records the pending call itself — the tool, an argument template with one slot, and the options for that slot — then cancels the run through the token, as the dispatcher does.
 - `pause_requested` carries a `pause_id`, a `kind` (`approval` or `input`), the pending calls (tool, argument summary, risk), optional `options`, and the continuation.
 - `run_paused` is the terminal event of a paused segment. `run_finished` keeps its meaning: an answer was delivered.
-- The resume request carries the continuation and one decision per call (`approve`, optional `input`).
+- The resume request carries the continuation and one decision per call: `approve` for an approval, the chosen option for an input.
+- On resume, an approved call runs with the model's arguments. For an input, the decision must name one of the options: the pending call's arguments are built from that option, and a value outside the options is refused with an error — it never reaches the tool.
 
 ### 5.5 Continuation
 
@@ -362,7 +376,7 @@ It is delivered in two increments: first `web_search` as a tool of the simple ru
 | Step | Kind | Tools | Policy |
 |---|---|---|---|
 | `find` | agent | `scheduler.list_slots` (read), `search_knowledge` | required |
-| pause | `input` with the candidate slots as options, and the pending `scheduler.book` | — | — |
+| pause | pause step | `scheduler.book`, its slot filled from the chosen option | — |
 | `execute` | direct | `scheduler.book` (write) | required |
 | `confirm` | direct, then agent | `scheduler.get_appointment` (read) | required |
 
@@ -408,7 +422,7 @@ Frame and endpoint names are proposals; the BFF contract test fixes them.
 
 ### 6.4 Decision endpoint
 
-One BFF endpoint receives the decision for a pause. The BFF checks ownership, single use and lifetime, records the decision on the turn, and starts the resume run like a normal turn.
+One BFF endpoint receives the decision for a pause. It is keyed by the turn, not by the conversation: the pause lives on the per-turn `queries` record (§7.2), and a turn joins a conversation only when the user saves it. Proposed shape: `POST /api/chat/queries/:queryId/agent-pause/:pauseId/decision`, where `queryId` is the key the `queries` record is stored under. The BFF checks ownership (`queries.userId`), single use and lifetime, records the decision on the turn, and starts the resume run like a normal turn.
 
 ### 6.5 Clients
 
@@ -437,10 +451,10 @@ Rollback continuity holds: the legacy path ignores the `agent` block. After a ro
 
 ### 7.3 Conversation context
 
-The run receives one `question` today. The legacy path condenses up to eight history turns (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`). Iteration 2 carries the context with the request:
+The run receives one `question` today. The legacy path condenses up to eight prior message segments — four exchanges, since the knob counts segments (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8` in the deployed chatqna module). Iteration 2 carries the context with the request:
 
 - `turns` is a bounded list of prior user and assistant messages, assembled by the BFF from existing records.
-- Two deployment knobs bound it: number of turns (proposed default 6) and characters (proposed default 12 000). History tokens count against the run's token budget.
+- Two deployment knobs bound it: number of messages (proposed default 8 — four exchanges, the depth the legacy path condenses) and characters (proposed default 12 000). History tokens count against the run's token budget.
 - No separate condense step: the model sees the turns and writes standalone search queries itself.
 - A free-text reply that answers a paused question is an ordinary turn: the assistant's last message in `turns` carries the options.
 
@@ -517,7 +531,7 @@ Tool errors use the contract's existing outcome codes (`AUTHORIZATION_FAILURE`, 
 
 | Package | Version | License | Default network behavior | Status |
 |---|---|---|---|---|
-| `mcp` | 2.3.0 | MIT | no exporter among its dependencies (`opentelemetry-api` only) | to adopt, client only, pinned |
+| `mcp` | 2.3.0 | MIT | no telemetry exporter among its dependencies; it requires `opentelemetry-api>=1.28.0` where the tree pins `1.27.0`, and brings `httpx2`, `jsonschema`, `mcp-types`, `python-multipart`, `sse-starlette` and `cryptography` (through `pyjwt[crypto]`) | to adopt, client only; its adoption starts with an OpenTelemetry line bump and the audit of those packages (ADR agentic-005) |
 | `pytestarch` | 5.1.1 | Apache-2.0 | test only | to adopt, `requirements-test.txt` |
 | SearXNG | unmodified image | AGPL-3.0 | separate service, consumed over its HTTP API | decision recorded in ADR 0003 of the Server-Side Tools record; to re-record (§12) |
 
@@ -578,7 +592,7 @@ Smallest first. Each slice is one implementation plan with its own gate.
 | Slice | Content | Gate |
 |---|---|---|
 | S0 | The records of §12 | records accepted |
-| S1 | Architecture tests; the five leaks closed; migration step 1 | architecture suite green; stream identical |
+| S1 | Architecture tests; the six leaks closed; migration step 1 | architecture suite green; stream identical |
 | S2 | Migration step 2: dispatcher, orchestrator-owned lifecycle | contract suite green, violators red; stream identical |
 | S3 | `ToolSource`; `DocumentToolSource`; catalog; `web_search` in the simple run; PII egress; web citation variant on web and mobile | tool-source suites; runtime gate; end to end |
 | S4 | `turns` in the request; BFF assembly | budget and bounds tests |
@@ -586,7 +600,7 @@ Smallest first. Each slice is one implementation plan with its own gate.
 | S6 | Scheduler mock MCP server; `McpToolSource`; `UserCredentials`; write path with pause; client frame; decision endpoint; approval on web and mobile | pause round-trip; BFF contract tests; end to end |
 | S7 | pydantic-ai spike, out of tree | spike report |
 
-S1 is delivered as three plans, each landing on its own: the architecture tests and the two leaks that need no code to move; composition out of the core, which closes the other three; migration step 1.
+S1 is delivered as three plans, each landing on its own: the architecture tests and the two leaks that need no code to move; composition out of the core, which closes the rest; migration step 1.
 
 New deployment knobs go into the `env` template and the config validator's coverage.
 
@@ -619,9 +633,9 @@ A shipped second runtime; durable execution; dynamic tool management; declarativ
 | Decision | Proposed default |
 |---|---|
 | First mock building block | Scheduler: one read tool, two write tools, one read-after-write |
-| Client frame and endpoint names | `agent_pause`; `POST /api/chat/conversations/:id/agent-pause/:pauseId/decision` |
+| Client frame and endpoint names | `agent_pause`; `POST /api/chat/queries/:queryId/agent-pause/:pauseId/decision` |
 | Continuation lifetime | 24 hours |
-| Context bounds | 6 turns, 12 000 characters |
+| Context bounds | 8 messages (four exchanges), 12 000 characters |
 | What `scopes` maps to | realm roles, as the Server-Side Tools record's `tools-reader` and `tools-admin` were |
 
 ### 13.3 Risks

@@ -65,9 +65,12 @@ keeps the continuation.**
 2. **Where they live.** A `pipelines/` package in the core: the step and pipeline types,
    the runner, one module per pipeline. The run request names a pipeline by `plan`;
    absent means a simple run. An unknown plan ends with `run_error`.
-3. **The pause.** When a write tool requires approval, the dispatcher records the pending
-   call, cancels the run through the token (ADR agentic-004), and the orchestrator emits
-   `pause_requested` then `run_paused`. `run_paused` is the terminal event of a paused
+3. **The pause.** Two triggers. When a write tool requires approval, the dispatcher
+   records the pending call — the model's, arguments as written — and cancels the run
+   through the token (ADR agentic-004). A pause step declared by a pipeline does the same
+   for a call of kind `input`: the pipeline records the tool, an argument template with
+   one slot, and the options for it. In both cases the orchestrator emits `pause_requested`
+   then `run_paused`. `run_paused` is the terminal event of a paused
    segment; `run_finished` keeps its meaning: an answer was delivered.
 4. **The continuation** is a model of the core, serialized and opaque to the BFF: pipeline
    id and version, step index, pending calls, the step outputs needed to finish, bounded
@@ -77,7 +80,9 @@ keeps the continuation.**
 5. **The resume request** carries the continuation and one decision per pending call. An
    approved call is executed through the same dispatcher, never through a direct path. A
    refused call is not executed; the model is told as data; the pipeline continues or ends
-   honestly.
+   honestly. For an input, the decision must name one of the options: the pending call's
+   arguments are built from it, and a value outside the options is refused — it never
+   reaches the tool.
 6. **Budgets.** Each segment has one monitor, the source of every counter. A pipeline
    declares a wall-clock share and a model-call cap per step, whose sum fits the segment's
    deadline minus the verification reserve. Segments are linked by a `pipeline_id` on
@@ -86,7 +91,9 @@ keeps the continuation.**
    `agent_pause` frame carries the pause for display, without any raw argument that could
    hold a secret; the non-streaming entry answers with `paused: true` and the same
    summary. One BFF endpoint receives the decision and checks ownership, single use and
-   lifetime. Frame and endpoint names are fixed by the BFF contract test.
+   lifetime. The endpoint is keyed by the turn (`queryId`): a pause lives on the per-turn
+   `queries` record, which joins a conversation only at save. Frame and endpoint names are
+   fixed by the BFF contract test.
 8. **First pipelines.** Extended research — plan the queries (optional), search in a
    fan-out with `web_search` and `search_knowledge`, synthesize, verify — delivered in two
    increments: first `web_search` as a tool of the simple run, then the pipeline. Errand —

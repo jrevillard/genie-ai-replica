@@ -36,8 +36,8 @@ rollback continuity or adds an migration burden ». Its scope is iteration 1.
 
 Iteration 2 adds state the record does not cover: a pending pause with its continuation,
 a tool-call audit trail, and conversation context — the run receives one `question`
-today, while the legacy path condenses up to eight history turns
-(`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`).
+today, while the legacy path condenses up to eight prior message
+segments — four exchanges (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`).
 
 Read from the documentation of six runtimes on 2026-11-25, the prevailing pattern is that
 storage belongs to the application behind an interface, and that a pause is a serialized
@@ -76,7 +76,8 @@ record gains an additive `agent` block that the legacy path never reads.**
 
 3. **Conversation context travels with the request.** The run request gains `turns`: a
    bounded list of prior user and assistant messages that the BFF assembles from existing
-   records. Two deployment knobs bound it (proposed defaults: 6 turns, 12 000 characters);
+   records. Two deployment knobs bound it (proposed defaults: 8 messages — four exchanges,
+   the depth the legacy path condenses — and 12 000 characters);
    history tokens count against the run's token budget. There is no separate condense
    step: the model sees the turns and writes standalone search queries itself.
 4. **Audit summary.** Per tool call: `call_id`, tool, outcome, duration, bytes. For a

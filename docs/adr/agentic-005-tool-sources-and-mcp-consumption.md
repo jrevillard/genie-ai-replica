@@ -75,7 +75,12 @@ the request.**
    scan; `tool_call_finished`.
 5. **MCP consumption.** The official Python SDK (`mcp` 2.3.0, MIT) as a client over
    Streamable HTTP, which speaks protocol revision 2026-07-28; `stdio` is not used for
-   separate processes; `mcpo` is not used. The tool's input schema becomes the
+   separate processes; `mcpo` is not used. Its declared requirements, read from PyPI on
+   2026-11-25, set the price of the adoption: it requires `opentelemetry-api>=1.28.0` where
+   the tree pins `1.27.0`, which moves the whole OpenTelemetry line; and it brings `httpx2`,
+   `jsonschema`, `mcp-types`, `python-multipart`, `sse-starlette` and `cryptography`
+   (through `pyjwt[crypto]`) into the audited tree. Both are work of the slice that adopts
+   it, priced before it starts. The tool's input schema becomes the
    `ToolDefinition` parameters. A server's tool instructions are never added to the system
    prompt.
 6. **Outbound PII.** A tool with `egress: open_web` passes its query through the existing
@@ -111,7 +116,8 @@ the request.**
   frozen behavior; new tools are configuration plus one adapter.
 - Negative: tool definitions consume the prompt budget — the catalog is bounded and
   counted in the budget tests; more registered tools may degrade tool-calling on the
-  venue's vLLM — measured by a probe before the first external tool ships.
+  venue's vLLM — measured by a probe before the first external tool ships. The adoption
+  also moves the OpenTelemetry line and adds six packages to the audited tree.
 - Neutral: a web result is a new citation variant (`source: 'web'`) that the citation
   components on web and mobile must render.
 

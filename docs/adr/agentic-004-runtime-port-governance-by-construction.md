@@ -57,12 +57,16 @@ contract suite would have to verify behavior that should hold by construction.
 the objects it is given.**
 
 1. **The port.** A runtime implements `RuntimeDriver`: `runtime_id` and one method,
-   `run(inputs) -> RunResult`. `RunInputs` carries the question, the tool dispatcher, the
-   budget monitor, the cancellation token and the event emitter.
-2. **What a runtime does and never does.** It calls the model, bounded by the monitor
-   through a core-owned decorator around its model client; it dispatches tools only through
-   the dispatcher; it returns the drafted text and its `RunResult`; it lets `CancelledError`
-   propagate. It never emits a lifecycle or verdict event, never decides the delivered
+   `run(inputs) -> RunResult`. `RunInputs` carries the question, the instruction (the system
+   prompt of the run), the definitions of the registered tools, the model client, the tool
+   dispatcher, the budget monitor, the cancellation token and the event emitter. The
+   orchestrator builds the model client per request, bounds it and hands it over; the
+   verification judge and the record's model axis use that same client.
+2. **What a runtime does and never does.** It calls the model through the client it is
+   given, bounded by the monitor through a core-owned decorator around that client; it
+   dispatches tools only through the dispatcher; it returns the drafted text and its
+   `RunResult`; it lets `CancelledError` propagate. It never emits a lifecycle or verdict
+   event, never decides the delivered
    text, never verifies, scans or keeps anything between two runs, and never knows a BFF
    frame name.
 3. **`ToolDispatcher`** is the body of the current `_dispatch_tool`, moved, not rewritten:
@@ -77,7 +81,9 @@ the objects it is given.**
 5. **The orchestrator owns the lifecycle and the product rules.** It emits `run_started`,
    calls the runtime, applies the mechanical insufficiency decision to the drafted text,
    emits the text events, runs the verification pipeline, emits `verdict` and the terminal.
-   The order on the wire is unchanged.
+   The order on the wire is unchanged. The execution-version record gains a `runtime`
+   axis, `{"id": runtime_id}`: today's record carries implementation, model, prompt and
+   configuration, and no runtime.
 6. **Migration, two steps, each gated on a byte-identical event stream** recorded from the
    current orchestrator tests: a pure extraction (the orchestrator receives a runtime
    factory), then the move of governance into the core.

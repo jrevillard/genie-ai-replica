@@ -1511,11 +1511,12 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # OpenTelemetry — the compose↔source pair: the
       # SDK in tracing.py is a no-op unless ENABLE_OBSERVABILITY=1 (the
-      # single gate), and OTEL_SERVICE_NAME matches the compose block name
-      # AND the setup_tracing("agent-service") source default, so the
-      # dashboards' `service_name` label discovery resolves to agent-service
-      # without any dashboard edit (the backend block at the service pair
-      # convention is the pattern).
+      # single gate). The service identity is the setup_tracing
+      # ("agent-service") source default — the fixed name the dashboards'
+      # `service_name` label discovery resolves to, never an env override;
+      # the OTEL_SERVICE_NAME line mirrors it for the OTel-standard
+      # tooling that reads the variable (the SDK's own resource detector),
+      # and the explicit resource attribute wins over it.
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       - OTEL_SERVICE_NAME=agent-service

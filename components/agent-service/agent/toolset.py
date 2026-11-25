@@ -171,11 +171,12 @@ def _make_search_executor(
             # A model that echoes the user's language is translated. When
             # the detector cannot classify the query at all, the request's
             # locale (the preparer's own default) speaks for it — the
-            # search the caller can still have; with no locale anywhere,
-            # the module's own unknown-language status refuses it — never
-            # a claimed English that was not established, whose raw text
-            # would be embedded into the English-only space with a
-            # prepared label.
+            # search the caller can still have (an English locale answers
+            # passthrough_english: the locale establishes the English);
+            # with no locale anywhere, the module's own unknown-language
+            # status refuses it — no English is claimed that nothing
+            # established, whose raw text would be embedded into the
+            # English-only space with a prepared label.
             query_language = detect_language(query_text)
             # The call is BOUNDED at the dispatch's operation budget — its
             # own pieces only know the translation service's generous

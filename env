@@ -1512,8 +1512,10 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   They follow EMBEDDING_SERVICE_URL / RERANKER_SERVICE_URL, which the
 #   GPU-node section below points at the node's gateway (/embed, /rerank).
 # ARANGO_URL:
-#   the ArangoDB host the retrieval legs read. Unset = the code default
-#   (localhost), which inside the container is the container itself.
+#   the ArangoDB host the retrieval legs read. On the compose deployment
+#   unset means the compose default (http://arango-vector-db:8529); an
+#   in-process run with nothing set falls to the code default
+#   (localhost), which inside a container is the container itself.
 # ARANGO_USERNAME:
 #   the database user the retrieval legs authenticate with. This is the
 #   one spelling the agent service reads.

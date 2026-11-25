@@ -307,15 +307,17 @@ class SearchKnowledgeCapability:
                     )
                 else:
                     provenance = LegacyFileProvenance(file_id=doc.file_ids[0])
+                hit = SearchHit(provenance=provenance, text=doc.text, score=scored.score)
             except ValidationError as error:
-                # The identity comes from the corpus, not from the caller: a
-                # payload that does not match the contract is a transient
-                # defect of the enrichment, never a raw validation error.
+                # The hit comes from the corpus, not from the caller: a
+                # payload that does not match the contract (an identity or
+                # a text field of the wrong type) is a transient defect of
+                # the enrichment, never a raw validation error.
                 raise TransientError(
-                    f"the corpus served an identity that does not match the contract: {error}",
+                    f"the corpus served a hit that does not match the contract: {error}",
                     operation=OperationName.SEARCH_KNOWLEDGE,
                 ) from error
-            hits.append(SearchHit(provenance=provenance, text=doc.text, score=scored.score))
+            hits.append(hit)
 
         if not hits:
             # Every selected candidate was unresolvable: nothing citable

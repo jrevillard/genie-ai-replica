@@ -352,7 +352,20 @@ def test_a_drifted_identity_payload_is_a_transient_failure_not_a_raw_validation_
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking)
     capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
-    with pytest.raises(TransientError, match="identity that does not match the contract"):
+    with pytest.raises(TransientError, match="hit that does not match the contract"):
+        asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+
+
+def test_a_drifted_text_payload_is_a_transient_failure_too():
+    """The whole hit comes from the corpus: a selected candidate whose
+    text field is not a string is the same transient payload defect as a
+    drifted identity — never a raw pydantic error that matches no outcome
+    code."""
+    rows = [{"key": "c1", "text": {"drifted": True}, "score": 0.9, "file_id": "f1"}]
+    selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
+    with pytest.raises(TransientError, match="hit that does not match the contract"):
         asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
 
 

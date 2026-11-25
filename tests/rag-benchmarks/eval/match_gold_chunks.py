@@ -93,25 +93,16 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--chunk-text-field",
-        default="chunk_text",
-        help="Document field carrying the chunk text (default: chunk_text). Match your ingestion schema.",
+        default=os.getenv("ARANGO_TEXT_FIELD", "text"),
+        help="Document field carrying the chunk text (default: $ARANGO_TEXT_FIELD or 'text' — the SERVED"
+        " column the retrieval contract reads; the gold's content_hash must hash the same field"
+        " run_eval's key→hash map hashes, or every match fails on a contextualized corpus).",
     )
     p.add_argument(
         "--min-preview-len",
         type=int,
         default=20,
         help="Skip matching previews shorter than this many chars (too noisy; default: %(default)s)",
-    )
-    p.add_argument(
-        "--keep-duplicate-passages",
-        action="store_true",
-        help="Keep previews that resolve to a chunk-key set another entry "
-        "already resolved to. The default drops them (the F7 invariant: two "
-        "annotations of one passage inflate passage-level recall). Sets whose "
-        "duplicate gold is the MEASUREMENT DESIGN — phrasing twins, language "
-        "variants, paraphrase probes over a small fixture corpus — are gutted "
-        "by that default (33 of 67 cases on the #2151 acceptance-grade set): "
-        "the flag keeps every entry's own resolution.",
     )
     p.add_argument(
         "--mode",
@@ -229,7 +220,6 @@ def main() -> int:
         "unresolved": 0,
         "skipped_short": 0,
         "total_previews": 0,
-        "deduped_passages": 0,
     }
     for entry in entries:
         expected = entry.get("expected_chunks", [])
@@ -267,37 +257,9 @@ def main() -> int:
                 stats["unresolved"] += 1
         entry["expected_chunks"] = new_expected
 
-    # F7 (MR !505 review): drop cross-entry duplicate passages — the full
-    # rationale lives on the --keep-duplicate-passages flag, whose help is
-    # the single home of the skip's reasoning.
-    if not args.keep_duplicate_passages:
-        seen_passage_keys: set[frozenset[str]] = set()
-        for entry in entries:
-            new_expected: list[dict[str, Any]] = []
-            for ec in entry.get("expected_chunks", []):
-                pid = ec.get("passage_id")
-                if pid is None:
-                    # Unresolved / skipped rows have no passage; pass through.
-                    new_expected.append(ec)
-                    continue
-                keys = frozenset(
-                    c["chunk_key"] for c in entry["expected_chunks"]
-                    if c.get("passage_id") == pid and c.get("chunk_key")
-                )
-                if not keys:
-                    new_expected.append(ec)
-                    continue
-                if keys in seen_passage_keys:
-                    stats["deduped_passages"] += 1
-                    continue
-                seen_passage_keys.add(keys)
-                new_expected.append(ec)
-            entry["expected_chunks"] = new_expected
-
     payload["match_run"] = {
         "ran_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "graph_source": args.graph_source,
-        "duplicate_passages_kept": args.keep_duplicate_passages,
         "stats": stats,
     }
 
@@ -313,7 +275,6 @@ def main() -> int:
     sys.stderr.write(
         f"[match] resolved={stats['resolved']} split_passages={stats['split_passages']} "
         f"unresolved={stats['unresolved']} skipped_short={stats['skipped_short']} "
-        f"deduped_passages={stats['deduped_passages']} "
         f"total_previews={stats['total_previews']} -> {out_path}\n"
     )
     return 0

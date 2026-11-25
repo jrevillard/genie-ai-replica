@@ -105,24 +105,42 @@ class AuthorizedExecutor:
         context: CallerContext,
         request: SearchKnowledgeInput,
         budget: OperationBudget,
+        abstention_sink: "Callable[[str], None] | None" = None,
     ) -> SearchKnowledgeResult:
-        """Search the authorized corpus; hits outside the set never surface."""
+        """Search the authorized corpus; hits outside the set never surface.
+
+        ``abstention_sink`` is the same OPTIONAL per-call hook the inner
+        port takes: threading it here means an insufficiency answered
+        through the executor records its exact reason WHEN a caller
+        supplies the sink — the reason no longer dies at the executor
+        boundary for a caller that wants it. Today's callers that scrape
+        reasons (the noagent pipeline) call the capability directly; the
+        agent path's toolset call passes no sink yet (the wiring to the
+        run's metadata is the remaining seam). The executor's own
+        authorization refusals (no authorized graphs, no surviving
+        authorized hits) record no reason through it — they are
+        authorization outcomes, not retrieval insufficiencies.
+        """
         self._refuse_a_foreign_context(context, operation=_SEARCH)
         if not context.authorized_graph_names:
             # Fail-closed: nothing is reachable, so nothing is sought. The
             # inner port is not consulted at all.
             return self._insufficient_search(request)
         inner = await self._within_deadline(
-            lambda: self._search_port.search_knowledge(context, request, budget), budget, _SEARCH
+            lambda: self._search_port.search_knowledge(context, request, budget, abstention_sink=abstention_sink),
+            budget,
+            _SEARCH,
         )
         survivors = tuple(candidate for candidate in inner.hits if self._hit_is_authorized(candidate))
         if inner.outcome is OutcomeCode.INSUFFICIENT_EVIDENCE or not survivors:
             return self._insufficient_search(request)
-        truncated = inner.truncated or len(survivors) > budget.max_results
+        # The inner capability already caps `hits` at budget.max_results and
+        # survivors are a subset — the slice below is the only cut the
+        # executor needs; `truncated` reports the inner port's own honesty.
         return SearchKnowledgeResult(
             outcome=inner.outcome,
             hits=survivors[: budget.max_results],
-            truncated=truncated,
+            truncated=inner.truncated,
             query_preparation_status=request.query.preparation_status,
         )
 

@@ -297,6 +297,10 @@ async function proxyAgentRun({
 
   // ── the upstream call: admission (429) and configuration (503) surface as
   // client JSON BEFORE any SSE byte ──
+  // A client that left gets no write into a dead socket — the ONE predicate
+  // the wait and every refusal drain check (the close handler has already
+  // run and persisted the honest cancelled outcome).
+  const clientGone = () => res.writableEnded || res.destroyed;
   let response;
   try {
     response = await axios.post(agentRunUrl(), runBody, {
@@ -312,7 +316,7 @@ async function proxyAgentRun({
       validateStatus: () => true
     });
   } catch (error) {
-    if (res.writableEnded || res.destroyed) {
+    if (clientGone()) {
       return; // the client left during the wait; the close handler already ran
     }
     // The response is over: the pre-stream refusal IS the terminal. The
@@ -337,9 +341,23 @@ async function proxyAgentRun({
   armStreamDeadline();
 
   const status = response.status;
-  if (status === 429) {
-    const { parsed } = await readUpstreamBody(response.data, status);
+  // The refusal paths share ONE drain sequence: read the upstream body,
+  // clear the stream deadline, then refuse to write when the client left
+  // during the drain (CLIENT_GONE — the close handler has already run and
+  // persisted the honest cancelled outcome). The sentinel, not null: a body
+  // that did not parse IS a null `parsed` and must still answer the client
+  // with the documented fallback.
+  const CLIENT_GONE = Symbol('client-gone');
+  const readRefusalBody = async (refusalStatus) => {
+    const { parsed } = await readUpstreamBody(response.data, refusalStatus);
     clearStreamDeadline();
+    return clientGone() ? CLIENT_GONE : parsed;
+  };
+  if (status === 429) {
+    const parsed = await readRefusalBody(status);
+    if (parsed === CLIENT_GONE) {
+      return;
+    }
     // The lane hint passes through (the caller retries on it); a body that
     // did not parse (or is not an object) falls back to the documented error
     // name.
@@ -353,8 +371,10 @@ async function proxyAgentRun({
     return res.status(429).json(passthroughBody(parsed) || { error: 'admission_refused' });
   }
   if (status === 503) {
-    const { parsed } = await readUpstreamBody(response.data, status);
-    clearStreamDeadline();
+    const parsed = await readRefusalBody(status);
+    if (parsed === CLIENT_GONE) {
+      return;
+    }
     logger.warn('AgentFrameWriter.run_surface_unconfigured', { queryId, body: parsed });
     streamFinished = true;
     return res.status(503).json(passthroughBody(parsed) || { error: 'budget_configuration_missing' });
@@ -363,15 +383,19 @@ async function proxyAgentRun({
     // A malformed run request is a request problem, not an outage — the
     // upstream's validation answer passes through (the fallback names it as
     // the BFF's own invalid request).
-    const { parsed } = await readUpstreamBody(response.data, status);
-    clearStreamDeadline();
+    const parsed = await readRefusalBody(status);
+    if (parsed === CLIENT_GONE) {
+      return;
+    }
     logger.warn('AgentFrameWriter.run_request_invalid', { queryId, body: parsed });
     streamFinished = true;
     return res.status(422).json(passthroughBody(parsed) || { error: 'invalid_run_request' });
   }
   if (status !== 200 || !response.data) {
-    const { parsed } = await readUpstreamBody(response.data, status);
-    clearStreamDeadline();
+    const parsed = await readRefusalBody(status);
+    if (parsed === CLIENT_GONE) {
+      return;
+    }
     logger.error('AgentFrameWriter.upstream_status_error', { queryId, status });
     streamFinished = true;
     return res

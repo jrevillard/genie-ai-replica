@@ -248,7 +248,15 @@ class TeiRerankingAdapter:
                 json={"query": query, "texts": texts, "truncate": False},
                 headers={"Authorization": f"Bearer {self._bearer}"} if self._bearer else {},
             )
-        decoded = response.json()
+        # The body is parsed WHEN POSSIBLE, and the status decides first: a
+        # non-JSON error body (a proxy HTML page, a plain-text 502) must
+        # surface as the failure carrying its HTTP status, not as a decode
+        # crash with no status — and a 422 whose body does not parse keeps
+        # its status visible instead of dying on the decode.
+        try:
+            decoded = response.json()
+        except ValueError:
+            decoded = None
         if response.status_code == 422 and isinstance(decoded, dict) and decoded.get("error_type") == "Validation":
             error_message = decoded.get("error", "unknown")
             given_tokens = None
@@ -262,9 +270,10 @@ class TeiRerankingAdapter:
             )
             raise RerankerInputTooLongError(f"TEI rejected input: {error_message}")
         if response.status_code != 200:
+            body_preview = response.text if decoded is None else json.dumps(decoded)
             raise RuntimeError(
                 f"TEI reranker call failed: HTTP {response.status_code} from "
-                f"{self._endpoint}/rerank (ndocs={len(texts)}). Response: {json.dumps(decoded)[:500]}"
+                f"{self._endpoint}/rerank (ndocs={len(texts)}). Response: {body_preview[:500]}"
             )
         if not isinstance(decoded, list):
             raise RuntimeError(

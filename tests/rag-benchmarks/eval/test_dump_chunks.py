@@ -34,7 +34,7 @@ class _FakeCursor:
 
 def test_row_level_fallback_fires_when_all_texts_null(capsys, tmp_path, monkeypatch):
     """F1: when the primary field returns rows with all-null text, dump_chunks
-    MUST retry with the legacy field, emit the WARNING, and produce non-empty
+    MUST retry with the fallback field, emit the WARNING, and produce non-empty
     content_hashes. The old collection-level guard never fired because the
     AQL always returns one row per document."""
     primary_rows = [
@@ -47,17 +47,18 @@ def test_row_level_fallback_fires_when_all_texts_null(capsys, tmp_path, monkeypa
     ]
     fake = _FakeCursor([primary_rows, fallback_rows])
     monkeypatch.setattr(dump_chunks, "cursor", fake)
-    # Pin the primary field to something other than the legacy one so the
-    # fallback path is eligible to run.
-    monkeypatch.setattr(dump_chunks, "TEXT_FIELD", "chunk_text")
+    # Pin the primary field to something other than the fallback one so the
+    # fallback path is eligible to run (the default primary is the served
+    # `text` column, #2153).
+    monkeypatch.setattr(dump_chunks, "TEXT_FIELD", "text")
     out = tmp_path / "reg.json"
     rc = dump_chunks.main(str(out))
     assert rc is None  # main() returns None on success
     assert fake.calls == 2, "fallback should have fired exactly once"
     err = capsys.readouterr().err
     assert "WARNING" in err
-    assert "chunk_text" in err
-    # The registry now carries real hashes from the legacy field
+    assert "chunk_text" in err  # the fallback field is named
+    # The registry now carries real hashes from the fallback field
     reg = json.loads(out.read_text())
     assert len(reg) == 2
     hashes = {r["content_hash"] for r in reg}
@@ -73,13 +74,13 @@ def test_no_fallback_when_texts_are_present(capsys, tmp_path, monkeypatch):
     ]
     fake = _FakeCursor([primary_rows])
     monkeypatch.setattr(dump_chunks, "cursor", fake)
-    monkeypatch.setattr(dump_chunks, "TEXT_FIELD", "chunk_text")
+    monkeypatch.setattr(dump_chunks, "TEXT_FIELD", "text")
     out = tmp_path / "reg.json"
     dump_chunks.main(str(out))
     assert fake.calls == 1, "fallback must NOT fire when text is present"
     err = capsys.readouterr().err
     # The retry-warning is absent
-    assert "retrying with legacy field" not in err
+    assert "retrying with" not in err
 
 
 def test_partial_null_text_warns_with_count(capsys, tmp_path, monkeypatch):
@@ -92,7 +93,7 @@ def test_partial_null_text_warns_with_count(capsys, tmp_path, monkeypatch):
     ]
     fake = _FakeCursor([rows])
     monkeypatch.setattr(dump_chunks, "cursor", fake)
-    monkeypatch.setattr(dump_chunks, "TEXT_FIELD", "chunk_text")
+    monkeypatch.setattr(dump_chunks, "TEXT_FIELD", "text")
     out = tmp_path / "reg.json"
     dump_chunks.main(str(out))
     assert fake.calls == 1  # no fallback — some rows have text

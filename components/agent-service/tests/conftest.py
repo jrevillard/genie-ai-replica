@@ -260,8 +260,10 @@ class AgentFakePort:
         self.search_calls: list[dict] = []
         self.read_calls: list[dict] = []
 
-    async def search_knowledge(self, context, request, budget) -> SearchKnowledgeResult:
-        self.search_calls.append({"context": context, "request": request, "budget": budget})
+    async def search_knowledge(self, context, request, budget, abstention_sink=None) -> SearchKnowledgeResult:
+        self.search_calls.append(
+            {"context": context, "request": request, "budget": budget, "abstention_sink": abstention_sink}
+        )
         if isinstance(self.search_result, Exception):
             raise self.search_result
         return self.search_result

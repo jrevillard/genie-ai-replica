@@ -67,7 +67,11 @@ from harness import (
 from .config_b_driver import default_graph as config_b_default_graph
 from .evalset import (
     as_label_list,
+    authorized_identities,
+    authorized_repo_ids,
+    corpus_presence_key,
     coverage_census,
+    declared_graphs_key,
     evaluation_surface,
     turn_entries,
 )
@@ -76,6 +80,7 @@ from .manifest import (
     sha256_json,
 )
 from .redaction import redact_deep
+from .reuse import current_protocol_code_sha
 
 # The temp dir the harness writes the B driver + its payload into, inside the
 # agent-service container.
@@ -418,7 +423,12 @@ def _prepare_anchor_bearer() -> None:
 
     if not run_eval._refresh_configured():
         return
-    run_eval._token_ts = time.time()
+    # The seed reads THE ANCHOR'S OWN clock (run_eval.time): the TTL check
+    # reads that module's clock, and a seed taken from another module's
+    # `time` silently splits the clock in two — under any module-scoped
+    # clock fake the seeded elapsed time goes negative and the run never
+    # refreshes.
+    run_eval._token_ts = run_eval.time.time()
     if not os.getenv("E2E_BEARER_TOKEN"):
         run_eval._maybe_refresh_token(force=True)
 
@@ -606,6 +616,12 @@ def run_config_a_capture(
         # The identity of the ANCHOR's input — which of the set's cases the
         # chunk-level surface scores. A change to the surface model moves it.
         "anchor_projection_sha256": anchor_projection_sha256(anchor_projection(cases)),
+        # The PROTOCOL's own code identity: the reuse check compares the
+        # recorded digest against the live package, so a capture made before
+        # a protocol change is not current evidence (the drivers, the set
+        # validator and the verdict layer are behaviour the capture speaks
+        # for).
+        "protocol_code_sha256": current_protocol_code_sha(),
     }
     # The rows file certifies the SET it was captured over: resuming by case
     # id across another set would certify set B's digest while carrying set
@@ -1141,6 +1157,66 @@ def run_config_c(
         "rows_path": str(rows_path),
         "pending_ids": [c["id"] for c in pending],
     }
+
+
+# ---------------------------------------------------------------------------
+# The corpus-presence resolution (the security verdicts' precondition)
+# ---------------------------------------------------------------------------
+
+
+def corpus_presence_for(entries: list[dict], *, file_ids_by_graph: dict[str, set[str]] | None) -> dict[tuple, bool | None] | None:
+    """The corpus-presence map the security verdicts' precondition reads
+    (#2155): ``(identity, declared_graphs) -> True | False | None``.
+
+    The resolution depends on the graphs the CASE declares, so the map is
+    keyed per (identity, declared-graphs) — a per-identity memo would hand a
+    restricted case the public graph's verdict for the same file id (a
+    vacuous pass over the empty restricted graph, exactly what the
+    precondition prevents). ``file_ids_by_graph`` maps a graph name to the
+    file ids its ``<graph>_SOURCE`` collection carries — the live resolver
+    reads ArangoDB (:func:`eval.arango.source_file_ids`, one AQL per graph);
+    tests inject.
+
+    Per declared identity:
+
+    * present in ANY queried declared graph → ``True``;
+    * a declared graph that was NOT armed (absent from the map) was never
+      queried → ``None`` (unknown, never absent — calling it absent would
+      fire the precondition on a corpus that exists);
+    * all declared graphs queried and none carries it → ``False``;
+    * no graphs declared → ``None`` (nothing to resolve against).
+
+    OKF identities — a bare repo id (an ``authorized_repos`` entry) or a
+    ``<repo>/<concept>`` id — resolve ``None``: the SOURCE collections carry
+    file ids, so the precondition refuses to call OKF content absent from a
+    resolution it cannot make.
+    """
+    if file_ids_by_graph is None:
+        return None
+
+    presence: dict[tuple, bool | None] = {}
+    for case in entries:
+        if not isinstance(case, dict):
+            continue
+        context = case.get("context") or {}
+        declared = authorized_identities(context) or set()
+        repo_ids = authorized_repo_ids(context)
+        graphs = declared_graphs_key(context)
+        graph_sets = [file_ids_by_graph.get(graph) for graph in graphs]
+        queried = [file_ids for file_ids in graph_sets if file_ids is not None]
+        unqueried = any(file_ids is None for file_ids in graph_sets)
+        for identity in declared:
+            key = corpus_presence_key(identity, context)
+            if identity in repo_ids or "/" in identity:
+                # OKF identity: not resolvable against SOURCE file ids.
+                presence[key] = None
+            elif any(identity in file_ids for file_ids in queried):
+                presence[key] = True
+            elif unqueried or not queried:
+                presence[key] = None
+            else:
+                presence[key] = False
+    return presence
 
 
 # ---------------------------------------------------------------------------

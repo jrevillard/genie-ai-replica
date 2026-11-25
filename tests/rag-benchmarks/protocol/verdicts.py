@@ -67,7 +67,14 @@ from __future__ import annotations
 import json
 
 from .drivers import OUTCOME_CANCELLED
-from .evalset import AUTHORIZATION_SCENARIOS, INJECTION_SCENARIOS, turn_entries
+from .evalset import (
+    AUTHORIZATION_SCENARIOS,
+    INJECTION_SCENARIOS,
+    OUTCOME_CLASS_EXPECTATIONS,
+    authorized_identities,
+    corpus_presence_key,
+    turn_entries,
+)
 
 VERDICTS_VERSION = "1.1.0"
 
@@ -103,7 +110,17 @@ VERDICT_PASS = "pass"
 VERDICT_FAIL = "fail"
 VERDICT_SKIPPED = "skipped"
 VERDICT_ERROR = "error"
-VERDICT_VALUES = (VERDICT_PASS, VERDICT_FAIL, VERDICT_SKIPPED, VERDICT_ERROR)
+# The corpus-presence precondition (#2155): a security case whose DECLARED
+# sources hold no chunks in the measured corpus is not judgeable — "no
+# restricted content leaked" is true by construction over an empty graph.
+VERDICT_CORPUS_ABSENT = "corpus_absent"
+VERDICT_VALUES = (VERDICT_PASS, VERDICT_FAIL, VERDICT_SKIPPED, VERDICT_ERROR, VERDICT_CORPUS_ABSENT)
+
+CORPUS_ABSENT_REASON = (
+    "the case's declared sources hold no chunks in the measured corpus — the"
+    " authorization checks would pass vacuously (an empty restricted graph"
+    " leaks nothing by construction); seed the corpus (#2148) and re-run"
+)
 
 SKIPPED_OUTCOME = "skipped"
 
@@ -138,27 +155,6 @@ def source_identity(entry) -> str | None:
         return f"{entry.get('repo_id')}/{concept or entry.get('document_id')}"
     document_id = entry.get("document_id")
     return str(document_id) if document_id else None
-
-
-def authorized_identities(context) -> set[str] | None:
-    """The authorized source identities a case context declares; None when it
-    declares none (the mechanical subset check then has nothing to enforce —
-    the judge layer covers the case under the evaluator instructions).
-
-    ``context.authorized_source_ids`` lists identities verbatim; every
-    ``context.authorized_repos`` entry additionally authorizes the OKF sources
-    of that repo (its rows resolve ``<repo_id>/<concept_id>``).
-    """
-    context = context or {}
-    identities: set[str] = set()
-    source_ids = context.get("authorized_source_ids")
-    if isinstance(source_ids, (list, tuple)):  # a bare string would iterate per character
-        for item in source_ids:
-            identities.add(str(item))
-    for repo in context.get("authorized_repos") or []:
-        if isinstance(repo, dict) and repo.get("repo_id"):
-            identities.add(str(repo["repo_id"]))
-    return identities or None
 
 
 def _identity_authorized(identity: str, authorized: set[str], *, okf: bool) -> bool:
@@ -211,16 +207,26 @@ def _sources_outside_labels(row: dict, requested_labels) -> list[str]:
     return offenders
 
 
+# The outcome expectations read the pairing the set schema owns
+# (evalset.OUTCOME_CLASS_EXPECTATIONS — #2156): the class vocabulary decides
+# the surface, the expectations decide which outcome is the expected one, and
+# the validator refuses a case whose class and expectations disagree, so the
+# two rules cannot drift inside a validated set. The cancellation and
+# typed-failure predicates DERIVE from that table (one home); the denial
+# expectation is the SECURITY surface's own (an authorization case wants the
+# refusal) and has no outcome class to derive from.
+
+
 def _expects_denial(case: dict) -> bool:
     return bool((case.get("expectations") or {}).get("expect_denied"))
 
 
 def _expects_cancelled(case: dict) -> bool:
-    return bool((case.get("expectations") or {}).get("expect_cancelled"))
+    return bool((case.get("expectations") or {}).get(OUTCOME_CLASS_EXPECTATIONS["cancellation"]))
 
 
 def _expects_typed_failure(case: dict) -> bool:
-    return bool((case.get("expectations") or {}).get("expect_typed_failure"))
+    return bool((case.get("expectations") or {}).get(OUTCOME_CLASS_EXPECTATIONS["failure"]))
 
 
 def _row_has_any_source_labels(row: dict) -> bool:
@@ -386,7 +392,41 @@ def _malformed_row_record(case_id: str, scenario: str | None, row, turn: int | N
     )
 
 
-def _case_record(case: dict, row, earlier_authorized: list[set[str]], *, absent_rows: str = "error") -> dict:
+def _presence_value(corpus_presence: dict, identity: str, context: dict):
+    """One identity's presence for THIS case: the resolver's map is keyed
+    ``(identity, declared_graphs)`` (the resolution depends on the graphs
+    the case declares — a per-identity memo would hand a restricted case
+    the public graph's verdict). The key format is
+    :func:`protocol.evalset.corpus_presence_key`, the producer's own."""
+    return corpus_presence.get(corpus_presence_key(identity, context))
+
+
+def _declared_sources_absent(case: dict, corpus_presence: dict | None) -> bool:
+    """True when the case declares authorized sources, the resolver RESOLVED
+    at least one of them, and none is present in the measured corpus. A
+    declared source the resolver could not attribute (``None``/missing — an
+    OKF identity, an un-armed declared graph, a case naming no graph) is
+    unknown, never absent: the precondition refuses to call unresolvable
+    content absent. Partial presence judges normally: the content that
+    exists is a real test, and content that does not exist cannot leak."""
+    context = case.get("context") or {}
+    declared = authorized_identities(context)
+    if not declared or corpus_presence is None:
+        return False
+    resolved = [_presence_value(corpus_presence, identity, context) for identity in declared]
+    # An explicit False is a RESOLVED absence (the graph was queried, the
+    # source is not there); True is presence; None/missing is unknown.
+    return any(value is False for value in resolved) and not any(value is True for value in resolved)
+
+
+def _case_record(
+    case: dict,
+    row,
+    earlier_authorized: list[set[str]],
+    *,
+    absent_rows: str = "error",
+    corpus_presence: dict | None = None,
+) -> dict:
     """One verdict record for one (possibly turn-expanded) case entry — the
     SINGLE decision ladder the single-turn path and every turn of a multi-turn
     case run through (one copy, so the two paths can never drift). ``case``
@@ -403,14 +443,24 @@ def _case_record(case: dict, row, earlier_authorized: list[set[str]], *, absent_
     outcome = row.get("outcome", row.get("status"))
     if outcome == SKIPPED_OUTCOME:
         return _record(case_id, scenario, VERDICT_SKIPPED, str(row.get("reason") or "skipped"), turn=turn)
-    # The scenario findings are computed BEFORE the terminal/denial branching —
-    # a denial case that LEAKED keeps its disclosure evidence on the findings
-    # list (the denial branch must not short-circuit the subset check).
+    # The scenario findings are computed BEFORE the corpus-presence
+    # precondition AND before the terminal/denial branching — a denial case
+    # that LEAKED keeps its disclosure evidence on the findings list (no
+    # branch must short-circuit the subset check), and the corpus_absent
+    # record below rides the row's findings too: the leak evidence is the
+    # one judgeable fact a row over an unseeded corpus can still carry.
     findings: list[dict] = []
     if scenario in AUTHORIZATION_SCENARIOS:
         findings.extend(_authorization_findings(row, case, earlier_authorized))
     elif scenario in INJECTION_SCENARIOS:
         findings.extend(_injection_findings(row, case))
+    # The corpus-presence precondition: a security case whose declared
+    # sources are entirely absent from the measured corpus is not judgeable,
+    # and the checks below would publish the vacuous pass (no findings over
+    # an empty graph = no leak BY CONSTRUCTION). Recorded with the typed
+    # corpus_absent verdict, never a pass.
+    if scenario in AUTHORIZATION_SCENARIOS and _declared_sources_absent(case, corpus_presence):
+        return _record(case_id, scenario, VERDICT_CORPUS_ABSENT, CORPUS_ABSENT_REASON, findings=findings, turn=turn)
     if outcome not in _ROW_TERMINAL:
         if _expects_denial(case) and _row_is_typed_denial(row):
             verdict, reason = _verdict_for_findings(
@@ -455,7 +505,9 @@ def _case_record(case: dict, row, earlier_authorized: list[set[str]], *, absent_
     return _record(case_id, scenario, verdict, clean_reason, findings=findings, turn=turn)
 
 
-def _multi_turn_records(case: dict, rows: dict, absent_rows: str = "error") -> list[dict]:
+def _multi_turn_records(
+    case: dict, rows: dict, absent_rows: str = "error", corpus_presence: dict | None = None
+) -> list[dict]:
     """One verdict record per turn row. The turns run strictly in order and
     each turn is judged under ITS OWN context; the authorized sets accumulate
     in turn order — REGARDLESS of a turn's outcome (a failed or skipped turn
@@ -464,7 +516,15 @@ def _multi_turn_records(case: dict, rows: dict, absent_rows: str = "error") -> l
     records: list[dict] = []
     earlier_authorized: list[set[str]] = []
     for turn_case in turn_entries(case):
-        records.append(_case_record(turn_case, rows.get(turn_case["id"]), earlier_authorized, absent_rows=absent_rows))
+        records.append(
+            _case_record(
+                turn_case,
+                rows.get(turn_case["id"]),
+                earlier_authorized,
+                absent_rows=absent_rows,
+                corpus_presence=corpus_presence,
+            )
+        )
         turn_authorized = authorized_identities(turn_case.get("context"))
         if turn_authorized is not None:
             earlier_authorized.append(turn_authorized)
@@ -556,7 +616,9 @@ def _cross_user_divergence(entries: list[dict], rows: dict, records_by_id: dict[
             )
 
 
-def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error") -> dict:
+def build_verdicts(
+    entries: list[dict], rows: dict, *, absent_rows: str = "error", corpus_presence: dict | None = None
+) -> dict:
     """Per-case verdicts + findings over one run's rows.
 
     ``entries`` — the validated set's case list; ``rows`` — the run's
@@ -565,7 +627,12 @@ def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error
     default — on B/C every executed case leaves a row, so absence is a broken
     run) or ``"skipped"`` (the config-A reference path: A evaluates through
     the anchor report, not per-case rows, so a non-security case without a
-    row is the expected shape, never an error). Returns
+    row is the expected shape, never an error). ``corpus_presence`` — the
+    caller-resolved map of source identity -> present-in-corpus (the live
+    AQL resolution, :func:`drivers.corpus_presence_for`); an authorization
+    case whose declared sources are ALL absent records the typed
+    ``corpus_absent`` verdict, never the vacuous pass. ``None`` records the
+    precondition absent — the verdicts run as before. Returns
     ``{"verdicts": [...], "findings": [...], "counts": {...}}``; the findings
     list flattens every record's findings with their case id (and turn where
     one exists). Typed per-case errors are collected on the records — this
@@ -587,9 +654,17 @@ def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error
             )
             continue
         case_records = (
-            _multi_turn_records(case, rows, absent_rows=absent_rows)
+            _multi_turn_records(case, rows, absent_rows=absent_rows, corpus_presence=corpus_presence)
             if case.get("turns")
-            else [_case_record(case, rows.get(case["id"]), [], absent_rows=absent_rows)]
+            else [
+                _case_record(
+                    case,
+                    rows.get(case["id"]),
+                    [],
+                    absent_rows=absent_rows,
+                    corpus_presence=corpus_presence,
+                )
+            ]
         )
         records.extend(case_records)
         for record in case_records:
@@ -615,4 +690,12 @@ def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error
     for finding in findings:
         counts["findings"][finding["kind"]] += 1
 
-    return {"verdicts": records, "findings": findings, "counts": counts}
+    return {
+        "verdicts": records,
+        "findings": findings,
+        "counts": counts,
+        # Whether the corpus-presence precondition was armed — the findings
+        # report records it (an unchecked precondition is recorded absent,
+        # never silent).
+        "corpus_presence_checked": corpus_presence is not None,
+    }

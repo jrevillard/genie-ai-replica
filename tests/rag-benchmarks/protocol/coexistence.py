@@ -312,7 +312,10 @@ def _apply_regression(limits: dict | None, regression: dict, *, same_mix: bool) 
     under the agentic load?" — and that needs a TOLERANCE, which is the
     operator's decision like every other bound. Without one the regression is
     NOT MEASURABLE and the verdict blocks; it is never scored against a
-    tolerance nobody agreed. And when the two phases do not cover the same
+    tolerance nobody agreed. A tolerance naming a metric outside
+    LEGACY_METRICS is NOT MEASURABLE with the same harness reason the
+    absolute limits carry — the entry is never scored against a guessed
+    polarity. And when the two phases do not cover the same
     request mix, the regression is computed over different populations — the
     comparison is invalid, so its verdict is BLOCKED, never a FAIL whose
     evidentiary basis the report itself calls invalid.
@@ -332,6 +335,23 @@ def _apply_regression(limits: dict | None, regression: dict, *, same_mix: bool) 
     metrics = []
     for name in sorted(entries):
         bound = entries[name]
+        if name not in LEGACY_METRICS:
+            metrics.append(
+                {
+                    "metric": name,
+                    "max_delta": None,
+                    "control": None,
+                    "loaded": None,
+                    "delta": None,
+                    "outcome": LIMIT_NOT_MEASURABLE,
+                    "reason": (
+                        f"no legacy metric named {name!r} exists in this harness — the regression"
+                        " tolerance names a metric the criterion does not define, and never passes"
+                        " unmeasured"
+                    ),
+                }
+            )
+            continue
         tolerance = _numeric(bound.get("max_delta")) if isinstance(bound, dict) else _numeric(bound)
         observed = regression.get(name) or {}
         control = observed.get("control")

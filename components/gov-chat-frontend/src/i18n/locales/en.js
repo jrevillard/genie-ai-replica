@@ -2143,6 +2143,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept} of {requested} questions grounded — {discarded} could not be tied to the evaluated corpus (re-asked {rounds} round(s))'
+      },
       dropped: {
         note: '{kept} of {requested} questions — {dropped} could not be generated',
         reason: {

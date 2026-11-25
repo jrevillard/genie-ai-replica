@@ -3617,6 +3617,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{kept} из {requested} вопросов привязаны к корпусу — {discarded} не удалось связать с оцениваемым корпусом (повторов: {rounds})'
+      },
       dropped: {
         note: 'Создано {kept} из {requested} вопросов — {dropped} не удалось сгенерировать',
         reason: {

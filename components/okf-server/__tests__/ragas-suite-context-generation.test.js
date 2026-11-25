@@ -203,4 +203,192 @@ describe('#2061 phase 3 (E-7): the RAGAS suite is minted FOR a context', () => {
     // which corpus the question was minted from, and that is true either way.
     expect(suite.payload.entries[0].source_repo_id).toBe('r-agri');
   });
+
+  // Live 2026-11-25 (David's 20-question benchmark kept 10): Ragas's
+  // multi-hop synthesizers prefix EVERY reference context with a literal
+  // hop marker — "<1-hop>\n\n" + the chunk's page_content (vendored
+  // ragas/testset/synthesizers/multi_hop/base.py, make_contexts). The
+  // attribution match keys on the leading characters, so "<1-hop> …"
+  // matched no chunk and EVERY multi-hop question (50% of the default
+  // mix) was falsely discarded as unattributable although its content is
+  // verbatim corpus text. David's rulings: strip the marker; re-ask the
+  // shortfall like the head-suite generator (capped, honestly tallied);
+  // notify the admin on the suite record.
+  it('a MULTI-HOP question (hop-marker-prefixed passages) stamps to its chunk — passages stored clean', async () => {
+    const multiHop = [
+      {
+        user_input: 'How do frost timing and legal aid interact for seasonal workers?',
+        reference: 'Plant after the frost; aid depends on income.',
+        reference_contexts: [
+          '<1-hop>\n\nPlant after the last frost date. Tomatoes are a crop.',
+          '<2-hop>\n\nPlant after the last frost date. Tomatoes are a crop.'
+        ],
+        persona_name: 'agronomist',
+        query_style: 'companion',
+        query_length: 'medium',
+        synthesizer_name: 'multi_hop_specific'
+      }
+    ];
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) {
+        return Promise.resolve(okJson({ job_id: 'j-gen', status: 'queued', poll: '/jobs/j-gen' }));
+      }
+      if (u.includes('/jobs/j-gen')) {
+        return Promise.resolve(
+          okJson({
+            job_id: 'j-gen',
+            kind: 'generate-testset',
+            status: 'done',
+            result: { samples: multiHop, generator: { model: 'm', embed_model: 'e' } }
+          })
+        );
+      }
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const { done } = await svc.beginSuiteGeneration('r-agri', {}, { actor: { user_id: 'u1' }, binding: BINDING });
+    const suite = await done;
+    expect(suite.payload.entries).toHaveLength(1);
+    expect(suite.payload.entries[0].source_repo_id).toBe('r-agri');
+    expect(suite.payload.entries[0].source_chunk_key).toBe('a1');
+    // The stored passages are the chunk text — Ragas's hop marker is
+    // plumbing, never corpus content.
+    expect(suite.payload.entries[0].reference_passages[0]).not.toContain('<1-hop>');
+    expect(suite.payload.entries[0].reference_passages[0]).toContain('Plant after the last frost');
+  });
+
+  it('the shortfall is RE-ASKED (capped) and the suite records the honest tally', async () => {
+    // Requested 4. Pass 1 answers 2 attributable + 1 unattributable (a
+    // passage that is in NO corpus). Pass 2 is asked for the shortfall (2)
+    // and answers 2 attributable — the request is fulfilled.
+    const good = (n) => ({
+      user_input: `Question number ${n}?`,
+      reference: `Answer ${n}.`,
+      reference_contexts: ['Plant after the last frost date. Tomatoes are a crop.'],
+      persona_name: 'agronomist',
+      query_style: 'web-search',
+      query_length: 'short',
+      synthesizer_name: 'single_hop_specific'
+    });
+    const ungroundable = {
+      user_input: 'What is outside every corpus?',
+      reference: 'Nothing measurable.',
+      reference_contexts: ['This passage exists in no corpus document at all.'],
+      persona_name: 'auditor',
+      query_style: 'chat',
+      query_length: 'short',
+      synthesizer_name: 'single_hop_specific'
+    };
+    const passes = [{ samples: [good(1), good(2), ungroundable] }, { samples: [good(3), good(4)] }];
+    let submitCount = 0;
+    let currentJob = 'j-1';
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) {
+        submitCount += 1;
+        currentJob = `j-${submitCount}`;
+        return Promise.resolve(okJson({ job_id: currentJob, status: 'queued', poll: `/jobs/${currentJob}` }));
+      }
+      if (u.includes('/jobs/j-')) {
+        const pass = passes[submitCount - 1];
+        return Promise.resolve(
+          okJson({
+            job_id: currentJob,
+            kind: 'generate-testset',
+            status: 'done',
+            result: { samples: pass.samples, generator: { model: 'm', embed_model: 'e' } }
+          })
+        );
+      }
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const { done } = await svc.beginSuiteGeneration(
+      'r-agri',
+      { testset_size: 4 },
+      { actor: { user_id: 'u1' }, binding: BINDING }
+    );
+    const suite = await done;
+    // The request was FULFILLED: 4 entries.
+    expect(suite.payload.entries).toHaveLength(4);
+    // The re-ask asked for exactly the shortfall.
+    expect(submitCount).toBe(2);
+    const submits = global.fetch.mock.calls.filter((c) => String(c[0]).includes('/generate-testset'));
+    const secondBody = JSON.parse(submits[1][1].body);
+    expect(secondBody.testset_size).toBe(2);
+    // The honest tally rides the suite record (David: the admin must be
+    // notified of any drop — on the record, not in a log).
+    expect(suite.payload.dimensions.grounding).toEqual({
+      requested: 4,
+      kept: 4,
+      discarded_unattributed: 1,
+      discarded_duplicate: 0,
+      rounds: 2
+    });
+  });
+
+  it('the re-ask is CAPPED — a corpus that cannot ground more stops and says so', async () => {
+    // Requested 3. Every pass answers 1 attributable + 1 ungroundable.
+    // After the first pass + the 3 re-ask rounds (4 submits), the loop
+    // stops: kept 2? no — each pass adds exactly 1 kept, so 4 passes keep 4
+    // — request 3 fulfilled on pass 3. Make the request 5 so the cap binds:
+    // 4 passes keep 4 of 5, and the tally names the stop.
+    const good = (n) => ({
+      user_input: `Capped question ${n}?`,
+      reference: `Answer ${n}.`,
+      reference_contexts: ['Plant after the last frost date. Tomatoes are a crop.'],
+      persona_name: 'agronomist',
+      query_style: 'web-search',
+      query_length: 'short',
+      synthesizer_name: 'single_hop_specific'
+    });
+    const ungroundableFor = (n) => ({
+      user_input: `Still outside every corpus, round ${n}?`,
+      reference: 'Still nothing.',
+      reference_contexts: ['A passage no corpus document contains.'],
+      persona_name: 'auditor',
+      query_style: 'chat',
+      query_length: 'short',
+      synthesizer_name: 'single_hop_specific'
+    });
+    let submitCount = 0;
+    let currentJob = 'j-1';
+    global.fetch = jest.fn((url) => {
+      const u = String(url);
+      if (u.includes('/generate-testset')) {
+        submitCount += 1;
+        currentJob = `j-${submitCount}`;
+        return Promise.resolve(okJson({ job_id: currentJob, status: 'queued', poll: `/jobs/${currentJob}` }));
+      }
+      if (u.includes('/jobs/j-')) {
+        return Promise.resolve(
+          okJson({
+            job_id: currentJob,
+            kind: 'generate-testset',
+            status: 'done',
+            result: {
+              samples: [good(submitCount), ungroundableFor(submitCount)],
+              generator: { model: 'm', embed_model: 'e' }
+            }
+          })
+        );
+      }
+      return Promise.reject(new Error(`unexpected fetch ${u}`));
+    });
+    const { done } = await svc.beginSuiteGeneration(
+      'r-agri',
+      { testset_size: 5 },
+      { actor: { user_id: 'u1' }, binding: BINDING }
+    );
+    const suite = await done;
+    // The cap: ONE first pass + THREE re-asks, never more.
+    expect(submitCount).toBe(4);
+    expect(suite.payload.entries).toHaveLength(4);
+    expect(suite.payload.dimensions.grounding).toEqual({
+      requested: 5,
+      kept: 4,
+      discarded_unattributed: 4,
+      discarded_duplicate: 0,
+      rounds: 4
+    });
+  });
 });

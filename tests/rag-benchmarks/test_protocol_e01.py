@@ -835,8 +835,8 @@ def test_e01_report_redacts_credential_named_keys_from_per_case_rows():
 
 
 def test_e01_redacts_nested_credential_named_keys_too():
-    """The manifest's redaction is top-level only — a row's nested metadata
-    would carry a credential straight into the report."""
+    """A row's nested metadata carries credential-named keys at depth — the
+    report's own redaction drops them before anything is written."""
     rows = _b_rows()
     rows["c1"]["metadata"] = {"api_key": "must-not-leak", "nested": {"client_secret": "must-not-leak-either"}}
     report = _build(b_rows=rows)

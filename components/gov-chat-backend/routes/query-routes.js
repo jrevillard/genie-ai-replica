@@ -488,9 +488,13 @@ module.exports = (queryService) => {
         ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
         : null;
 
-      const doHandleStreamDone = async () => {
+      const doHandleStreamDone = async (skipRoutedGraphs = false) => {
         if (doneState.handled || res.writableEnded) return;
         doneState.handled = true;
+        // Only the skipRoutedGraphs KEY rides conditionally (the arity
+        // rule the legacy terminal's call and its mocks pin) — the options
+        // object itself always rides.
+        const skipOpt = skipRoutedGraphs ? { skipRoutedGraphs: true } : {};
         try {
           if (streamRelay) {
             // Degraded or not: flush() orders every queued unit BEFORE the
@@ -501,14 +505,16 @@ module.exports = (queryService) => {
               targetLanguage,
               translator,
               skipPostStreamTranslation: true,
-              alreadyFailedTranslation
+              alreadyFailedTranslation,
+              ...skipOpt
             });
           } else {
             // The post-stream translation runs here, and the client may be
             // gone by the time it answers.
             await handleStreamDone(queryId, fullResponseText, streamStartTime, res, capturedMetadata, {
               targetLanguage,
-              translator
+              translator,
+              ...skipOpt
             });
           }
         } catch (error) {
@@ -587,10 +593,16 @@ module.exports = (queryService) => {
           // close paths. A `done` frame already handled
           // leaves the metadata untouched — the marker must never leak into
           // a normally completed answer.
+          // The sticky-graph decision reads the CAPTURED state — before the
+          // interruption marker replaces a missing metadata frame with a
+          // truthy object — so a truncated stream that never saw a metadata
+          // frame leaves the session's routed-graph stickiness untouched, the
+          // same arity rule the `res.on('close')` path applies.
+          const hadCapturedMetadata = capturedMetadata !== null;
           if (!doneState.handled) {
             capturedMetadata = interruptedMetadata(capturedMetadata);
           }
-          doHandleStreamDone();
+          doHandleStreamDone(!hadCapturedMetadata);
         } else if (!doneState.handled && res.writableEnded === false) {
           // The upstream ended cleanly with NO chunk and NO `done` frame:
           // the terminal never ran, so the response would hang on the
@@ -599,9 +611,11 @@ module.exports = (queryService) => {
           // path uses (error frame, then end; no metadata, no done). The doc
           // stays unanswered: an empty answer is nothing to finalize.
           doneState.handled = true;
-          res.write(
-            `data: ${JSON.stringify({ type: 'error', message: 'the upstream stream ended without an answer', code: 'CHATQNA_STREAM_ERROR' })}\n\n`
-          );
+          writeSSEFrame(res, {
+            type: 'error',
+            message: 'the upstream stream ended without an answer',
+            code: 'CHATQNA_STREAM_ERROR'
+          });
           res.end();
         }
       });

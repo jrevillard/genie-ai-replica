@@ -441,6 +441,25 @@ def test_no_translation_for_english_auto_or_nothing_even_when_gated():
     assert translator.calls == []
 
 
+def test_no_translation_for_the_upper_case_locale_the_detection_layer_resolves():
+    """The skip check compares the target in its normalized form: the
+    upper-case code the detection module resolves (and the BFF layer uses)
+    must skip the gate like its lower-case twin — an English answer must
+    not ride an English-to-English pass that can reword it."""
+    translator = FakeTranslator()
+    config = NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "true"})
+    pipeline = _pipeline(config=config, translator=translator)
+    for target in ("EN", " EN ", "Auto"):
+        result = asyncio.run(pipeline.run(["USER: q"], _context(), target_language=target))
+        assert result.answer == "The generated answer."
+        assert "translation_status" not in result.metadata
+    assert translator.calls == []
+    # A genuinely non-English target still translates.
+    result = asyncio.run(pipeline.run(["USER: q"], _context(), target_language="FR"))
+    assert result.answer == "translated answer"
+    assert translator.calls == [("The generated answer.", "FR")]
+
+
 class _FixedWindowCache:
     """A model-endpoint cache double with a pinned window (no endpoint)."""
 

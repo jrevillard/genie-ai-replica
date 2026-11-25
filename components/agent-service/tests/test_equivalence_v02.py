@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The behavioral-equivalence suite: the V02 fixtures vs the implementation.
+"""The behavioral-equivalence suite: the recorded fixtures vs the implementation.
 
 DATA-DRIVEN: every assertion reads its expectation from
 ``docs/baselines/v02-opea-query-path-contract.fixtures.json`` — the recorded
@@ -77,7 +77,7 @@ DEVIATIONS = {
     "graph_traversal": (
         "The deployed traversal stage rewrites each surviving chunk's text "
         "with the RELATED INFORMATION neighbourhood. The port implements NO "
-        "traversal: story 1.6's recorded scope line stands, the chunk text "
+        "traversal: the recorded scope line stands, the chunk text "
         "reaches the reranker and the prompt verbatim, and no GRAPH_LINKS_TO "
         "query ever executes."
     ),
@@ -104,10 +104,14 @@ DEVIATIONS = {
         "replicated, and graph attribution rides the leg's own scope. And "
         "the deployed retriever serves a chunk with no derivable file_id "
         "unattributed while chatqna drops it later, at citation assembly; "
-        "the port drops it EARLIER, at the capability's hit minting "
-        "(issue #2032): the executor and the no-agent citation mapping both "
-        "read the same hits, so an unresolvable identity cannot surface "
-        "anywhere."
+        "the port drops it EARLIER, at the capability's hit minting: the "
+        "executor and the no-agent citation mapping both read the same "
+        "hits, so an unresolvable identity cannot surface anywhere. The "
+        "early drop costs the chunk its TEXT as well as its citation — "
+        "the port's answer loses that evidence, where the deployed answer "
+        "keeps it — and a selection of unresolvable candidates abstains "
+        "with ``no_resolvable_candidates``, where the deployed path answers "
+        "over the degraded evidence."
     ),
 }
 
@@ -255,6 +259,17 @@ def test_the_deviation_table_names_recorded_behaviors_only():
     assert set(DEVIATIONS) <= set(RECORDED_BEHAVIORS)
     for name, text in DEVIATIONS.items():
         assert len(text) > 40, f"{name}: the deviation entry carries no recorded decision"
+
+
+def test_the_provenance_deviation_states_what_the_early_drop_costs():
+    """The port drops the unresolvable chunk earlier than the deployed
+    path. The drop costs the answer the chunk's TEXT, and a selection of
+    unresolvable candidates abstains where the deployed path answers. The
+    table names both consequences — a reader must not have to infer them
+    from the code."""
+    text = DEVIATIONS["provenance_attach"]
+    assert "TEXT" in text
+    assert "no_resolvable_candidates" in text
 
 
 # ---------------------------------------------------------------------
@@ -553,7 +568,7 @@ def test_reranking_score_count_mismatch_is_not_fatal():
 
 
 # ---------------------------------------------------------------------
-# The preparation block — the recorded §5 order over the recorded knobs
+# The preparation block — the recorded order over the recorded knobs
 # ---------------------------------------------------------------------
 
 

@@ -352,16 +352,23 @@ class GroundingJudge:
                 )
             except TimeoutError:
                 logger.info("grounding judge timed out after %.3fs", self.timeout_seconds)
+                # The response that carries the served usage never arrived:
+                # the call's server-side spend is unreportable, so the run's
+                # served totals become a lower bound.
+                self.monitor.mark_usage_gap()
                 result = {"ran": True, "outcome": JUDGE_OUTCOME_TIMEOUT, "verdict": None}
             except BudgetExhausted as spent:  # the bound raced the budget mid-call accounting
                 logger.info("grounding judge refused: %s", spent)
                 result = {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
             else:
                 verdict = parse_judge_verdict(turn.content)
+                # The call was served, so its usage is accounted for whatever
+                # the verdict says — an unparseable answer does not make the
+                # served tokens unreportable.
+                self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
                 if verdict is None:
                     result = {"ran": True, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None}
                 else:
-                    self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
                     result = {"ran": True, "outcome": JUDGE_OUTCOME_COMPLETED, "verdict": verdict}
             judge_span.set_attribute("outcome", result["outcome"])
             return result

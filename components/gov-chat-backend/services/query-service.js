@@ -5,7 +5,7 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const { normalizeRequestedLanguage } = require('./translation/language-request');
-const { isAgentPathEnabled, agentServiceUrl } = require('./agent-routing');
+const { isAgentPathEnabled, agentRunUrl } = require('./agent-routing');
 const { runAgentJsonTurn } = require('./agent-json-result');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib');
@@ -70,7 +70,7 @@ function opeaChatQnaUrl() {
 // carries behaviorally (no grep can see the BFF runtime call graph).
 function resolveQueryRoute() {
   if (isAgentPathEnabled()) {
-    return { agentic: true, url: agentServiceUrl() };
+    return { agentic: true, url: agentRunUrl() };
   }
   return { agentic: false, url: opeaChatQnaUrl() };
 }
@@ -712,7 +712,8 @@ class QueryService {
   async resolveFanoutPosture(authHeaders, { queryId, sessionId = null, correlationId = null } = {}) {
     // The legacy graph the GRAPH-injection rule prepends — one computation
     // for both returns of this resolution (and the one `_fanoutGraphSet`
-    // reads back).
+    // reads back — the carrier's `_fanoutGraphSet` and the agent's
+    // `_agentGraphSet` both derive from it).
     const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
     const bearer = authHeaders?.authorization;
     if (!bearer) {
@@ -849,12 +850,56 @@ class QueryService {
   }
 
   /**
+   * The graph set the AGENT may search — the search SCOPE, which is NOT the
+   * carrier's payload set.
+   *
+   * The two views answer different questions and an empty answer means
+   * opposite things:
+   *   - the carrier's set (`_fanoutGraphSet`) says which OKF graphs the
+   *     chatqna payload carries. EMPTY means "the carrier adds nothing" —
+   *     the legacy retriever searches the legacy free-form corpus anyway;
+   *   - the agent's set says which graphs the agent may search. EMPTY means
+   *     "nothing is reachable": the agent's capability contract fail-closes
+   *     on it (capabilities/executor.py:111 — the search port is never
+   *     consulted), so an empty set answers EVERY question with the
+   *     insufficiency statement.
+   *
+   * The rule, by mode (the deployment's own scope rule — the legacy corpus
+   * is in scope unless the mode excludes it):
+   *   - legacy (or unknown) mode → the legacy graph: the legacy corpus IS
+   *     the corpus of that deployment, and the legacy path answers from it;
+   *   - hybrid → the legacy graph, plus the OKF graphs when the fan-out is
+   *     engaged;
+   *   - okf_only → the OKF graphs only, NEVER the legacy graph — and nothing
+   *     at all while the fan-out is not engaged (that mode excludes the
+   *     legacy corpus by definition).
+   *
+   * @param {Object|null} posture - A resolveFanoutPosture result, or null.
+   * @returns {string[]}
+   */
+  _agentGraphSet(posture) {
+    const legacyGraph = posture?.legacyGraph || process.env.ARANGO_GRAPH_NAME || 'GRAPH';
+    const engaged = posture?.engaged === true;
+    const mode = posture?.mode;
+    const authorized = Array.isArray(posture?.authorizedGraphs) ? posture.authorizedGraphs : [];
+    if (mode === 'okf_only') {
+      return engaged ? [...new Set(authorized)] : [];
+    }
+    if (mode === 'hybrid') {
+      return [...new Set(engaged ? [legacyGraph, ...authorized] : [legacyGraph])];
+    }
+    return [legacyGraph];
+  }
+
+  /**
    * The agent `CallerContext` the run request carries: the
    * trusted caller context the agent-service port enforces by construction.
    * Built from the SHARED posture resolution (no second upstream read), so
-   * the agent's authorized set is exactly the graph set the chatqna carrier
-   * would have carried for the same request:
-   *   - `authorized_graph_names` — the mode-ruled set (`_fanoutGraphSet`);
+   * the agent's set and the carrier's set are read from ONE posture — but
+   * they are not the same set: the carrier's set says which OKF graphs the
+   * chatqna payload carries, the agent's set says which graphs the agent
+   * may SEARCH (its own scope rule, `_agentGraphSet`):
+   *   - `authorized_graph_names` — the agent's search scope (`_agentGraphSet`);
    *   - `authorized_repos` — the authz-resolver's repo↔graph rows, kept only
    *     when the row's graph is IN the authorized set (the contract's
    *     invariant: the mapping may never widen the scope it resolves into)
@@ -863,8 +908,10 @@ class QueryService {
    *     context-only, it cannot widen a search.
    *
    * A null/unavailable posture (no bearer, or a resolver failure the caller
-   * chose to degrade) yields empty authorization — the same fail-closed
-   * direction the carrier takes.
+   * chose to degrade) yields the legacy corpus — the same default the
+   * carrier's posture takes when it cannot be read (mode legacy, fan-out not
+   * engaged). The agent is never authorized for MORE than the legacy path
+   * answers, and the okf_only mode keeps excluding the legacy corpus.
    *
    * @param {Object} queryData - The request (userId + context.serviceLabels).
    * @param {Object|null} posture - A resolveFanoutPosture result, or null.
@@ -872,7 +919,7 @@ class QueryService {
    *   requested_labels }`.
    */
   buildAgentCallerContext(queryData, posture) {
-    const graphSet = posture ? this._fanoutGraphSet(posture) : [];
+    const graphSet = this._agentGraphSet(posture);
     const graphSetMembers = new Set(graphSet);
     const seenRepoIds = new Set();
     const authorizedRepos = [];

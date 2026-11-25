@@ -228,7 +228,7 @@ beforeEach(() => {
     requested_labels: []
   }));
   process.env.OPEA_STREAMING = 'true';
-  delete process.env.STREAMING_TRANSLATION_ENABLED;
+  process.env.STREAMING_TRANSLATION_ENABLED = '0';
 });
 
 function authPost(path, body) {
@@ -1296,7 +1296,6 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     // CANNOT know a translation at all; the annotation must stay out even
     // though the run asked for one (its whole-answer translation lands in the
     // later translation frame, the client's own delivery carrier).
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
     axios.post.mockResolvedValue({
       status: 200,
@@ -1326,7 +1325,6 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     // TERMINAL usage record — the one place it exists — and its V05 status
     // rides the persisted metadata while the translation frame carries the
     // delivered text.
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
     createWholeAnswerTranslator.mockImplementation(() =>
       jest.fn().mockResolvedValue({
@@ -1376,7 +1374,6 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     // zero-byte wire there lets an idle-timeout proxy sever the SSE before
     // `done`). SSE comments cannot move the pinned frame order; this is the
     // legacy terminal's own discipline.
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
     // The keepalive interval is hardcoded 15000ms — the spy shortens ONLY the
     // period (the real interval machinery, real clock, real wire bytes run
@@ -1453,7 +1450,6 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
   });
 
   it('a failed leg translation reports translationFailed on done; the English answer stands', async () => {
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
     createWholeAnswerTranslator.mockImplementation(() =>
       jest.fn().mockResolvedValue({
@@ -1491,7 +1487,6 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
     // The default beforeEach translator stub IS the skip (the fail-closed
     // shape the leg resolves for an unbounded translation): the English
     // answer stands and a skip is not a failure — V05.
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
     setupAgentQuery();
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
@@ -2126,7 +2121,7 @@ describe('POST /api/queries/stream — the terminal facts (the W-P2 wave)', () =
   });
 
   it('the agentic terminal carries the leg status and the answer-translation outcome', async () => {
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    process.env.STREAMING_TRANSLATION_ENABLED = '0';
     setupAgentQuery();
     createWholeAnswerTranslator.mockImplementation(() =>
       jest.fn().mockResolvedValue({
@@ -2170,7 +2165,7 @@ describe('POST /api/queries/stream — the terminal facts (the W-P2 wave)', () =
   });
 
   it('a failed leg translation persists the failed outcome', async () => {
-    delete process.env.STREAMING_TRANSLATION_ENABLED;
+    process.env.STREAMING_TRANSLATION_ENABLED = '0';
     setupAgentQuery();
     createWholeAnswerTranslator.mockImplementation(() =>
       jest.fn().mockResolvedValue({

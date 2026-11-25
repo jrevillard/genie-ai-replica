@@ -158,6 +158,50 @@ def test_an_unprepared_preparation_answers_insufficiency_and_never_touches_the_p
     assert statuses == ["fallback_timeout"]
 
 
+def test_an_unclassifiable_query_rides_the_locale_and_never_claims_english():
+    """A query the REAL detector cannot classify ("???" carries no
+    linguistic features) rides the request's locale — the preparer's own
+    default — and the search the caller can still have runs. With no
+    locale anywhere, the module's own unknown-language status refuses the
+    query: never passthrough_english, whose raw text would be embedded
+    into the English-only space with a prepared label."""
+    from preparation import PreparationConfig, QueryPreparer
+    from preparation.registry import LanguageRegistry
+
+    env = {"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
+    config = PreparationConfig.load(env=env)
+    registry = LanguageRegistry(config.registry_path)
+
+    # No locale anywhere: the refusal, on the module's own status.
+    translator = RecordingTranslator(config, registry)
+    preparer = QueryPreparer(config, registry, translator, default_source_language=None)
+    statuses: list[str] = []
+    port = AgentFakePort(search_result=canned_search_result())
+    registry_tools = document_toolset(
+        port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer, on_preparation_status=statuses.append
+    )
+    result = asyncio.run(registry_tools.dispatch("search_knowledge", {"query": "???"}))
+    assert result == {
+        "outcome": "insufficient_evidence",
+        "hits": [],
+        "truncated": False,
+        "query_preparation_status": "passthrough_unknown_language",
+    }
+    assert port.search_calls == []
+    assert statuses == ["passthrough_unknown_language"]
+    assert translator.prompts == []  # nothing was translated from nothing
+
+    # A named locale speaks for the query: the search runs, prepared.
+    translator = RecordingTranslator(config, registry)
+    preparer = QueryPreparer(config, registry, translator, default_source_language="fr")
+    port = AgentFakePort(search_result=canned_search_result())
+    registry_tools = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
+    result = asyncio.run(registry_tools.dispatch("search_knowledge", {"query": "???"}))
+    assert result["outcome"] == "success"
+    assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.TRANSLATED
+    assert len(translator.prompts) == 1
+
+
 def test_an_over_budget_query_is_the_contract_transient_carrier():
     """The over-budget input is structured tool feedback, not a run error:
     the executor raises the contract's TransientError (the same carrier the
@@ -274,6 +318,11 @@ class RecordingTranslator(TranslationClient):
 
 
 def test_the_run_record_carries_language_and_the_first_preparation_status(tmp_path):
+    """The request's locale rides the run record, and the first search
+    query's preparation status rides with it. The QUERY's own language
+    decides the preparation: the model writes English queries (the tool
+    schema asks for them), so a French UI locale never forces an English
+    query through a translation pass that could reword it."""
     env = {"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
     config = PreparationConfig.load(env=env)
     registry = LanguageRegistry(config.registry_path)
@@ -282,8 +331,18 @@ def test_the_run_record_carries_language_and_the_first_preparation_status(tmp_pa
     # request's locale as its default source language.
     translator = RecordingTranslator(config, registry)
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
+    english_search = multihop_turns(answer="the answer")
+    from agent.loop import ModelTurn, ToolCallRequest
+
+    turns = (
+        ModelTurn(
+            tool_calls=(
+                ToolCallRequest(call_id="call-1", name="search_knowledge", arguments={"query": "grid outage report"}),
+            )
+        ),
+    ) + english_search[1:]
     orchestrator = _orchestrator(
-        ScriptedLoopModel((*multihop_turns(answer="the answer"), _judge_turn())),
+        ScriptedLoopModel((*turns, _judge_turn())),
         port,
         tmp_path,
         preparer_factory=lambda monitor, language=None: QueryPreparer(
@@ -296,10 +355,53 @@ def test_the_run_record_carries_language_and_the_first_preparation_status(tmp_pa
 
     assert record.outcome == "answered"
     assert record.language == "fr"  # the request's UI locale rides the record
-    assert record.preparation_status == "translated"  # the FIRST query's status
-    # The hint reached preparation THROUGH THE SHIPPED CODE: the English-
-    # looking model query was routed to translation (detection bypassed),
-    # and its translated text is what reached the port.
+    assert record.preparation_status == "passthrough_english"  # the FIRST query's status
+    # The English model query passed through untouched: no translation
+    # dispatch under a foreign UI locale, and the raw text is what the
+    # port received.
+    assert translator.prompts == []
+    assert port.search_calls[0]["request"].query.text == "grid outage report"
+    assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.PASSTHROUGH_ENGLISH
+
+
+def test_a_model_query_in_the_users_language_is_still_translated(tmp_path):
+    """The model echoing the user's language is the case the preparation
+    leg exists for: the query's own language decides, so a French query is
+    translated to English for the English-only embedding space — with or
+    without a locale hint."""
+    env = {"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
+    config = PreparationConfig.load(env=env)
+    registry = LanguageRegistry(config.registry_path)
+    translator = RecordingTranslator(config, registry)
+    port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
+    from agent.loop import ModelTurn, ToolCallRequest
+
+    first_search = multihop_turns(answer="the answer")
+    turns = (
+        ModelTurn(
+            tool_calls=(
+                ToolCallRequest(
+                    call_id="call-1",
+                    name="search_knowledge",
+                    arguments={"query": "signalement d'une panne du réseau électrique"},
+                ),
+            )
+        ),
+    ) + first_search[1:]
+    orchestrator = _orchestrator(
+        ScriptedLoopModel((*turns, _judge_turn())),
+        port,
+        tmp_path,
+        preparer_factory=lambda monitor, language=None: QueryPreparer(
+            config, registry, translator, default_source_language=language
+        ),
+    )
+    events: list[AgentEvent] = []
+
+    record = asyncio.run(orchestrator.run(_request(language=None), sink=events.append))
+
+    assert record.outcome == "answered"
+    assert record.preparation_status == "translated"
     assert len(translator.prompts) == 1
     assert port.search_calls[0]["request"].query.text == "the english query"
     assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.TRANSLATED

@@ -1536,11 +1536,15 @@ describe('GET /:queryId', () => {
 
       const response = await responsePromise;
       expect(response.status).toBe(200);
+      // No metadata frame arrived before the end: the partial save skips the
+      // routed-graph persistence (the close path's same arity rule — the
+      // derived empty set must not reset the session's stickiness).
       expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
         'q1',
         'Auto finalized',
         expect.any(Number),
-        expect.any(Object)
+        expect.any(Object),
+        { skipRoutedGraphs: true }
       );
     });
   });
@@ -1800,6 +1804,9 @@ describe('GET /:queryId', () => {
     const translationService = require('../../services/translation-service');
 
     it('should emit translation SSE event for non-EN language', async () => {
+      // Streaming translation OFF: this test exercises the POST-stream
+      // whole-answer frame, which only exists when no unit relay ran.
+      process.env.STREAMING_TRANSLATION_ENABLED = '0';
       const mockStream = setupSSEStream();
       translationService.init.mockResolvedValue(undefined);
       translationService.translateMarkdown.mockResolvedValue('Bonjour monde');
@@ -2443,12 +2450,55 @@ describe('agent branch wiring (story 2.4) — AGENT_ENABLED off', () => {
 
     // The truncated answer was finalized exactly once — as a PARTIAL save,
     // carrying the honesty marker (the same contract as the close paths).
+    // No metadata frame arrived before the truncation, so the save also
+    // SKIPS the routed-graph persistence — persisting the derived empty set
+    // would reset a stickiness the session already earned (the close path's
+    // same arity rule).
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
     expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
       'q1',
       'legacy answer',
       expect.any(Number),
-      expect.objectContaining({ answer_interrupted: true })
+      expect.objectContaining({ answer_interrupted: true }),
+      { skipRoutedGraphs: true }
+    );
+  });
+
+  it('a stream that ends without its completion frame AFTER metadata was captured persists the routed set', async () => {
+    const mockStream = setupLegacyStream();
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockStream.push('data: {"type":"chunk","content":"legacy answer"}\n\n');
+    mockStream.push(
+      'data: {"type":"metadata","source_documents":[{"document_id":"doc-1","document_name":"Doc One"}],"is_grounded":true,"abstained":false}\n\n'
+    );
+    // The upstream ends cleanly but the `done` frame never arrives (a
+    // truncated upstream: generator abort, proxy trim).
+    mockStream.push(null);
+
+    await responsePromise;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // The metadata frame named the session's routed graphs: the partial save
+    // persists the captured set (an honest reset for an answer chatqna
+    // actually routed) — the skip option does NOT ride (the close path's
+    // same arity rule, four-argument call).
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledTimes(1);
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      'legacy answer',
+      expect.any(Number),
+      expect.objectContaining({
+        is_grounded: true,
+        abstained: false,
+        source_documents: [{ document_id: 'doc-1', document_name: 'Doc One' }],
+        answer_interrupted: true
+      })
     );
   });
 

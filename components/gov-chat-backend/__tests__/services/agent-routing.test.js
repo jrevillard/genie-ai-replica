@@ -64,7 +64,7 @@ describe('isAgentPathEnabled', () => {
   });
 });
 
-describe('agentServiceUrl', () => {
+describe('agentRunUrl', () => {
   const originalValue = process.env.AGENT_SERVICE_URL;
 
   afterEach(() => {
@@ -75,32 +75,34 @@ describe('agentServiceUrl', () => {
     }
   });
 
-  it('defaults to the compose service name + port when unset', () => {
+  it('names the run surface on the shipped default (the base alone answered 404 live)', () => {
     delete process.env.AGENT_SERVICE_URL;
-    // The run surface the agent service serves is joined to the configured
-    // base: a POST to the bare base is a 404 on every agentic turn.
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-service:8010/v1/runs');
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-service:8010/v1/runs');
   });
 
-  it('honors the AGENT_SERVICE_URL override', () => {
+  it('names the run surface on an overridden base', () => {
     process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999';
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-svc:9999/v1/runs');
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
   });
 
   it('falls back to the default on an empty/blank override', () => {
     process.env.AGENT_SERVICE_URL = '   ';
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-service:8010/v1/runs');
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-service:8010/v1/runs');
   });
 
-  it('does not append the run surface twice when the override already names it', () => {
-    // A deployment may configure the full path (the V08 rehearsal did).
+  it('uses an override that already names the run surface as it stands', () => {
     process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999/v1/runs';
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-svc:9999/v1/runs');
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
   });
 
-  it('tolerates a trailing slash on the configured base', () => {
+  it('tolerates a trailing slash on the base (one run surface, never two)', () => {
     process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999/';
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-svc:9999/v1/runs');
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
+  });
+
+  it('tolerates a trailing slash on an override that already names the surface', () => {
+    process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999/v1/runs/';
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
   });
 });
 

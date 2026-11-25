@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The embedding query-instruction contract, ported from the recorded query path.
 
-V02 §4.12 records the contract as MODEL-SPECIFIC: many embedding models are
+The recorded contract is MODEL-SPECIFIC: many embedding models are
 trained contrastively or with task-specific instructions, so queries and
 passages sit on opposite sides of the vector space at inference. The model
 card specifies that queries must be prefixed with a specific string while
@@ -26,7 +26,7 @@ resolution semantics are identical.
 import os
 
 # The model id resolved when TEI_EMBED_MODEL is unset — the recorded code
-# default (V02 §3.2).
+# default.
 DEFAULT_EMBED_MODEL = "BAAI/bge-large-en-v1.5"
 
 # Built-in table covers the most common families. Order matters: substring

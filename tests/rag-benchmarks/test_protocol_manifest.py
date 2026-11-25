@@ -115,6 +115,63 @@ def test_non_secret_keys_survive_redaction():
     assert mf.redact({"RETRIES": "3", "graph_name": "G"}) == {"RETRIES": "3", "graph_name": "G"}
 
 
+def test_manifest_redacts_a_credential_named_key_nested_in_model_ids():
+    """A credential-named key nested one level down (a provider block) must
+    not reach the committed manifest — a top-level scan never saw it."""
+    configuration = _configuration(
+        model_ids={"llm": "granite-4.1-8b", "provider": {"api_key": "sk-nested", "name": "granite"}},
+    )
+    m = _build_reference(configuration=configuration)
+    model_ids = m["configuration"]["A"]["model_ids"]
+    assert "api_key" not in model_ids["provider"]
+    # The benign fields of the nested block and of the map itself survive.
+    assert model_ids["provider"]["name"] == "granite"
+    assert model_ids["llm"] == "granite-4.1-8b"
+    assert "sk-nested" not in json.dumps(m)
+
+
+def test_manifest_redacts_a_credential_named_key_nested_in_prompt_digests():
+    configuration = _configuration(
+        prompt_digests={"system": "d" * 64, "surface": {"client_secret": "s3cret-value", "sha256": "e" * 64}},
+    )
+    m = _build_reference(configuration=configuration)
+    surface = m["configuration"]["A"]["prompt_digests"]["surface"]
+    assert "client_secret" not in surface
+    assert surface["sha256"] == "e" * 64
+    assert m["configuration"]["A"]["prompt_digests"]["system"] == "d" * 64
+    assert "s3cret-value" not in json.dumps(m)
+
+
+def test_manifest_redacts_a_credential_named_key_nested_in_the_resolved_env():
+    configuration = _configuration(
+        resolved_env={"RERANKER_TOP_N": "3", "PROBE": {"access_token": "tok-nested-value", "url": "u"}},
+    )
+    m = _build_reference(configuration=configuration)
+    probe = m["configuration"]["A"]["resolved_env"]["PROBE"]
+    assert "access_token" not in probe
+    assert probe["url"] == "u"
+    assert "tok-nested-value" not in json.dumps(m)
+
+
+def test_manifest_redaction_is_the_shared_rule():
+    """The manifest and the comparison reports write through ONE rule — the
+    shared one in protocol/redaction.py. Asserting the equality pins the
+    vocabulary: every credential name the shared list knows (its markers and
+    its auth-word forms) reaches the manifest's rule too, so the two surfaces
+    cannot state two different things about the same key name."""
+    from protocol.redaction import redact_deep as shared_redact_deep
+
+    sample = {
+        "retries": "3",
+        "api_key": "sk",
+        "authorization": "Bearer",
+        "authheader": "Bearer",
+        "chunk_key": "k",
+        "nested": {"session_id": "s", "name": "n"},
+    }
+    assert mf.redact(sample) == shared_redact_deep(sample)
+
+
 def test_fingerprint_corpus_deterministic_and_order_insensitive():
     a = mf.fingerprint_corpus("COLL", ["h1", "h2", "h3"])
     b = mf.fingerprint_corpus("COLL", ["h3", "h1", "h2"])

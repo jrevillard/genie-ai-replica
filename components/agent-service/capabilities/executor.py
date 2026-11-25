@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """The authorization executor — the port's enforcement point.
 
-A contract declares; an executor enforces. The V04 map (§6) records which
-obligations were declared but enforced by nobody; this module
-is where each of them becomes enforced:
+A contract declares; an executor enforces. Some obligations were declared
+but enforced by nobody in the deployed tree; this module is where each of
+them becomes enforced:
 
 * **Authorization precedes resolution.** A target outside the request's
   authorized set — or an identifier that fails its charset guard — is

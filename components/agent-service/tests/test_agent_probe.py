@@ -371,11 +371,65 @@ def test_complete_omits_the_bound_when_the_prompt_leaves_no_room():
     assert "max_tokens" not in transport.calls[-1]["payload"]
 
 
+def test_the_declared_tools_count_against_the_window_room():
+    # The tools are part of the request the endpoint sees: their serialized
+    # schemas are the dominant term of a tool-shaped call, and a room
+    # computed without them would overstate what one call can serve (the
+    # overflow the cap arithmetic exists to prevent).
+    transport = _transport((200, _chat_body(content="a")))
+    config = verifier_config(AGENT_WINDOW_OVERRIDE_TOKENS="1000")
+    tools = ({"type": "function", "function": {"name": "search_knowledge", "description": "x" * 400}},)
+    asyncio.run(ProbeModelClient(config, transport=transport).complete([], tools, max_output_tokens=5000))
+    payload = transport.calls[-1]["payload"]
+    request_chars = len("[]") + len(json.dumps(list(tools)))
+    expected_room = 1000 - (math.ceil(request_chars / 4) + 20) - 128
+    assert payload["max_tokens"] == expected_room
+
+
+def test_a_toolset_that_fills_the_window_omits_the_bound():
+    # A declaration larger than the window leaves no room: the bound is
+    # omitted (the endpoint rejection is the honest failure), never sent
+    # oversized.
+    transport = _transport((200, _chat_body(content="a")))
+    config = verifier_config(AGENT_WINDOW_OVERRIDE_TOKENS="200")
+    tools = ({"type": "function", "function": {"name": "search_knowledge", "description": "x" * 2000}},)
+    asyncio.run(ProbeModelClient(config, transport=transport).complete([], tools, max_output_tokens=5000))
+    assert "max_tokens" not in transport.calls[-1]["payload"]
+
+
 def test_complete_carries_the_bearer_when_configured():
     transport = _transport((200, _chat_body(content="a")))
     config = verifier_config(OPENAI_API_KEY="sk-data")
     asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=None))
     assert transport.calls[-1]["headers"] == {"Authorization": "Bearer sk-data"}
+
+
+@pytest.mark.parametrize(
+    ("served", "honored"),
+    [
+        (8192, True),  # the plain int
+        (8192.0, True),  # proxy float serialization
+        ("8192", True),  # proxy digit-string serialization
+        (True, False),  # a boolean is a malformed answer, not a 1-token window
+        (0, False),  # a non-positive window is garbage
+        (1.0e15, False),  # an absurd window would disable the overflow guard
+    ],
+)
+def test_the_discovered_window_accepts_the_numeric_forms_proxies_serve(served, honored):
+    # The discovered max_model_len anchors the per-call cap: a proxy that
+    # serializes it as a float or a digit string must still be honored, or
+    # the caps are sized against the wrong (fallback) window. A bound
+    # larger than an HONORED 8192 window is capped to its room; a DROPPED
+    # value falls back to the configured 65536 tier, where the allowance
+    # rides verbatim.
+    transport = _transport((200, _chat_body(content="a")), model_entry=preparation_model_entry(max_model_len=served))
+    client = ProbeModelClient(verifier_config(VLLM_LLM_MODEL_ID=""), transport=transport)
+    asyncio.run(client.complete([], (), max_output_tokens=50_000))
+    payload = transport.calls[-1]["payload"]
+    if honored:
+        assert payload["max_tokens"] == 8192 - (math.ceil(len("[]") / 4) + 20) - 128
+    else:
+        assert payload["max_tokens"] == 50_000
 
 
 def test_the_model_id_override_means_no_discovery_probe():

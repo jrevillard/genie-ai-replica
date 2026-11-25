@@ -66,7 +66,11 @@ function wantsTranslation(targetLanguage) {
  * @returns {boolean} True when the deployment streams translations.
  */
 function streamingTranslationEnabled() {
-  return ['1', 'true'].includes((process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase());
+  // Unset = enabled: the documented deployment default is on (compose injects
+  // `${STREAMING_TRANSLATION_ENABLED:-1}`), and a backend started outside
+  // compose must not silently serve English-only streams against it. Only an
+  // explicit `0`/`false` turns the stream translation off.
+  return ['1', 'true'].includes((process.env.STREAMING_TRANSLATION_ENABLED || '1').toLowerCase());
 }
 
 module.exports = { normalizeRequestedLanguage, wantsTranslation, streamingTranslationEnabled };

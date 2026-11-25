@@ -5,7 +5,7 @@
 The self-signed GPU gateway answers 401 without the deployment's bearer and
 dies on httpx's verifying default — the venue's own knobs
 (``OPEA_SSL_SKIP_VERIFY``, ``OPENAI_API_KEY``/``VLLM_API_KEY``) are the
-convention every other client of that gateway reads (issue #2167; the
+convention every other client of that gateway reads (the
 search capability's first live run exposed both)."""
 
 from capabilities.adapters.env_config import ModelEndpointConfig

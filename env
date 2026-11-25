@@ -125,18 +125,21 @@ HUGGING_FACE_HUB_TOKEN=
 # guided JSON) — e.g. ibm-granite/granite-3.3-2b-instruct (faster).
 # VLLM_LLM_MODEL_ID=
 #
-#   Tool-calling note: the vLLM container is pinned with
-#   --enable-auto-tool-choice --tool-call-parser $VLLM_TOOL_CALL_PARSER
-#   (default granite4 — the parser for Granite 4.x models). Serving a model
-#   outside Granite 4.x (env.strixhalo's granite-3.1-2b, for example) must
-#   set VLLM_TOOL_CALL_PARSER to its model's documented parser (granite for
-#   Granite 3.x) — the granite4 default misparses that model's tool output
-#   silently. The lever feeds docker-compose.yaml's vllm service; requests
-#   that carry no tools (chat, translation, labeling) are unaffected by
-#   either flag.
+#   Tool-calling note: the tool-calling flags (--enable-auto-tool-choice
+#   --tool-call-parser) are DERIVED from the served model id: granite4 (the
+#   vLLM 0.29 parser for Granite 4.x) is pinned only when the model id
+#   contains `granite-4`, and an explicit VLLM_TOOL_CALL_PARSER always wins
+#   (set it to the served model's documented parser — e.g. granite for
+#   Granite 3.x, plus the chat template that family needs — to enable tool
+#   calling there; the flags are inert for requests that carry no tools, so
+#   chat, translation and labeling are unaffected either way). One
+#   divergence to know: compose cannot tell an EMPTY value from an unset
+#   one, so an empty VLLM_TOOL_CALL_PARSER behaves as unset (derive), while
+#   the ansible lever treats empty as "force the flags OFF".
 # VLLM_TOOL_CALL_PARSER=
-#   Default: granite4. The --tool-call-parser value the vLLM container is
-#   launched with; must match the SERVED model family (see the note above).
+#   Default: derived — granite4 for Granite 4.x models, no pin for anything
+#   else. The --tool-call-parser value the vLLM container is launched with;
+#   must match the SERVED model family (see the note above).
 
 # Translation model (OPEA Translation service)
 # The model used for guardrails and translation (Service: vllm-translation-guardrail)
@@ -1497,6 +1500,32 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # exactly what is missing.
 # AGENT_DOCREPO_URL=
 # AGENT_OKF_URL=
+# The shared corpus/model endpoints the agent service's assembly reads at
+# request time — the SAME knobs the OPEA services read (one .env line moves
+# both worlds). The agent service's compose block maps them with the same
+# spellings and the same defaults as the retriever's block; leave them
+# unset to run on the compose defaults. The knobs documented at their own
+# sections above (ARANGO_DB, ARANGO_PASSWORD, ARANGO_GRAPH_NAME,
+# VLLM_ENDPOINT) are shared as they are — this section documents only the
+# ones the agent service reads that have no home yet.
+#
+# TEI_EMBEDDING_ENDPOINT / TEI_RERANKING_ENDPOINT:
+#   the embedding endpoint is the FULL embed URL (the recorded value ends in
+#   /embed); the reranker endpoint is the BASE the /rerank call is built on.
+#   They follow EMBEDDING_SERVICE_URL / RERANKER_SERVICE_URL, which the
+#   GPU-node section below points at the node's gateway (/embed, /rerank).
+# ARANGO_URL:
+#   the ArangoDB host the retrieval legs read. On the compose deployment
+#   unset means the compose default (http://arango-vector-db:8529); an
+#   in-process run with nothing set falls to the code default
+#   (localhost), which inside a container is the container itself.
+# ARANGO_USERNAME:
+#   the database user the retrieval legs authenticate with. This is the
+#   one spelling the agent service reads.
+# TEI_EMBEDDING_ENDPOINT=
+# TEI_RERANKING_ENDPOINT=
+# ARANGO_URL=
+# ARANGO_USERNAME=
 # AGENT_AUTHORIZED_GRAPHS=
 # AGENT_AUTHORIZED_REPOS=
 # AGENT_PROBE_BEARER=

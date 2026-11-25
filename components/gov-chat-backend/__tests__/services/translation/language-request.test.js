@@ -1,6 +1,9 @@
 'use strict';
 
-const { normalizeRequestedLanguage } = require('../../../services/translation/language-request');
+const {
+  normalizeRequestedLanguage,
+  streamingTranslationEnabled
+} = require('../../../services/translation/language-request');
 
 /**
  * The canonical form of a caller-supplied language.
@@ -47,5 +50,37 @@ describe('the canonical form of a requested language', () => {
   it('reads a blank language as no language at all', () => {
     expect(normalizeRequestedLanguage('')).toBe('');
     expect(normalizeRequestedLanguage('   ')).toBe('');
+  });
+});
+
+describe('the streaming-translation flag', () => {
+  const withEnv = (value, fn) => {
+    const previous = process.env.STREAMING_TRANSLATION_ENABLED;
+    try {
+      if (value === undefined) delete process.env.STREAMING_TRANSLATION_ENABLED;
+      else process.env.STREAMING_TRANSLATION_ENABLED = value;
+      fn();
+    } finally {
+      if (previous === undefined) delete process.env.STREAMING_TRANSLATION_ENABLED;
+      else process.env.STREAMING_TRANSLATION_ENABLED = previous;
+    }
+  };
+
+  it('is ON when the variable is unset (the documented deployment default)', () => {
+    withEnv(undefined, () => expect(streamingTranslationEnabled()).toBe(true));
+  });
+
+  it('is ON for the enabled spellings', () => {
+    // The empty string behaves as unset — the same semantics the compose
+    // default `${STREAMING_TRANSLATION_ENABLED:-1}` gives it.
+    for (const value of ['1', 'true', 'TRUE', '']) {
+      withEnv(value, () => expect(streamingTranslationEnabled()).toBe(true));
+    }
+  });
+
+  it('is OFF for the disabled spellings', () => {
+    for (const value of ['0', 'false', 'FALSE', 'yes']) {
+      withEnv(value, () => expect(streamingTranslationEnabled()).toBe(false));
+    }
   });
 });

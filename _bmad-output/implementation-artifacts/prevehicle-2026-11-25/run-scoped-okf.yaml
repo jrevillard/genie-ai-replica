@@ -1,0 +1,748 @@
+# Run-scoped OKF tier for the #2170 pre-vehicle validation campaign.
+#
+# WHY it is deployed at all (the campaign's central finding):
+#   the BFF builds the agent run's CallerContext from the SHARED fan-out
+#   posture (query-service.js:837 _fanoutGraphSet): with the OKF tier parked
+#   (the baseline), mode is "legacy" and the authorized graph set is EMPTY.
+#   The agent's capability contract treats an empty authorized set as
+#   "nothing is reachable" (capabilities/executor.py:111 — fail-closed, the
+#   inner port is never consulted), so EVERY agentic answer on a venue
+#   without the OKF fan-out engaged is the insufficiency statement. The
+#   agentic path is therefore COUPLED to the OKF tier: the flag alone does
+#   not make it work. Deploying the tier is the deployment-level remedy the
+#   campaign applies; the coupling itself is filed as a finding.
+#
+# The tier is deployed RUN-SCOPED (run-prefixed ownership label, no Helm
+# ownership annotations) because the chart's tier cannot be flipped on the
+# shared venue: the chart's observability tier (same release) renders the
+# VTSingle storage field vm-operator rejects (issue #2172), so the release
+# cannot be upgraded with the tiers on.
+#
+# Images: the umbrella tip's promoted CI builds (pipeline 19392 =
+# refs/merge-requests/938/merge @ a2db5f7d; that merge's tree equals
+# d1648d17f's tree).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ragas-llm-cache
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/version: 0.2.184
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: ragas-service
+    genieai.io/component: ragas-service
+    genieai.io/managed-by: helm
+    e2170.genieai.io/run: '2170'
+  annotations: {}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ramdisk
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: okf-server
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/version: 0.2.184
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: okf-server
+    genieai.io/component: okf-server
+    genieai.io/managed-by: helm
+    e2170.genieai.io/run: '2170'
+  annotations: {}
+spec:
+  ports:
+  - name: http
+    port: 3002
+    targetPort: 3002
+  selector:
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/component: okf-server
+    genieai.io/component: okf-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pii-service
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/version: 0.2.184
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: pii-service
+    genieai.io/component: pii-service
+    genieai.io/managed-by: helm
+    e2170.genieai.io/run: '2170'
+  annotations: {}
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  selector:
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/component: pii-service
+    genieai.io/component: pii-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ragas-service
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/version: 0.2.184
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: ragas-service
+    genieai.io/component: ragas-service
+    genieai.io/managed-by: helm
+    e2170.genieai.io/run: '2170'
+  annotations: {}
+spec:
+  ports:
+  - name: http
+    port: 8090
+    targetPort: 8090
+  selector:
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/component: ragas-service
+    genieai.io/component: ragas-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genieai-genieai-umbrella-okf-server
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/version: 0.2.184
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: okf-server
+    genieai.io/component: okf-server
+    genieai.io/managed-by: helm
+    e2170.genieai.io/run: '2170'
+  annotations: {}
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 2400
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: genieai-umbrella
+      app.kubernetes.io/instance: genieai
+      app.kubernetes.io/component: okf-server
+      genieai.io/component: okf-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: genieai-umbrella
+        app.kubernetes.io/instance: genieai
+        app.kubernetes.io/component: okf-server
+        genieai.io/component: okf-server
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: okf-server
+        image: registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-okf-server:feat-agentic-foundations-prd-a2db5f7d
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3002
+        env:
+        - name: PORT
+          value: '3002'
+        - name: KEYCLOAK_URL
+          value: http://keycloak-service.genieai.svc.cluster.local:8080/auth
+        - name: KEYCLOAK_REALM
+          value: genie
+        - name: SERVICE_NAME
+          value: genie-okf-server
+        - name: NODE_ENV
+          value: production
+        - name: KEYCLOAK_PUBLIC_URL
+          value: https://genieai-forge.local:4443/auth
+        - name: KEYCLOAK_JWKS_URL
+          value: ''
+        - name: KEYCLOAK_BROWSER_ISSUER
+          value: ''
+        - name: KEYCLOAK_INTERNAL_URL
+          value: ''
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: '1'
+        - name: CORS_ALLOWED_ORIGINS
+          value: ''
+        - name: ENABLE_OBSERVABILITY
+          value: '1'
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://genieai-collector-collector.genieai.svc.cluster.local:4318
+        - name: ARANGO_URL
+          value: http://arangodb-single.genieai.svc.cluster.local:8529
+        - name: ARANGO_DB
+          value: _system
+        - name: ARANGO_USER
+          value: root
+        - name: ARANGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: arango-root-secret
+              optional: true
+        - name: KC_OKF_SERVER_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: KC_OKF_SERVER_CLIENT_SECRET
+              name: okf-server-client-secret
+              optional: true
+        - name: KC_OKF_ACCESS_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: KEYCLOAK_PROXY_CLIENT_SECRET
+              name: keycloak-proxy-client-secret
+              optional: true
+        - name: RAGAS_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: OKF_INTERNAL_SECRET
+              name: okf-internal-secret
+              optional: true
+        - name: OKF_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: OKF_INTERNAL_SECRET
+              name: okf-internal-secret
+              optional: true
+        - name: VLLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: VLLM_API_KEY
+              name: vllm-api-key
+        - name: RAGAS_JUDGE_BASE_URL
+          value: https://ai.assembly.govstack.global:444/llm/v1
+        - name: RAGAS_JUDGE_MODEL
+          value: ibm-granite/granite-4.1-8b
+        - name: OKF_DELETE_GRACE_HOURS
+          value: '168'
+        - name: OKF_BUNDLE_STORE_TIMEOUT_MS
+          value: '300000'
+        - name: OKF_AUDIENCE
+          value: ''
+        - name: OKF_SCOPE_MODE
+          value: open
+        - name: KC_OKF_SERVER_CLIENT_ID
+          value: okf-server
+        - name: KC_OKF_ACCESS_CLIENT_ID
+          value: genie-proxy-client
+        - name: OKF_INGEST_WORKER_ENABLED
+          value: 'true'
+        - name: OKF_INGEST_WORKER_INTERVAL_MS
+          value: '15000'
+        - name: OKF_INGEST_WORKER_SWEEP_INTERVAL_MS
+          value: '3600000'
+        - name: OKF_INGEST_CONCURRENCY
+          value: '1'
+        - name: OKF_MAX_CONCEPT_DOC_CHARS
+          value: ''
+        - name: DATAPREP_MAX_MODEL_LEN
+          value: '0'
+        - name: DATAPREP_LLM_LABEL_BATCH_SIZE
+          value: '4'
+        - name: DATAPREP_CONTEXTUAL_MAX_TOKENS
+          value: '512'
+        - name: DATAPREP_CHUNK_SIZE
+          value: '500'
+        - name: DATAPREP_CHUNK_SIZE_PDF
+          value: '500'
+        - name: DATAPREP_CHUNK_SIZE_DOCX
+          value: '1000'
+        - name: DATAPREP_CHUNK_SIZE_XLSX
+          value: '1500'
+        - name: DATAPREP_CHUNK_SIZE_PPTX
+          value: '500'
+        - name: DATAPREP_CHUNK_SIZE_HTML
+          value: '500'
+        - name: DATAPREP_CHUNK_SIZE_TXT
+          value: '500'
+        - name: DATAPREP_CHUNK_SIZE_MD
+          value: '500'
+        - name: CONTEXTUAL_RETRIEVAL_PROMPT
+          value: ''
+        - name: OKF_KICK_429_COOLDOWN_MS
+          value: '15000'
+        - name: VLLM_ENDPOINT
+          value: ''
+        - name: VLLM_MODEL_ID
+          value: ''
+        - name: TEI_EMBED_HOST
+          value: https://ai.assembly.govstack.global:444/embed
+        - name: MODEL_DETECT_TTL
+          value: '60'
+        - name: MODEL_PROBE_TIMEOUT_SECONDS
+          value: '10'
+        - name: RAGAS_JUDGE_API_KEY
+          value: ''
+        - name: VLLM_LLM_MODEL_ID
+          value: ''
+        - name: EMBEDDING_MODEL_ID
+          value: BAAI/bge-large-en-v1.5
+        - name: OKF_GUARD_SELF_SUBJECT
+          value: ''
+        - name: OKF_GUARD_DUPLICATE_FORBIDDEN
+          value: ''
+        - name: OKF_RERANK_ENDPOINT
+          value: ''
+        - name: OKF_RERANK_TOKEN
+          value: ''
+        - name: OKF_RAGAS_URL
+          value: http://ragas-service:8090
+        - name: OKF_RAGAS_TESTSET_SIZE_DEFAULT
+          value: '20'
+        - name: OKF_RAGAS_MAX_ENTRIES
+          value: '200'
+        - name: OKF_RAGAS_RUN_CONCURRENCY
+          value: '2'
+        - name: OKF_RAGAS_RERANK_CONCURRENCY
+          value: '3'
+        - name: OKF_RAGAS_SERVE_URL
+          value: http://chatqna:8888/v1/chatqna
+        - name: RETRIEVER_ARANGO_K
+          value: '20'
+        - name: RETRIEVER_ARANGO_FETCH_K
+          value: '30'
+        - name: RETRIEVER_ARANGO_SCORE_THRESHOLD
+          value: '0.2'
+        - name: RETRIEVER_ARANGO_DISTANCE_THRESHOLD
+          value: '1'
+        - name: RETRIEVER_ARANGO_LAMBDA_MULT
+          value: '0.5'
+        - name: RERANKING_STRATEGY
+          value: slice
+        - name: RERANKER_TOP_N
+          value: '3'
+        - name: RERANKING_THRESHOLD
+          value: '0.75'
+        - name: CHATQNA_ENFORCE_ABSTENTION
+          value: 'true'
+        - name: OKF_RAGAS_ANSWER_MAX_TOKENS
+          value: '5000'
+        - name: OKF_RAGAS_LONG_TIMEOUT_MS
+          value: '3600000'
+        - name: OKF_RAGAS_JOB_POLL_MS
+          value: '3000'
+        - name: CHATQNA_SYSTEM_PROMPT
+          value: ''
+        - name: OKF_CURATION_TIMEOUT_MS
+          value: ''
+        - name: OKF_CURATION_LANES
+          value: ''
+        - name: OKF_TOPIC_LINK_ENABLED
+          value: 'true'
+        - name: OKF_TOPIC_LINK_TIMEOUT_MS
+          value: ''
+        - name: OKF_TOPIC_LINK_LANES
+          value: ''
+        - name: OKF_TOPIC_LINK_BATCH
+          value: ''
+        - name: OKF_TOPIC_LINK_MAX_PER_CONCEPT
+          value: ''
+        - name: OKF_INGEST_WORKER_REAP_GRACE_MS
+          value: '3600000'
+        - name: OKF_INGEST_WORKER_MAX_CLAIMS
+          value: '8'
+        - name: DATAPREP_URL
+          value: http://dataprep:5000
+        - name: OKF_MAX_CRAWL_SOURCE_MB
+          value: ''
+        - name: OKF_CONVERSION_DEBUG
+          value: ''
+        - name: OKF_IMPORT_CONCURRENCY
+          value: '4'
+        - name: OKF_INGEST_WORKER_JOB_POLL_MS
+          value: '5000'
+        - name: OKF_INGEST_WORKER_JOB_TIMEOUT_MS
+          value: '1800000'
+        - name: OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS
+          value: '1800000'
+        - name: OKF_INGEST_WORKER_SWEEP_GRACE_MS
+          value: '3600000'
+        - name: OKF_JOB_WINDOW_ADAPTIVE
+          value: 'false'
+        - name: OKF_JOB_WINDOW_FLOOR_MS
+          value: '1800000'
+        - name: OKF_JOB_WINDOW_MAX_MS
+          value: '21600000'
+        - name: OKF_JOB_WINDOW_SEC_PER_CHUNK_MS
+          value: '5000'
+        - name: OKF_CLAIM_STRATEGY
+          value: fifo
+        - name: OKF_REPO_INGEST_CAP
+          value: '0'
+        - name: OKF_KICK_BACKOFF_BASE_MS
+          value: '0'
+        - name: OKF_KICK_BACKOFF_MAX_MS
+          value: '900000'
+        - name: OKF_INGEST_MAX_CONCEPTS
+          value: '1000'
+        - name: OKF_INGEST_MAX_ZIP_BYTES
+          value: '268435456'
+        - name: OKF_MAX_CONCURRENT_CONVERSIONS
+          value: '2'
+        - name: OKF_XLSX_ROWS_PER_CONCEPT
+          value: '200'
+        - name: OKF_CSV_ROWS_PER_CONCEPT
+          value: '200'
+        - name: OKF_RETRIEVAL_MODE
+          value: legacy
+        - name: OKF_RETRIEVAL_MAX_FANOUT_GRAPHS
+          value: '5'
+        - name: OKF_RETRIEVAL_SPINE_MAX_HOPS
+          value: '2'
+        - name: OKF_RETRIEVAL_EXTRACTED_HOP_CAP
+          value: '1'
+        - name: OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH
+          value: '50'
+        - name: OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL
+          value: '200'
+        - name: OKF_FRONTMATTER_VALIDATE_BATCH_SIZE
+          value: '4'
+        - name: OKF_SETTLE_LEASE_MS
+          value: '600000'
+        - name: RETRIEVER_ROUTE_ENABLED
+          value: 'true'
+        - name: RETRIEVER_ROUTE_TOP_K
+          value: '40'
+        - name: RETRIEVER_ROUTE_MIN_CHUNKS
+          value: '3'
+        - name: RETRIEVER_ROUTE_PROBE_TIMEOUT_MS
+          value: '2000'
+        - name: RETRIEVER_ROUTE_RETRY
+          value: '1'
+        - name: RETRIEVER_ROUTE_HEAD_WEIGHT
+          value: '1.0'
+        - name: RETRIEVER_ROUTE_HEAD_MARGIN
+          value: '0.01'
+        - name: RETRIEVER_ROUTE_HEAD_FLOOR
+          value: '0.55'
+        - name: RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX
+          value: '0.55'
+        - name: RETRIEVER_ROUTE_HEADS_SUPERSEDE
+          value: 'true'
+        resources:
+          limits:
+            cpu: '2'
+            memory: 4Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          failureThreshold: 5
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          failureThreshold: 5
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genieai-genieai-umbrella-pii-service
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/version: 0.2.184
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: pii-service
+    genieai.io/component: pii-service
+    genieai.io/managed-by: helm
+    e2170.genieai.io/run: '2170'
+  annotations: {}
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 2400
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: genieai-umbrella
+      app.kubernetes.io/instance: genieai
+      app.kubernetes.io/component: pii-service
+      genieai.io/component: pii-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: genieai-umbrella
+        app.kubernetes.io/instance: genieai
+        app.kubernetes.io/component: pii-service
+        genieai.io/component: pii-service
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: pii-service
+        image: registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-pii-service:feat-agentic-foundations-prd-a2db5f7d
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+        env:
+        - name: PORT
+          value: '8000'
+        - name: PII_WEB_CONCURRENCY
+          value: '4'
+        - name: PII_REGION_MAX_CHARS
+          value: '50000'
+        resources:
+          limits:
+            cpu: '1'
+            memory: 2Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        readinessProbe:
+          failureThreshold: 4
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 30
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 30
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genieai-genieai-umbrella-ragas-service
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+    app.kubernetes.io/name: genieai-umbrella
+    app.kubernetes.io/instance: genieai
+    app.kubernetes.io/version: 0.2.184
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: ragas-service
+    genieai.io/component: ragas-service
+    genieai.io/managed-by: helm
+    e2170.genieai.io/run: '2170'
+  annotations: {}
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 2400
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: genieai-umbrella
+      app.kubernetes.io/instance: genieai
+      app.kubernetes.io/component: ragas-service
+      genieai.io/component: ragas-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: genieai-umbrella
+        app.kubernetes.io/instance: genieai
+        app.kubernetes.io/component: ragas-service
+        genieai.io/component: ragas-service
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - name: ragas-llm-cache
+        persistentVolumeClaim:
+          claimName: ragas-llm-cache
+      containers:
+      - name: ragas-service
+        image: registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-ragas-service:feat-agentic-foundations-prd-a2db5f7d
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8090
+        env:
+        - name: PORT
+          value: '8090'
+        - name: RAGAS_JUDGE_BASE_URL
+          value: https://ai.assembly.govstack.global:444/llm/v1
+        - name: RAGAS_JUDGE_MODEL
+          value: ibm-granite/granite-4.1-8b
+        - name: RAGAS_JUDGE_CONTEXT_TOKENS
+          value: '65536'
+        - name: RAGAS_EMBED_BASE_URL
+          value: https://ai.assembly.govstack.global:444/embed
+        - name: RAGAS_EMBED_MODEL
+          value: BAAI/bge-large-en-v1.5
+        - name: RAGAS_EMBED_API
+          value: tei
+        - name: RAGAS_LLM_CACHE
+          value: '1'
+        - name: RAGAS_LLM_CACHE_DIR
+          value: /tmp/ragas-llm-cache
+        - name: RAGAS_LLM_CACHE_LEGACY
+          value: '0'
+        - name: RAGAS_LLM_MAX_CONCURRENCY
+          value: '8'
+        - name: RAGAS_LLM_MAX_RETRIES
+          value: '5'
+        - name: RAGAS_DO_NOT_TRACK
+          value: 'true'
+        - name: RAGAS_EVAL_MAX_WORKERS
+          value: '8'
+        - name: RAGAS_EVAL_BATCH_ROWS
+          value: '1'
+        - name: RAGAS_EVAL_TIMEOUT_SECONDS
+          value: '600'
+        - name: LOG_LEVEL
+          value: INFO
+        - name: RAGAS_INTERNAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: OKF_INTERNAL_SECRET
+              name: okf-internal-secret
+              optional: true
+        - name: RAGAS_JUDGE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: VLLM_API_KEY
+              name: vllm-api-key
+              optional: true
+        - name: VLLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: VLLM_API_KEY
+              name: vllm-api-key
+        resources:
+          limits:
+            cpu: '1'
+            memory: 2Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /tmp/ragas-llm-cache
+          name: ragas-llm-cache
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 30
+          periodSeconds: 30
+---
+# The BFF's OKF hop and the agent's OKF capability both dial okf-server on
+# 3002. The chart's backend NetworkPolicy carries that egress row ONLY when
+# okf.enabled=true — and the DEPLOYED release (the baseline this campaign
+# repoints) has the OKF tier off, so the row is absent and the flow is
+# denied by the default-deny policy. NetworkPolicy egress is a UNION of the
+# rules of every policy that selects the pod, so this run-scoped policy adds
+# the two missing edges without touching the chart's policy. It is deleted
+# with the run.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2170-okf-egress
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+spec:
+  podSelector:
+    matchExpressions:
+      - key: genieai.io/component
+        operator: In
+        values:
+          - backend
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - e2170-agent
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 3002
+---
+# The OKF publish path stores the minted bundle in the document-repository
+# (the okf-server's own "bundle store failed (doc-repo status n/a): connect
+# ECONNREFUSED" on the live publish). The chart's document-repository
+# NetworkPolicy trusts the proxy / backend / dataprep / chatqna pods on
+# 3001 — the okf-server pod is none of them, so the flow is denied. Ingress
+# is a UNION of the rules of every policy that selects the pod, so this
+# run-scoped policy adds the missing edge (okf-server -> doc-repo:3001)
+# without touching the chart's policy. It is deleted with the run.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2170-okf-docrepo-ingress
+  namespace: genieai
+  labels:
+    e2170.genieai.io/run: "2170"
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: documentRepository
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 3001

@@ -1,38 +1,40 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The depth-aware credential redaction the comparison reports write through.
+"""The depth-aware credential redaction every recorded artifact writes through.
 
-The manifest's own redaction is TOP-LEVEL only: a nested credential (a row's
-``metadata`` carrying an api key) survives it, and the comparison reports
-record whole rows. The reports therefore apply THIS rule on every path they
-write — the per-case rows, the M-5 values, the M-1 aggregate, the recorded
-label scopes, the capture stamp and the manifests' prompt/model maps.
+ONE rule for the whole protocol: the run manifest (:mod:`manifest`) records
+its resolved-env snapshots, its model ids and its prompt digests through
+:func:`redact_deep`, and the comparison reports (:mod:`e01`, :mod:`e02`)
+apply it on every path they write — the per-case rows, the M-5 values, the
+M-1 aggregate, the recorded label scopes, the capture stamp and the
+manifests' prompt/model maps. A credential-named key reaches neither the
+committed manifest nor a derived report, and a marker added to the shared
+vocabulary reaches both surfaces at once — they cannot drift on what names a
+credential.
 
-The rule is deliberately NARROWER than the manifest's: the report records
-measurement fields the judge needs (``chunk_key``, the token counts), so it
-keeps those and drops the credential names explicitly. The two rules diverge
-ON PURPOSE, and the reports apply this one on every path they write — they
-never state two different things about the same datum.
-
-One home for the rule: the E01 report (story 4.3) and the E02 report (story
-4.5) both write rows, and a rule with two copies is a rule with two answers.
+The rule keeps the measurement names the judge needs (``chunk_key``, the
+token counts) and drops the credential names explicitly — including the
+auth-word spellings (``authHeader``, ``authorized``) a bare substring list
+alone would miss. The documented safe side: an env key named after the
+deployment's authorized-graph scope (``AGENT_AUTHORIZED_GRAPHS``) is read as
+a credential and drops from every recorded artifact.
 """
 
 from __future__ import annotations
 
 import re
 
-from .manifest import SECRET_KEY_MARKERS
+# The credential vocabulary — ONE list, the single home every redacting
+# surface reads. Both the manifest and the reports derive their rule from
+# these names, so a marker added here reaches both.
+SECRET_KEY_MARKERS = ("PASSWORD", "SECRET", "TOKEN", "KEY", "BEARER", "CREDENTIAL")
 
-# The credential-named keys the reports drop, at ANY depth. The marker set is
-# the manifest's, plus the names that carry the marker as a substring. This
-# rule is the REPORTS' own and it is deliberately narrower than the manifest's
-# (which drops every marker-named key, measurement names included): the
-# reports record measurement fields the judge needs, so they keep those and
-# drop the credential names explicitly.
+# The credential-named keys the redaction drops, at ANY depth. This rule is
+# the measurement-aware form: it keeps the names the judge needs
+# (:data:`MEASUREMENT_KEY_NAMES`) and drops the credential names explicitly.
 CREDENTIAL_MARKERS = (
     tuple(marker.lower() for marker in SECRET_KEY_MARKERS)
-    # The names the manifest's list does not carry but a config map can.
+    # The names the base list does not carry but a config map can.
     + ("authorization", "session")
 )
 
@@ -128,11 +130,11 @@ def is_credential_key(key) -> bool:
 def redact_deep(value):
     """Drop every credential-named key at ANY depth.
 
-    The manifest's redaction is top-level only — a nested credential (a row's
-    ``metadata`` carrying an api key) would survive it, and the comparison
-    reports record whole rows. Depth-aware redaction here; the rule is the
-    reports' own (see :data:`MEASUREMENT_KEY_NAMES` for the measurement names
-    it keeps).
+    The manifest records maps of maps (a provider block's ``api_key`` inside
+    ``model_ids``) and the reports record whole rows — a top-level scan would
+    let a nested credential reach a committed artifact. The measurement names
+    in :data:`MEASUREMENT_KEY_NAMES` are the explicit exceptions: values the
+    judge needs, not secrets.
     """
     if isinstance(value, dict):
         return {key: redact_deep(item) for key, item in value.items() if not is_credential_key(key)}

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The ported bounds of the preparation pipeline (V02 §5.3).
+"""The ported bounds of the preparation pipeline, as the record measures them.
 
 Everything here is ported from the deployed module
 (``genieai_chatqna.py:821-968``, ``:1321-1322``): the character-budget

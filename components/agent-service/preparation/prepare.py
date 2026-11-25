@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The preparation entry: one path serving initial and refined queries.
 
-The orchestrator of the recorded §5.1 order (V02
-``docs/baselines/v02-opea-query-path-contract.md`` §5.1), ported from
+The orchestrator of the recorded preparation order
+(``docs/baselines/v02-opea-query-path-contract.md``), ported from
 ``genieai_chatqna.py:4578-4806``:
 
 1. the caller names a language or names none — a named code is resolved
@@ -27,7 +27,7 @@ The orchestrator of the recorded §5.1 order (V02
    retrieval query (the whole blob as the fallback when the marker is
    absent).
 
-The three failure classes keep their distinct outcomes (V02 §5.4, mapped
+The three failure classes keep their distinct outcomes (mapped
 onto the capability contract's taxonomy — see the Design Notes): an
 oversized input RAISES the typed
 :class:`~preparation.translation.TranslationInputTooLongError` (the

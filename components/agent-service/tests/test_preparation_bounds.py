@@ -33,7 +33,7 @@ def _config(**overrides) -> PreparationConfig:
 
 class TestBudgetDerivation:
     def test_the_recorded_window_derives_the_recorded_budget(self):
-        """V02 §5.3: window 8192 → (8192 − 512) // 2 × 3 = 11520 characters."""
+        """Window 8192 → (8192 − 512) // 2 × 3 = 11520 characters, as recorded."""
         assert derived_char_budget(8192, _config()) == 11520
 
     def test_an_unknown_window_falls_back_to_the_configured_budget(self):
@@ -151,7 +151,7 @@ class TestListTrim:
 
     def test_translation_and_passthrough_keep_the_same_turns(self):
         """The retriever must see the same turns whichever language the query
-        is written in (V02 §5.3)."""
+        is written in, as recorded."""
         history = [
             {"role": "user", "content": "A" * 90},
             {"role": "assistant", "content": "B" * 90},

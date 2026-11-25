@@ -1280,7 +1280,10 @@ def _release_info(**overrides):
     """The release facts the identity is resolved from."""
     info = {
         "chart_name": "genieai-umbrella",
-        "chart_version": "0.2.182",
+        # The deployment runs the chart THIS CHECKOUT carries: the expected
+        # version is derived from the checkout's Chart.yaml, not pinned —
+        # a pinned number re-reddens the identity tests on every chart bump.
+        "chart_version": capture.local_chart_version(),
         "source_ref": {
             "kind": "GitRepository",
             "name": "genie-ai",
@@ -1299,7 +1302,7 @@ def test_the_identity_names_the_chart_the_deployment_runs(monkeypatch):
     _stub_release_secret(monkeypatch)
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "IDENTICAL"
-    assert identity["chart_version"] == "0.2.182"
+    assert identity["chart_version"] == capture.local_chart_version()
     assert identity["source_kind"] == "GitRepository"
     assert identity["commit"], (
         "the identity must name the commit that carries the chart"
@@ -1421,7 +1424,7 @@ def test_the_record_states_the_chart_the_deployment_runs(tmp_path, monkeypatch):
     capture.write_record(data, str(out_path))
     record = out_path.read_text(encoding="utf-8")
     assert "## Chart identity" in record
-    assert "0.2.182" in record
+    assert capture.local_chart_version() in record
     assert identity["commit"] in record
     # The source the release was rendered from is named too.
     assert "GitRepository" in record
@@ -1668,7 +1671,14 @@ def test_the_release_secret_is_looked_for_in_every_candidate_namespace(monkeypat
         "status": {
             "conditions": [{"type": "Ready", "status": "True", "message": "ok"}],
             "history": [
-                {"version": 72, "chartVersion": "0.2.182", "status": "deployed"}
+                {
+                    "version": 72,
+                    # The deployed revision runs THIS checkout's chart: the
+                    # version is derived, not pinned, or the identity check
+                    # re-reddens on every chart bump.
+                    "chartVersion": capture.local_chart_version(),
+                    "status": "deployed",
+                }
             ],
         },
     }

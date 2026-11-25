@@ -2,7 +2,7 @@
 
 - **Stage:** V08 — first stage rollout of the agentic routing path (Epic 3, story 3.3; the flag and rollback-continuity artifacts of stories 3.1/3.2 exercised on a real deployment)
 - **Date:** 2026-11-22
-- **Named responsible operator:** `jrevillard` (the initiative owner — the person who pulls the rollback trigger when a rollback trigger fires)
+- **Named responsible operator:** the rollout owner (the person who pulls the rollback trigger when a rollback trigger fires)
 - **Venue:** the shared k3s dev cluster, namespace `genieai` (the V03 baseline venue; shared legacy stack untouched — the rehearsal ran DEDICATED workloads `v08-rehearsal-backend` / `v08-rehearsal-agent` + headless Service `v08-rehearsal-agent-hl`, all deleted and verified gone after the run)
 
 ## 1. Selected consumers and capabilities
@@ -73,10 +73,10 @@ was evidenced by every failed agentic attempt: each left its at-start doc
 
 | Trigger                                                                                     | Response                                                                                                                                                                                      | Who            |
 | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| The agentic path answers unacceptably in production (wrong, ungrounded, degraded vs legacy) | Execute §4 (flag off + restart) — the legacy path serves the very next request                                                                                                                | **jrevillard** |
-| The pair invariant (§7 pair validation) stops holding after a configuration change          | Treat as a stage-gate BLOCKER: restore the timeout/deadline pair, or roll back per §4 until it holds                                                                                          | **jrevillard** |
-| Agent-service outage (5xx / unreachable)                                                    | The agentic branch surfaces an honest error to the client; no silent legacy fallback exists by contract — roll back per §4 until the service recovers                                         | **jrevillard** |
-| Any incident where attribution of a long run matters (CM-3)                                 | The pair rule keeps long runs surfacing as the agent's own honest `budget_exhausted`/`run_error`, never a BFF timeout — if a BFF timeout is observed, that is a broken pair: roll back per §4 | **jrevillard** |
+| The agentic path answers unacceptably in production (wrong, ungrounded, degraded vs legacy) | Execute §4 (flag off + restart) — the legacy path serves the very next request                                                                                                                | the on-call operator |
+| The pair invariant (§7 pair validation) stops holding after a configuration change          | Treat as a stage-gate BLOCKER: restore the timeout/deadline pair, or roll back per §4 until it holds                                                                                          | the on-call operator |
+| Agent-service outage (5xx / unreachable)                                                    | The agentic branch surfaces an honest error to the client; no silent legacy fallback exists by contract — roll back per §4 until the service recovers                                         | the on-call operator |
+| Any incident where attribution of a long run matters (CM-3)                                 | The pair rule keeps long runs surfacing as the agent's own honest `budget_exhausted`/`run_error`, never a BFF timeout — if a BFF timeout is observed, that is a broken pair: roll back per §4 | the on-call operator |
 
 ## 7. Rehearsal evidence
 

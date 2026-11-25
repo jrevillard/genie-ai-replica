@@ -58,6 +58,12 @@ docx2txt==0.9
 fastapi==0.116.1
 httpx==0.28.1
 huggingface-hub==0.36.2
+# json-repair is a LAZY fallback import (the graph-entity extraction's
+# JSON-repair path when the LLM has no native function calling) — not in
+# the module-level import set above, but missing from the slim lock it
+# raised ImportError and failed the whole ingestion with HTTP 500
+# instead of degrading (#2121). Same version the fat lock pins.
+json-repair==0.63.0
 langchain==0.3.27
 langchain-arangodb==0.0.6
 langchain-community==0.3.31

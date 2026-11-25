@@ -119,18 +119,40 @@ observability:
     retentionPeriod: "30d"
     storageSize: 20Gi
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    # Extra command-line arguments for the VictoriaLogs binary, rendered
+    # onto the VLSingle CR as spec.extraArgs. The operator renders each
+    # key as "-<key>=<value>", so the key carries the flag name WITHOUT
+    # its leading dash (e.g. fs.disableMmap → "-fs.disableMmap=true").
+    extraArgs: {}
   metrics:
     enabled: false
     # VMSingle retention period.
     retentionPeriod: "30d"
     storageSize: 20Gi
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    # Same contract as logs.extraArgs above (rendered onto the VMSingle CR).
+    extraArgs: {}
   traces:
     enabled: false
     # VTSingle retention period.
     retentionPeriod: "30d"
     storageSize: 20Gi
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    # Same contract as logs.extraArgs above (rendered onto the VTSingle CR).
+    #
+    # The traces tier DEFAULTS to the binary's own mmap remedy
+    # (fs.disableMmap → "-fs.disableMmap=true"): on a node whose
+    # filesystems cannot back the mmap of the trace index files
+    # (live-verified on a venue where BOTH the tmpfs-backed and the
+    # disk-backed StorageClasses failed with "cannot mmap ... no such
+    # device", with max_map_count nowhere near its limit), VictoriaTraces
+    # crashloops in a restart loop that no StorageClass choice fixes, and
+    # the flag is the remedy the binary itself names in that panic. The
+    # trade-off is a read-path one (pread() instead of mmap()), never a
+    # correctness one — a venue whose storage CAN mmap and measures the
+    # difference may flip it back with fs.disableMmap: "false".
+    extraArgs:
+      fs.disableMmap: "true"
   grafana:
     enabled: false
     # Pin the Grafana image version on the CR. Without it the operator
@@ -216,7 +238,7 @@ pluggable:
   # creates: the data-tier PVCs (ArangoDB, CNPG, document-repository
   # uploads, redis appendonly, clamav signatures, model cache, ragas
   # judge cache) AND the observability CRs (VLSingle/VMSingle/VTSingle
-  # `storage.className`). "" (the default) = each volume lands on the
+  # `storage.storageClassName`). "" (the default) = each volume lands on the
   # cluster's default StorageClass; set it per venue — a dev cluster
   # can point it at a tmpfs-backed StorageClass to pull the cache-class
   # volumes into RAM (#1522), a prod venue at its SSD class. Applied at

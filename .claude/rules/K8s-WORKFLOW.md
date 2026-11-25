@@ -56,6 +56,7 @@ helm lint --strict charts/genieai-umbrella/
 #    prefix with `rtk proxy` to bypass the hook for this command.
 rtk proxy helm template genieai charts/genieai-umbrella/ \
   -n genieai \
+  --api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector \
   -f <(yq -o=json '.values' overlays/<dev>-laptop/dev/values.yaml | yq -P) \
   > /tmp/rendered.yaml
 #    <dev>-laptop = your per-developer overlay in genie-ai-deploy
@@ -296,12 +297,21 @@ helm dependency update /tmp/chart-before/charts/genieai-umbrella >/dev/null
 # The two "before" renders use the SAME flags as the "after" ones, with
 # the chart path swapped:
 #   rtk proxy helm template genieai /tmp/chart-before/charts/genieai-umbrella/ -n genieai \
+#     --api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector \
 #     <the same --set list> --set opea.gpu.mode=external > /tmp/before-external.yaml
 #   rtk proxy helm template genieai /tmp/chart-before/charts/genieai-umbrella/ -n genieai \
+#     --api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector \
 #     <the same --set list> --set opea.gpu.mode=in-cluster > /tmp/before-incluster.yaml
 
+# Every offline render MUST declare the otel operator's API version
+# (--api-versions, the same line charts/ci/render-base-flags carries):
+# the collector CR renders only where that API version is known, and an
+# offline render that omits the flag silently drops it — a
+# collector-only refactor then diffs to nothing and the gate runs green
+# over an untested change.
 # The "after" renders:
 rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
+  --api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector \
   --set data.keycloak.failOnPlaceholderSecrets=false \
   --set data.keycloak.adminEmail=ci-render@example.org \
   --set data.keycloak.smtp.from=no-reply@ci.invalid \
@@ -314,6 +324,7 @@ rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
   --set opea.gpu.mode=external > /tmp/after-external.yaml
 
 rtk proxy helm template genieai charts/genieai-umbrella/ -n genieai \
+  --api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector \
   --set data.keycloak.failOnPlaceholderSecrets=false \
   --set data.keycloak.adminEmail=ci-render@example.org \
   --set data.keycloak.smtp.from=no-reply@ci.invalid \

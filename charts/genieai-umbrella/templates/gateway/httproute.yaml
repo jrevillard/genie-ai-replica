@@ -58,6 +58,45 @@ spec:
         - name: document-repository
           port: 80
     {{- end }}
+    {{- /* OKF server (opt-in tier): the okf-server's public surface.
+    The BFF mounts no okf proxy, so /api/okf/* reaches the cluster only
+    through this rule — and it MUST sit before the /api/ backend rule
+    below, because Gateway API resolves rule matches by list order
+    (first match wins, NOT longest-prefix): under the backend rule every
+    okf call would land on the BFF and answer 404.
+
+    The path matrix mirrors the Compose venue's Kong routes: the general
+    /api/okf prefix on okf-server at Kong's 60s timeout, and the import
+    POSTs (POST /api/okf/repos/...) on the same upstream at Kong's 1h
+    timeout — an import is a crawl-and-convert job that runs for
+    minutes, and the edge's implicit default timeout would cut it
+    (the same budget story as the SSE stream on the backend rule).
+    Kong's import route carries the trailing slash for the same
+    element-boundary reason the /api-docs.json note below explains.
+
+    No path rewrite: the okf-server serves its routes under /api/okf
+    itself, and Kong's okf route runs with strip_path: false. */}}
+    {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/okf/repos/
+          method: POST
+      timeouts:
+        backendRequest: 1h
+      backendRefs:
+        - name: okf-server
+          port: 3002
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/okf
+      timeouts:
+        backendRequest: 60s
+      backendRefs:
+        - name: okf-server
+          port: 3002
+    {{- end }}
     {{- /* Backend BFF: /api + swagger. The chat SSE stream lives here:
            Envoy's default route timeout kills long streams mid-flight
            (live-observed: backend finished in 20s, browser got a 504 at

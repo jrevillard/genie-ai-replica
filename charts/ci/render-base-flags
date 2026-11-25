@@ -4,6 +4,7 @@
 --set data.keycloak.smtp.port=587
 --set data.keycloak.smtp.starttls=true
 --set ingress.host=ci-render.local
+--api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector
 --set data.keycloak.convergence.envSecrets[0].envVar=KC_PROXY_CLIENT_SECRET
 --set data.keycloak.convergence.envSecrets[0].secretName=keycloak-proxy-client-secret
 --set data.keycloak.convergence.envSecrets[0].secretKey=KEYCLOAK_PROXY_CLIENT_SECRET

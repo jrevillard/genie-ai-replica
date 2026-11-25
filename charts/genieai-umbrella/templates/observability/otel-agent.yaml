@@ -32,7 +32,15 @@
   by root (containerd default). Non-root UIDs see EACCES on the
   open() call; the operator's default non-root securityContext is
   overridden here to keep the filelog tail functional.
+
+  Same prerequisite guard as the gateway collector (otel-collector.yaml):
+  the CR renders only where the operator's CRD is served. logs.enabled
+  defaults TRUE, so without this guard the DEFAULT install would abort
+  the whole release upgrade on a cluster without the OpenTelemetry
+  Operator — the DaemonSet unmappable after the gateway's skip record
+  had already claimed the upgrade alive.
 */}}
+{{- if .Capabilities.APIVersions.Has "opentelemetry.io/v1beta1/OpenTelemetryCollector" }}
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
@@ -245,6 +253,22 @@ spec:
   securityContext:
     runAsUser: 0
     runAsGroup: 0
+{{- else }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: genieai-agent-prereq
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+data:
+  agent: >-
+    skipped — the OpenTelemetryCollector CRD (opentelemetry.io/v1beta1) is
+    not served by this cluster, so the filelog agent CR was NOT rendered
+    and container logs stay out of VictoriaLogs. Same record and remedy
+    as the genieai-collector-prereq ConfigMap.
+{{- end }}
 ---
 # Namespaced watch rights for the agent's k8sattributes processor.
 # The SA lives in the agent's own namespace (<namespace>-obs, created

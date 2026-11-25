@@ -4530,7 +4530,7 @@ test:rag-benchmarks:
     # threshold registry + counter-metrics (the promotion decision and the
     # CM-1/CM-2/CM-3 records) and the E02 B-vs-C comparison + the coexistence
     # criterion (the legacy non-regression under concurrent agentic load).
-    - pytest test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py test_protocol_e01.py test_protocol_thresholds.py test_protocol_counter_metrics.py test_protocol_e02.py test_protocol_coexistence.py test_assessment_grade_set.py -q --junitxml=../../reports/rag-benchmarks-protocol-report.xml
+    - pytest test_protocol_evalset.py test_protocol_manifest.py test_protocol_gate.py test_protocol_reuse.py test_protocol_drivers.py test_protocol_security.py test_protocol_e01.py test_protocol_thresholds.py test_protocol_counter_metrics.py test_protocol_e02.py test_protocol_coexistence.py test_assessment_grade_set.py test_assessment_candidate_set.py -q --junitxml=../../reports/rag-benchmarks-protocol-report.xml
   artifacts:
     when: always
     expire_in: 7 days
@@ -4549,6 +4549,14 @@ test:rag-benchmarks:
         # The gate also reads the #2148 source set (the inherited cases'
         # byte-identity baseline) — an edit there must run the job too.
         - "_bmad-output/implementation-artifacts/e01-security-corpus-2026-11-24/**/*"
+        # The #2146 candidate-set gate reads the candidate set (its subject)
+        # and the FINAL A reference set (the addition-only byte-identity
+        # baseline + the draft lineage's manifest); the coexistence draft
+        # tests read the draft artifact — an edit to any of them must run
+        # the job too.
+        - "_bmad-output/implementation-artifacts/assessment-set-candidate-2026-11-25/**/*"
+        - "_bmad-output/implementation-artifacts/coexistence-limits-draft-2026-11-25/**/*"
+        - "_bmad-output/implementation-artifacts/e01-final-reference-2026-11-24/**/*"
         # And the E2E fixture the graded gold names as a source document —
         # rewriting it would invalidate the set's verbatim contract.
         - "tests/e2e/fixtures/test-document.md"

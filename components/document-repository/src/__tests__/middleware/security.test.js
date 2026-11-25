@@ -35,12 +35,6 @@ jest.mock('../../config/appConfig', () => ({
   }
 }));
 
-// file-type 21 is ESM-only: the module is mocked via unstable_mockModule (Jest
-// runs under --experimental-vm-modules). The factory reads the shared jest.fn
-// lazily through a getter, so per-test mockResolvedValue calls are visible.
-const fileTypeFromBuffer = jest.fn();
-const { validateFileType, setFileTypeLoader, resetFileTypeLoader } = require('../../utils/mimeTypeValidator');
-
 // file-type 21 is ESM-only, so it is stubbed through mimeTypeValidator's
 // injectable loader seam — NOT through `jest.unstable_mockModule`. That API
 // needs Jest's ESM VM (--experimental-vm-modules), and the flag makes Jest
@@ -49,6 +43,11 @@ const { validateFileType, setFileTypeLoader, resetFileTypeLoader } = require('..
 // The seam is the injection point the module documents for exactly this
 // reason ("dynamic imports are not interceptable in the CJS VM").
 //
+// The factory reads the shared jest.fn lazily through a getter, so per-test
+// mockResolvedValue calls are visible.
+const fileTypeFromBuffer = jest.fn();
+const { validateFileType, setFileTypeLoader, resetFileTypeLoader } = require('../../utils/mimeTypeValidator');
+
 // The seam lives on globalThis, so it must be (re)installed per test: the
 // beforeEach below resets it, and the getter keeps the shared jest.fn
 // visible to each test's mockResolvedValue call.

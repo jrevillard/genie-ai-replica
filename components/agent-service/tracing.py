@@ -24,8 +24,6 @@ import contextlib
 import logging
 import os
 import re
-import signal
-import sys
 from contextlib import contextmanager
 
 from opentelemetry import metrics, trace
@@ -40,6 +38,9 @@ from opentelemetry.trace import Status, StatusCode
 
 _provider = None
 _meter_provider = None
+# The service name the tracing setup was given; the meter's scope carries
+# it, so the identity is the same fixed one the resource reports.
+_SERVICE_NAME = ""
 
 # PII key patterns — case-insensitive regex, mirroring the Node side
 # (`SENSITIVE_KEY_PATTERNS` in `components/gov-chat-backend/tracing-pii.js`).
@@ -149,14 +150,21 @@ def setup_tracing(service_name: str) -> None:
     if not endpoint_base:
         return
 
-    # `OTEL_SERVICE_NAME` is the canonical OTel-spec env var; the argument is
-    # the per-service default an operator can shadow per environment.
-    service_name_resolved = os.getenv("OTEL_SERVICE_NAME") or service_name
+    # The service identity is fixed by the deployment's ops decision: the
+    # namespace, the per-service name and the version are the resource's
+    # own attributes, and no environment variable may rename or re-version
+    # them — a renamed service breaks the dashboard and the service-identity
+    # contract the decision fixed. The SDK's own resource detector reads
+    # OTEL_SERVICE_NAME, but the attributes set here take precedence over
+    # the detected ones.
+    service_name_resolved = service_name
     # `service.namespace` groups the services of a deployment: the OPEA
     # overlay services share "genieai", the application services
     # (backend, document-repository, agent-service) share "genie-core".
     service_namespace = "genie-core"
-    service_version = os.getenv("OTEL_SERVICE_VERSION") or "1.0.0"
+    service_version = "1.0.0"
+    global _SERVICE_NAME
+    _SERVICE_NAME = service_name
     resource = Resource.create(
         {
             "service.name": service_name_resolved,
@@ -257,18 +265,13 @@ def setup_tracing(service_name: str) -> None:
     except Exception as exc:
         logging.getLogger(__name__).warning("Failed to initialize OTel MeterProvider — metrics disabled: %s", exc)
 
+    # The flush rides the process's normal exit: the server owns SIGTERM
+    # and SIGINT, finishes the requests in flight, and the process then
+    # exits — and `atexit` runs the flush. Installing a handler of our own
+    # would either lose to the server's (the flush promise kept, the
+    # graceful shutdown kept) or win over it (the flush promise kept, the
+    # graceful shutdown lost, the in-flight requests cut).
     atexit.register(shutdown)
-
-    # SIGTERM (Docker/Swarm) and SIGINT (Ctrl+C): flush the spans before the
-    # process dies. `signal.signal()` is only valid in the main thread, so the
-    # handlers are best-effort — `atexit` already covers a normal exit.
-    for _signame in (signal.SIGTERM, signal.SIGINT):
-        try:
-            signal.signal(_signame, _sigterm_handler)
-        except (ValueError, OSError):
-            logging.getLogger(__name__).debug(
-                f"signal.signal({_signame}) unavailable in this thread; falling back to atexit-only shutdown."
-            )
 
 
 def get_tracer(name: str = __name__):
@@ -328,12 +331,11 @@ class _SpanContext:
 def get_meter() -> metrics.Meter:
     """Return a meter from the global MeterProvider.
 
-    Safe to call before `setup_tracing()` — returns a no-op meter.
+    Safe to call before `setup_tracing()` — returns a no-op meter. The scope
+    carries the same fixed identity as the resource: the service name the
+    setup was given and the fixed version, never an environment override.
     """
-    return metrics.get_meter(
-        os.getenv("OTEL_SERVICE_NAME") or os.getenv("SERVICE_NAME", "unknown"),
-        os.getenv("OTEL_SERVICE_VERSION") or os.getenv("SERVICE_VERSION", "1.0.0"),
-    )
+    return metrics.get_meter(_SERVICE_NAME or "unknown", "1.0.0")
 
 
 def shutdown() -> None:
@@ -361,8 +363,3 @@ def _reset() -> None:
     global _provider, _meter_provider
     _provider = None
     _meter_provider = None
-
-
-def _sigterm_handler(signum, frame):
-    shutdown()
-    sys.exit(0)

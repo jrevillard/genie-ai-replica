@@ -1203,7 +1203,6 @@ const Map<String, dynamic> esLocale = {
     "indexBadge": "index",
   },
 
-
   // Inteligencia agrícola (precios de mercado, salud de cultivos, plagas)
   "charts": {
     "activeAlerts": "Alertas Activas",

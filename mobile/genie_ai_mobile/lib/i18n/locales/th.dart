@@ -1185,7 +1185,6 @@ const Map<String, dynamic> thLocale = {
     "indexBadge": "index",
   },
 
-
   // Agricultural intelligence charts (market prices, crop health, pest alerts)
   "charts": {
     "activeAlerts": "Active Alerts",

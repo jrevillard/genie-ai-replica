@@ -2941,11 +2941,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: DsSpacing.lg),
-                  _agriSectionTitle(
-                    theme,
-                    tokens,
-                    tr('charts.insights'),
-                  ),
+                  _agriSectionTitle(theme, tokens, tr('charts.insights')),
                   // Stacked, not side-by-side: at phone width (360dp) two
                   // Expanded cards leave ~136dp per card, under the summary
                   // rows' intrinsic content width — the side-by-side row
@@ -2959,11 +2955,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     ],
                   ),
                   const SizedBox(height: DsSpacing.lg),
-                  _agriSectionTitle(
-                    theme,
-                    tokens,
-                    tr('charts.fastActions'),
-                  ),
+                  _agriSectionTitle(theme, tokens, tr('charts.fastActions')),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {

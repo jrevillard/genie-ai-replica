@@ -162,17 +162,20 @@ void main() {
     });
 
     group('per-deployment locale whitelist', () {
-      test('the el_salvador product flavor restricts the dropdown to en/es', () {
-        // AgroGenio (El Salvador) ships English + Spanish only. The
-        // restriction lives in the flavor that builds the product
-        // (flavors/el_salvador.dart) — the dev default keeps every shipped
-        // locale active (see dev_config.dart). I18nService derives its map
-        // from getConfig(), so `flutter test` (no FLAVOR dart-define) runs
-        // against the unrestricted dev config; this pins the product
-        // flavor's whitelist instead.
-        expect(el_salvador.config.supportedLocaleCodes, ['en', 'es']);
-        expect(getConfig().supportedLocaleCodes, allSupportedLocaleCodes);
-      });
+      test(
+        'the el_salvador product flavor restricts the dropdown to en/es',
+        () {
+          // AgroGenio (El Salvador) ships English + Spanish only. The
+          // restriction lives in the flavor that builds the product
+          // (flavors/el_salvador.dart) — the dev default keeps every shipped
+          // locale active (see dev_config.dart). I18nService derives its map
+          // from getConfig(), so `flutter test` (no FLAVOR dart-define) runs
+          // against the unrestricted dev config; this pins the product
+          // flavor's whitelist instead.
+          expect(el_salvador.config.supportedLocaleCodes, ['en', 'es']);
+          expect(getConfig().supportedLocaleCodes, allSupportedLocaleCodes);
+        },
+      );
 
       test('a bare KeycloakConfig still exposes every shipped locale', () {
         // Guard: restricting one flavor must not shrink the shipped locale

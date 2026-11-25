@@ -1210,7 +1210,6 @@ const Map<String, dynamic> deLocale = {
     "indexBadge": "index",
   },
 
-
   // Agricultural intelligence charts (market prices, crop health, pest alerts)
   "charts": {
     "activeAlerts": "Active Alerts",

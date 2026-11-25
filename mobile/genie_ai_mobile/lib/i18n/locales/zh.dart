@@ -1077,7 +1077,6 @@ const Map<String, dynamic> zhLocale = {
     "indexBadge": "index",
   },
 
-
   // Agricultural intelligence charts (market prices, crop health, pest alerts)
   "charts": {
     "activeAlerts": "Active Alerts",

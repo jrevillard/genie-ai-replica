@@ -1213,7 +1213,6 @@ const Map<String, dynamic> frLocale = {
     "indexBadge": "index",
   },
 
-
   // Agricultural intelligence charts (market prices, crop health, pest alerts)
   "charts": {
     "activeAlerts": "Active Alerts",

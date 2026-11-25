@@ -237,8 +237,8 @@ class RunUsageRecord:
     FIRST search query's preparation status (the initial query's, in the
     contract's preparation vocabulary; ``None`` when no query was prepared);
     ``abstention_reason`` — the insufficiency reason the search port
-    recorded through the run's abstention sink on the run's LATEST search
-    dispatch (the contract's typed vocabulary —
+    recorded through the run's abstention sink on the run's LATEST
+    port-reaching search dispatch (the contract's typed vocabulary —
     ``no_documents_retrieved``, ``reranker_input_too_long``,
     ``reranker_selected_nothing``, ``result_budget_exhausted``,
     ``no_resolvable_candidates``; ``None`` when no dispatch recorded one —

@@ -119,18 +119,40 @@ observability:
     retentionPeriod: "30d"
     storageSize: 20Gi
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    # Extra command-line flags for the {kind} container, as a map
+    # (the flag name without the leading dash). Empty = the operator's
+    # defaults.
+    #
+    # The one flag a venue may need: `fs.disableMmap`. A StorageClass
+    # backed by a HOST PATH (local-path and its kin) does not support
+    # the memory-mapped index files VictoriaMetrics/VictoriaTraces
+    # write: the process panics in the storage layer at startup and
+    # crash-loops, and the tier is then a broken release rather than a
+    # working one. A venue whose storage class is a host path sets it
+    # here.
+    extraArgs: {}
   metrics:
     enabled: false
     # VMSingle retention period.
     retentionPeriod: "30d"
     storageSize: 20Gi
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    # Extra command-line flags for the VMSingle container, as a map
+    # (the flag name without the leading dash). Empty = the operator's
+    # defaults. See the logs tier's note on `fs.disableMmap` — a host-path
+    # StorageClass needs it, or the tier crash-loops in the storage layer.
+    extraArgs: {}
   traces:
     enabled: false
     # VTSingle retention period.
     retentionPeriod: "30d"
     storageSize: 20Gi
     storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    # Extra command-line flags for the VTSingle container, as a map
+    # (the flag name without the leading dash). Empty = the operator's
+    # defaults. See the logs tier's note on `fs.disableMmap` — a host-path
+    # StorageClass needs it, or the tier crash-loops in the storage layer.
+    extraArgs: {}
   grafana:
     enabled: false
     # Pin the Grafana image version on the CR. Without it the operator

@@ -102,6 +102,7 @@ ssh <user>@<host> 'docker service logs <stack>_chatqna-xeon-backend-server --sin
 | File | Role |
 |---|---|
 | `run_eval.py` | Eval driver. OIDC handled by the wrapper (ROPC enable/revert) or by `E2E_BEARER_TOKEN`/`EVAL_KC_*` env vars; this script refreshes its own realm bearer in-run. |
+| `run_agent_anchor.py` | The AGENT-path anchor: drives the config-C seam (`protocol/drivers.py`) and fetches every run's trace FROM VICTORIATRACES BY IDENTITY (the driver propagates its own W3C traceparent, so the run's spans join that trace). Measures the trace property the legacy anchor's tuple cannot: the agent's spans carry counters and ids only, and its citations are file-level — the chunk-level tuple is NOT derivable today (see the design + deferral in the #2170 campaign artifacts). |
 | `calibrate.py` | Offline adaptive-reranker parameter sweep. Pure replay, no chatqna calls. |
 | `run_ragas_eval.py` | LLM-judged semantic scoring. Reads `eval_tuples.json` (Phase 3 output). |
 | `metrics.py` | `aggregate()` (per-row → mean) + `recall_at_k` / `ndcg_at_k` (rank-aware). |

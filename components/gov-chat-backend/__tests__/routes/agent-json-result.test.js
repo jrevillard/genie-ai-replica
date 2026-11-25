@@ -296,17 +296,17 @@ describe('POST /api/queries — the agentic success contract', () => {
 
     // The agent leg carried the derived deadline, the question, the
     // CallerContext (the REAL buildAgentCallerContext over the legacy
-    // posture — empty authorization) and the bearer.
+    // posture — the legacy corpus is the authorized set) and the bearer.
     expect(axios.post).toHaveBeenCalledTimes(1);
     const [url, body, options] = axios.post.mock.calls[0];
-    expect(url).toBe('http://agent-service:8010');
+    expect(url).toBe('http://agent-service:8010/v1/runs');
     expect(body.deadline_ms).toBe(
       _internals.DEFAULT_UPSTREAM_TIMEOUT_MS - _internals.TRANSLATION_RESERVE_MS - _internals.FINALIZATION_MARGIN_MS
     );
     expect(body.question).toBe('What is the tax rate?');
     expect(body.context).toEqual({
       user_id: 'http://localhost:8080/realms/genie#user-123',
-      authorized_graph_names: [],
+      authorized_graph_names: ['GRAPH'],
       authorized_repos: [],
       requested_labels: []
     });
@@ -779,18 +779,21 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     expect(collections.update).not.toHaveBeenCalled();
   });
 
-  it('a non-401 posture failure fails closed — the run still serves on the empty authorization', async () => {
+  it('a non-401 posture failure fails closed — the run still serves on the legacy corpus', async () => {
     queryService.resolveFanoutPosture.mockRejectedValue(new Error('resolver exploded'));
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });
 
     const response = await postQuery();
 
     // The run went out with the NULL posture (fail-closed direction) — the
-    // REAL buildAgentCallerContext turned it into the empty authorized set.
+    // REAL buildAgentCallerContext turned it into the legacy corpus, the
+    // deployment's own default when the posture cannot be read. An EMPTY
+    // set here would authorize no search at all, and the agent's contract
+    // fail-closes on it: every answer would be the insufficiency statement.
     expect(axios.post).toHaveBeenCalledTimes(1);
     expect(axios.post.mock.calls[0][1].context).toEqual({
       user_id: 'http://localhost:8080/realms/genie#user-123',
-      authorized_graph_names: [],
+      authorized_graph_names: ['GRAPH'],
       authorized_repos: [],
       requested_labels: []
     });

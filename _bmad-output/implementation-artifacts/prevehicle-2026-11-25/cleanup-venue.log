@@ -1,0 +1,117 @@
+=== #2170 venue cleanup ===
+_bmad-output/implementation-artifacts/prevehicle-2026-11-25/cleanup-venue.sh: line 31: date:: command not found
+--- 1. the run-scoped objects (by label)
+  deployment.apps "e2170-agent" deleted from genieai namespace
+  deployment.apps "genieai-collector-collector" deleted from genieai namespace
+  deployment.apps "genieai-grafana-deployment" deleted from genieai namespace
+  service "e2170-agent-hl" deleted from genieai namespace
+  service "genieai-collector-collector" deleted from genieai namespace
+  service "genieai-collector-collector-extension" deleted from genieai namespace
+  service "genieai-collector-collector-headless" deleted from genieai namespace
+  service "genieai-collector-collector-monitoring" deleted from genieai namespace
+  service "genieai-grafana-alerting" deleted from genieai namespace
+  service "genieai-grafana-service" deleted from genieai namespace
+  networkpolicy.networking.k8s.io "collector-gateway" deleted from genieai namespace
+  networkpolicy.networking.k8s.io "e2170-agent" deleted from genieai namespace
+  networkpolicy.networking.k8s.io "e2170-okf-docrepo-ingress" deleted from genieai namespace
+  networkpolicy.networking.k8s.io "e2170-okf-egress" deleted from genieai namespace
+  configmap "genieai-collector-collector-ff4e20cf" deleted from genieai namespace
+  configmap "genieai-grafana-ini" deleted from genieai namespace
+  configmap "genieai-grafana-plugins" deleted from genieai namespace
+  secret "genieai-grafana-admin-credentials" deleted from genieai namespace
+  opentelemetrycollector.opentelemetry.io "genieai-collector" deleted from genieai namespace
+  vtsingle.operator.victoriametrics.com "vtraces" deleted from genieai namespace
+  vmsingle.operator.victoriametrics.com "vmetrics" deleted from genieai namespace
+  vlsingle.operator.victoriametrics.com "victorialogs" deleted from genieai namespace
+  grafana.grafana.integreatly.org "genieai-grafana" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "application-metrics" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "observability-stack-health" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "rag-pipeline-trace-waterfall" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "service-health" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "service-logs" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "trace-explorer" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "victorialogs-single-node" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "victoriametrics-single-node" deleted from genieai namespace
+  grafanadashboard.grafana.integreatly.org "victoriatraces-single-node" deleted from genieai namespace
+  grafanadatasource.grafana.integreatly.org "victorialogs" deleted from genieai namespace
+  grafanadatasource.grafana.integreatly.org "victoriametrics" deleted from genieai namespace
+  grafanadatasource.grafana.integreatly.org "victoriatraces" deleted from genieai namespace
+  grafanafolder.grafana.integreatly.org "genieai-general" deleted from genieai namespace
+  grafanafolder.grafana.integreatly.org "genieai-observability" deleted from genieai namespace
+  grafanaalertrulegroup.grafana.integreatly.org "observability-otel-log-stamping" deleted from genieai namespace
+  grafanaalertrulegroup.grafana.integreatly.org "observability-pipeline-health" deleted from genieai namespace
+  grafanaalertrulegroup.grafana.integreatly.org "observability-vlog-ingestion" deleted from genieai namespace
+  grafanaalertrulegroup.grafana.integreatly.org "observability-vm-storage" deleted from genieai namespace
+  grafanaalertrulegroup.grafana.integreatly.org "observability-vtrace-ingestion" deleted from genieai namespace
+--- 2. the storage PVCs this run created (the vtsingle PVC pre-existed the run — see the report)
+  persistentvolumeclaim "vlsingle-victorialogs" deleted from genieai namespace
+  persistentvolumeclaim "vmsingle-vmetrics" deleted from genieai namespace
+--- 3. the HelmRelease: unsuspend and reconcile (the chart re-applies the baseline)
+helmrelease.helm.toolkit.fluxcd.io/genieai patched
+  helmrelease ready=True
+  helmrelease ready=True
+--- 4. the Keycloak probe user (and its realm role)
+  delete user http=204
+--- 5. the ROPC posture (the genie-app client must refuse password grants)
+  directAccessGrantsEnabled = False
+--- 6. the receipt: what is left
+  run-scoped objects (any kind, any namespace):
+    NAMESPACE   NAME                                              READY   STATUS        RESTARTS   AGE
+    genieai     pod/genieai-collector-collector-7f654b947-wpv7z   0/1     Terminating   0          62s
+    
+    NAMESPACE   NAME                                    STATUS   VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+    genieai     persistentvolumeclaim/ragas-llm-cache   Bound    ramdisk-pv-0   16Gi       RWO            ramdisk        <unset>                 3h14m
+  the deployed images (the baseline is :main):
+    genieai-genieai-umbrella-backend -> registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-backend:feat-agentic-foundations-chore-prevehicle-validation-25575680
+    genieai-genieai-umbrella-frontend -> registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend:feat-agentic-foundations-prd-a2db5f7d
+  the agent env rows (the baseline carries none):
+    OKF_ENABLED=0
+    ENABLE_OBSERVABILITY=1
+    AGENT_ENABLED=1
+    AGENT_SERVICE_URL=http://e2170-agent-hl.genieai.svc.cluster.local:8080
+  the helmrelease:
+  suspend= ready=True chart=0.2.183 rev=78
+  the port-forwards (the campaign's own):
+    none
+=== cleanup done ===
+
+=== the baseline restore, completed after the reconcile ===
+
+The HelmRelease reconcile re-applied the chart's release (rev 78, chart
+0.2.183) but did NOT roll the campaign's manual patches back: the backend
+and the frontend Deployments kept the campaign's image tags and the
+campaign's AGENT_* env rows, and Helm does not own them any more.
+
+The baseline was therefore restored from the release's OWN manifest (the
+helm-controller release Secret `sh.helm.release.v1.genieai.v78` — the
+chart's rendered spec for those two Deployments):
+
+  kubectl apply --server-side --force-conflicts   (the two Deployments)
+  kubectl -n genieai set env deploy/genieai-genieai-umbrella-backend \
+      AGENT_ENABLED- AGENT_SERVICE_URL-            (the campaign's rows)
+
+--- the receipt, re-read after the restore
+  the deployed images:
+    genieai-genieai-umbrella-backend -> registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-backend:main
+    genieai-genieai-umbrella-frontend -> registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend:main
+  the agent env rows:
+    ENABLE_OBSERVABILITY=0        (the baseline's own value)
+    (no AGENT_* row)
+  the helmrelease:
+    suspend= ready=True chart=0.2.183
+  the run-scoped objects (any kind, any namespace):
+    (none)
+  the operator CRs:
+    (none)
+  the PVCs this run created:
+    vlsingle-victorialogs  deleted
+    vmsingle-vmetrics      deleted
+    ragas-llm-cache        deleted   (the OKF tier's cache)
+    vtsingle-e2148-vt-probe / vtsingle-e2148-vt-probe3 / vtsingle-vtraces
+                           PRE-EXISTED the run (25 h old) — left alone
+  the Keycloak probe user:
+    deleted (HTTP 204)
+  the ROPC posture:
+    directAccessGrantsEnabled = False
+  the campaign's port-forwards:
+    none (all killed)

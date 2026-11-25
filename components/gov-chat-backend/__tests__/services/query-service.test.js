@@ -49,7 +49,8 @@ jest.mock('path', () => ({
 // module's own suite (agent-routing.test.js) pins the real read semantics.
 jest.mock('../../services/agent-routing', () => ({
   isAgentPathEnabled: jest.fn(),
-  agentServiceUrl: jest.fn(() => 'http://agent-service:8010')
+  agentServiceUrl: jest.fn(() => 'http://agent-service:8010'),
+  agentRunUrl: jest.fn(() => 'http://agent-service:8010/v1/runs')
 }));
 const routingFlag = require('../../services/agent-routing');
 
@@ -2019,7 +2020,7 @@ describe('query routing — one flag, both entries', () => {
   beforeEach(async () => {
     await queryService.init();
     routingFlag.isAgentPathEnabled.mockReturnValue(false);
-    routingFlag.agentServiceUrl.mockReturnValue('http://agent-service:8010');
+    routingFlag.agentRunUrl.mockReturnValue('http://agent-service:8010/v1/runs');
   });
 
   const LEGACY_URL = 'http://chatqna-xeon-backend-server:8888/v1/chatqna';
@@ -2129,10 +2130,10 @@ describe('query routing — one flag, both entries', () => {
     // returns only what the shared routing module names as the agent target,
     // whatever the legacy leg's own OPEA_HOST/OPEA_PORT configuration says.
     routingFlag.isAgentPathEnabled.mockReturnValue(true);
-    routingFlag.agentServiceUrl.mockReturnValue('http://agent.internal:9999');
+    routingFlag.agentRunUrl.mockReturnValue('http://agent.internal:9999/v1/runs');
     const route = queryService.resolveQueryRoute();
     expect(route.agentic).toBe(true);
-    expect(route.url).toBe('http://agent.internal:9999');
+    expect(route.url).toBe('http://agent.internal:9999/v1/runs');
     expect(route.url.includes('/v1/chatqna')).toBe(false);
   });
 
@@ -2148,7 +2149,7 @@ describe('query routing — one flag, both entries', () => {
     // continuity holds, the legacy worker never runs, and the run request
     // targets the agent service the routing helper names.
     routingFlag.isAgentPathEnabled.mockReturnValue(true);
-    routingFlag.agentServiceUrl.mockReturnValue('http://agent-service:8010');
+    routingFlag.agentRunUrl.mockReturnValue('http://agent-service:8010/v1/runs');
     mockDb.query.mockResolvedValue(createMockCursor([]));
     jest.spyOn(queryService, 'resolveFanoutPosture').mockResolvedValue(legacyPosture());
     const workerSpy = jest
@@ -2168,7 +2169,7 @@ describe('query routing — one flag, both entries', () => {
       const result = await queryService.createQuery(createMockQueryData());
       expect(workerSpy).not.toHaveBeenCalled();
       expect(axios.post).toHaveBeenCalledTimes(1);
-      expect(axios.post.mock.calls[0][0]).toBe('http://agent-service:8010');
+      expect(axios.post.mock.calls[0][0]).toBe('http://agent-service:8010/v1/runs');
       expect(result.response).toBe('Hello world.');
       // The doc was minted first and completed through the ONE tail.
       expect(mockQueriesCollection.save).toHaveBeenCalled();
@@ -2207,10 +2208,15 @@ describe('buildAgentCallerContext (story 2.4)', () => {
     context: { serviceLabels: ['taxes', 'taxes', '', 42, 'health'] }
   };
 
-  it('a null posture (no bearer / failed resolution) yields the empty-authorization context', () => {
+  it('a null posture (no bearer / failed resolution) authorizes the legacy corpus', () => {
+    // The posture could not be read: the deployment's own default is the
+    // legacy corpus (mode legacy, fan-out not engaged), and the legacy path
+    // answers from it. The agent's contract fail-closes on an EMPTY set
+    // (nothing is reachable), so an empty set here would answer every
+    // question with the insufficiency statement.
     expect(queryService.buildAgentCallerContext(queryData, null)).toEqual({
       user_id: 'user-1',
-      authorized_graph_names: [],
+      authorized_graph_names: ['GRAPH'],
       authorized_repos: [],
       requested_labels: ['taxes', 'health']
     });
@@ -2280,7 +2286,7 @@ describe('buildAgentCallerContext (story 2.4)', () => {
     ]);
   });
 
-  it('an unengaged posture yields the empty set (the legacy corpus answers a hybrid caller)', () => {
+  it('an unengaged hybrid posture authorizes the legacy corpus (the corpus that answers)', () => {
     const posture = {
       available: true,
       mode: 'hybrid',
@@ -2290,7 +2296,34 @@ describe('buildAgentCallerContext (story 2.4)', () => {
       authz: null
     };
     const context = queryService.buildAgentCallerContext(queryData, posture);
-    expect(context.authorized_graph_names).toEqual([]);
+    expect(context.authorized_graph_names).toEqual(['GRAPH']);
     expect(context.authorized_repos).toEqual([]);
+  });
+
+  it('the legacy mode authorizes the legacy corpus (the deployment has no OKF tier)', () => {
+    const posture = {
+      available: true,
+      mode: 'legacy',
+      engaged: false,
+      authorizedGraphs: [],
+      legacyGraph: 'GRAPH',
+      authz: null
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_graph_names).toEqual(['GRAPH']);
+  });
+
+  it('the okf_only mode authorizes nothing while the fan-out is not engaged', () => {
+    // okf_only EXCLUDES the legacy corpus by definition — the mode says
+    // "only the OKF repos". With no serving repo there is nothing to
+    // authorize, and the agent answers the insufficiency statement.
+    const posture = {
+      available: true,
+      mode: 'okf_only',
+      engaged: false,
+      authorizedGraphs: ['OKF_a_v1'],
+      legacyGraph: 'GRAPH',
+      authz: null
+    };
+    expect(queryService.buildAgentCallerContext(queryData, posture).authorized_graph_names).toEqual([]);
   });
 });

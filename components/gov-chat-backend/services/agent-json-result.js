@@ -2,7 +2,7 @@
 
 const axios = require('axios');
 const { logger } = require('../shared-lib');
-const { agentServiceUrl } = require('./agent-routing');
+const { agentRunUrl } = require('./agent-routing');
 const { parseAgentSeamLine } = require('./agent-seam-parser');
 const {
   resolveUpstreamTimeoutMs,
@@ -172,14 +172,14 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   const persistRunOutcome = attribution.persistRunOutcome;
 
   // The shared posture resolution (one home with the fan-out carrier — no
-  // double upstream calls, no drift). Fail-closed, DELIBERATELY stricter
-  // than the legacy carrier: any resolver problem except a 401 (the request
-  // itself is invalid — it propagates) builds an empty CallerContext, whose
-  // search_knowledge raises AuthorizationError — the run ends in the
-  // insufficiency answer, the fail-closed direction for degraded
-  // retrieval. (The legacy carrier's degrade instead keeps the
-  // byte-identical legacy-corpus payload — same trigger, intended
-  // different outcome.)
+  // double upstream calls, no drift). Any resolver problem except a 401 (the
+  // request itself is invalid — it propagates) degrades to the NULL
+  // posture, and the NULL posture carries the deployment's own default:
+  // the legacy corpus (the same scope the legacy path answers from). The
+  // agent's scope is the SEARCH SCOPE, so an unreadable posture narrows the
+  // fan-out to the corpus that is always there — it does not empty the
+  // authorized set, which the agent's contract reads as "nothing is
+  // reachable" and fail-closes on.
   let callerContext;
   try {
     const posture = await queryService.resolveFanoutPosture(headers, {
@@ -212,7 +212,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // so the doc stays unanswered (createQuery's tail never runs on a throw).
   let response;
   try {
-    response = await axios.post(agentServiceUrl(), runBody, {
+    response = await axios.post(agentRunUrl(), runBody, {
       headers: {
         'Content-Type': 'application/json'
       },

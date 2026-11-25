@@ -25,6 +25,13 @@ const AGENT_ENABLED = (process.env.AGENT_ENABLED ?? '0').trim() === '1';
 // operator override is optional, never required.
 const DEFAULT_AGENT_SERVICE_URL = 'http://agent-service:8010';
 
+// The run surface the agent-service serves (POST /v1/runs). The BFF posts
+// the configured url VERBATIM (axios.post(agentRunUrl(), …)), so the url the
+// BFF dials must NAME the run surface: a base url without the path answers
+// 404 on a real deployment (both sides stay green under a mocked axios;
+// the live hop answers "POST / HTTP/1.1 404").
+const AGENT_RUN_PATH = '/v1/runs';
+
 /**
  * Whether the agentic branch of the query entries is exposed.
  *
@@ -35,7 +42,8 @@ function isAgentPathEnabled() {
 }
 
 /**
- * The agent-service internal endpoint the BFF POSTs `/v1/runs` to.
+ * The agent-service BASE url — the operator's AGENT_SERVICE_URL override, or
+ * the compose default.
  *
  * Read per call (a constant, not a knob an operator flips at runtime — but a
  * function keeps the test surface honest about where the value comes from).
@@ -47,4 +55,21 @@ function agentServiceUrl() {
   return configured || DEFAULT_AGENT_SERVICE_URL;
 }
 
-module.exports = { isAgentPathEnabled, agentServiceUrl };
+/**
+ * The agent-service RUN endpoint the BFF POSTs to — the base url with the
+ * run surface named.
+ *
+ * The path is appended HERE, once, so every consumer of the agent seam dials
+ * the same url and the shipped default works without an operator override.
+ * A configured url that ALREADY names the run surface is used as it stands:
+ * a deployment that pinned the full path (`…:8010/v1/runs`) keeps working,
+ * and the two spellings cannot disagree about where the seam lives.
+ *
+ * @returns {string} The absolute url of POST /v1/runs.
+ */
+function agentRunUrl() {
+  const base = agentServiceUrl().replace(/\/+$/, '');
+  return base.endsWith(AGENT_RUN_PATH) ? base : `${base}${AGENT_RUN_PATH}`;
+}
+
+module.exports = { isAgentPathEnabled, agentServiceUrl, agentRunUrl };

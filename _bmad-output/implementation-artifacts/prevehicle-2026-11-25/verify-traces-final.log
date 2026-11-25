@@ -1,0 +1,411 @@
+=== #2170 live-trace verification ===
+date: 2026-11-25T12:53:53Z
+since: 3600s
+--- port-forwards (collector tier + grafana)
+--- 1. VictoriaTraces: the agent-service spans (Jaeger query API)
+jaeger http=200
+traces: 100
+  span 261f0c53a9ae0a72 | GET /ready | svc=agent-service | parent=None | {}
+  span 7208b8ecef64dd34 | GET /ready http send | svc=agent-service | parent=261f0c53a9ae0a72 | {}
+  span 5003111e305a5510 | GET /ready http send | svc=agent-service | parent=261f0c53a9ae0a72 | {}
+  span a6e7666922f0c506 | GET /ready | svc=agent-service | parent=None | {}
+  span 4bdee5a16fa5728b | GET /ready http send | svc=agent-service | parent=a6e7666922f0c506 | {}
+  span 978c4c3b61416f58 | GET /ready http send | svc=agent-service | parent=a6e7666922f0c506 | {}
+  span da8810fc2341db22 | GET /ready | svc=agent-service | parent=None | {}
+  span b81b18bb6ba4b3c8 | GET /ready http send | svc=agent-service | parent=da8810fc2341db22 | {}
+  span f7cb627409a95ba9 | GET /ready http send | svc=agent-service | parent=da8810fc2341db22 | {}
+  span 2c7f6c47fc78422f | GET /ready | svc=agent-service | parent=None | {}
+  span bbe742b39cf416ff | GET /ready http send | svc=agent-service | parent=2c7f6c47fc78422f | {}
+  span 2193426a76f2b837 | GET /ready http send | svc=agent-service | parent=2c7f6c47fc78422f | {}
+  span 64c3b7511e3d2543 | GET /ready | svc=agent-service | parent=None | {}
+  span b507faad14aa5d6d | GET /ready http send | svc=agent-service | parent=64c3b7511e3d2543 | {}
+  span 8950f68444258663 | GET /ready http send | svc=agent-service | parent=64c3b7511e3d2543 | {}
+  span 4c65cb0acd923203 | GET /ready | svc=agent-service | parent=None | {}
+  span 55bd538ec8cf5dc8 | GET /ready http send | svc=agent-service | parent=4c65cb0acd923203 | {}
+  span 3163d57476507ebf | GET /ready http send | svc=agent-service | parent=4c65cb0acd923203 | {}
+  span 51305a9630ff3896 | GET /ready | svc=agent-service | parent=None | {}
+  span b5c00c60be4b502b | GET /ready http send | svc=agent-service | parent=51305a9630ff3896 | {}
+  span 9aabbd21c529bad8 | GET /ready http send | svc=agent-service | parent=51305a9630ff3896 | {}
+  span 584fb9086fb7df55 | GET /ready | svc=agent-service | parent=None | {}
+  span d9df275def76d4a5 | GET /ready http send | svc=agent-service | parent=584fb9086fb7df55 | {}
+  span 36d4ea2f38c8bebd | GET /ready http send | svc=agent-service | parent=584fb9086fb7df55 | {}
+  span 9c47a4ef6d37134f | GET /ready | svc=agent-service | parent=None | {}
+  span fa51e00a6772842c | GET /ready http send | svc=agent-service | parent=9c47a4ef6d37134f | {}
+  span cda4862029312817 | GET /ready http send | svc=agent-service | parent=9c47a4ef6d37134f | {}
+  span 210816c4b029e9df | GET /ready | svc=agent-service | parent=None | {}
+  span 7f37287ec06a0f6d | GET /ready http send | svc=agent-service | parent=210816c4b029e9df | {}
+  span 31a2ed7f3620f346 | GET /ready http send | svc=agent-service | parent=210816c4b029e9df | {}
+  span daa899e9cc0d3a07 | GET /ready | svc=agent-service | parent=None | {}
+  span 5a80bc6b927a9dab | GET /ready http send | svc=agent-service | parent=daa899e9cc0d3a07 | {}
+  span 3f91c4620a50a18c | GET /ready http send | svc=agent-service | parent=daa899e9cc0d3a07 | {}
+  span 70d56648ff3357d9 | GET /ready | svc=agent-service | parent=None | {}
+  span 695cdda53ed23c13 | GET /ready http send | svc=agent-service | parent=70d56648ff3357d9 | {}
+  span 515aa30d53292b6d | GET /ready http send | svc=agent-service | parent=70d56648ff3357d9 | {}
+  span b63ac15533d61d33 | POST /v1/runs http receive | svc=agent-service | parent=46502bca7d83d0ec | {}
+  span db5597a4fc69ca3e | POST /v1/runs http send | svc=agent-service | parent=46502bca7d83d0ec | {}
+  span b5b6db1305209292 | POST /v1/runs http send | svc=agent-service | parent=46502bca7d83d0ec | {}
+  span b5d9ea64bbd05698 | agent.run | svc=agent-service | parent=14069c6d58578353 | {}
+  span d1a952094fb4b72c | POST /v1/runs http receive | svc=agent-service | parent=14069c6d58578353 | {}
+  span 854ac1028b97c221 | POST /v1/runs http receive | svc=agent-service | parent=14069c6d58578353 | {}
+  span 3557d6bcb3bb3032 | POST /v1/runs http send | svc=agent-service | parent=14069c6d58578353 | {}
+  span 007515ea266ce703 | POST /v1/runs http send | svc=agent-service | parent=14069c6d58578353 | {}
+  span 7ad2a8687173be54 | POST /v1/runs http send | svc=agent-service | parent=14069c6d58578353 | {}
+  span 1c944a1c223ca6e7 | POST /v1/runs http send | svc=agent-service | parent=14069c6d58578353 | {}
+  span f838c473a06e43ce | POST /v1/runs http send | svc=agent-service | parent=14069c6d58578353 | {}
+  span e847dfb751046a5b | POST | svc=agent-service | parent=b5d9ea64bbd05698 | {}
+  span 14069c6d58578353 | POST /v1/runs | svc=agent-service | parent=a9475da2ca6a0799 | {}
+  span f7fd70b51627c250 | agent.model_call | svc=agent-service | parent=b5d9ea64bbd05698 | {}
+  span 956319af906c248d | GET /ready | svc=agent-service | parent=None | {}
+  span 9e50ef95b3438dae | GET /ready http send | svc=agent-service | parent=956319af906c248d | {}
+  span 3bd70deaaefd96f5 | GET /ready http send | svc=agent-service | parent=956319af906c248d | {}
+  span f13c18df3d63dc08 | GET /ready | svc=agent-service | parent=None | {}
+  span ea023a5a0ac9a67b | GET /ready http send | svc=agent-service | parent=f13c18df3d63dc08 | {}
+  span 081090f2eb29f5c9 | GET /ready http send | svc=agent-service | parent=f13c18df3d63dc08 | {}
+  span 0c9274009c2a4a68 | GET /ready | svc=agent-service | parent=None | {}
+  span 8505e4c541cc2da5 | GET /ready http send | svc=agent-service | parent=0c9274009c2a4a68 | {}
+  span 6347e32446b1a961 | GET /ready http send | svc=agent-service | parent=0c9274009c2a4a68 | {}
+  span 2b1089a824f31c23 | GET /ready | svc=agent-service | parent=None | {}
+  span a034409d50f1fd4a | GET /ready http send | svc=agent-service | parent=2b1089a824f31c23 | {}
+  span b20affebf711b4f7 | GET /ready http send | svc=agent-service | parent=2b1089a824f31c23 | {}
+  span e4b5f6482d5e102e | GET /ready | svc=agent-service | parent=None | {}
+  span a6f39684318c4b0c | GET /ready http send | svc=agent-service | parent=e4b5f6482d5e102e | {}
+  span bf481fafd28c7823 | GET /ready http send | svc=agent-service | parent=e4b5f6482d5e102e | {}
+  span 924554dfdb286d29 | GET /ready | svc=agent-service | parent=None | {}
+  span 42757b6510b81ccc | GET /ready http send | svc=agent-service | parent=924554dfdb286d29 | {}
+  span 502c0b2472cadd85 | GET /ready http send | svc=agent-service | parent=924554dfdb286d29 | {}
+  span 25c5107b12a2c06c | GET /ready | svc=agent-service | parent=None | {}
+  span acea87c59e03601a | GET /ready http send | svc=agent-service | parent=25c5107b12a2c06c | {}
+  span fed0331c2141a14c | GET /ready http send | svc=agent-service | parent=25c5107b12a2c06c | {}
+  span 3db014a2d5f08d64 | GET /ready | svc=agent-service | parent=None | {}
+  span b319e683d849e7c3 | GET /ready http send | svc=agent-service | parent=3db014a2d5f08d64 | {}
+  span eb460fa1dd66dc70 | GET /ready http send | svc=agent-service | parent=3db014a2d5f08d64 | {}
+  span 393a384acf93ac57 | GET /ready | svc=agent-service | parent=None | {}
+  span 09ae75c8c0330f4e | GET /ready http send | svc=agent-service | parent=393a384acf93ac57 | {}
+  span 208d106363036b32 | GET /ready http send | svc=agent-service | parent=393a384acf93ac57 | {}
+  span 5fdf109bcae9c5cc | GET /ready | svc=agent-service | parent=None | {}
+  span a8727029868ec66b | GET /ready http send | svc=agent-service | parent=5fdf109bcae9c5cc | {}
+  span 16fd52b828240109 | GET /ready http send | svc=agent-service | parent=5fdf109bcae9c5cc | {}
+  span d9c68b5402c1735b | GET /ready | svc=agent-service | parent=None | {}
+  span e48f21bb39474b26 | GET /ready http send | svc=agent-service | parent=d9c68b5402c1735b | {}
+  span 6661bb664c104c85 | GET /ready http send | svc=agent-service | parent=d9c68b5402c1735b | {}
+  span 71132736cf3e9e45 | GET /ready | svc=agent-service | parent=None | {}
+  span 1527d817ab1796e5 | GET /ready http send | svc=agent-service | parent=71132736cf3e9e45 | {}
+  span 161688052765d1c0 | GET /ready http send | svc=agent-service | parent=71132736cf3e9e45 | {}
+  span 4786cd71e9f5abf1 | GET /ready | svc=agent-service | parent=None | {}
+  span dfafa59a8ce99a47 | GET /ready http send | svc=agent-service | parent=4786cd71e9f5abf1 | {}
+  span c87d705fcf6a4692 | GET /ready http send | svc=agent-service | parent=4786cd71e9f5abf1 | {}
+  span 3aa02a67e4577dc5 | GET /ready | svc=agent-service | parent=None | {}
+  span 2e879bab165f0d36 | GET /ready http send | svc=agent-service | parent=3aa02a67e4577dc5 | {}
+  span 294ef74832d55b86 | GET /ready http send | svc=agent-service | parent=3aa02a67e4577dc5 | {}
+  span 99c8a92ca55a0eaa | GET /ready | svc=agent-service | parent=None | {}
+  span 82491a3ff2ddda5a | GET /ready http send | svc=agent-service | parent=99c8a92ca55a0eaa | {}
+  span 84587c74a0012c14 | GET /ready http send | svc=agent-service | parent=99c8a92ca55a0eaa | {}
+  span b00d9a1ee9a27cfa | GET /ready | svc=agent-service | parent=None | {}
+  span 5542b20577fde314 | GET /ready http send | svc=agent-service | parent=b00d9a1ee9a27cfa | {}
+  span 0bfd15a5406a6443 | GET /ready http send | svc=agent-service | parent=b00d9a1ee9a27cfa | {}
+  span 34dc3524d846ae8c | GET /ready | svc=agent-service | parent=None | {}
+  span 7c0b76b11b2d46c1 | GET /ready http send | svc=agent-service | parent=34dc3524d846ae8c | {}
+  span 9a146dd34e797159 | GET /ready http send | svc=agent-service | parent=34dc3524d846ae8c | {}
+  span 1e26aa985e851090 | GET /ready | svc=agent-service | parent=None | {}
+  span fd748ee028c1f52f | GET /ready http send | svc=agent-service | parent=1e26aa985e851090 | {}
+  span b9574a326925b7d2 | GET /ready http send | svc=agent-service | parent=1e26aa985e851090 | {}
+  span 442350aad43a7221 | GET /ready | svc=agent-service | parent=None | {}
+  span 8fa3be35bda4e878 | GET /ready http send | svc=agent-service | parent=442350aad43a7221 | {}
+  span 8da8d00356894ef1 | GET /ready http send | svc=agent-service | parent=442350aad43a7221 | {}
+  span 2a9ba4aaa31cfc78 | GET /ready | svc=agent-service | parent=None | {}
+  span 7102eefccbf86def | GET /ready http send | svc=agent-service | parent=2a9ba4aaa31cfc78 | {}
+  span 72994de657b7e3ea | GET /ready http send | svc=agent-service | parent=2a9ba4aaa31cfc78 | {}
+  span 90ce3af8e2633600 | GET /ready | svc=agent-service | parent=None | {}
+  span d044afb4f753dd4f | GET /ready http send | svc=agent-service | parent=90ce3af8e2633600 | {}
+  span 5238bee76a42fc1b | GET /ready http send | svc=agent-service | parent=90ce3af8e2633600 | {}
+  span 1e380bef714f1ef4 | GET /ready | svc=agent-service | parent=None | {}
+  span 030dba07a6592fa8 | GET /ready http send | svc=agent-service | parent=1e380bef714f1ef4 | {}
+  span 6dc028cb19a56859 | GET /ready http send | svc=agent-service | parent=1e380bef714f1ef4 | {}
+  span b5b4448cc693e04c | GET /ready | svc=agent-service | parent=None | {}
+  span ca560206487e529c | GET /ready http send | svc=agent-service | parent=b5b4448cc693e04c | {}
+  span 4b3abb0935431b0f | GET /ready http send | svc=agent-service | parent=b5b4448cc693e04c | {}
+  span 956b5e74fc95fe2b | GET /ready | svc=agent-service | parent=None | {}
+  span 5db97c4271eede07 | GET /ready http send | svc=agent-service | parent=956b5e74fc95fe2b | {}
+  span 9a3bb6e54d3c9dce | GET /ready http send | svc=agent-service | parent=956b5e74fc95fe2b | {}
+  span 1e62497ef38d691f | GET /ready | svc=agent-service | parent=None | {}
+  span 05f2882b890fcfd4 | GET /ready http send | svc=agent-service | parent=1e62497ef38d691f | {}
+  span 166bd7afd4cfbaf6 | GET /ready http send | svc=agent-service | parent=1e62497ef38d691f | {}
+  span 18dc7e2d43e2d4e9 | GET /ready | svc=agent-service | parent=None | {}
+  span 971e7ff0785f5cee | GET /ready http send | svc=agent-service | parent=18dc7e2d43e2d4e9 | {}
+  span b72c837ca9d9bf8a | GET /ready http send | svc=agent-service | parent=18dc7e2d43e2d4e9 | {}
+  span 69882ab049278ccc | GET /ready | svc=agent-service | parent=None | {}
+  span 35394203c7dabda4 | GET /ready http send | svc=agent-service | parent=69882ab049278ccc | {}
+  span 4fb1f582f921775d | GET /ready http send | svc=agent-service | parent=69882ab049278ccc | {}
+  span 7a28190b307ad517 | GET /ready | svc=agent-service | parent=None | {}
+  span fa0ffbf3f8387283 | GET /ready http send | svc=agent-service | parent=7a28190b307ad517 | {}
+  span fd8dca24d521ee1c | GET /ready http send | svc=agent-service | parent=7a28190b307ad517 | {}
+  span bcaf746f98b3f29b | GET /ready | svc=agent-service | parent=None | {}
+  span a7262b5917d0baeb | GET /ready http send | svc=agent-service | parent=bcaf746f98b3f29b | {}
+  span c37e21d5f7dc6897 | GET /ready http send | svc=agent-service | parent=bcaf746f98b3f29b | {}
+  span 2d7fbfb19bfe69c9 | GET /ready | svc=agent-service | parent=None | {}
+  span 9d8968abcd840764 | GET /ready http send | svc=agent-service | parent=2d7fbfb19bfe69c9 | {}
+  span e7ad0534038fb06c | GET /ready http send | svc=agent-service | parent=2d7fbfb19bfe69c9 | {}
+  span 9d2be72e2fda8f05 | GET /ready | svc=agent-service | parent=None | {}
+  span 3c3de295cfd3e8c0 | GET /ready http send | svc=agent-service | parent=9d2be72e2fda8f05 | {}
+  span 89016481c7951704 | GET /ready http send | svc=agent-service | parent=9d2be72e2fda8f05 | {}
+  span 806bf7b7ad5b6645 | GET /ready | svc=agent-service | parent=None | {}
+  span 76492f19008d3c42 | GET /ready http send | svc=agent-service | parent=806bf7b7ad5b6645 | {}
+  span a43e12a71a1356ff | GET /ready http send | svc=agent-service | parent=806bf7b7ad5b6645 | {}
+  span 5e9bf346612bf60d | GET /ready | svc=agent-service | parent=None | {}
+  span 531c8c64db1dadad | GET /ready http send | svc=agent-service | parent=5e9bf346612bf60d | {}
+  span 2de2807f8b5e0fe8 | GET /ready http send | svc=agent-service | parent=5e9bf346612bf60d | {}
+  span b06ce9e763c087ce | GET /ready | svc=agent-service | parent=None | {}
+  span e29388ce00b55bb7 | GET /ready http send | svc=agent-service | parent=b06ce9e763c087ce | {}
+  span 6cafa3b5cae89721 | GET /ready http send | svc=agent-service | parent=b06ce9e763c087ce | {}
+  span b8076c39c3660746 | GET /ready | svc=agent-service | parent=None | {}
+  span 9b42e585360d8c40 | GET /ready http send | svc=agent-service | parent=b8076c39c3660746 | {}
+  span ef50415582e5a415 | GET /ready http send | svc=agent-service | parent=b8076c39c3660746 | {}
+  span b154063815b805e7 | GET /ready | svc=agent-service | parent=None | {}
+  span 9eda4aadf0ddadde | GET /ready http send | svc=agent-service | parent=b154063815b805e7 | {}
+  span 25eac45b6aebb1cb | GET /ready http send | svc=agent-service | parent=b154063815b805e7 | {}
+  span 604ef935d838ada6 | GET /ready | svc=agent-service | parent=None | {}
+  span 85a035229370b1b1 | GET /ready http send | svc=agent-service | parent=604ef935d838ada6 | {}
+  span e900c38fd25219d7 | GET /ready http send | svc=agent-service | parent=604ef935d838ada6 | {}
+  span 507a4e614604f627 | GET /ready | svc=agent-service | parent=None | {}
+  span e2b75edf8225c428 | GET /ready http send | svc=agent-service | parent=507a4e614604f627 | {}
+  span 893329241b48afd8 | GET /ready http send | svc=agent-service | parent=507a4e614604f627 | {}
+  span 7aaaef12224f41a9 | GET /ready | svc=agent-service | parent=None | {}
+  span 0497effefe78b17a | GET /ready http send | svc=agent-service | parent=7aaaef12224f41a9 | {}
+  span 862b517c5b9cfe1b | GET /ready http send | svc=agent-service | parent=7aaaef12224f41a9 | {}
+  span 5a19f5afb02d9cca | GET /ready | svc=agent-service | parent=None | {}
+  span cd8a7a519e2d0575 | GET /ready http send | svc=agent-service | parent=5a19f5afb02d9cca | {}
+  span d8a53ef8bbd4b9f7 | GET /ready http send | svc=agent-service | parent=5a19f5afb02d9cca | {}
+  span e9dc919c0e84b79a | GET /ready | svc=agent-service | parent=None | {}
+  span 569b048539875838 | GET /ready http send | svc=agent-service | parent=e9dc919c0e84b79a | {}
+  span 755ae1970126311e | GET /ready http send | svc=agent-service | parent=e9dc919c0e84b79a | {}
+  span 77000086e28f190e | GET /ready | svc=agent-service | parent=None | {}
+  span 2fe013b7cf1da180 | GET /ready http send | svc=agent-service | parent=77000086e28f190e | {}
+  span 2ee96de8fc4004a7 | GET /ready http send | svc=agent-service | parent=77000086e28f190e | {}
+  span 6249ed3b29c56081 | GET /ready | svc=agent-service | parent=None | {}
+  span 60776823e93ff2a1 | GET /ready http send | svc=agent-service | parent=6249ed3b29c56081 | {}
+  span 3ce6234be7161e25 | GET /ready http send | svc=agent-service | parent=6249ed3b29c56081 | {}
+  span ec40e86401ff0854 | GET /ready | svc=agent-service | parent=None | {}
+  span 18a0a2c7798ebe10 | GET /ready http send | svc=agent-service | parent=ec40e86401ff0854 | {}
+  span 299458709938fe09 | GET /ready http send | svc=agent-service | parent=ec40e86401ff0854 | {}
+  span 4f50a89b3fb36730 | GET /ready | svc=agent-service | parent=None | {}
+  span b0d4318720bb37fb | GET /ready http send | svc=agent-service | parent=4f50a89b3fb36730 | {}
+  span 6f457007c9d7de07 | GET /ready http send | svc=agent-service | parent=4f50a89b3fb36730 | {}
+  span 9d60fc4b6fa72712 | GET /ready | svc=agent-service | parent=None | {}
+  span 1e659643380121e4 | GET /ready http send | svc=agent-service | parent=9d60fc4b6fa72712 | {}
+  span 358a8d47b9eeac74 | GET /ready http send | svc=agent-service | parent=9d60fc4b6fa72712 | {}
+  span d954159321fd14a4 | GET /ready | svc=agent-service | parent=None | {}
+  span 7b0c282046e801fc | GET /ready http send | svc=agent-service | parent=d954159321fd14a4 | {}
+  span 881648b5d312d7a2 | GET /ready http send | svc=agent-service | parent=d954159321fd14a4 | {}
+  span d509bccf60918f78 | GET /ready | svc=agent-service | parent=None | {}
+  span df243dfe73f04187 | GET /ready http send | svc=agent-service | parent=d509bccf60918f78 | {}
+  span 6e8cef1e940f30e6 | GET /ready http send | svc=agent-service | parent=d509bccf60918f78 | {}
+  span da2b5b6f8eec92e0 | GET /ready | svc=agent-service | parent=None | {}
+  span a93b889a8020f9f8 | GET /ready http send | svc=agent-service | parent=da2b5b6f8eec92e0 | {}
+  span aca1d6b36bc2832c | GET /ready http send | svc=agent-service | parent=da2b5b6f8eec92e0 | {}
+  span 429db1499a7f6997 | GET /ready | svc=agent-service | parent=None | {}
+  span 173b733ffb5636db | GET /ready http send | svc=agent-service | parent=429db1499a7f6997 | {}
+  span 70a8d2cedf7168d7 | GET /ready http send | svc=agent-service | parent=429db1499a7f6997 | {}
+  span 6d24bee2ee42e928 | GET /ready | svc=agent-service | parent=None | {}
+  span 89c855c422eee0b4 | GET /ready http send | svc=agent-service | parent=6d24bee2ee42e928 | {}
+  span 91aeab8940a13006 | GET /ready http send | svc=agent-service | parent=6d24bee2ee42e928 | {}
+  span 4cf516a252c6b45a | GET /ready | svc=agent-service | parent=None | {}
+  span 3037a0c7df326828 | GET /ready http send | svc=agent-service | parent=4cf516a252c6b45a | {}
+  span 5886991d8c3340fa | GET /ready http send | svc=agent-service | parent=4cf516a252c6b45a | {}
+  span dad846f5d3979bf6 | GET /ready http send | svc=agent-service | parent=bcf53d102bb2e290 | {}
+  span 45e74be1a0a1c4a5 | GET /ready http send | svc=agent-service | parent=bcf53d102bb2e290 | {}
+  span bcf53d102bb2e290 | GET /ready | svc=agent-service | parent=None | {}
+  span 7676618b9e758259 | GET /ready http send | svc=agent-service | parent=492315883a66279a | {}
+  span 77414a2575b76e35 | GET /ready http send | svc=agent-service | parent=492315883a66279a | {}
+  span 492315883a66279a | GET /ready | svc=agent-service | parent=None | {}
+  span ed478dc6a44dff8c | GET /ready http send | svc=agent-service | parent=8cbab847ed17d37f | {}
+  span 8f5dd60b08aa5694 | GET /ready http send | svc=agent-service | parent=8cbab847ed17d37f | {}
+  span 8cbab847ed17d37f | GET /ready | svc=agent-service | parent=None | {}
+  span 5dc80c9b41c0b6fa | GET /ready http send | svc=agent-service | parent=30431d8770ce91ed | {}
+  span 46242843a0efb37d | GET /ready http send | svc=agent-service | parent=30431d8770ce91ed | {}
+  span 30431d8770ce91ed | GET /ready | svc=agent-service | parent=None | {}
+  span 237a377f2219dfcc | GET /ready http send | svc=agent-service | parent=3b577d973051acb9 | {}
+  span df0cd615419e9528 | GET /ready http send | svc=agent-service | parent=3b577d973051acb9 | {}
+  span 3b577d973051acb9 | GET /ready | svc=agent-service | parent=None | {}
+  span 08e46b44a08eab61 | GET /ready http send | svc=agent-service | parent=7913c456d5e6e843 | {}
+  span 3bef8cd2c1874dcb | GET /ready http send | svc=agent-service | parent=7913c456d5e6e843 | {}
+  span 7913c456d5e6e843 | GET /ready | svc=agent-service | parent=None | {}
+  span 32d1882cc6c00942 | GET /ready http send | svc=agent-service | parent=4f7b85096f87cb6c | {}
+  span 532517b49c85f13f | GET /ready http send | svc=agent-service | parent=4f7b85096f87cb6c | {}
+  span 4f7b85096f87cb6c | GET /ready | svc=agent-service | parent=None | {}
+  span 28f1077afebae463 | GET /ready http send | svc=agent-service | parent=68fae4b6d1f1022b | {}
+  span 692e7e57224eba1e | GET /ready http send | svc=agent-service | parent=68fae4b6d1f1022b | {}
+  span 68fae4b6d1f1022b | GET /ready | svc=agent-service | parent=None | {}
+  span 69a0c4a854c0553c | agent.run | svc=agent-service | parent=8573695e0fd27214 | {}
+  span 1a21036d32d2471a | POST /_db/_system/_api/cursor | svc=backend | parent=f400ad550b239777 | {}
+  span 7a8dab9efc2c878b | POST /_db/_system/_api/cursor | svc=backend | parent=f400ad550b239777 | {}
+  span fc605b7490f7de6a | POST /_db/_system/_api/cursor | svc=backend | parent=003ab90d5b645d4e | {}
+  span 466da34dbb77e6fa | POST /_db/_system/_api/cursor | svc=backend | parent=003ab90d5b645d4e | {}
+  span 39de0bb15017efdd | POST /v1/runs http receive | svc=agent-service | parent=8573695e0fd27214 | {}
+  span cb8095eb236f2bbd | POST /v1/runs http receive | svc=agent-service | parent=8573695e0fd27214 | {}
+  span f400ad550b239777 | POST /stream | svc=backend | parent=None | {}
+  span 4f2cf654d701749b | tcp.connect | svc=backend | parent=b0f6ae69d5a44208 | {}
+  span 44fa2f7306e44df2 | tcp.connect | svc=backend | parent=466da34dbb77e6fa | {}
+  span e55b777c61177dbe | POST /_db/_system/_api/document/queries | svc=backend | parent=003ab90d5b645d4e | {}
+  span f6c399bc43660f0e | router - /api/queries | svc=backend | parent=f400ad550b239777 | {}
+  span b0f6ae69d5a44208 | POST | svc=backend | parent=003ab90d5b645d4e | {}
+  span 14f811c117d7afb0 | POST /v1/runs http send | svc=agent-service | parent=8573695e0fd27214 | {}
+  span b2b1a2cbba6ebb6f | POST /v1/runs http send | svc=agent-service | parent=8573695e0fd27214 | {}
+  span 984596d3d322af9f | POST /v1/runs http send | svc=agent-service | parent=8573695e0fd27214 | {}
+  span 38320c938bb6a436 | POST /v1/runs http send | svc=agent-service | parent=8573695e0fd27214 | {}
+  span a459489807b4ea34 | POST /v1/runs http send | svc=agent-service | parent=8573695e0fd27214 | {}
+  span 2185ff38bb0ae63f | POST | svc=agent-service | parent=69a0c4a854c0553c | {}
+  span 48cef0272f910d5c | agent.model_call | svc=agent-service | parent=69a0c4a854c0553c | {}
+  span 8573695e0fd27214 | POST /v1/runs | svc=agent-service | parent=b0f6ae69d5a44208 | {}
+  span 7953d06b1e171d45 | GET | svc=agent-service | parent=8573695e0fd27214 | {}
+  span 18aa83363c2e4b66 | GET /ready http send | svc=agent-service | parent=3caaad07f02c10ab | {}
+  span 03a5100e090e739c | GET /ready http send | svc=agent-service | parent=3caaad07f02c10ab | {}
+  span 3caaad07f02c10ab | GET /ready | svc=agent-service | parent=None | {}
+  span 99cb49520a933805 | GET /ready http send | svc=agent-service | parent=fd04ee02fac0cf53 | {}
+  span 6d8048e0f3887fa3 | GET /ready http send | svc=agent-service | parent=fd04ee02fac0cf53 | {}
+  span fd04ee02fac0cf53 | GET /ready | svc=agent-service | parent=None | {}
+  span 2ec1cdf382ced743 | GET /ready http send | svc=agent-service | parent=66566ce45e3551d9 | {}
+  span 8bff40f6c735c8b7 | GET /ready http send | svc=agent-service | parent=66566ce45e3551d9 | {}
+  span 66566ce45e3551d9 | GET /ready | svc=agent-service | parent=None | {}
+  span 64d6797c92f1ad33 | GET /ready http send | svc=agent-service | parent=d4e4890ae6d86704 | {}
+  span 9456f7861e8216f8 | GET /ready http send | svc=agent-service | parent=d4e4890ae6d86704 | {}
+  span d4e4890ae6d86704 | GET /ready | svc=agent-service | parent=None | {}
+  span 12e21a57af0af2d2 | GET /ready http send | svc=agent-service | parent=26b3e555e7fe5f17 | {}
+  span 869f0a148670080c | GET /ready http send | svc=agent-service | parent=26b3e555e7fe5f17 | {}
+  span 26b3e555e7fe5f17 | GET /ready | svc=agent-service | parent=None | {}
+  span 01fd660a4f821526 | GET /ready http send | svc=agent-service | parent=74a71edb397f98c9 | {}
+  span 199877ac6e108d71 | GET /ready http send | svc=agent-service | parent=74a71edb397f98c9 | {}
+  span 74a71edb397f98c9 | GET /ready | svc=agent-service | parent=None | {}
+  span 96e495e00070d16a | GET /ready http send | svc=agent-service | parent=a07f503a470a7156 | {}
+  span ba3affda84fb7647 | GET /ready http send | svc=agent-service | parent=a07f503a470a7156 | {}
+  span a07f503a470a7156 | GET /ready | svc=agent-service | parent=None | {}
+  span 787df46d71e8ac4f | GET /ready http send | svc=agent-service | parent=ebba5d56a7782d3f | {}
+  span 7f71fd4d39a3bdda | GET /ready http send | svc=agent-service | parent=ebba5d56a7782d3f | {}
+  span ebba5d56a7782d3f | GET /ready | svc=agent-service | parent=None | {}
+  span 22becb5869063f8c | GET /ready http send | svc=agent-service | parent=b0d5936dd61d9671 | {}
+  span 64d0ba2cc91c4b4b | GET /ready http send | svc=agent-service | parent=b0d5936dd61d9671 | {}
+  span b0d5936dd61d9671 | GET /ready | svc=agent-service | parent=None | {}
+  span 40194732069382a6 | GET /ready http send | svc=agent-service | parent=5032f354e47246b0 | {}
+  span 80f5234adb45548f | GET /ready http send | svc=agent-service | parent=5032f354e47246b0 | {}
+  span 5032f354e47246b0 | GET /ready | svc=agent-service | parent=None | {}
+  span 7a2fad0d4aec2249 | GET /ready http send | svc=agent-service | parent=85b0bd4aff09ed2f | {}
+  span dee48ee242a297b1 | GET /ready http send | svc=agent-service | parent=85b0bd4aff09ed2f | {}
+  span 85b0bd4aff09ed2f | GET /ready | svc=agent-service | parent=None | {}
+  span 0a5b5af1946099f1 | GET /ready http send | svc=agent-service | parent=1b48775250426c69 | {}
+  span 43a203b413c81d1e | GET /ready http send | svc=agent-service | parent=1b48775250426c69 | {}
+  span 1b48775250426c69 | GET /ready | svc=agent-service | parent=None | {}
+  span 5be5be3c3b0c9506 | GET /ready http send | svc=agent-service | parent=6249838307654f17 | {}
+  span 243c940fa1d1bc43 | GET /ready http send | svc=agent-service | parent=6249838307654f17 | {}
+  span 6249838307654f17 | GET /ready | svc=agent-service | parent=None | {}
+  span e58e103d012f094b | GET /ready http send | svc=agent-service | parent=707c902d45cc67d3 | {}
+  span 60770280e1039b3d | GET /ready http send | svc=agent-service | parent=707c902d45cc67d3 | {}
+  span 707c902d45cc67d3 | GET /ready | svc=agent-service | parent=None | {}
+  span 93ef1e77e7492f5a | GET /ready http send | svc=agent-service | parent=4257091495800add | {}
+  span 8a95e4c38fc15cd6 | GET /ready http send | svc=agent-service | parent=4257091495800add | {}
+  span 4257091495800add | GET /ready | svc=agent-service | parent=None | {}
+  span 33d9bda3f1326a34 | POST /v1/runs | svc=backend | parent=81dbfb5451c046f8 | {}
+  span 932415677e87baa9 | POST /_db/_system/_api/cursor | svc=backend | parent=9263769652b1b786 | {}
+  span 87ead827ac3fdaf6 | POST /_db/_system/_api/cursor | svc=backend | parent=9263769652b1b786 | {}
+  span 603cee865779e8fe | POST /_db/_system/_api/cursor | svc=backend | parent=9263769652b1b786 | {}
+  span 38591b1ed3ce5e99 | POST /v1/runs http receive | svc=agent-service | parent=ece0d5be3ee1e282 | {}
+  span 6b2e0f53487991a4 | tcp.connect | svc=backend | parent=33d9bda3f1326a34 | {}
+  span ea810a951cff385c | POST /v1/runs http send | svc=agent-service | parent=ece0d5be3ee1e282 | {}
+  span 058f61bcc255be35 | POST /v1/runs http send | svc=agent-service | parent=ece0d5be3ee1e282 | {}
+  span ece0d5be3ee1e282 | POST /v1/runs | svc=agent-service | parent=33d9bda3f1326a34 | {}
+  span 9263769652b1b786 | POST /stream | svc=backend | parent=None | {}
+  span 3aaa6dd5d8e17f67 | POST /_db/_system/_api/document/queries | svc=backend | parent=81dbfb5451c046f8 | {}
+  span 81dbfb5451c046f8 | request handler - /api/queries/stream | svc=backend | parent=9263769652b1b786 | {}
+  span c4dba85250cd17d5 | router - /api/queries | svc=backend | parent=9263769652b1b786 | {}
+  span 90bee0eba485b599 | GET /ready http send | svc=agent-service | parent=d7ef6e03575b1df2 | {}
+  span 553476da5cc58e3f | GET /ready http send | svc=agent-service | parent=d7ef6e03575b1df2 | {}
+  span d7ef6e03575b1df2 | GET /ready | svc=agent-service | parent=None | {}
+  span dd4df55e49ba734b | GET /ready http send | svc=agent-service | parent=fbc39b6376f0ba8f | {}
+  span 83295b6d2d9b2aac | GET /ready http send | svc=agent-service | parent=fbc39b6376f0ba8f | {}
+  span fbc39b6376f0ba8f | GET /ready | svc=agent-service | parent=None | {}
+  span 95cd249904d5cc1a | POST /v1/runs | svc=backend | parent=d78a0e2ed1c40f09 | {}
+  span c3aba3074d5080af | POST /_db/_system/_api/cursor | svc=backend | parent=ee2dbf512c821d29 | {}
+  span 424a71b482bec087 | POST /_db/_system/_api/cursor | svc=backend | parent=ee2dbf512c821d29 | {}
+  span e8789157ba2f7bc7 | POST /_db/_system/_api/cursor | svc=backend | parent=ee2dbf512c821d29 | {}
+  span 582772de46ddc707 | POST /v1/runs http receive | svc=agent-service | parent=66ed90dd98bcb5ab | {}
+  span ee2dbf512c821d29 | POST /stream | svc=backend | parent=None | {}
+  span f23c84c6b1f61a8e | tcp.connect | svc=backend | parent=95cd249904d5cc1a | {}
+  span 45003a869c1bd411 | POST /_db/_system/_api/document/queries | svc=backend | parent=d78a0e2ed1c40f09 | {}
+  span d78a0e2ed1c40f09 | request handler - /api/queries/stream | svc=backend | parent=ee2dbf512c821d29 | {}
+  span 1b4e312b833725aa | router - /api/queries | svc=backend | parent=ee2dbf512c821d29 | {}
+  span 51a0ad8efe7428e5 | POST /v1/runs http send | svc=agent-service | parent=66ed90dd98bcb5ab | {}
+  span d2bca053e307420e | POST /v1/runs http send | svc=agent-service | parent=66ed90dd98bcb5ab | {}
+  span 66ed90dd98bcb5ab | POST /v1/runs | svc=agent-service | parent=95cd249904d5cc1a | {}
+  span 540c446ea49ba55f | GET /ready http send | svc=agent-service | parent=ccd8091f771b3c49 | {}
+  span 3a673a2140b86993 | GET /ready http send | svc=agent-service | parent=ccd8091f771b3c49 | {}
+  span ccd8091f771b3c49 | GET /ready | svc=agent-service | parent=None | {}
+  span 37c151a477708fe7 | GET /ready http send | svc=agent-service | parent=b8704817abd3f4da | {}
+  span f0da964bb9f73fdc | GET /ready http send | svc=agent-service | parent=b8704817abd3f4da | {}
+  span b8704817abd3f4da | GET /ready | svc=agent-service | parent=None | {}
+  span 0105d8595dbf77d9 | GET /ready http send | svc=agent-service | parent=2589fd2645f066fa | {}
+  span 03bbe33e5c130ce4 | GET /ready http send | svc=agent-service | parent=2589fd2645f066fa | {}
+  span 2589fd2645f066fa | GET /ready | svc=agent-service | parent=None | {}
+  span b832421cd75780c6 | GET /ready http send | svc=agent-service | parent=e3eec829f897511c | {}
+  span 32701c4fb5741219 | GET /ready http send | svc=agent-service | parent=e3eec829f897511c | {}
+  span e3eec829f897511c | GET /ready | svc=agent-service | parent=None | {}
+  span be32c1e2b51bd046 | GET /ready http send | svc=agent-service | parent=22386c473709b887 | {}
+  span 0b9cad8708edeb45 | GET /ready http send | svc=agent-service | parent=22386c473709b887 | {}
+  span 22386c473709b887 | GET /ready | svc=agent-service | parent=None | {}
+  span f6c7a173b9a2fe61 | GET /ready http send | svc=agent-service | parent=85de8995aadab003 | {}
+  span 302de1b54ab1475b | GET /ready http send | svc=agent-service | parent=85de8995aadab003 | {}
+  span 85de8995aadab003 | GET /ready | svc=agent-service | parent=None | {}
+spans total: 347
+span names: {'GET /ready': 95, 'GET /ready http send': 190, 'POST /v1/runs http receive': 7, 'POST /v1/runs http send': 16, 'agent.run': 2, 'POST': 3, 'POST /v1/runs': 6, 'agent.model_call': 2, 'POST /_db/_system/_api/cursor': 10, 'POST /stream': 3, 'tcp.connect': 4, 'POST /_db/_system/_api/document/queries': 3, 'router - /api/queries': 3, 'GET': 1, 'request handler - /api/queries/stream': 2}
+--- 2. the same through the Grafana datasource path (proxy -> jaeger)
+grafana proxy http=200
+proxied traces: 20
+  trace dd82efd2c7bf43016baf7a173dc758d2 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 2bf9b9d81a102f3f125951192bf78d23 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 9408e717da064ce7077fb878da9371e8 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 2073e4c3e726fde3acea12c98f5ce552 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace aabe64ae234e7e3c106d5a48c4200781 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 46dd37ec6f6d299735e058dc17ab2ae2 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 8a2dbb7e22ae94759dd67a7c56b38518 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 315ebc067df27d0de1c143bc983b2be9 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 05b930d6fdb2db65c571bd869c7d924c spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 12c50c075258a6a03978cb6177196ce4 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 82b6163cce43c944f01b89e643e6b555 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace ce059a21c087b0652b50fdb460d18f1b spans: 3 ['GET /ready', 'GET /ready http send']
+  trace da0f7cf8b30e98d9137b7733304ccf33 spans: 3 ['POST /v1/runs http receive', 'POST /v1/runs http send']
+  trace 4d6eff0fd29e1105384b234fce0dc156 spans: 3 ['POST /v1/runs http send']
+  trace 34b9f9e67c6e44552cb6ce16e5450c1f spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 1e4f2b0ed3e28d47d3551581954c247c spans: 3 ['GET /ready', 'GET /ready http send']
+  trace e97656f5d41aa7a0b4e8111833036635 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 0d3d5aec401d02cdb5564fa37012bee3 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace a74fc1e37b90f9ab607eb554988a5d60 spans: 3 ['GET /ready', 'GET /ready http send']
+  trace 9d1de6ed4d0dbbf1bbaf31595e2ddf66 spans: 3 ['GET /ready', 'GET /ready http send']
+--- 3. VictoriaMetrics: the agent-service series under service_name
+vm http=200
+service_name values: 3
+  service_name=? value=2
+  service_name=agent-service value=238
+  service_name=backend value=1258
+--- 4. Grafana: the dashboards the campaign names + their datasource
+grafana search http=200
+dashboards: 9
+  Application Metrics (uid=application-metrics, folder=General)
+  Observability Stack Health (uid=observability-stack-health, folder=Observability)
+  RAG Pipeline Trace Waterfall (uid=genieai-rag-pipeline-waterfall, folder=General)
+  Service Health (uid=genieai-service-health, folder=General)
+  Service Logs (uid=genieai-service-logs, folder=General)
+  Trace Explorer (uid=genieai-trace-explorer, folder=General)
+  VictoriaLogs - single-node (uid=OqPIZTX4z, folder=Observability)
+  VictoriaMetrics - single-node (uid=wNf0q_kZk, folder=Observability)
+  VictoriaTraces - single-node (uid=10dbc46d-e6fe-46c9-8ee2-57783dd70695, folder=Observability)
+  -- the service-health dashboard's service discovery query
+  dashboard http=200
+  mentions service_name: True
+  mentions agent-service: False
+   expr: histogram_quantile(0.50, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\
+   expr: histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\
+   expr: histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\
+   expr: sum(rate(http_server_request_duration_seconds_count{service_name=~\
+  -- a live query against the metrics datasource for agent-service
+  vm proxy http=200
+  service_name= None value= 2
+  service_name= agent-service value= 238
+  service_name= backend value= 1258
+=== trace verification done ===

@@ -136,3 +136,20 @@ def test_the_emitter_hands_every_event_to_the_sink_in_order():
 def test_a_none_payload_is_normalized_to_an_empty_dict():
     event = EventEmitter(run_id="r").emit(EventKind.TEXT_MESSAGE_FINISHED)
     assert event.payload == {}
+
+
+def test_a_second_run_started_on_one_run_never_reaches_the_sink():
+    """One run, ONE started handshake (#2160 nit 3): the loop announces
+    run_started when it enters, and the orchestrator's build-failure path
+    announces it too — a plumbing raise that escapes the loop's own handler
+    made the orchestrator re-announce, and the BFF's captureRunStart
+    overwrote the real started_at with the duplicate's fresh one. The
+    emitter owns the invariant: a second RUN_STARTED on the same run is
+    dropped, the first announcement is the one the sink carries."""
+    collector: list[AgentEvent] = []
+    emitter = EventEmitter(run_id="r-1", sink=collector.append)
+    emitter.emit(EventKind.RUN_STARTED, {"question": "q"})
+    again = emitter.emit(EventKind.RUN_STARTED, {"question": "q-duplicate"})
+    assert [event.kind for event in collector] == [EventKind.RUN_STARTED]
+    assert collector[0].payload == {"question": "q"}
+    assert again.seq == 0  # the returned duplicate IS the first event

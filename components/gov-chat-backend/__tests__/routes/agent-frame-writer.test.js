@@ -1506,6 +1506,27 @@ describe('proxyAgentRun — client disconnect mid-run (res.on close)', () => {
     expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
   });
 
+  it('a client gone mid-refusal never writes the refusal (the close handler already ran)', async () => {
+    // The refusal paths drain the upstream body BEFORE writing the client
+    // JSON; a client that leaves during that drain gets no write into a dead
+    // socket — the same destroyed/writableEnded guard the upstream catch
+    // carries.
+    setupAgentQuery();
+    const pendingBody = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ status: 429, headers: { 'retry-after': '7' }, data: pendingBody });
+
+    const res = fakeRes();
+    const runPromise = directRun(res);
+    await flush();
+    // The client leaves while the refusal body is still draining.
+    res.destroyed = true;
+    pendingBody.push('{"error":"admission_refused","message":"lane busy"}');
+    pendingBody.push(null);
+    await runPromise;
+
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
   it('a disconnect after chunks streamed aborts upstream AND partial-saves the answer', async () => {
     let capturedSignal = null;
     const mockStream = new Readable({ read() {} });

@@ -24,10 +24,13 @@ carries it, so a consumer that replays or reorders events can still
 reconstruct the run's order.
 """
 
+import logging
 from enum import StrEnum
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
+
+logger = logging.getLogger(__name__)
 
 # The client-SSE frame names the BFF writes today (the five preserved event
 # types plus the additive ones) — a snapshot, hand-maintained: the guard
@@ -130,11 +133,29 @@ class EventEmitter:
         self._run_id = run_id
         self._sink = sink
         self._seq = 0
+        self._started_event: AgentEvent | None = None
 
     def emit(self, kind: EventKind, payload: dict | None = None, *, call_id: str | None = None) -> AgentEvent:
-        """Stamp one event and hand it to the sink."""
+        """Stamp one event and hand it to the sink.
+
+        RUN_STARTED is a once-per-run handshake: the loop announces it when
+        it enters and the orchestrator's build-failure path announces it too,
+        so a plumbing raise that escapes the loop's own handler would make
+        the orchestrator re-announce — and the BFF's captureRunStart would
+        overwrite the real started_at with the duplicate's fresh one. The
+        second announcement is dropped; the first is what the sink carries
+        (and what this method returns).
+        """
+        if kind is EventKind.RUN_STARTED and self._started_event is not None:
+            logger.warning(
+                "duplicate run_started dropped on run %s (the handshake was already announced)",
+                self._run_id,
+            )
+            return self._started_event
         event = AgentEvent(run_id=self._run_id, call_id=call_id, seq=self._seq, kind=kind, payload=payload or {})
         self._seq += 1
+        if kind is EventKind.RUN_STARTED:
+            self._started_event = event
         if self._sink is not None:
             self._sink(event)
         return event

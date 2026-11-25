@@ -90,10 +90,10 @@ const V05_STATUS = Object.freeze({
   FALLBACK_ERROR: 'fallback_error'
 });
 
-// The execution modes. Streaming translation (the request's
-// STREAMING_TRANSLATION_ENABLED discipline, owned by the caller) translates
-// unit by unit; the post-stream path translates the whole answer once.
-const MODE_UNIT = 'streaming-unit';
+// The execution mode: the leg owns the POST-STREAM whole-answer translation
+// (the streaming relay's units run MID-STREAM, before any terminal usage
+// record exists — the request-resolved translator serves those, so the leg
+// never carries a unit mode).
 const MODE_FULL = 'full-answer';
 
 /**
@@ -119,7 +119,7 @@ function readKnob(name) {
  * @param {string} parts.queryTranslationStatus - A V05 vocabulary value
  * @param {{prompt_tokens: number, completion_tokens: number, estimated: boolean}|null} [parts.usage]
  * @param {string|null} [parts.configError] - A knob name, a GPU-only reason, or `invalid_remaining_ms`
- * @param {'streaming-unit'|'full-answer'} parts.mode
+ * @param {'full-answer'} parts.mode
  * @returns {Object}
  */
 function accountingBlock({
@@ -326,7 +326,7 @@ const loadMarkdownLibs = () => {
  *   every translation (`usage_unavailable`) — the run's usage is never
  *   estimated up to the allowance.
  * @param {string} params.targetLanguage - The requested UI language
- * @returns {Object} `{configError, translateFullAnswer, createStreamingTranslator}`
+ * @returns {Object} `{configError, translateFullAnswer}`
  * @throws {Error} when the routing decision is not the agentic one
  */
 function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetLanguage }) {
@@ -626,34 +626,6 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
      */
     translateFullAnswer({ text, remainingMs, signal }) {
       return execute({ markdownText: text, mode: MODE_FULL, remainingMs, signal });
-    },
-
-    /**
-     * The streaming-unit translator: one plan → call → account cycle per
-     * unit, the leg's spend accumulated across the request's units. Once a
-     * unit fails, the V05 streaming discipline applies: the answer stays
-     * English for the remainder and the model is not asked again (later
-     * units answer skipped).
-     *
-     * @returns {{failed: boolean, translateUnit: (params: {content: string, remainingMs: number, signal: AbortSignal}) => Promise<{outcome: string, translated: string|null, accounting: Object}>}}
-     */
-    createStreamingTranslator() {
-      let failed = false;
-      return {
-        get failed() {
-          return failed;
-        },
-        async translateUnit({ content, remainingMs, signal }) {
-          if (failed) {
-            return { outcome: 'skipped', translated: null, accounting: skipAccounting(MODE_UNIT) };
-          }
-          const result = await execute({ markdownText: content, mode: MODE_UNIT, remainingMs, signal });
-          if (result.outcome === 'failed') {
-            failed = true;
-          }
-          return result;
-        }
-      };
     }
   };
 }

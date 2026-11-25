@@ -300,9 +300,16 @@ async function proxyAgentRun({
   armStreamDeadline();
 
   const status = response.status;
+  // A client that left while a refusal body was draining gets no write into
+  // a dead socket — the same guard the upstream catch carries (the close
+  // handler has already run and persisted the honest cancelled outcome).
+  const clientGone = () => res.writableEnded || res.destroyed;
   if (status === 429) {
     const { parsed } = await readUpstreamBody(response.data, status);
     clearStreamDeadline();
+    if (clientGone()) {
+      return;
+    }
     // The lane hint passes through (the caller retries on it); a body that
     // did not parse (or is not an object) falls back to the documented error
     // name.
@@ -315,6 +322,9 @@ async function proxyAgentRun({
   if (status === 503) {
     const { parsed } = await readUpstreamBody(response.data, status);
     clearStreamDeadline();
+    if (clientGone()) {
+      return;
+    }
     logger.warn('AgentFrameWriter.run_surface_unconfigured', { queryId, body: parsed });
     return res.status(503).json(passthroughBody(parsed) || { error: 'budget_configuration_missing' });
   }
@@ -324,12 +334,18 @@ async function proxyAgentRun({
     // the BFF's own invalid request).
     const { parsed } = await readUpstreamBody(response.data, status);
     clearStreamDeadline();
+    if (clientGone()) {
+      return;
+    }
     logger.warn('AgentFrameWriter.run_request_invalid', { queryId, body: parsed });
     return res.status(422).json(passthroughBody(parsed) || { error: 'invalid_run_request' });
   }
   if (status !== 200 || !response.data) {
     const { parsed } = await readUpstreamBody(response.data, status);
     clearStreamDeadline();
+    if (clientGone()) {
+      return;
+    }
     logger.error('AgentFrameWriter.upstream_status_error', { queryId, status });
     return res
       .status(502)

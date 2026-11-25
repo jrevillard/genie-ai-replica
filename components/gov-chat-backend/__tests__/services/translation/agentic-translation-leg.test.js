@@ -488,86 +488,8 @@ describe('agentic translation leg (story 2.10)', () => {
     });
   });
 
-  describe('streaming-unit mode', () => {
+  describe('the deadline spent mid-pass (the full-answer path)', () => {
     const zeroRun = { prompt_tokens: 0, completion_tokens: 0, model_calls: 0, aux_model_calls: 0 };
-
-    it('accumulates the leg spend across units and bounds each call at the remainder', async () => {
-      process.env.AGENT_TRANSLATION_MAX_TOKENS = '1000';
-      // Long cores: the window math's own cap would exceed the allowance, so
-      // the bound the request carries is exactly the plan's remainder.
-      const longUnit = (ch) => `${ch} `.repeat(400).trim() + '.';
-      const { calls, chatWrites } = serve({
-        chat: { json: chatBody('X', { usage: { prompt_tokens: 10, completion_tokens: 5 } }) }
-      });
-      const leg = makeLeg({ runUsage: zeroRun });
-      const t = leg.createStreamingTranslator();
-
-      const u1 = await t.translateUnit({ content: longUnit('A'), remainingMs: 5000 });
-      const u2 = await t.translateUnit({ content: longUnit('B'), remainingMs: 4000 });
-
-      expect(u1.outcome).toBe('translated');
-      expect(u2.outcome).toBe('translated');
-      expect(u1.accounting.mode).toBe('streaming-unit');
-      expect(u2.accounting.usage).toEqual({ prompt_tokens: 10, completion_tokens: 5, estimated: false });
-      // Unit 1's plan bound is the full 1000; unit 2's plan already carries
-      // unit 1's spend (15), so its request carries exactly 985 — subtracted
-      // once, in the plan.
-      expect(chatWrites[0].max_tokens).toBe(1000);
-      expect(chatWrites[1].max_tokens).toBe(985);
-      expect(chatCalls(calls)).toHaveLength(2);
-    });
-
-    it('does not double-subtract earlier units: their spend rides inside the plan', async () => {
-      process.env.AGENT_TRANSLATION_MAX_TOKENS = '10000';
-      const longUnit = (ch) => `${ch} `.repeat(3400).trim() + '.';
-      const { calls, chatWrites } = serve({
-        chat: { json: chatBody('X', { usage: { prompt_tokens: 2000, completion_tokens: 1000 } }) }
-      });
-      const leg = makeLeg({
-        runUsage: { prompt_tokens: 5000, completion_tokens: 0, model_calls: 0, aux_model_calls: 0 }
-      });
-      const t = leg.createStreamingTranslator();
-
-      const u1 = await t.translateUnit({ content: longUnit('A'), remainingMs: 5000 });
-      const u2 = await t.translateUnit({ content: longUnit('B'), remainingMs: 4000 });
-
-      expect(u1.outcome).toBe('translated');
-      expect(u2.outcome).toBe('translated');
-      // Unit 2's plan remainder = 10000 - 5000 (run) - 3000 (unit 1) = 2000.
-      // Subtracting the leg's accumulated spend AGAIN would have computed
-      // -1000 and thrown spuriously.
-      expect(chatWrites[1].max_tokens).toBe(2000);
-      expect(chatCalls(calls)).toHaveLength(2);
-    });
-
-    it('skips a unit whose plan finds the token allowance spent by earlier units', async () => {
-      process.env.AGENT_TRANSLATION_MAX_TOKENS = '20';
-      serve({ chat: { json: chatBody('X', { usage: { prompt_tokens: 10, completion_tokens: 10 } }) } });
-      const leg = makeLeg({ runUsage: zeroRun });
-      const t = leg.createStreamingTranslator();
-
-      const u1 = await t.translateUnit({ content: 'Hello world.', remainingMs: 5000 });
-      const u2 = await t.translateUnit({ content: 'Second sentence.', remainingMs: 4000 });
-
-      expect(u1.outcome).toBe('translated');
-      expect(u2.outcome).toBe('skipped');
-      expect(u2.accounting.status).toBe(SKIP_STATUSES.TOKEN_ALLOWANCE_SPENT);
-    });
-
-    it('applies the V05 sticky failure: after a failed unit the model is not asked again', async () => {
-      const { calls } = serve({ chat: { status: 500 } });
-      const leg = makeLeg({ runUsage: zeroRun });
-      const t = leg.createStreamingTranslator();
-
-      const u1 = await t.translateUnit({ content: 'Hello world.', remainingMs: 5000 });
-      const u2 = await t.translateUnit({ content: 'Second sentence.', remainingMs: 4000 });
-
-      expect(u1.outcome).toBe('failed');
-      expect(t.failed).toBe(true);
-      expect(u2.outcome).toBe('skipped');
-      expect(u2.accounting.queryTranslationStatus).toBe('passthrough_english');
-      expect(chatCalls(calls)).toHaveLength(1);
-    });
 
     it('stops mid-pass when the remaining deadline is spent, as a failed unit', async () => {
       process.env.AGENT_TRANSLATION_MAX_TOKENS = '100000';

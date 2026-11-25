@@ -452,6 +452,16 @@ class OperationBudget(BaseModel):
 
     The values come from the orchestrator that owns the request's deadline;
     the thresholds themselves are a deployment decision, not the contract's.
+
+    ``max_results`` is ONE bound with two readings, both documented here so
+    a caller sizing it knows what it bounds: the SEARCH hit-count cap (the
+    search capability applies it to ``hits`` before the executor sees them)
+    AND the legacy read's chunk-count cap (``read_source`` bounds the
+    chunks it reads from the graph by the same number, before the byte
+    cut). A caller sizing ``max_results`` for search therefore bounds every
+    legacy document read too — the ``truncated`` flag reads honest on both
+    paths, and a caller that needs the two bounds to differ has to raise
+    that as a contract change, not re-derive one locally.
     """
 
     model_config = ConfigDict(extra="forbid")

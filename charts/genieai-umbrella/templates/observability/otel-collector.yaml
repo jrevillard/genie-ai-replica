@@ -243,6 +243,8 @@ data:
     stays dark. The release upgrade is NOT blocked by it. Install the
     OpenTelemetry Operator (scripts/install-prereqs.sh, or the deploy
     overlay's HelmRelease) and the next reconcile brings the collector
-    up on its own.
+    up on its own. This record covers the otel-operator CRs only — the
+    VictoriaMetrics and Grafana tiers keep their own operator
+    prerequisites (charts/README.md).
 {{- end }}
 {{- end }}

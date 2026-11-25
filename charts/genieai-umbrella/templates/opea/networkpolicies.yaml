@@ -801,6 +801,7 @@ was written to allow.
 
 */ -}}
 {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+{{- $ingress := .Values.ingress | default dict -}}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -817,6 +818,16 @@ spec:
     - Ingress
     - Egress
   ingress:
+    # The Envoy Gateway data plane (the /api/okf HTTPRoute rule — the
+    # okf-server's public surface; the BFF mounts no okf proxy) plus the
+    # same-namespace server-to-server clients below.
+    {{- if $ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 3002
+    {{- end }}
     # The BFF's retrieval-posture client (OKF_SERVER_URL) and the
     # dataprep worker, which carries the same wiring and kicks the
     # server on ingest completions.

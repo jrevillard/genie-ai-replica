@@ -1553,7 +1553,7 @@ opea:
     # in-cluster mode only.
     llm:
       modelId: ibm-granite/granite-4.1-8b
-      # Tool-calling pin (#2052 parity with the Compose surfaces, whose
+      # Tool-calling pin (parity with the Compose surfaces, whose
       # lever is VLLM_TOOL_CALL_PARSER): empty/unset derives granite4 for
       # Granite 4.x model ids and NO pin for anything else (a Granite 3.x
       # id needs the `granite` parser PLUS a chat template the chart

@@ -31,7 +31,7 @@ variables:
   GIT_DEPTH: "1"
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
-  # --- OKF content-only chunking (Story 4.8-amend) ---
+  # --- OKF content-only chunking ---
   # The okf-server internal concept-status callback is fail-closed: any test
   # that exercises the live dataprep → okf-server path needs this same value on
   # both ends. Unit tests mock it; the CI default is a non-prod sentinel.
@@ -173,6 +173,20 @@ workflow:
     # approval the umbrella does not need. This rule therefore sits BEFORE
     # the suppression rule on purpose: it must apply to pushes on that
     # branch. The security policies themselves are untouched by it.
+    #
+    # Container-scanning asymmetry, ACCEPTED: this pipeline runs the
+    # security suite EXCEPT container scanning — the build:*/scan:* jobs
+    # stay gated to the default branch and release/*, so no pipeline on
+    # this branch produces a container_scanning report. The CVE
+    # scan-result policy dedupes an MR's container findings against the
+    # TARGET branch's report, so an untriaged HIGH/CRITICAL container
+    # finding in a merge request targeting this branch counts as newly
+    # introduced and demands the policy's Maintainer approval, where the
+    # same finding on a main-targeting MR does not (main carries the
+    # reports). Bounded today: the monthly CVE triage loop keeps
+    # needs-triage HIGH/CRITICAL findings at zero. If that stops holding,
+    # run the build+scan stages here (the same `*/prd` rule shape as this
+    # workflow rule) and take the full 15-image rebuild on every push.
     - if: $CI_COMMIT_BRANCH =~ /\/prd$/
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
@@ -183,7 +197,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_BRANCH =~ /^release\//
 
-# --- Hidden job templates (DRY, reusable by Story 1.3 test stage) ---
+# --- Hidden job templates (DRY, reusable by the test stage) ---
 
 # npm's download cache (#1671): the one reuse channel npm ci genuinely has
 # (node_modules itself is deleted by npm ci before installing — see
@@ -1453,7 +1467,7 @@ container_scanning:
         # CACHE_BUST re-runs the Dockerfiles' apt upgrade layer (its cache
         # key includes the ARG value), so the slim images' Debian packages
         # move with every forced rebuild instead of staying a registry
-        # cache hit forever (#2031).
+        # cache hit forever.
         if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
           set -- "$@" --build-arg "CACHE_BUST=$(date +%s)"
         fi
@@ -2160,7 +2174,7 @@ promote:okf-server:
       changes:
         paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
 
-# genie-ai-pii-service (OKF PII sidecar — ADR-okf-004 rev; model baked in)
+# genie-ai-pii-service (OKF PII sidecar; model baked in)
 build:pii-service:
   <<: *build_template
   variables:
@@ -2270,7 +2284,7 @@ test:pii-service:
       changes:
         paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
 
-# genie-ai-agent-server (Epic 1 — the agent service)
+# genie-ai-agent-server (the agent service)
 build:agent-service:
   <<: *build_template
   variables:
@@ -2377,7 +2391,7 @@ test:agent-service:
       changes:
         paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
 
-# genie-ai-ragas-service (OKF RAGAS benchmark sidecar — Story 8-6, ADR-okf-043)
+# genie-ai-ragas-service (OKF RAGAS benchmark sidecar)
 build:ragas-service:
   <<: *build_template
   variables:
@@ -4169,13 +4183,13 @@ docs:validate:
     # conditionals resolve: two template-module runs (gpu_vendor set /
     # unset) render the ROCm and NVIDIA node files without a host
     # connection. The served-model ids are MANDATORY with no template
-    # default (#2119), so every render passes them explicitly via -e —
+    # default, so every render passes them explicitly via -e —
     # and the missing-variable case below asserts the render FAILS.
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm.yaml" -c local -e "gpu_vendor=rocm vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it"
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it"
     - grep -q "vllm-reranker" /tmp/gpu-rocm.yaml
     - '! grep -q "vllm-reranker" /tmp/gpu-nvidia.yaml'
-    # The REC-6 tool-calling pin (#2052): the granite4 flags render ONLY when
+    # The tool-calling pin: the granite4 flags render ONLY when
     # the served model is Granite 4.x. Asserted STRUCTURALLY (parsed YAML,
     # not substring grep — a grep passes on a corrupted render): the flags in
     # the vllm-llm command AND the environment entry still carrying
@@ -4187,12 +4201,12 @@ docs:validate:
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm-granite4.yaml'))['services']['vllm-llm']; assert '--tool-call-parser granite4' in s['command'] and any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-nvidia.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']; assert any(str(e).startswith('HUGGING_FACE_HUB_TOKEN=') for e in s['environment'])"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-rocm.yaml'))['services']['vllm-llm']; assert 'tool-call-parser' not in s['command'] and '--enable-auto-tool-choice' not in s['command']"
-    # The explicit parser lever (ansible spelling of VLLM_TOOL_CALL_PARSER,
-    # #2052 parity): an override on a Granite 3.x model renders the flags
+    # The explicit parser lever (ansible spelling of VLLM_TOOL_CALL_PARSER):
+    # an override on a Granite 3.x model renders the flags
     # with THAT parser instead of the derived default (absent for 3.x).
     - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-parser-override.yaml" -c local -e "vllm_llm_model_id=ibm-granite/granite-3.3-2b-instruct vllm_translation_model_id=google/gemma-3-4b-it vllm_tool_call_parser=granite"
     - python3 -c "import yaml; s=yaml.safe_load(open('/tmp/gpu-parser-override.yaml'))['services']['vllm-llm']; assert '--enable-auto-tool-choice' in s['command'] and '--tool-call-parser granite' in s['command']"
-    # #2119: the served-model ids are MANDATORY — a render without them must
+    # The served-model ids are MANDATORY — a render without them must
     # FAIL, and the error must NAME the variable (never a silent default).
     # The runner script carries set -e: capture the expected failure with
     # `|| RC=$?` (a bare `cmd; RC=$?` aborts at cmd with its exit code).
@@ -4956,7 +4970,7 @@ chart:lint:
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.mode=in-cluster
       > /tmp/rendered-incluster.yaml
-    # The REC-6 tool-calling pin on the in-cluster vLLM (#2095): asserted
+    # The tool-calling pin on the in-cluster vLLM: asserted
     # STRUCTURALLY on the parsed Deployment args, mirroring the
     # docs:validate asserts for the ansible surface — the granite4 flags
     # render with the Granite 4.x default model, an explicit
@@ -6423,7 +6437,6 @@ scheduled:cleanup:
 # --- Manual jobs (on-demand via Run Pipeline → click play) ---
 
 # RAG quality regression — requires GPU runner
-# Enhanced by Epic 8 (RAG Quality)
 manual:rag-quality:
   image: python:3.11-slim
   stage: manual
@@ -6446,7 +6459,7 @@ manual:rag-quality:
         exit 0
       fi
     - |
-      pytest -m rag-quality --junitxml=reports/rag-quality.xml || echo "WARNING: No rag-quality tests found (Epic 8 placeholder)"
+      pytest -m rag-quality --junitxml=reports/rag-quality.xml || echo "WARNING: No rag-quality tests found"
   artifacts:
     when: always
     expire_in: 30 days

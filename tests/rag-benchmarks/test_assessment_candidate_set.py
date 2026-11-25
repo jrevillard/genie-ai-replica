@@ -132,3 +132,50 @@ def test_multi_hop_cases_join_at_least_two_documents():
             assert len(sources) >= 2, case["id"]
         else:
             assert len(case["expected_chunks"]) >= 2, case["id"]
+
+
+def test_the_readme_states_the_set_digest():
+    """The artifact README's digest line is pinned to the files: the current
+    set's digest must be stated, and every digest-shaped token the README
+    carries must be this set's or the signed source's (computed, never
+    hardcoded) — a stale digest line fails here. The digest line is exactly
+    what the operator reads at re-sign time."""
+    import re
+
+    from protocol.manifest import sha256_file
+
+    digest = sha256_file(CANDIDATE_SET)
+    signed = sha256_file(SIGNED_SET)
+    readme = (CANDIDATE_DIR / "README.md").read_text(encoding="utf-8")
+    tokens = set(re.findall(r"\b[0-9a-f]{64}\b", readme))
+    assert digest in tokens, (
+        f"the artifact README does not state the set's file digest {digest}"
+    )
+    assert tokens <= {digest, signed}, (
+        f"the artifact README states unknown digest token(s): {tokens - {digest, signed}}"
+    )
+
+
+def test_the_committed_set_is_the_build_script_s_output():
+    """The build script is the artifact's only writer, checked: running it
+    against a temp path reproduces the committed bytes exactly — a hand edit
+    to the committed JSON drifts from the declared derivation and fails
+    here."""
+    import subprocess
+    import sys
+
+    rebuilt = CANDIDATE_DIR / (CANDIDATE_SET.name + ".rebuilt")
+    try:
+        subprocess.run(
+            [sys.executable, str(CANDIDATE_DIR / "build-candidate-2146.py"), str(rebuilt)],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert rebuilt.read_bytes() == CANDIDATE_SET.read_bytes(), (
+            "the committed assessment-set.json is not the build script's output —"
+            " the artifact and its declared derivation have drifted"
+        )
+    finally:
+        rebuilt.unlink(missing_ok=True)

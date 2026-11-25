@@ -4549,6 +4549,14 @@ test:rag-benchmarks:
         # The gate also reads the #2148 source set (the inherited cases'
         # byte-identity baseline) — an edit there must run the job too.
         - "_bmad-output/implementation-artifacts/e01-security-corpus-2026-11-24/**/*"
+        # The #2146 candidate-set gate reads the candidate set (its subject)
+        # and the FINAL A reference set (the addition-only byte-identity
+        # baseline + the draft lineage's manifest); the coexistence draft
+        # tests read the draft artifact — an edit to any of them must run
+        # the job too.
+        - "_bmad-output/implementation-artifacts/assessment-set-candidate-2026-11-25/**/*"
+        - "_bmad-output/implementation-artifacts/coexistence-limits-draft-2026-11-25/**/*"
+        - "_bmad-output/implementation-artifacts/e01-final-reference-2026-11-24/**/*"
         # And the E2E fixture the graded gold names as a source document —
         # rewriting it would invalidate the set's verbatim contract.
         - "tests/e2e/fixtures/test-document.md"

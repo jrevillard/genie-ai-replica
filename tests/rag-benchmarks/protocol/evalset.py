@@ -511,18 +511,22 @@ def _validate_composition(
     non_latin_minimum = DEFAULT_NON_LATIN_MINIMUM
     for key, value in (minimums_override or {}).items():
         try:
-            numeric = max(1, int(value))
+            numeric = int(value)
         except (TypeError, ValueError):
             errors.append(f"_meta.minimums: {key!r} must be a number (got {value!r})")
             continue
         if key in class_minimums:
-            class_minimums[key] = numeric
+            # "Never lower below 1" guards a REQUIRED class's presence; a
+            # post-signature class (default 0) may state its own optional
+            # floor explicitly — {multi_hop: 0} is a valid way to say
+            # "present when carried, never required here".
+            class_minimums[key] = max(1 if class_minimums[key] >= 1 else 0, numeric)
         elif key in access_minimums:
-            access_minimums[key] = numeric
+            access_minimums[key] = max(1, numeric)
         elif key in security_minimums:
-            security_minimums[key] = numeric
+            security_minimums[key] = max(1, numeric)
         elif key == "non_latin":
-            non_latin_minimum = numeric
+            non_latin_minimum = max(1, numeric)
         else:
             errors.append(f"_meta.minimums: unknown composition key {key!r}")
 

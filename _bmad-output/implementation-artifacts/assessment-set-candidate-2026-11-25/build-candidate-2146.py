@@ -13,10 +13,14 @@ The output's digest MOVES by addition only (the expected, documented
 outcome); re-signing a digest that carries the new classes is the
 operator's later step. The signed source file is only ever READ.
 
-Usage: python3 build-candidate-2146.py
+Usage: build-candidate-2146.py [output-path]
+  (default output: assessment-set.json beside this script — the committed
+  artifact; the provenance gate runs the script against a temp path and
+  byte-compares it, so the committed file must stay this script's output)
 """
 
 import json
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -205,7 +209,7 @@ def main() -> None:
         "entries": signed["entries"] + NEW_CASES,
         "match_run": signed["match_run"],
     }
-    out = HERE / "assessment-set.json"
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "assessment-set.json"
     out.write_text(json.dumps(candidate, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {out} ({len(candidate['entries'])} cases)")
 

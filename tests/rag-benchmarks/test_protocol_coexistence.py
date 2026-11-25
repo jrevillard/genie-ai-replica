@@ -615,7 +615,52 @@ def test_coexistence_refuses_a_draft_limits_artifact():
             limits=_draft_limits(),
             created_utc=CREATED,
         )
-    assert failed.value.reason == "draft_limits"
+    assert failed.value.reason == "unagreed_limits"
+    assert "'draft'" in str(failed.value)
+
+
+def test_coexistence_refuses_any_non_agreed_status_not_just_draft():
+    """The whitelist, not a draft blacklist: a typo'd agreement flip
+    ('agree'), or any other non-agreed word ('pending', 'final', 'signed')
+    is refused too — an un-agreed artifact must never open a verdict,
+    whatever its status string claims. Only a case variant of 'agreed'
+    itself applies (the flip's intent is unambiguous)."""
+    for status in ("agree", "pending", "final", "signed"):
+        limits = _draft_limits()
+        limits["status"] = status
+        with pytest.raises(CoexistenceRefusal) as failed:
+            build_coexistence_report(
+                control_measurements=_control(),
+                loaded_measurements=_held_loaded(),
+                agent_load=_all_answered_load(),
+                limits=limits,
+                created_utc=CREATED,
+            )
+        assert failed.value.reason == "unagreed_limits", status
+
+
+def test_coexistence_accepts_the_status_flip_in_any_case():
+    """The agreement act is the flip: 'agreed' in any casing applies (the
+    operator's intent is unambiguous), and the status-less shape — the
+    pre-existing artifact spelling — applies unchanged."""
+    for status in ("agreed", "AGREED", "Agreed", None):
+        limits = _draft_limits()
+        if status is None:
+            limits.pop("status")
+        else:
+            limits["status"] = status
+        report = build_coexistence_report(
+            control_measurements=_control(),
+            loaded_measurements=_held_loaded(),
+            agent_load=_all_answered_load(),
+            limits=limits,
+            lineage={
+                "corpus_fingerprint": limits["corpus_fingerprint"],
+                "assessment_set_sha256": limits["assessment_set_sha256"],
+            },
+            created_utc=CREATED,
+        )
+        assert report["verdict"]["verdict"] == "pass", status
 
 
 def test_coexistence_applies_the_limits_once_agreed():

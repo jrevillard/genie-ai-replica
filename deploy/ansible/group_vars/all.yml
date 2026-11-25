@@ -84,6 +84,32 @@ agent_enabled: "0"
 # The BFF's agentic routing target (read when agent_enabled is "1"); default
 # matches the compose service name on the documented port.
 agent_service_url: "http://agent-service:8010"
+# Agentic run-surface knobs — REQUIRED once agent_enabled is "1", read
+# fail-closed by the BFF and the agent service: a run against a deployment
+# that has not set one is answered 503 naming the missing knob (no numeric
+# default exists in the enforcement path). Empty = unset = the compose
+# block's own empty default. Sizing guidance (budget/deadline pairs, the
+# translation leg's allowances): docs/agent-budget-deadline-pairs.md.
+agent_upstream_timeout_ms: ""
+agent_translation_max_tokens: ""
+agent_translation_max_calls: ""
+agent_run_max_steps: ""
+agent_run_max_model_calls: ""
+agent_run_max_tool_calls: ""
+agent_run_max_total_tokens: ""
+agent_run_max_evidence_bytes: ""
+agent_run_max_wall_clock_seconds: ""
+agent_tool_timeout_ms: ""
+agent_tool_max_results: ""
+agent_tool_max_result_bytes: ""
+agent_verdict_judge_timeout_ms: ""
+agent_verdict_policy: ""
+agent_run_system_prompt: ""
+agent_docrepo_url: ""
+agent_okf_url: ""
+agent_authorized_graphs: ""
+agent_authorized_repos: ""
+agent_probe_bearer: ""
 grafana_admin_user: "admin"
 victoriametrics_retention: "30d"
 victorialogs_retention: "30d"
@@ -383,6 +409,15 @@ nginx_image: nginx:1.28-alpine
 # vars/rocm_gpu_nodes.yml) to a name the GPU actually serves, or every LLM
 # call 404s.
 # vllm_llm_model_id: ibm-granite/granite-4.1-8b
+# Tool-calling pin on the GPU overlay's LLM server — the ansible spelling
+# of the compose VLLM_TOOL_CALL_PARSER lever. UNSET (the default) derives
+# from the served model id: `granite4` when the id contains `granite-4`,
+# NO pin for anything else (a Granite 3.x id needs the `granite` parser
+# PLUS a chat template this surface cannot reference — leave it unpinned
+# there). Set it to the served model's documented parser to enable tool
+# calling with that parser; set it to an empty string to force the flags
+# OFF for a Granite 4.x model.
+# vllm_tool_call_parser:
 vllm_translation_model_id: google/gemma-3-4b-it
 embedding_model_id: BAAI/bge-large-en-v1.5
 #   (empty = reuse the discovered LLM model, see vllm_llm_model_id above)

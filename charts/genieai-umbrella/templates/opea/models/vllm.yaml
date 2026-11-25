@@ -14,7 +14,7 @@
 {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
 {{- $modelId := $opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString -}}
 {{- $llm := $opeaModelsLlm -}}
-{{- /* Tool-calling pin (#2052 parity with the Compose surfaces): an
+{{- /* Tool-calling pin (parity with the Compose surfaces): an
       explicit toolCallParser value wins; empty/unset derives granite4 for
       Granite 4.x model ids and no pin for anything else. The flags are
       inert for requests that carry no tools. */ -}}

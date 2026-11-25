@@ -24,8 +24,13 @@ from arango import cursor
 from chunk_identity import content_hash
 
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
-TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
-_FALLBACK_TEXT_FIELD = "text"
+# The SERVED column is the default (#2153): the retrieval contract reads
+# `text` (hardcoded in the retriever so ingest and read paths cannot drift),
+# and the gold identities are content hashes of the served field — hashing
+# the display-only `metadata.chunk_text` produced a silent all-zero anchor
+# on a contextualized corpus.
+TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
+_FALLBACK_TEXT_FIELD = "chunk_text"
 
 
 def _query_rows(text_field: str) -> list[dict]:
@@ -62,9 +67,9 @@ def main(out_path: str = "chunks_registry.json") -> None:
             sys.stderr.write(
                 "WARNING: primary field "
                 f"{TEXT_FIELD!r} returned all-null/empty rows — retrying with "
-                f"legacy field {_FALLBACK_TEXT_FIELD!r}. For "
-                "CONTEXTUAL_RETRIEVAL_ENABLED=false deployments, set "
-                "ARANGO_TEXT_FIELD=text explicitly to skip this probe.\n"
+                f"fallback field {_FALLBACK_TEXT_FIELD!r} (a corpus that predates the"
+                " contextualized-write contract). Set ARANGO_TEXT_FIELD explicitly to"
+                " skip this probe.\n"
             )
             rows = _query_rows(_FALLBACK_TEXT_FIELD)
     null_text_count = sum(1 for r in rows if not (r.get("text") or ""))

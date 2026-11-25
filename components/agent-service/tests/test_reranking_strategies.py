@@ -288,3 +288,30 @@ def test_adaptive_breakdown_records_every_term():
             "selected",
         }
     assert breakdown[0]["selected"] is True
+
+
+def test_non_json_error_body_raises_runtime_error_with_the_status():
+    """A non-200 with a non-JSON body (a proxy HTML page, a plain-text 502)
+    surfaces as the transport failure CARRYING ITS HTTP STATUS — not as a
+    decode crash with no status for the operator to read."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="<html>Bad Gateway</html>")
+
+    adapter = make_adapter(handler=handler)
+    with pytest.raises(RuntimeError, match="HTTP 502"):
+        rerank(adapter)
+
+
+def test_non_json_422_surfaces_the_status_not_a_decode_crash():
+    """A 422 whose body is not the Validation JSON cannot be classified as
+    too-long — it surfaces as the failure with its status (the operator can
+    tell a transport failure from a too-long input); a decode crash would
+    have carried neither."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, text="validation failed")
+
+    adapter = make_adapter(handler=handler)
+    with pytest.raises(RuntimeError, match="HTTP 422"):
+        rerank(adapter)

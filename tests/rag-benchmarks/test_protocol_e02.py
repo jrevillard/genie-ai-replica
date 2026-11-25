@@ -780,6 +780,19 @@ def test_e02_counts_multi_turn_rows_in_their_case_class():
     assert multi_hop["delta"]["answered"] == 2
 
 
+def test_e02_counts_carries_the_coverage_census():
+    """The E02 report carries the set's coverage census — the C verdict's
+    coverage claim is the one the operator reads, so it states what the set
+    covers per surface instead of leaving it inferred from a gold count.
+    The census is a pure function of the set, and the report carries the
+    set's digest — the same claim the A capture stamps."""
+    entries = _entries()
+    report = _report(entries=entries)
+    from protocol.evalset import coverage_census
+
+    assert report["counts"]["coverage"] == coverage_census(entries)
+
+
 def test_e02_does_not_count_a_budget_exhausted_row_as_answered():
     """A row whose terminal state is a limit hit is not an answer — counting
     it as one inflates the fixed pipeline's coverage and can deny the agent a
@@ -922,7 +935,7 @@ def test_e02_resolved_env_does_not_claim_identical_over_unrecorded_maps():
 
 def test_e02_resolved_env_key_on_one_side_alone_is_not_a_difference():
     """A key recorded on ONE side alone (the B container's EVAL_* snapshot
-    when the C side records nothing) is an unrecorded value on the other —
+    when the C side does not carry it) is an unrecorded value on the other —
     never a disagreement. Counting it manufactured a phantom divergence
     signal on every venue that set the var."""
     b_manifest, c_manifest = _legs()
@@ -943,6 +956,32 @@ def test_e02_resolved_env_key_on_one_side_alone_is_not_a_difference():
     resolved = report["uncontrolled_differences"]["resolved_env"]
     assert resolved["state"] == "identical"
     assert "EVAL_DEFAULT_GRAPH" not in (resolved.get("differing_keys") or [])
+
+
+def test_e02_resolved_env_recorded_on_one_side_only_is_not_compared():
+    """One leg records NO env while the other records keys: the comparison
+    itself is unrecorded — 'identical' over an empty shared-key set is a
+    vacuous equality (the never-equal-from-absence principle the recorded
+    comparisons carry)."""
+    b_manifest, c_manifest = _legs()
+    b_manifest["configuration"]["B"]["resolved_env"] = {
+        "LLM_MODEL": "granite",
+        "AGENT_LANE_SLOTS": "2",
+        "EVAL_DEFAULT_GRAPH": "GRAPH",
+    }
+    c_manifest["configuration"]["C"]["resolved_env"] = {}
+    report = build_e02_report(
+        b_manifest=b_manifest,
+        c_manifest=c_manifest,
+        b_rows=_b_rows(),
+        c_rows=_c_rows(),
+        entries=_entries(),
+        set_sha256=SET_SHA,
+        created_utc=CREATED,
+    )
+    resolved = report["uncontrolled_differences"]["resolved_env"]
+    assert resolved["state"] == "not_recorded"
+    assert resolved["differing_keys"] == []
 
 
 def test_e02_reads_the_resource_record_limit_marker_on_the_b_leg():

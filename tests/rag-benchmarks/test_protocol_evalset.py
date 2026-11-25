@@ -411,3 +411,50 @@ def test_the_two_class_partitions_cover_the_composition_classes():
     "unknown"."""
     assert set(es.RETRIEVAL_CLASSES) | set(es.OUTCOME_CLASSES) == set(es.COMPOSITION_CLASSES)
     assert not set(es.RETRIEVAL_CLASSES) & set(es.OUTCOME_CLASSES)
+
+
+# ---------------------------------------------------------------------------
+# The outcome-surface expectations — ONE pairing (#2156 item 1)
+# ---------------------------------------------------------------------------
+
+
+def test_outcome_classes_pair_with_one_expectation_key_each():
+    """The outcome surface's model lives in ONE place: each outcome class
+    pairs with exactly the expectation key the verdict layer reads for its
+    non-answer outcome — the class vocabulary decides the surface, this
+    pairing decides which outcome is the expected one, and a second copy of
+    the pairing elsewhere can drift."""
+    assert es.OUTCOME_CLASS_EXPECTATIONS == {
+        "unanswerable": "expect_abstained",
+        "failure": "expect_typed_failure",
+        "cancellation": "expect_cancelled",
+    }
+
+
+def test_validator_refuses_a_contradicting_outcome_expectation():
+    """A case whose class pairs with one outcome expectation but carries
+    another is refused at the set boundary — the surface says 'judged from
+    the recorded outcome' while the expectation names a different outcome,
+    and the two layers would read it differently."""
+    data = json.loads((Path(es.__file__).parent / "sets" / "assessment.sample.json").read_text(encoding="utf-8"))
+    for case in data["entries"]:
+        if case.get("case_class") == "unanswerable":
+            case["expectations"] = {"expect_cancelled": True}
+    with pytest.raises(es.SetValidationError) as failed:
+        es.validate_set_or_raise(data, "assessment")
+    joined = "; ".join(failed.value.errors)
+    assert "expect_cancelled" in joined
+    assert "unanswerable" in joined
+
+
+def test_validator_refuses_a_denial_expectation_on_an_outcome_case():
+    """expect_denied is the SECURITY surface's expectation (an authorization
+    case wants the refusal) — an outcome-class case carrying it claims a
+    surface its class does not name."""
+    data = json.loads((Path(es.__file__).parent / "sets" / "assessment.sample.json").read_text(encoding="utf-8"))
+    for case in data["entries"]:
+        if case.get("case_class") == "cancellation":
+            case["expectations"] = {"expect_denied": True}
+    with pytest.raises(es.SetValidationError) as failed:
+        es.validate_set_or_raise(data, "assessment")
+    assert any("expect_denied" in e for e in failed.value.errors)

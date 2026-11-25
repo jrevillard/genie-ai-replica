@@ -90,6 +90,7 @@ from protocol.counter_metrics import (  # noqa: E402
 )
 from protocol.drivers import (  # noqa: E402
     DriverError,
+    corpus_presence_for,
     discover_model_ids,
     run_config_a,
     run_config_a_capture,
@@ -142,6 +143,43 @@ def _corpus_fingerprint(args: argparse.Namespace) -> str:
 
     hashes = sorted(set(run_eval.build_key_to_content_hash().values()))
     return fingerprint_corpus(args.corpus_collection, hashes)
+
+
+def _add_security_corpus_args(p: argparse.ArgumentParser) -> None:
+    """The corpus-presence resolution arguments (#2155): the graphs whose
+    SOURCE collections the security cases' declared sources must be resolved
+    against. Omitted = the precondition is recorded ABSENT in the findings
+    report (the verdicts run as before); given = a declared source absent
+    from every named graph records the typed corpus_absent verdict, never
+    the vacuous pass."""
+    p.add_argument(
+        "--security-graphs",
+        default="",
+        help="comma-separated graph names whose <graph>_SOURCE collections resolve the"
+        " security cases' declared sources (default: unset = precondition recorded absent)",
+    )
+
+
+def resolve_file_ids_by_graph(graph_names: list[str]) -> dict[str, set[str]]:
+    """The live file-id sets per graph — one AQL read per graph's SOURCE
+    collection, through the shared cursor (the same resolution
+    eval/match_gold_chunks uses for gold). The ArangoDB connection comes from
+    the eval env defaults (ARANGO_URL / ARANGO_DB / ARANGO_USER /
+    ARANGO_PASSWORD)."""
+    # Local import: the shared AQL cursor (the eval dir is already importable
+    # — importing protocol.drivers inserted its path).
+    import arango
+
+    return {name: arango.source_file_ids(f"{name}_SOURCE") for name in graph_names}
+
+
+def _resolve_corpus_presence(entries: list, graphs_csv: str | None):
+    """The corpus-presence map from the --security-graphs list; None when
+    the precondition was not armed."""
+    names = [name.strip() for name in (graphs_csv or "").split(",") if name.strip()]
+    if not names:
+        return None
+    return corpus_presence_for(entries, file_ids_by_graph=resolve_file_ids_by_graph(names))
 
 
 def _resolved_configuration(args: argparse.Namespace, config: str, driver_resolved: dict | None = None) -> dict:
@@ -203,15 +241,25 @@ def _validated_entries(args: argparse.Namespace) -> list | None:
 
 
 def _write_findings_report(
-    out_dir: Path, config: str, entries: list, rows: dict, absent_rows: str = "error"
+    out_dir: Path,
+    config: str,
+    entries: list,
+    rows: dict,
+    absent_rows: str = "error",
+    security_graphs: str | None = None,
 ) -> tuple[Path, dict]:
     """The findings report: rows → verdicts → report, written into
     the run out-dir beside the rows and the manifest. No silent pass. The
     reference path passes ``absent_rows="skipped"`` — config A evaluates
     through the anchor report, so a case without a row is the expected shape
-    (see :func:`verdicts.build_verdicts`)."""
+    (see :func:`verdicts.build_verdicts`). ``security_graphs`` arms the
+    corpus-presence precondition (#2155) when given."""
+    corpus_presence = _resolve_corpus_presence(entries, security_graphs)
     report = build_findings_report(
-        config=config, verdicts_result=verdicts_mod.build_verdicts(entries, rows, absent_rows=absent_rows)
+        config=config,
+        verdicts_result=verdicts_mod.build_verdicts(
+            entries, rows, absent_rows=absent_rows, corpus_presence=corpus_presence
+        ),
     )
     path = _write_manifest(Path(out_dir), "findings.report.json", report)
     return path, report
@@ -287,7 +335,12 @@ def cmd_reference(args: argparse.Namespace) -> int:
         return pair_failed
     path = _write_manifest(Path(args.out_dir), "reference.manifest.json", manifest)
     report_path, report = _write_findings_report(
-        Path(args.out_dir), "A", entries, result.get("rows") or {}, absent_rows="skipped"
+        Path(args.out_dir),
+        "A",
+        entries,
+        result.get("rows") or {},
+        absent_rows="skipped",
+        security_graphs=getattr(args, "security_graphs", ""),
     )
     _print_findings_summary(report)
     _print_coverage("reference run", result.get("coverage") or {})
@@ -370,7 +423,9 @@ def cmd_assess(args: argparse.Namespace) -> int:
     n_failure = sum(1 for row in rows.values() if row.get("outcome", row.get("status")) not in (None, "answered", "ok"))
     print(f"gated run: {len(rows)} case(s) recorded ({n_failure} non-answered outcome(s))")
     print(f"gated manifest: {path}")
-    report_path, report = _write_findings_report(Path(args.out_dir), config, entries, rows)
+    report_path, report = _write_findings_report(
+        Path(args.out_dir), config, entries, rows, security_graphs=getattr(args, "security_graphs", "")
+    )
     _print_findings_summary(report)
     print(f"findings report: {report_path}")
     return 0
@@ -418,7 +473,9 @@ def cmd_verdicts(args: argparse.Namespace) -> int:
         return 1
     report = build_findings_report(
         config=args.config,
-        verdicts_result=verdicts_mod.build_verdicts(entries, rows),
+        verdicts_result=verdicts_mod.build_verdicts(
+            entries, rows, corpus_presence=_resolve_corpus_presence(entries, getattr(args, "security_graphs", ""))
+        ),
         created_utc=args.created_utc,
     )
     path = _write_manifest(Path(args.out).parent, Path(args.out).name, report)
@@ -835,6 +892,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--stack-prefix", default=None, help="live resolved-env snapshot prefix (config A)")
     _add_common_manifest_args(r)
+    _add_security_corpus_args(r)
     r.set_defaults(func=cmd_reference)
 
     a = sub.add_parser("assess", help="the gated B/C run")
@@ -845,6 +903,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--base-url", default=None, help="the agent-service base URL (config C)")
     a.add_argument("--deadline-ms", type=int, default=600_000, help="the run's agent-phase deadline (config C)")
     _add_common_manifest_args(a)
+    _add_security_corpus_args(a)
     a.set_defaults(func=cmd_assess)
 
     c = sub.add_parser("check-reuse", help="the suitability report over a capture artifact")
@@ -865,6 +924,7 @@ def build_parser() -> argparse.ArgumentParser:
         " the same rows digest-comparable)",
     )
     v.add_argument("--config", choices=("A", "B", "C"), default="B", help="the run's configuration letter")
+    _add_security_corpus_args(v)
     v.set_defaults(func=cmd_verdicts)
 
     cap = sub.add_parser("capture-a", help="the per-case config-A answer capture (story 4.3)")

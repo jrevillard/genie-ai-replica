@@ -75,6 +75,27 @@ def _intentional_differences(config: str, verdict_records: list[dict]) -> list[d
     return [{**A_SECURITY_SKIP_DIFFERENCE, "cases": skipped}]
 
 
+def _corpus_presence_record(verdicts_result: dict) -> dict:
+    """The corpus-presence precondition's state in the report (#2155): an
+    UNCHECKED precondition is recorded absent with the arm named — the
+    vacuous pass an unseeded restricted graph produces must stay visible as
+    a possibility the report knows about, never a silence."""
+    counts = (verdicts_result.get("counts") or {}).get("verdicts") or {}
+    checked = bool(verdicts_result.get("corpus_presence_checked"))
+    if checked:
+        note = (
+            "the corpus-presence precondition ran: an authorization case whose declared sources"
+            " hold no chunks in the named graphs is corpus_absent, never a pass"
+        )
+    else:
+        note = (
+            "the corpus-presence precondition was not armed (--security-graphs unset): an"
+            " unseeded restricted graph would pass the authorization classes vacuously — arm"
+            " it on a venue the corpus campaign (#2148) has seeded"
+        )
+    return {"checked": checked, "n_corpus_absent": counts.get(verdicts_mod.VERDICT_CORPUS_ABSENT, 0), "note": note}
+
+
 def build_findings_report(*, config: str, verdicts_result: dict, created_utc: str | None = None) -> dict:
     """Assemble the findings report from :func:`verdicts.build_verdicts` output.
 
@@ -93,5 +114,6 @@ def build_findings_report(*, config: str, verdicts_result: dict, created_utc: st
         "verdicts": verdict_records,
         "findings": verdicts_result.get("findings") or [],
         "counts": verdicts_result.get("counts") or {},
+        "corpus_presence": _corpus_presence_record(verdicts_result),
         "intentional_differences": _intentional_differences(config, verdict_records),
     }

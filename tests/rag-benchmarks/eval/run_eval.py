@@ -104,7 +104,7 @@ VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")
 CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
 CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "genieai-chatqna")
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
-TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
+TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
 TRACE_FLUSH_WAIT = float(os.getenv("TRACE_FLUSH_WAIT", "5"))
 TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
 
@@ -442,7 +442,11 @@ def build_key_to_content_hash() -> dict[str, str]:
     content-hash-keyed (content-based identity survives re-ingest). Map each
     span ``_key`` to its content fingerprint so matching stays content-based.
     ``content_hash`` is computed Python-side (sha256 of normalized text) — it is
-    NOT stored in ArangoDB — so fetch the text and hash it here.
+    NOT stored in ArangoDB — so fetch the text and hash it here. The text
+    comes from the SERVED column (``text`` — the retrieval contract's own
+    field; ``metadata.chunk_text`` is display-only, #2153): the gold hashes
+    the text the pipeline serves, and hashing the display column scored a
+    silent all-zero anchor on a contextualized corpus.
     """
     return {
         r["key"]: content_hash(r["text"])

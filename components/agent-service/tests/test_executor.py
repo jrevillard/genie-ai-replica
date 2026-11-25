@@ -94,9 +94,13 @@ class FakeSearchPort:
         self.result = result
         self.calls = []
 
-    async def search_knowledge(self, context, request, budget):
-        self.calls.append({"context": context, "request": request, "budget": budget})
+    async def search_knowledge(self, context, request, budget, abstention_sink=None):
+        self.calls.append(
+            {"context": context, "request": request, "budget": budget, "abstention_sink": abstention_sink}
+        )
         if self.result is None:
+            if abstention_sink is not None:
+                abstention_sink("no_documents_retrieved")
             return SearchKnowledgeResult(
                 outcome=OutcomeCode.INSUFFICIENT_EVIDENCE, query_preparation_status=QUERY.query.preparation_status
             )
@@ -337,11 +341,43 @@ def test_search_insufficiency_passes_through():
     assert result.outcome is OutcomeCode.INSUFFICIENT_EVIDENCE
 
 
+def test_search_threads_the_abstention_sink_into_the_inner_port():
+    """The recorded insufficiency reason survives the executor boundary: the
+    agent path's search carries the same per-call sink hook the direct
+    capability path takes, so an insufficiency answered through the
+    executor records its exact reason — the same event the direct path
+    (config B) records, not a null reason beside it."""
+    reasons = []
+    inner = FakeSearchPort()
+    result = asyncio.run(executor(search=inner).search_knowledge(ctx(), QUERY, BUDGET, abstention_sink=reasons.append))
+    assert result.outcome is OutcomeCode.INSUFFICIENT_EVIDENCE
+    # The sink travelled WITH the call to the inner port...
+    assert inner.calls[-1]["abstention_sink"] is not None
+    # ...and the inner port's recorded reason reached the caller's sink.
+    assert reasons == ["no_documents_retrieved"]
+
+
+def test_search_without_a_sink_leaves_the_inner_call_unchanged():
+    """No sink passed: the inner port sees none — the executor's protocol
+    call stays a plain call for callers that scrape no reasons."""
+    inner = FakeSearchPort()
+    asyncio.run(executor(search=inner).search_knowledge(ctx(), QUERY, BUDGET))
+    assert inner.calls[-1]["abstention_sink"] is None
+
+
 def test_search_hit_cap_truncates():
+    """The hit cap is the inner port's OWN result budget (it caps `hits` at
+    max_results before the executor sees them) — the executor slices its
+    authorized survivors to the same cap and reports the inner port's
+    truncation honesty. A second truncation count here would be a cut that
+    never happens."""
     hits = tuple(hit(LegacyFileProvenance(file_id=str(i))) for i in range(10))
     inner = FakeSearchPort(
         SearchKnowledgeResult(
-            outcome=OutcomeCode.SUCCESS, hits=hits, query_preparation_status=QUERY.query.preparation_status
+            outcome=OutcomeCode.SUCCESS,
+            hits=hits,
+            truncated=True,
+            query_preparation_status=QUERY.query.preparation_status,
         )
     )
     result = asyncio.run(executor(search=inner).search_knowledge(ctx(), QUERY, BUDGET))

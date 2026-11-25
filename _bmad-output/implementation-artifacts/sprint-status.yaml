@@ -31,9 +31,71 @@
 last_updated: 11-24-2026 19:50
 
 project: genie-ai
-project_key: NOKEY
+project_key: agentic-foundations
+branch: feat/agentic-foundations/prd
 tracking_system: file-system
-story_location: _bmad-output/implementation-artifacts
+story_location: _bmad-output/implementation-artifacts/stories
+epics:
+- id: epic-1
+  title: OPEA-free document capability layer (S3)
+  spec: _bmad-output/planning-artifacts/epics.md#epic-1-opea-free-document-capability-layer-s3
+  status: done
+  stories:
+  - 1.1
+  - 1.2
+  - 1.3
+  - 1.4
+  - 1.5
+  - 1.6
+  - 1.7
+  - 1.8
+  - 1.9
+  - 1.10
+- id: epic-2
+  title: Governed document-QA agent with visible work (S4a)
+  spec: _bmad-output/planning-artifacts/epics.md#epic-2-governed-document-qa-agent-with-visible-work-s4a
+  status: done
+  depends_on:
+  - epic-1
+  stories:
+  - 2.1
+  - 2.2
+  - 2.3
+  - 2.4
+  - 2.4b
+  - 2.5
+  - 2.6
+  - 2.7
+  - 2.8
+  - 2.9
+  - 2.10
+  - 2.11
+  - 2.12
+- id: epic-3
+  title: Safe activation and rollback (S4b)
+  spec: _bmad-output/planning-artifacts/epics.md#epic-3-safe-activation-and-rollback-s4b
+  status: done
+  depends_on:
+  - epic-1
+  - epic-2
+  stories:
+  - 3.1
+  - 3.2
+  - 3.3
+- id: epic-4
+  title: Evaluation and evidence
+  spec: _bmad-output/planning-artifacts/epics.md#epic-4-evaluation-and-evidence
+  status: in-progress
+  depends_on:
+  - epic-1
+  - epic-2
+  stories:
+  - 4.1
+  - 4.2
+  - 4.3
+  - 4.4
+  - 4.5
+  - 4.6
 development_status:
   epic-1: done
   1-1-record-the-opea-query-path-behavioral-contract-v02: done
@@ -48,7 +110,7 @@ development_status:
   1-10-attest-the-chart-identity-of-the-deployed-baseline: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-runtime-seam-and-bounded-decision-probe: done
   2-2-v06-runtime-verification-and-d03-closure: done
   2-3-request-orchestrator-budgets-admission-cancellation: done
@@ -63,7 +125,7 @@ development_status:
   2-11-execution-attribution-and-observability: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-one-flag-both-paths-provably: done
   3-2-rollback-continuity: done
   3-3-rehearsed-rollback-and-rollout-record-v08: done

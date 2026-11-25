@@ -535,6 +535,20 @@ def test_coexistence_splits_the_not_measurable_reason_for_an_unknown_metric():
     assert "no legacy metric named" in by_metric["unknown_metric"]["reason"]
 
 
+def test_coexistence_regression_splits_the_not_measurable_reason_for_an_unknown_metric():
+    """A regression tolerance naming a metric the harness does not define
+    blames the ARTIFACT, not the measurement — the same unknown-metric rule
+    the absolute limits carry: the entry is never scored against a polarity
+    the harness does not define for it, and the verdict stays BLOCKED."""
+    limits = _limits()
+    limits["regression"]["latency_medain_ms"] = {"max_delta": 200.0}
+    report = _report(control=_control(), loaded=_control(), limits=limits)
+    by_metric = {record["metric"]: record for record in report["regression_verdict"]["metrics"]}
+    assert by_metric["latency_medain_ms"]["outcome"] == "not_measurable"
+    assert "no legacy metric named" in by_metric["latency_medain_ms"]["reason"]
+    assert report["regression_verdict"]["verdict"] == "blocked"
+
+
 def test_coexistence_keeps_the_measurement_reason_for_a_known_unmeasured_metric():
     """A harness metric the measurement does not carry keeps the measurement
     reason — the two absences have different fixes."""

@@ -383,7 +383,15 @@ def test_the_port_declares_both_operations_with_the_context_and_the_budget():
         method = getattr(contract.DocumentCapabilityPort, method_name)
         parameters = list(inspect.signature(method).parameters)
 
-        assert parameters == ["self", "context", "request", "budget"]
+        if method_name == "search_knowledge":
+            # The optional per-call abstention sink is part of the DECLARED
+            # protocol: the executor threads it into the inner port call, so
+            # a port conforming to the declared signature must accept it —
+            # a 3-args-only port raises TypeError the moment a caller
+            # supplies a sink.
+            assert parameters == ["self", "context", "request", "budget", "abstention_sink"]
+        else:
+            assert parameters == ["self", "context", "request", "budget"]
         assert inspect.iscoroutinefunction(method)
 
 

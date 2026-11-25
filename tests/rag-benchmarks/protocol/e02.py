@@ -71,7 +71,7 @@ from .e01 import (
 from .e01 import (
     _ok_rows as _b_ok_rows,
 )
-from .evalset import base_case_id
+from .evalset import base_case_id, coverage_census
 from .manifest import (
     digest_without_embedded,
     manifest_digest,
@@ -1147,9 +1147,11 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
     # committed maps are the BUILD-TIME redacted snapshots (credential-named
     # keys were dropped before the manifest was written), so a difference that
     # lived only in a credential-named key is not comparable — "identical"
-    # means "identical over the recorded keys", and two empty maps are two
-    # UNRECORDED envs, never an identical pair.
-    if not b_committed and not c_committed:
+    # means "identical over the recorded keys", and an env UNRECORDED ON
+    # EITHER SIDE makes the comparison itself unrecorded (equality over an
+    # empty shared-key set is a vacuous claim — the same never-equal-from-
+    # absence principle the recorded comparisons carry).
+    if not b_committed or not c_committed:
         env_state = "not_recorded"
     else:
         env_state = "identical" if not differing_env else "different"
@@ -1184,8 +1186,10 @@ def _uncontrolled_differences(b_manifest: dict, c_manifest: dict, seed: int | No
             "note": (
                 "the resolved env is recorded from the two runs' own snapshots, which the manifest"
                 " redacted at build time: credential-named keys are not comparable, so 'identical'"
-                " means identical over the recorded keys, and two empty maps are two unrecorded"
-                " envs. A key that differs is an uncontrolled difference the reader must weigh"
+                " means identical over the recorded keys, and an env unrecorded on either side"
+                " (both maps empty, or one leg's map empty) is not compared — 'not_recorded',"
+                " never an identical pair. A key that differs is an uncontrolled difference the"
+                " reader must weigh"
             ),
         },
         "execution_conditions": {
@@ -1471,6 +1475,12 @@ def build_e02_report(
             "c_missing": sum(1 for record in per_case.values() if record["c"] is None),
             "n_query_classes": len(gains.get("per_class") or {}),
             "n_query_classes_not_covered": len(gains.get("not_covered") or []),
+            # What the set covers, per evaluation surface — the same census
+            # the A capture stamps and the E01 report carries in its own
+            # counts. The C verdict's coverage claim is the one the operator
+            # reads, so it is stated here against the set digest the report
+            # carries, not inferred from a gold count.
+            "coverage": coverage_census(entries),
         },
     }
     body["verdict"] = _verdict(dimensions, gains)

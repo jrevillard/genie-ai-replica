@@ -129,3 +129,20 @@ def source_chunks(
         {"@src": graph_source},
         **(conn or {}),
     )
+
+
+def source_file_ids(graph_source: str, conn: dict | None = None) -> set[str]:
+    """The distinct ``file_id`` values a SOURCE collection carries — the
+    corpus-presence resolution the security verdicts' precondition reads
+    (#2155): a declared source absent from every graph it names means the
+    case is not judgeable (an empty restricted graph leaks nothing by
+    construction, and the verdict layer must never publish that vacuous
+    pass). Goes through the ONE cursor implementation, like every AQL read
+    in this tree.
+    """
+    rows = cursor(
+        "FOR doc IN @@src FILTER doc.file_id != null RETURN DISTINCT doc.file_id",
+        {"@src": graph_source},
+        **(conn or {}),
+    )
+    return {str(row) for row in rows}

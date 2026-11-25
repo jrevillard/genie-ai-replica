@@ -60,7 +60,7 @@ Fields after parsing (defaults in `query-service.js:469-489`):
 | `confidence_score` | `0` | citizen-facing confidence (LLM self-grade when enabled, else retrieval) |
 | `retrieval_confidence_score` | `null` | raw rank-weighted retrieval confidence (admin/eval) |
 | `abstained` | `false` | the turn abstained; **`null` on the never-answered empty default** (`:162-173`) — `false` ("answered, chose not to abstain") is distinguishable from `null` ("chatqna never answered") |
-| `abstention_reason` | `null` | the machine-readable cause: `no_documents_retrieved` / `reranker_selected_nothing` / `reranker_input_too_long` |
+| `abstention_reason` | `null` | the machine-readable cause: `no_documents_retrieved` / `reranker_selected_nothing` / `reranker_input_too_long` / `result_budget_exhausted` / `no_resolvable_candidates` |
 | `filter_labels` | `null` | the scope the retrieval filtered on; `null` = "not recorded", `[]` = a reported empty scope |
 | `is_grounded` | `false` | the answer is backed by retrieved chunks |
 | *(passthrough)* `self_confidence` | absent | presence-keyed: absent = feature off; explicit `null` = feature on, sentinel malformed (`:497-509`) |

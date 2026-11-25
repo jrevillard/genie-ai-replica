@@ -144,7 +144,9 @@ on it (ChatQnA; embedding, reranker, retriever and dataprep wrappers),
 including their build-time repository downloads.
 
 **Not** OPEA components: vLLM, TEI, ArangoDB, Redis and GENIE's own Node.js
-services — compose defines them independently of the OPEA wrappers (F05).
+services — compose defines them independently of the OPEA wrappers (the OPEA
+wrappers' own finding F05, recorded in the framing issue #1729: the wrapper
+images carry the OPEA repository downloads, the base services do not).
 
 The constraint binds the **new** agentic path only; it does not require touching
 the existing stack. **R12 discipline:** a capability may only be described as
@@ -427,7 +429,7 @@ through the verification item that feeds it:
 |----|----------|--------|--------|
 | D01 | Ownership/placement of the document capability boundary | **Acted 2026-11-16** (architecture spine AD-3: contract = module inside `components/agent-service`, okf-server remains THE per-user read authority; operator-approved) | V02, V04 confirm at contract acceptance — a V04 divergence reopens the AD |
 | D02 | OPEA-free agentic path coexisting with unchanged legacy OPEA RAG | Proposed (operator direction 2026-11-16) | V03, NFR-3 |
-| D03 | First agent runtime | Open — the operator named DSH the preferred investigation candidate (2026-11-10); research screening pick: custom minimal loop (provisional). **Candidate state, corrected revisit trigger, required evidence: addendum §D.** Decision at S4 entry from V06 and V07a; **must not close on research evidence older than the 2026-12-01 re-check** (PRD §13-7) | S1 research + amendments, SC-01 experiment, V06, V07 |
+| D03 | First agent runtime | Open — the operator named DSH the preferred investigation candidate (2026-11-10); research screening pick: custom minimal loop (provisional). **Candidate state, corrected revisit trigger, required evidence: addendum §D.** Decision at S4 entry from V06 and V07a; **must not close on research evidence older than the 2026-12-01 re-check** (PRD §13-7) | S1 research + amendments, SC-01 experiment, V06, V07a |
 | D04 | Preservation vs versioning of document/client contracts | Open | V05 |
 | D05 | Release gates and pilot scope | Open | Baseline measurement, validation infrastructure (V09) |
 
@@ -435,7 +437,7 @@ Verification backlog (roles, not yet named assignees):
 
 | ID | Investigation | Required before | Role |
 |----|---------------|-----------------|------|
-| V02 | Record what the OPEA retriever/embedding path contributes to query results (semantics, filtering, reranking); distinguish query from ingestion paths. Input: the OPEA contract-test suite (F06) documents retrieval/filtering/reranking/ingestion/telemetry checks | S3 design | Technical lead |
+| V02 | Record what the OPEA retriever/embedding path contributes to query results (semantics, filtering, reranking); distinguish query from ingestion paths. Input: the OPEA contract-test suite (the OPEA wrappers' finding F06, recorded in the framing issue #1729: the suite covers retrieval/filtering/reranking/ingestion/telemetry checks) | S3 design | Technical lead |
 | V03 | Record deployed versions, image digests, models, configurations, topology; reconcile with source baseline | Representative baseline | Operations |
 | V04 | Map effective authorization, provenance and ownership across existing services, incl. OKF amendments | Contract acceptance | Architecture + security reviewers |
 | V05 | Inventory actual API/SSE/error contracts and current regression coverage | S3 compatibility gate | Backend/frontend + QA |

@@ -7,7 +7,7 @@ tracking_format_version: 1
 epics:
 - id: epic-1
   title: Pipeline enablement (D1)
-  spec: _bmad-output/planning-artifacts/epics.md#epic-1
+  spec: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md#epic-1--pipeline-enablement-d1
   status: backlog
   stories:
   - 1.1
@@ -17,7 +17,7 @@ epics:
   - 1.6
 - id: epic-2
   title: "Producer \u2014 Winston \u2192 VictoriaLogs (+ JSON, OTel)"
-  spec: _bmad-output/planning-artifacts/epics.md#epic-2
+  spec: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md#epic-2--producer-winston--victorialogs--json-format-otel
   status: backlog
   depends_on:
   - epic-1
@@ -34,7 +34,7 @@ epics:
   - 2.12
 - id: epic-3
   title: Document-repository producer-side init
-  spec: _bmad-output/planning-artifacts/epics.md#epic-3
+  spec: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md#epic-3--document-repository-producer-side-init
   status: backlog
   depends_on:
   - epic-2
@@ -44,7 +44,7 @@ epics:
   - 3.4
 - id: epic-4
   title: MELT seam + VL client (hexagonal layout per AD-3)
-  spec: _bmad-output/planning-artifacts/epics.md#epic-4
+  spec: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md#epic-4--melt-seam--vl-client-hexagonal-layout-per-ad-3
   status: backlog
   depends_on:
   - epic-2
@@ -57,7 +57,7 @@ epics:
   - 4.6
 - id: epic-5
   title: Logs facility rewire (admin endpoints + F4 fix)
-  spec: _bmad-output/planning-artifacts/epics.md#epic-5
+  spec: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md#epic-5--logs-facility-rewire-admin-endpoints--f4-fix
   status: backlog
   depends_on:
   - epic-4
@@ -74,7 +74,7 @@ epics:
   - 5.12
 - id: epic-6
   title: "Security scanner rewire (worker_threads \u2192 VL bulk)"
-  spec: _bmad-output/planning-artifacts/epics.md#epic-6
+  spec: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md#epic-6--security-scanner-rewire-worker_threads--vl-bulk
   status: backlog
   depends_on:
   - epic-4
@@ -84,7 +84,7 @@ epics:
   - 6.4
 - id: epic-7
   title: Cleanup (deprecate rollover, remove file transports)
-  spec: _bmad-output/planning-artifacts/epics.md#epic-7
+  spec: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md#epic-7--cleanup-deprecate-rollover-remove-file-transports
   status: backlog
   depends_on:
   - epic-5

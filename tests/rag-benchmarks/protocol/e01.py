@@ -63,6 +63,7 @@ from .redaction import (
     is_credential_key as _is_credential_key,
     redact_deep as _redact_deep,
 )
+from .reuse import current_protocol_code_sha
 
 E01_REPORT_VERSION = "1.0.0"
 
@@ -402,6 +403,20 @@ def _verify_legs(
             f"the A capture ran over another corpus ({stamped_corpus!r} vs {ref_corpus!r}) —"
             " refusing before the report is built",
         )
+    # The PROTOCOL's own code identity: the capture stamp records the digest
+    # of the protocol package it ran under, and a capture made before a
+    # protocol change is not current evidence for the join. A stamp that
+    # predates the field is tolerated (recorded absent, never reconstructed).
+    stamped_protocol = capture_stamp.get("protocol_code_sha256")
+    if stamped_protocol is not None:
+        live_protocol = current_protocol_code_sha()
+        if stamped_protocol != live_protocol:
+            raise E01Refusal(
+                "protocol_code_mismatch",
+                f"the A capture ran under another protocol-package identity ({stamped_protocol!r}"
+                f" vs {live_protocol!r}) — the drivers, the set validator and the"
+                " verdict layer are behaviour its rows speak for; re-capture",
+            )
 
 
 # ---------------------------------------------------------------------------

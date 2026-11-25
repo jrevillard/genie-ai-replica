@@ -339,8 +339,12 @@ class ProbeModelClient:
             self._model_id = str(entry["id"])
             # The same probe serves the window the one-call cap is anchored
             # on; a garbage or absent value falls to the configured tier.
-            discovered = entry.get("max_model_len")
-            if isinstance(discovered, int) and discovered > 0:
+            # A proxy may serialize the served window as a float or a digit
+            # string, so the value is coerced like the other numeric fields
+            # the payload carries — and the sane cap keeps an absurd value
+            # from disabling the overflow guard.
+            discovered = coerce_int(entry.get("max_model_len"))
+            if discovered is not None and 0 < discovered <= MAX_SANE_TOKENS:
                 self._discovered_window = discovered
         return self._model_id
 
@@ -406,9 +410,12 @@ class ProbeModelClient:
             # The offset is added AFTER the estimate: the +20 prompt-offset
             # tokens are tokens, not characters — inside the division they
             # would contribute only 5.
-            input_tokens = (
-                math.ceil(len(json.dumps(messages)) / MODEL_CHARS_PER_TOKEN_ESTIMATE) + MODEL_PROMPT_OFFSET_TOKENS
-            )
+            # The declared tools are part of the request the endpoint sees,
+            # so their serialized size counts against the room too: for a
+            # tool-shaped call the schemas are the dominant term, and a
+            # room computed without them overstates what one call can serve.
+            request_chars = len(json.dumps(messages)) + len(json.dumps(payload.get("tools", [])))
+            input_tokens = math.ceil(request_chars / MODEL_CHARS_PER_TOKEN_ESTIMATE) + MODEL_PROMPT_OFFSET_TOKENS
             room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
             if room > 0:
                 payload["max_tokens"] = min(max_output_tokens, room)

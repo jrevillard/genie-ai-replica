@@ -50,6 +50,7 @@ from capabilities.contract import (
     SourceRef,
     TransientError,
 )
+from preparation.detection import detect_language
 from preparation.translation import TranslationInputTooLongError
 
 from .registry import ToolDefinition, ToolRegistry
@@ -162,15 +163,25 @@ def _make_search_executor(
             prepared = PreparedQuery(text=query_text, preparation_status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)
         else:
             # The string IS the retrieval query (the preparation module's
-            # single-message shape — the refined mid-loop query is prepared
-            # identically to the initial one). The call is BOUNDED at the
-            # dispatch's operation budget — its own pieces only know the
-            # translation service's generous timeout, and the run's wall
-            # clock is checked only BETWEEN dispatches, so an unbounded
-            # preparation would stall this dispatch (and the admission
-            # lane with it) for minutes on a slow-but-alive endpoint.
+            # single-message shape — every query the model writes is
+            # prepared the same way). The QUERY's own language decides, not
+            # the conversation's locale: the schema asks the model for an
+            # English query, and a foreign-language hint would send that
+            # English query through a translation pass that can reword it.
+            # A model that echoes the user's language is translated; a
+            # query whose language stays undetermined passes through as
+            # the English the schema asked for.
+            query_language = detect_language(query_text) or "EN"
+            # The call is BOUNDED at the dispatch's operation budget — its
+            # own pieces only know the translation service's generous
+            # timeout, and the run's wall clock is checked only BETWEEN
+            # dispatches, so an unbounded preparation would stall this
+            # dispatch (and the admission lane with it) for minutes on a
+            # slow-but-alive endpoint.
             try:
-                preparation = await asyncio.wait_for(preparer.prepare(query_text), timeout=budget.timeout_ms / 1000)
+                preparation = await asyncio.wait_for(
+                    preparer.prepare(query_text, query_language), timeout=budget.timeout_ms / 1000
+                )
             except TimeoutError:
                 # Bounded, not dead: the honest tool answer is the fallback
                 # insufficiency — the model can react (retry, reword), and

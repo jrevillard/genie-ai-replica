@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The V06 verification harness — cell judgment, streaming reassembly, cancellation demos.
+"""The runtime verification harness — cell judgment, streaming reassembly, cancellation demos.
 
 Every path runs on fakes: the suite is deterministic and CI carries no live
 endpoint. The judgment contract is pinned mechanically — a malformed call is
@@ -666,6 +666,29 @@ def test_the_identity_carries_the_version_and_model_verbatim():
     assert identity.model_id == "served-model"
     assert identity.max_model_len == 8192
     assert identity.served_at_utc
+
+
+@pytest.mark.parametrize(
+    ("served", "recorded"),
+    [
+        (8192, 8192),  # the plain int
+        (8192.0, 8192),  # proxy float serialization
+        ("8192", 8192),  # proxy digit-string serialization
+        (True, None),  # a boolean is a malformed answer, not a 1-token window
+        (0, None),  # a non-positive window is garbage
+        (1.0e15, None),  # an absurd window would disable the overflow guard
+    ],
+)
+def test_the_recorded_window_accepts_the_numeric_forms_proxies_serve(served, recorded):
+    # The execution-version record's max_model_len is what an audit reads
+    # the run against: a proxy that serializes it as a float or a digit
+    # string must still be recorded, and a malformed value must be recorded
+    # as absent (the window is unknown), never as a wrong number.
+    transport = PreparationFakeTransport(
+        {f"{ENDPOINT}/v1/models": (200, {"data": [{"id": "m", "max_model_len": served}]})}
+    )
+    identity = asyncio.run(read_endpoint_identity(verifier_config(VLLM_LLM_MODEL_ID=""), transport))
+    assert identity.max_model_len == recorded
 
 
 def test_an_absent_version_endpoint_is_recorded_not_fatal():

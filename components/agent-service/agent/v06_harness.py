@@ -1,11 +1,11 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""V06 — the runtime verification harness: live evidence for the D03 decision.
+"""The runtime verification harness: live evidence the deployment decision cites.
 
 Verification tooling beside ``probe.py``, NOT production loop code: it shares
 the seam's primitives (the loop, the cancellation token, the registry shape)
 and the recorded payload conventions (``noagent.generation``), and owns only
-the pieces V06 needs that nothing else has — the streaming SSE read and the
+the pieces the verification needs that nothing else has — the streaming SSE read and the
 per-cell judgment.
 
 What it produces, against the DEPLOYED endpoint:
@@ -54,7 +54,7 @@ from typing import Any, Protocol
 import httpx
 
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
-from preparation.translation import HttpxTransport
+from preparation.translation import MAX_SANE_TOKENS, HttpxTransport, coerce_int
 
 from .budget import RunBudgetMonitor
 from .cancellation import CancellationToken
@@ -132,7 +132,7 @@ MARKUP_LEAK_MARKERS = ("<tool_call>", "</tool_call>", "<|python_tag|>", "<functi
 
 CONTENT_PREVIEW_CHARS = 200
 # Deliberately wider than loop.py's MESSAGE_TRUNCATION (200): this bounds
-# evidence-record error text, and the V06 record cites the 300-char cap.
+# evidence-record error text; the verification record cites the 300-char cap.
 _ERROR_PREVIEW_CHARS = 300
 
 
@@ -279,7 +279,7 @@ class PlainControlObservation:
 
 @dataclass(frozen=True)
 class VerificationEvidence:
-    """One V06 run's evidence record — the record the decision cites."""
+    """One verification run's evidence record — the record the decision cites."""
 
     producer: str
     venue: str
@@ -299,7 +299,7 @@ class VerificationEvidence:
 
 @dataclass(frozen=True)
 class AcceptanceVerdict:
-    """The exit-0 semantics of one V06 record, judged mechanically.
+    """The exit-0 semantics of one verification record, judged mechanically.
 
     Passed means: the identity resolved, every cell is valid with no error,
     the streaming demo cancelled + aborted + delivered nothing, and the loop
@@ -932,9 +932,13 @@ async def _discover_model(config: ProbeConfig, transport) -> tuple[str | None, i
             "the model discovery carried no usable model entry "
             f"(expected a non-empty list of objects under 'data', got {type(data).__name__})"
         )
-    window = entry.get("max_model_len")
-    # bool is an int in Python; a True window is a malformed answer, not 1.
-    return str(entry["id"]), window if isinstance(window, int) and not isinstance(window, bool) else None
+    window = coerce_int(entry.get("max_model_len"))
+    # A proxy may serialize the served window as a float or a digit string,
+    # and a boolean is an int in Python — a True window is a malformed
+    # answer, not 1. The sane cap keeps an absurd value out of the record.
+    if window is None or not 0 < window <= MAX_SANE_TOKENS:
+        window = None
+    return str(entry["id"]), window
 
 
 async def run_matrix(
@@ -943,7 +947,7 @@ async def run_matrix(
     """Every cell of the matrix, serially, in a stable order.
 
     The first ERROR-FREE call per schema strictness carries the FSM-compile
-    latency — recorded per schema, per the V06 design (it informs the
+    latency — recorded per schema, per the verification design (it informs the
     orchestrator's budget sizing; it decides nothing here). An errored cell
     never feeds the slot (a rejection round-trip is not a compile), and
     ``first_call_cell`` names the cell that fed each slot.
@@ -1280,7 +1284,7 @@ async def run_plain_control(config: ProbeConfig, transport, model_id: str) -> Pl
 async def run_verification(
     config: ProbeConfig, transport=None, sse_factory=None, venue: str = ""
 ) -> VerificationEvidence:
-    """One V06 pass: identity, matrix, cancellation demos, control — the full record."""
+    """One verification pass: identity, matrix, cancellation demos, control — the full record."""
     transport = transport if transport is not None else HttpxTransport(config.tls_verify)
     identity = await read_endpoint_identity(config, transport, venue)
     if identity.model_id is None:
@@ -1322,7 +1326,7 @@ async def run_verification(
 
 
 def acceptance_verdict(evidence: VerificationEvidence) -> AcceptanceVerdict:
-    """The exit-0 semantics of one V06 record, judged mechanically and purely.
+    """The exit-0 semantics of one verification record, judged mechanically and purely.
 
     Passed means: the identity resolved; every cell is valid with no error;
     the streaming demo cancelled + observed the teardown abort + delivered

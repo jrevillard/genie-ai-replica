@@ -586,14 +586,24 @@ FINAL_A_MANIFEST = (
 )
 
 
-def _draft_limits() -> dict:
-    return json.loads(DRAFT_LIMITS_FILE.read_text(encoding="utf-8"))
+def _draft_limits(force_status="draft") -> dict:
+    """The committed draft artifact, with its status FORCED to the requested
+    value by default: the tests must not pin the committed file's own status
+    field — the documented agreement act flips it to "agreed" in place, and
+    a flip commit must keep the suite green. ``force_status=None`` reads the
+    artifact verbatim."""
+    draft = json.loads(DRAFT_LIMITS_FILE.read_text(encoding="utf-8"))
+    if force_status is not None:
+        draft["status"] = force_status
+    return draft
 
 
 def _draft_lineage() -> dict:
     """The lineage the draft binds: the FINAL A reference's corpus
-    fingerprint and assessment-set digest, read off the draft itself."""
-    draft = _draft_limits()
+    fingerprint and assessment-set digest, read off the draft itself —
+    verbatim, status-independent (the committed file may be draft or
+    agreed; the lineage fields never move)."""
+    draft = _draft_limits(force_status=None)
     return {
         "corpus_fingerprint": draft["corpus_fingerprint"],
         "assessment_set_sha256": draft["assessment_set_sha256"],
@@ -687,7 +697,6 @@ def test_draft_limits_lineage_matches_the_final_a_reference():
     reference (issue #2162): the corpus fingerprint and the assessment-set
     digest the signed thresholds carry."""
     manifest = json.loads(FINAL_A_MANIFEST.read_text(encoding="utf-8"))
-    draft = _draft_limits()
+    draft = _draft_limits(force_status=None)
     assert draft["corpus_fingerprint"] == manifest["corpus"]["fingerprint"]
     assert draft["assessment_set_sha256"] == manifest["sets"]["assessment"]["sha256"]
-    assert draft["status"] == "draft"

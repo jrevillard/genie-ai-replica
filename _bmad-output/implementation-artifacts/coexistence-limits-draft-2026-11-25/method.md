@@ -7,8 +7,9 @@ nothing is agreed, no verdict opens on it: the artifact carries
 outright (`draft_limits`), so the criterion's verdict stays BLOCKED until
 the operator agrees. The harness applies limits, it never authors or
 defaults them — this package is the authoring, and the agreement act is the
-operator's: flip the artifact's `status` to `"agreed"` (a one-key edit of
-THIS file, with the decision recorded on the issue), then pass it as
+operator's: flip the `status` key of `legacy-limits.draft.json` (the JSON
+artifact beside this method note — NOT this markdown file) to `"agreed"`,
+with the decision recorded on the issue, then pass that JSON as
 `run_protocol.py coexistence --limits`. Nothing in the harness needs to
 change for the agreement to take effect.
 

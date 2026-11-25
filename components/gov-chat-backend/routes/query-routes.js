@@ -603,6 +603,20 @@ module.exports = (queryService) => {
             capturedMetadata = interruptedMetadata(capturedMetadata);
           }
           doHandleStreamDone(!hadCapturedMetadata);
+        } else if (!doneState.handled && res.writableEnded === false) {
+          // The upstream ended cleanly with NO chunk and NO `done` frame:
+          // the terminal never ran, so the response would hang on the
+          // keepalives until the client's idle watch aborts it. The error
+          // contract ends it honestly — the same shape the stream-error
+          // path uses (error frame, then end; no metadata, no done). The doc
+          // stays unanswered: an empty answer is nothing to finalize.
+          doneState.handled = true;
+          writeSSEFrame(res, {
+            type: 'error',
+            message: 'the upstream stream ended without an answer',
+            code: 'CHATQNA_STREAM_ERROR'
+          });
+          res.end();
         }
       });
 
@@ -658,7 +672,11 @@ module.exports = (queryService) => {
       skipPostStreamTranslation = false,
       alreadyFailedTranslation = false,
       translateFullAnswer = null,
-      skipRoutedGraphs = false
+      skipRoutedGraphs = false,
+      // The agentic lane (the frame writer's terminal): it records the
+      // answer-translation outcome in the persisted metadata, the noagent
+      // lane's vocabulary. The legacy lane keeps its deployed shape.
+      agenticLane = false
     } = {}
   ) {
     if (res.writableEnded || res.destroyed) return;
@@ -673,8 +691,6 @@ module.exports = (queryService) => {
     // (reranker verdict + is_grounded), not from a backend-side retrieval.
     const metadata = capturedMetadata || emptyStreamMetadata();
 
-    res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
-
     // A translation was asked for and the answer was not already delivered in
     // the target language: the whole answer is translated here. On the
     // agentic non-relay terminal the AGENTIC LEG executes it (the caller
@@ -684,7 +700,34 @@ module.exports = (queryService) => {
     // the leg's outcome mapping (agentic); the frame write and the logging
     // stay here (delivery-mode specific).
     const translationExpected = wantsTranslation(targetLanguage);
-    if (!skipPostStreamTranslation && translationExpected && fullResponseText) {
+    const translateNow = !skipPostStreamTranslation && translationExpected && Boolean(fullResponseText);
+
+    // The answer-translation outcome, presence-keyed (the noagent lane's
+    // vocabulary): 'ok' when a translation was delivered, 'failed' when one
+    // was attempted and failed, absent when none was asked for. The agentic
+    // lane records it, so a restored conversation derives the same fact the
+    // live stream carried. The legacy lane's metadata keeps its deployed
+    // shape.
+    //
+    // The RELAY path knows its outcome here (the translated units were the
+    // delivery, or a unit failed); the leg path's outcome lands with its
+    // result below.
+    if (agenticLane) {
+      if (alreadyFailedTranslation) {
+        metadata.translation_status = 'failed';
+      } else if (skipPostStreamTranslation && translationExpected && /\S/.test(fullResponseText)) {
+        metadata.translation_status = 'ok';
+      }
+    }
+
+    // The metadata frame comes FIRST: the sources, the confidence and the
+    // grounding status must reach the client with the answer, not after the
+    // translation settled (the leg's window is the translation reserve —
+    // tens of seconds are legal). The leg's V05 status therefore rides the
+    // DONE frame below, and the persisted doc carries it too.
+    res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
+
+    if (translateNow) {
       // Both delivery cores are fail-soft — translateWholeAnswer (legacy) by
       // its own contract, the leg's bound translator by the leg module's
       // never-raises helper — so no caller-side guard lives here: the English
@@ -694,12 +737,18 @@ module.exports = (queryService) => {
         : await translateWholeAnswer(translator, fullResponseText);
       if (result.accounting) {
         // The leg's accounting is the observable record of WHY the answer is
-        // in its language, and the V05 status rides the persisted metadata
-        // (the metadata FRAME is already written — the client reads the
-        // delivery from the translation frame itself). Its presence alone
-        // discriminates the leg path: the legacy core never returns one.
+        // in its language, and the V05 status rides the DONE frame (the live
+        // carrier) and the persisted doc (the durable one). Its presence
+        // alone discriminates the leg path: the legacy core never returns one.
         logger.info('QueryService.agentic_translation_accounting', { queryId, accounting: result.accounting });
         metadata.query_translation_status = result.queryTranslationStatus;
+      }
+      if (agenticLane) {
+        if (result.failed) {
+          metadata.translation_status = 'failed';
+        } else if (result.text) {
+          metadata.translation_status = 'ok';
+        }
       }
       if (result.failed) {
         const reason = result.error
@@ -755,7 +804,17 @@ module.exports = (queryService) => {
       return;
     }
 
-    res.write(`data: ${JSON.stringify({ type: 'done', queryId, translationFailed })}\n\n`);
+    // The V05 status rides the DONE frame when the leg produced one: the
+    // metadata frame was written before the translation settled (the sources
+    // must not wait for it), so the done frame is the client's live carrier.
+    // Only the agentic lane runs the leg, and the legacy lane's metadata
+    // carries chatqna's own query-side status under that key — a different
+    // fact under the same name. The legacy done frame stays byte-identical.
+    const doneFrame = { type: 'done', queryId, translationFailed };
+    if (agenticLane && metadata.query_translation_status) {
+      doneFrame.queryTranslationStatus = metadata.query_translation_status;
+    }
+    res.write(`data: ${JSON.stringify(doneFrame)}\n\n`);
     res.end();
     logger.info('QueryService.stream_complete', { queryId, responseTime });
   }

@@ -29,6 +29,29 @@ const SKIP_STATUSES = Object.freeze({
   TOKEN_ALLOWANCE_SPENT: 'token_allowance_spent'
 });
 
+// The usage fields the allowance is computed from. ALL FOUR must be finite
+// for the record to bound anything: the token fields bound the token
+// allowance, the call fields bound the call allowance, and a missing one
+// leaves that half unbounded (a string `model_calls` would poison the
+// call-allowance arithmetic — `NaN` remaining — and silently unbound it).
+// The rule is ONE home: the leg's own gate applies this same predicate, so
+// the two cannot disagree about what "available" means.
+const USAGE_FIELDS = Object.freeze(['prompt_tokens', 'completion_tokens', 'model_calls', 'aux_model_calls']);
+
+/**
+ * Whether the run's usage record can bound a translation.
+ *
+ * A missing record, or one with a non-finite field, bounds nothing —
+ * translation is skipped and the run's usage is never estimated up to the
+ * allowance. The same rule the agent side runs, on the same fields.
+ *
+ * @param {Object|null} usage - The run's terminal usage record.
+ * @returns {boolean}
+ */
+function usageAvailable(usage) {
+  return usage !== null && usage !== undefined && USAGE_FIELDS.every((field) => Number.isFinite(usage[field]));
+}
+
 /**
  * Compute what remains of the translation allowance after one agent run.
  *
@@ -55,25 +78,21 @@ function computeResidual({ deadline, usage, allowances }) {
     throw new Error('computeResidual requires finite allowances.maxTokens and allowances.maxCalls');
   }
 
-  // The record's token fields are the endpoint's served counts. Either one
+  // The record's fields are the endpoint's served counts. Any one of them
   // missing makes the total a lower bound — the same degradation rule the
   // agent side runs — and a lower bound cannot bound a translation.
-  const usageAvailable =
-    usage !== null &&
-    usage !== undefined &&
-    Number.isFinite(usage.prompt_tokens) &&
-    Number.isFinite(usage.completion_tokens);
+  const usageIsAvailable = usageAvailable(usage);
 
   const remainingMs = deadline.remainingMs;
   let remainingTokens = null;
   let remainingCalls = null;
-  if (usageAvailable) {
+  if (usageIsAvailable) {
     const usedTokens = usage.prompt_tokens + usage.completion_tokens;
     remainingTokens = allowances.maxTokens - usedTokens;
-    const usedCalls = (usage.model_calls || 0) + (usage.aux_model_calls || 0);
+    const usedCalls = usage.model_calls + usage.aux_model_calls;
     remainingCalls = allowances.maxCalls - usedCalls;
   }
-  return { remainingMs, remainingTokens, remainingCalls, usageAvailable };
+  return { remainingMs, remainingTokens, remainingCalls, usageAvailable: usageIsAvailable };
 }
 
 /**
@@ -119,6 +138,7 @@ function planTranslation({ deadlineRemainingMs, usage, allowances }) {
 
 module.exports = {
   SKIP_STATUSES,
+  usageAvailable,
   computeResidual,
   planTranslation
 };

@@ -16,6 +16,7 @@ import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
 import 'package:genie_ai_mobile/okf/okf_citation_open.dart';
+import 'package:genie_ai_mobile/okf/concept_browser_repository.dart';
 import 'package:genie_ai_mobile/utils/okf_citation.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
@@ -326,7 +327,18 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     // a dead link). What remains here is this surface's own legacy
     // external-URL rung (with the `<HOST>` placeholder guard) and the
     // doc-repository file resolution.
-    if (openOkfCitation(context, doc, logTag: 'sidebar.citation')) {
+    //
+    // The opener resolves a concept's repository LIVE when the citation row
+    // carries none, so it is asynchronous: the external-URL rung runs after
+    // that resolution answered.
+    final handled = await openOkfCitation(
+      context,
+      doc,
+      logTag: 'sidebar.citation',
+      repository: ref.read(conceptBrowserRepositoryProvider),
+    );
+    if (!mounted) return;
+    if (handled) {
       return;
     }
 

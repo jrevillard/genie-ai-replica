@@ -2671,4 +2671,47 @@ describe('SSE stream error mid-stream (story 2.4 — the close-guard contract)',
     expect(frames.find((f) => f.type === 'done')).toBeUndefined();
     expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
   });
+
+  it('an upstream that ends cleanly with no chunk ends with the error contract (never a hang)', async () => {
+    // The upstream accepted the connection, served the headers and closed
+    // without emitting a chunk (an abstention-only turn, a proxy trim before
+    // the first token). Without a terminal, the response hangs on the
+    // keepalives until the client's idle watch aborts it.
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    queryService.parseChatQnASSELine.mockImplementation((data) => JSON.parse(data));
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }]
+    });
+    responsePromise.catch(() => {});
+    for (let i = 0; i < 100 && mockStream.listenerCount('data') === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(mockStream.listenerCount('data')).toBeGreaterThan(0);
+
+    // The upstream closes cleanly — no chunk, no done frame.
+    mockStream.emit('end');
+
+    const response = await responsePromise;
+    const frames = response.text
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => JSON.parse(line.slice(6)));
+    expect(frames[frames.length - 1]).toEqual({
+      type: 'error',
+      message: 'the upstream stream ended without an answer',
+      code: 'CHATQNA_STREAM_ERROR'
+    });
+    expect(frames.find((f) => f.type === 'done')).toBeUndefined();
+    // An empty answer is nothing to finalize: the doc stays unanswered.
+    expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
+  });
 });

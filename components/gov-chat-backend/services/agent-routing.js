@@ -25,11 +25,13 @@ const AGENT_ENABLED = (process.env.AGENT_ENABLED ?? '0').trim() === '1';
 // operator override is optional, never required.
 const DEFAULT_AGENT_SERVICE_URL = 'http://agent-service:8010';
 
-// The run surface the agent-service serves (POST /v1/runs). The BFF posts
-// the configured url VERBATIM (axios.post(agentRunUrl(), …)), so the url the
-// BFF dials must NAME the run surface: a base url without the path answers
-// 404 on a real deployment (both sides stay green under a mocked axios;
-// the live hop answers "POST / HTTP/1.1 404").
+// The run surface the agent service serves: its app exposes exactly three
+// routes (`/health`, `/ready` and this one), so a POST to the bare base URL
+// is a 404 on every agentic turn. The path is JOINED HERE, in the one place
+// that owns the agent endpoint — the operator configures the BASE
+// (host:port) and the BFF appends the surface the agent serves. A
+// deployment that already names the full path (the V08 rehearsal did) must
+// not get the path twice.
 const AGENT_RUN_PATH = '/v1/runs';
 
 /**
@@ -48,7 +50,12 @@ function isAgentPathEnabled() {
  * Read per call (a constant, not a knob an operator flips at runtime — but a
  * function keeps the test surface honest about where the value comes from).
  *
- * @returns {string} The AGENT_SERVICE_URL override, or the compose default.
+ * The configured value is the BASE (host:port); the run surface the agent
+ * serves is appended here, so the wire contract is joined in ONE place. A
+ * deployment that already names the full path (the V08 rehearsal configured
+ * `AGENT_SERVICE_URL=…/v1/runs`) must not get the path twice.
+ *
+ * @returns {string} The URL a run is POSTed to.
  */
 function agentServiceUrl() {
   const configured = (process.env.AGENT_SERVICE_URL ?? '').trim();

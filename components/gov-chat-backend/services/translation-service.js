@@ -381,16 +381,23 @@ class TranslationService {
    * not the codes the model expects. Those codes exist only here, and only
    * the resolution may produce them.
    *
+   * The translator also carries WHICH backend will do the work
+   * (`backendType`: 'gpu' or 'cpu') — the selected backend is decided once,
+   * at startup, and a caller whose own contract forbids the CPU model (the
+   * agentic path: AD-14's GPU-only rule) must be able to ASK before it
+   * schedules a translation. The legacy callers ignore the field.
+   *
    * @param {string} sourceLang - The source language as it arrived from the caller.
    * @param {string} targetLang - The target language as it arrived from the caller.
-   * @returns {{translate: (markdownContent: string) => Promise<string>}} A
-   *   translator bound to the resolved pair.
+   * @returns {{translate: (markdownContent: string) => Promise<string>, backendType: string|null}} A
+   *   translator bound to the resolved pair, carrying the selected backend's type.
    * @throws {UnsupportedLanguageError} When either language is unknown.
    */
   createMarkdownTranslator(sourceLang, targetLang) {
     const pair = this.resolveLanguagePair(sourceLang, targetLang);
     return {
-      translate: (markdownContent) => this._translateMarkdownWithPair(markdownContent, pair)
+      translate: (markdownContent) => this._translateMarkdownWithPair(markdownContent, pair),
+      backendType: this.backendType
     };
   }
 

@@ -242,6 +242,19 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // leg, the stream settles, and the refusal answers with the fallback body
   // — bounded and honest.
   let deadline = null;
+  // The answer's own state, declared HERE because the deadline's callback
+  // reads it and can fire before the stream is even established (a
+  // trickling refusal body): the guard must be safe to call at any point.
+  // `runCompleted`: the run reached its terminal (the `run_finished` event
+  // or the usage record). `fullResponseText`: the answer's text so far.
+  let runCompleted = false;
+  let fullResponseText = '';
+  // The ANSWER is in hand: the run reached its terminal AND its text
+  // arrived. A deadline that fires after that is the missing usage record
+  // (the agent service emits it after `run_finished`), not a timeout of a
+  // turn that already answered. A run that finished without text has
+  // nothing to keep — it stays a timeout.
+  const answerInHand = () => runCompleted && fullResponseText.trim().length > 0;
   const clearDeadline = () => {
     if (deadline !== null) {
       clearTimeout(deadline);
@@ -251,6 +264,15 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   deadline = setTimeout(() => {
     deadline = null;
     logger.warn('AgentJsonResult.upstream_deadline_exceeded', { queryId, timeoutMs: effectiveTimeoutMs });
+    // A run whose ANSWER is in hand is NOT a timeout: the usage record is
+    // what is missing (the agent service emits it after `run_finished`).
+    // The abort still ends the stalled request, but the turn keeps its real
+    // outcome — latching `timed_out` here would answer a completed turn
+    // with a timeout.
+    if (answerInHand()) {
+      controller.abort();
+      return;
+    }
     // The BFF-attributed deadline is an honest terminal fact.
     // Latched: the abort's stream teardown must not overwrite it. The
     // pre-200 refusals (a slow 429/503 body under the armed deadline) wrote
@@ -293,7 +315,6 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   legEstablished = true;
   const stream = response.data;
   let buffer = '';
-  let fullResponseText = '';
   let runId = null;
   let capturedVerdict = null;
   let usageRecord = null;
@@ -322,8 +343,20 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
         }
         case 'text_message_started':
         case 'text_message_finished':
-        case 'run_finished':
           // Run lifecycle and the text-message envelope are seam-internal.
+          break;
+        case 'run_finished':
+          // The run reached its terminal: the completion is recorded, so a
+          // late abort cannot be read as a timeout of a COMPLETED run.
+          //
+          // The DEADLINE STAYS ARMED here: the agent service emits the
+          // terminal usage record AFTER this event (the run's own teardown
+          // sits between the two), and that window is unbounded — a
+          // deployment that stalls there (or a proxy that drops the usage
+          // frame) would hang the request with no bound left. The deadline
+          // is cleared when the usage record arrives, or when the stream
+          // ends.
+          runCompleted = true;
           break;
         case 'text_message_content': {
           const text = event.payload?.text;
@@ -364,6 +397,11 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       }
     } else if (parsed.type === 'usage_record') {
       usageRecord = parsed.record;
+      // The terminal record: the run is complete. The deadline is cleared
+      // here — the answer is in hand, and a deadline that fires in the end
+      // tick would abort a run that already delivered it.
+      runCompleted = true;
+      clearDeadline();
     } else {
       logger.warn('AgentJsonResult.seam_parse_error', {
         queryId,
@@ -402,6 +440,13 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
     clearDeadline();
     if (failure) {
       // E.g. the run_error abort — the typed 502 already owns the terminal.
+      return;
+    }
+    if (answerInHand()) {
+      // The abort that ended a stalled-but-answered run reports as a stream
+      // error: it is the teardown of a run that already delivered its
+      // answer, not a failure of the turn. The answer stands.
+      logger.warn('AgentJsonResult.agent_stream_error_after_completion', { error: error.message, queryId });
       return;
     }
     logger.error('AgentJsonResult.agent_stream_error', { error: error.message, queryId });
@@ -443,10 +488,12 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   if (failure) {
     throw failure;
   }
-  if (controller.signal.aborted) {
+  if (controller.signal.aborted && !runCompleted) {
     // A wall-clock abort whose stream terminated without an 'error' event
     // (destroyed, 'close' only) is still a BFF-attributed timeout — never a
-    // truncated-but-complete answer.
+    // truncated-but-complete answer. A run that already reached its terminal
+    // is NOT that case: the abort fired after the answer was complete (the
+    // end tick), and it must not discard it.
     throw new AgentJsonTurnError(504, {
       error: 'AGENT_SERVICE_UNAVAILABLE',
       message: 'Agent service unavailable or timed out'
@@ -468,6 +515,10 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   let deliveredText = fullResponseText;
   let translationFailed = false;
   let translationStatus = null;
+  // The delivery mode of the answer translation, in the vocabulary the
+  // streaming path uses: 'post-stream' — the whole answer was translated
+  // after the run. Null when no translation was delivered.
+  let translationMode = null;
   if (wantsTranslation(targetLanguage) && fullResponseText) {
     // The bound translator: construction, deadline clock and fail-soft
     // delivery are the leg module's one home (the helper never raises).
@@ -486,6 +537,7 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
       translationFailed = true;
     } else if (legResult.text) {
       deliveredText = legResult.text;
+      translationMode = 'post-stream';
     }
   }
 
@@ -495,13 +547,36 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
   // block merges the run-start record + the `answered` outcome —
   // createQuery's tail writes it, completing the start write.
   const metadata = applyAbstentionOverlay(
-    assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome: 'answered' }),
+    assembleAgentMetadata({
+      verdict: capturedVerdict,
+      runId,
+      usageRecord,
+      runStart,
+      outcome: 'answered',
+      // The scope the run applied (the request's own narrowing) — the doc
+      // states it instead of the base's "not recorded" null.
+      filterLabels: callerContext?.requested_labels
+    }),
     capturedVerdict
   );
   // The leg's V05 status rides the persisted metadata (presence-keyed, like
   // the legacy passthrough: absent when no translation was asked for).
   if (translationStatus) {
     metadata.query_translation_status = translationStatus;
+  }
+  // The delivery mode rides it too — the streaming path annotates it on the
+  // verdict frame, and this entry has no frames: the metadata IS the
+  // record.
+  if (translationMode) {
+    metadata.translation_mode = translationMode;
+  }
+  // The answer-translation outcome, presence-keyed (the noagent lane's
+  // vocabulary): 'ok' when a translation was delivered, 'failed' when one
+  // was attempted and failed, absent when none was asked for.
+  if (translationFailed) {
+    metadata.translation_status = 'failed';
+  } else if (translationMode) {
+    metadata.translation_status = 'ok';
   }
 
   const result = {

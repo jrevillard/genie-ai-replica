@@ -64,33 +64,6 @@ describe('isAgentPathEnabled', () => {
   });
 });
 
-describe('agentServiceUrl', () => {
-  const originalValue = process.env.AGENT_SERVICE_URL;
-
-  afterEach(() => {
-    if (originalValue === undefined) {
-      delete process.env.AGENT_SERVICE_URL;
-    } else {
-      process.env.AGENT_SERVICE_URL = originalValue;
-    }
-  });
-
-  it('defaults to the compose service name + port when unset', () => {
-    delete process.env.AGENT_SERVICE_URL;
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-service:8010');
-  });
-
-  it('honors the AGENT_SERVICE_URL override', () => {
-    process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999';
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-svc:9999');
-  });
-
-  it('falls back to the default on an empty/blank override', () => {
-    process.env.AGENT_SERVICE_URL = '   ';
-    expect(requireRouting().agentServiceUrl()).toBe('http://agent-service:8010');
-  });
-});
-
 describe('agentRunUrl', () => {
   const originalValue = process.env.AGENT_SERVICE_URL;
 
@@ -110,6 +83,11 @@ describe('agentRunUrl', () => {
   it('names the run surface on an overridden base', () => {
     process.env.AGENT_SERVICE_URL = 'http://agent-svc:9999';
     expect(requireRouting().agentRunUrl()).toBe('http://agent-svc:9999/v1/runs');
+  });
+
+  it('falls back to the default on an empty/blank override', () => {
+    process.env.AGENT_SERVICE_URL = '   ';
+    expect(requireRouting().agentRunUrl()).toBe('http://agent-service:8010/v1/runs');
   });
 
   it('uses an override that already names the run surface as it stands', () => {

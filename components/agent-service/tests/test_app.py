@@ -48,3 +48,6 @@ def test_the_route_surface_is_pinned():
         paths = client.get("/openapi.json").json()["paths"]
 
     assert sorted(paths) == ["/health", "/ready", "/v1/runs"]
+    # The run surface is POSTed to (the BFF joins this path to its
+    # configured base) - the path alone would not say that.
+    assert "post" in paths["/v1/runs"]

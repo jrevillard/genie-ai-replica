@@ -2322,6 +2322,23 @@ export default {
     storableMetadata(message) {
       const metadata = { ...(message.metadata || {}) };
       if (message.translationMode) metadata.translation_mode = message.translationMode;
+      // The answer-translation OUTCOME, presence-keyed (the mobile's rule,
+      // the noagent lane's vocabulary): the key is present only when a
+      // translation was actually attempted. 'ok' means the answer WAS
+      // translated, 'failed' means one was attempted and broke, absent
+      // means none was asked for (an English UI) or none was delivered (a
+      // skipped translation). Without it the restored conversation loses
+      // the live warning: the answer stays English and the caption that
+      // said so is gone.
+      if (message.translationFailed) {
+        metadata.translation_status = 'failed';
+      } else if (message.translationMode && message.translationMode !== 'none') {
+        // 'post-stream' (the translation frame delivered the whole answer)
+        // or 'streaming-units' (the relay delivered translated units).
+        // 'none' is the agent's finalize-time payload: nothing was
+        // translated.
+        metadata.translation_status = 'ok';
+      }
       return metadata;
     },
 
@@ -2939,6 +2956,10 @@ export default {
           confidenceScore: msg.metadata?.confidence_score ?? msg.queryInfo?.confidenceScore ?? null,
           metadata: msg.metadata || null,
           isGrounded: msg.metadata?.is_grounded,
+          // The answer-translation outcome the save recorded: the live
+          // warning survives the reload (the key is presence-keyed — only
+          // an attempted-and-failed translation is a warning).
+          translationFailed: msg.metadata?.translation_status === 'failed',
           userFeedback: msg.metadata?.userFeedback || null,
           isSaved: true,
           sources:

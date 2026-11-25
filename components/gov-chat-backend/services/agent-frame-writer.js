@@ -103,7 +103,21 @@ async function proxyAgentRun({
   // (streaming off, and the non-streaming JSON entry) where the terminal
   // record exists. Moving the usage record earlier in the seam is the
   // future decision that would let the leg bound the units too.
-  const useStreamingTranslation = streamingTranslationEnabled() && wantsTranslation(targetLanguage);
+  //
+  // AD-14 — the agentic path's translation is GPU-ONLY (story 2.10: the
+  // backend selection is keyed on the routing decision; a GPU that is
+  // unconfigured or fails means skip-with-recorded-status, never the CPU
+  // model). The request-resolved translator is NOT keyed on that decision:
+  // it is whichever backend the service selected at startup, and on a
+  // deployment whose GPU probe failed inside the auto window that is the
+  // CPU model. So the agentic units are translated ONLY while the
+  // translator is GPU-backed; otherwise the units stay English (the leg's
+  // fail-closed direction — the whole answer is then translated by the
+  // leg, or skipped with its recorded reason). The legacy path keeps the
+  // CPU model: AD-14 scopes the agentic path.
+  const gpuBackedTranslator = translator?.backendType === 'gpu';
+  const useStreamingTranslation =
+    streamingTranslationEnabled() && wantsTranslation(targetLanguage) && gpuBackedTranslator;
   const streamRelay = useStreamingTranslation
     ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
     : null;
@@ -123,6 +137,11 @@ async function proxyAgentRun({
   // abort's stream teardown then reports an error). The shared home is
   // createAgentRunAttribution in agent-run-contract.js.
   let runStart = null;
+  // The caller's scope (the request's own narrowing). Declared HERE, with
+  // the other stream state: the disconnect handler below can assemble
+  // metadata before the posture resolution assigns it, and a `let` read
+  // before its declaration would throw.
+  let callerContext = null;
   const attribution = createAgentRunAttribution({
     queryService,
     queryId,
@@ -172,7 +191,19 @@ async function proxyAgentRun({
   };
 
   const assembleMetadata = (outcome) =>
-    assembleAgentMetadata({ verdict: capturedVerdict, runId, usageRecord, runStart, outcome });
+    assembleAgentMetadata({
+      verdict: capturedVerdict,
+      runId,
+      usageRecord,
+      runStart,
+      // The latched terminal fact wins: the assembled block REPLACES the
+      // doc's `metadata` field, so a block assembled as `answered` would
+      // overwrite a `timed_out` the deadline already declared.
+      outcome: attribution.latchedOutcome() ?? outcome,
+      // The scope the run applied (the request's own narrowing) — the doc
+      // states it instead of the base's "not recorded" null.
+      filterLabels: callerContext?.requested_labels
+    });
 
   // The disconnect signal: `res.on('close')`. Registered before any await, so
   // a client that leaves during the posture resolution or the agent-leg wait
@@ -236,7 +267,8 @@ async function proxyAgentRun({
   // fan-out to the corpus that is always there — it does not empty the
   // authorized set, which the agent's contract reads as "nothing is
   // reachable" and fail-closes on.
-  let callerContext;
+  // (`callerContext` is declared above, before the keepalive/close
+  // handlers — the terminal reads it when it assembles the metadata.)
   try {
     const posture = await queryService.resolveFanoutPosture(authHeaders, {
       queryId,
@@ -283,6 +315,11 @@ async function proxyAgentRun({
     if (res.writableEnded || res.destroyed) {
       return; // the client left during the wait; the close handler already ran
     }
+    // The response is over: the pre-stream refusal IS the terminal. The
+    // flag says so — without it the response's own 'close' event reads as a
+    // client disconnect (a phantom one: the client is reading the refusal)
+    // and logs it as such.
+    streamFinished = true;
     if (error?.code === 'ECONNABORTED' || error?.code === 'ERR_CANCELED') {
       res.status(504).json({ error: 'AGENT_SERVICE_UNAVAILABLE', message: 'Agent service unavailable or timed out' });
       return;
@@ -310,12 +347,16 @@ async function proxyAgentRun({
       res.set('Retry-After', String(response.headers['retry-after']));
     }
     logger.warn('AgentFrameWriter.admission_refused', { queryId });
+    // The refusal IS the terminal (see the catch branch above): the flag
+    // keeps the response's own 'close' from reading as a client disconnect.
+    streamFinished = true;
     return res.status(429).json(passthroughBody(parsed) || { error: 'admission_refused' });
   }
   if (status === 503) {
     const { parsed } = await readUpstreamBody(response.data, status);
     clearStreamDeadline();
     logger.warn('AgentFrameWriter.run_surface_unconfigured', { queryId, body: parsed });
+    streamFinished = true;
     return res.status(503).json(passthroughBody(parsed) || { error: 'budget_configuration_missing' });
   }
   if (status === 422) {
@@ -325,12 +366,14 @@ async function proxyAgentRun({
     const { parsed } = await readUpstreamBody(response.data, status);
     clearStreamDeadline();
     logger.warn('AgentFrameWriter.run_request_invalid', { queryId, body: parsed });
+    streamFinished = true;
     return res.status(422).json(passthroughBody(parsed) || { error: 'invalid_run_request' });
   }
   if (status !== 200 || !response.data) {
     const { parsed } = await readUpstreamBody(response.data, status);
     clearStreamDeadline();
     logger.error('AgentFrameWriter.upstream_status_error', { queryId, status });
+    streamFinished = true;
     return res
       .status(502)
       .json({ error: 'AGENT_SERVICE_UNAVAILABLE', message: parsed?.message || `agent service answered ${status}` });
@@ -410,6 +453,15 @@ async function proxyAgentRun({
         const verdictProjection = { ...capturedVerdict };
         delete verdictProjection.type;
         delete verdictProjection.version;
+        // The HEAVY fields do not ride the client frame: the citations carry
+        // the full passage text (the ledger's delivered evidence) and the
+        // findings repeat it. The client already receives the citation rows
+        // as `source_documents` on the metadata frame; the full payload stays
+        // server-side — the metadata assembly reads the captured verdict, not
+        // this projection.
+        delete verdictProjection.citations;
+        delete verdictProjection.invalid_citations;
+        delete verdictProjection.findings;
         // The verdict certifies the SOURCE-LANGUAGE text; the client marks the
         // distinction on the answer. The agent service cannot know whether a
         // translation was delivered — the finalize-time payload always says
@@ -468,6 +520,10 @@ async function proxyAgentRun({
         skipPostStreamTranslation: Boolean(streamRelay),
         alreadyFailedTranslation,
         translateFullAnswer,
+        // The agentic lane records the answer-translation outcome in the
+        // persisted metadata (the noagent lane's vocabulary); the legacy
+        // lane's metadata keeps its deployed shape.
+        agenticLane: true,
         // The agentic answer cannot name routed graphs — the sticky set is
         // left untouched (branch-driven skip).
         skipRoutedGraphs: true
@@ -540,7 +596,12 @@ async function proxyAgentRun({
         writeSSEFrame(res, {
           type: 'agent_activity',
           version: 1,
-          status: 'completed',
+          // A tool call that ended on an error is `failed`, not
+          // `completed`: the seam's error envelope rides the payload
+          // (`{error: {code, operation, message}}`), and the client's
+          // activity vocabulary has a status for it — reporting `completed`
+          // would claim the call succeeded.
+          status: event.payload?.error ? 'failed' : 'completed',
           operation: event.call_id ? (callNames.get(event.call_id) ?? null) : null,
           callId: event.call_id
         });
@@ -582,6 +643,10 @@ async function proxyAgentRun({
     if (parsed.type === 'event') {
       onSeamEvent(parsed.event);
     } else if (parsed.type === 'usage_record') {
+      // The failure latch: a usage record that arrives AFTER the terminal
+      // (the stream's own teardown) must not overwrite the record the
+      // terminal read — the JSON sibling's loop breaks on the same latch.
+      if (streamFinished) return;
       usageRecord = parsed.record;
     } else {
       logger.warn('AgentFrameWriter.seam_parse_error', {

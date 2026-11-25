@@ -15,8 +15,14 @@ class FakeConceptBrowserRepository implements ConceptBrowserRepository {
   final Map<String, Object> cardThrows = {};
   final Map<String, Completer<ConceptTreePage>> heldTrees = {};
   final Map<String, Completer<ConceptCard>> heldCards = {};
+
+  // The repository resolution (a citation row that lost its repo identity):
+  // the concept id -> serving repository, and the per-concept throwable.
+  final Map<String, String> repoByConcept = {};
+  final Map<String, Object> resolveThrows = {};
   int treeCalls = 0;
   int cardCalls = 0;
+  int resolveCalls = 0;
 
   Completer<ConceptTreePage> holdTree(String repoId) {
     final completer = Completer<ConceptTreePage>();
@@ -53,6 +59,16 @@ class FakeConceptBrowserRepository implements ConceptBrowserRepository {
     final throwable = cardThrows[conceptId];
     if (throwable != null) throw throwable;
     return cardsByRepo[repoId]![conceptId]!;
+  }
+
+  @override
+  Future<String?> resolveRepo(String conceptId) async {
+    resolveCalls++;
+    final throwable = resolveThrows[conceptId];
+    if (throwable != null) throw throwable;
+    // An unknown concept resolves to nothing — the honest "no visible
+    // repository holds it" answer.
+    return repoByConcept[conceptId];
   }
 }
 

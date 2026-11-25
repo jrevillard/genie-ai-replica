@@ -1808,4 +1808,34 @@ describe('#2061 E-5: the scoped benchmark states its binding and its attribution
     expect(w.vm.runDoc).toBeNull();
     expect(w.vm.explainDoc).toBeNull();
   });
+
+  // Live 2026-11-25 (David's 20-question benchmark that kept 10): a
+  // generation that keeps less than was asked owes the operator the
+  // difference — the grounding tally rides the suite record and the panel
+  // renders it beside the entries, never only in a server log.
+  it('renders the GROUNDING tally when the request was not fully met', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    const s = suiteFixture();
+    s.payload.dimensions = {
+      testset_size: 18,
+      requested_size: 20,
+      grounding: { requested: 20, kept: 18, discarded_unattributed: 2, discarded_duplicate: 0, rounds: 2 }
+    };
+    w.vm.suite = s;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('18 of 20');
+    expect(w.text()).toContain('2 could not be tied');
+
+    // Fully met: the tally line stays silent — nothing to report.
+    const clean = suiteFixture();
+    clean.payload.dimensions = {
+      testset_size: 20,
+      requested_size: 20,
+      grounding: { requested: 20, kept: 20, discarded_unattributed: 0, discarded_duplicate: 0, rounds: 1 }
+    };
+    w.vm.suite = clean;
+    await w.vm.$nextTick();
+    expect(w.text()).not.toContain('could not be tied');
+  });
 });

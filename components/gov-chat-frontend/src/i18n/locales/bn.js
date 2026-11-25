@@ -3592,6 +3592,9 @@ export default {
       }
     },
     ragas: {
+      grounding: {
+        note: '{requested}-এর মধ্যে {kept}টি প্রশ্ন গ্রাউন্ডেড — {discarded}টি মূল্যায়িত কর্পাসের সাথে যুক্ত করা যায়নি (পুনঃঅনুরোধ {rounds} রাউন্ড)'
+      },
       dropped: {
         note: '{requested}টির মধ্যে {kept}টি প্রশ্ন — {dropped}টি তৈরি করা যায়নি',
         reason: {

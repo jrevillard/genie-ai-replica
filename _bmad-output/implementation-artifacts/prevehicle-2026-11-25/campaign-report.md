@@ -138,9 +138,23 @@ issue comment.
 
 ## 9. The review chain
 
-The global review over the full diff, then the scoped fix-review chain on the
-landed code (BASE_SHA = the HEAD before each mutation, HEAD_SHA = the HEAD
-after). The decision log: `~/.claude/state/review/issue-2170-review.jsonl`. The
+The global review over the full diff (round 1 → 8 findings), then the scoped
+fix-review chain on the landed code (BASE_SHA = the HEAD before each mutation,
+HEAD_SHA = the HEAD after):
+
+| round | range | findings | outcome |
+|---|---|---|---|
+| f=0 | d1648d17f..8b4740731 | 8 (F1–F8) | corrected in `1e88b6d64` |
+| f=1 | e84658706..1e88b6d64 | 4 blockers + 7 minors (N1–N11) | corrected in `cf9630f99` |
+| f=2 | cf9630f99..989e301dc | 2 blockers + 7 minors (F1–F9) | corrected in `989e301dc` — the run's exit-code contract named a run that never answered as "a rename on the agent side", and the transport correction was pinned by nothing |
+| f=3 (confirming) | cf9630f99..989e301dc | — | the chain's confirming round |
+
+**Disclosed:** the chain's nominal cap is three fix reviews (f=0..f=2). f=2 was
+NOT clean, so the corrections were applied and ONE confirming round beyond the
+cap was spent to prove them closed — the cap exists to stop a loop, not to
+ship a known defect. The gate should read that as it is.
+
+The decision log: `~/.claude/state/review/issue-2170-review.jsonl`. The
 quality record: **not applicable — evidence-only campaign** (the deliverable is
 E2E reports, trace proofs, queries-doc outcomes and a cleanup receipt; the
 scoped review covered ONLY the landed driver/harness code, and the run reports

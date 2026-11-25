@@ -21,9 +21,20 @@
 */}}
 {{- define "genieai-umbrella.otlpEndpoint" -}}
 {{- $obs := .Values.observability | default dict -}}
-{{- $cr := $obs.collectorCRName | default "genieai-collector" -}}
+{{- $cr := include "genieai-umbrella.collectorCRName" . -}}
 {{- $port := $obs.collectorPort | default 4318 -}}
 {{- printf "http://%s-collector.%s.svc.cluster.local:%d" $cr .Values.namespace (int $port) -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.collectorCRName — the OpenTelemetry Collector CR's
+metadata.name, the name half of otlpEndpoint. The gateway CR, its
+prerequisite skip record and every endpoint derivation read the name
+from here, so a renamed collector is one edit, not one per surface.
+*/}}
+{{- define "genieai-umbrella.collectorCRName" -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obs.collectorCRName | default "genieai-collector" -}}
 {{- end -}}
 
 {{- /*

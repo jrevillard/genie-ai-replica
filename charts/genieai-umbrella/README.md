@@ -549,6 +549,22 @@ Default port `4318` matches the OpenTelemetry Operator's default
 that change the operator's listener port (e.g. port collisions on a
 shared node).
 
+**The collector CR is rendered only where the operator is.** The
+OpenTelemetry Operator is a cluster bootstrap prerequisite, and a cluster
+without it cannot map the kind — which aborts the WHOLE atomic Helm
+upgrade. So the CR renders only where the operator's CRD is served; where
+it is not, the chart records the skip in a ConfigMap
+(`<collectorCRName>-prereq`) instead of passing silently, and the next
+reconcile brings the collector up as soon as the operator lands.
+
+**The Victoria CRs take `extraArgs`.** `observability.{logs,metrics,
+traces}.extraArgs` is rendered onto the VLSingle / VMSingle / VTSingle CR
+as `spec.extraArgs`; each key is the flag name WITHOUT its leading dash
+(`fs.disableMmap` → `-fs.disableMmap=true`). The traces tier defaults to
+`fs.disableMmap: "true"` — the remedy the VictoriaTraces binary names
+in its own "cannot mmap" panic, on a node whose filesystems cannot back
+the mmap of the trace index files.
+
 ## Data layer
 
 | Tier | Operator CR | Default mode |

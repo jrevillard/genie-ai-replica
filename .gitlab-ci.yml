@@ -5272,7 +5272,16 @@ chart:crd-validate:
       helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags) \
         $(cat charts/ci/render-full-flags) \
         --set opea.gpu.mode=in-cluster \
+        --set pluggable.storageClassName=ci-render \
         > /tmp/crd-validate.yaml
+    # pluggable.storageClassName is SET in this job on purpose: the VM
+    # CRs render their storage-class field ONLY when a class is named,
+    # so with the values default ("") the webhook never sees the field
+    # and a wrong spelling (className vs storageClassName — the field is
+    # a PVC spec and the operator's strict decoder refuses any other)
+    # would pass this job green forever. Naming a class here (existence
+    # is not checked at create) makes the field render and the CRD dry
+    # run validate it.
     # The second render exists because the first one is not the deployment
     # that ships: clusterProfile=prod multiplies the replicas and puts the
     # Keycloak database at 3 CNPG instances, and ingress.tls.enabled adds
@@ -5290,6 +5299,7 @@ chart:crd-validate:
         --set ingress.tls.enabled=true \
         --set ingress.tls.issuerName=selfsigned \
         --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
+        --set pluggable.storageClassName=ci-render \
         > /tmp/crd-validate-prod.yaml
       ./scripts/ci/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
   rules:

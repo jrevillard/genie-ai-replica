@@ -25,13 +25,35 @@
   Validation: the operator-managed Service ports are operator-defaults
   (4318 HTTP, 8428 VM, 9428 VL, 4318 VT). The collector `config` is a
   MAP (otel-operator v1beta1 rejects string configs — see the note on
-  the config block below). Validation deferred to first reconcile —
-  the operator is not installed locally.
+  the config block below).
 */}}
+{{- /*
+  PREREQUISITE GUARD — the OpenTelemetry Operator is a cluster bootstrap
+  prerequisite (charts/README.md), NOT a chart dependency. Rendering the
+  CR on a cluster whose operator is absent aborts the WHOLE release
+  upgrade: helm cannot map the kind ("no matches for kind
+  \"OpenTelemetryCollector\" in version \"opentelemetry.io/v1beta1\"")
+  and one unmappable object fails the atomic upgrade — the release
+  stays Ready=Unknown until the operator is installed by hand.
+
+  So the CR is rendered ONLY where the operator's CRD is served, and its
+  absence is RECORDED (the ConfigMap below) instead of passing
+  silently: the observability tier stays dark, the release upgrade
+  stays alive, and the next reconcile picks the collector up as soon as
+  the operator lands.
+
+  The check reads the served API versions, which Helm fills from the
+  cluster's discovery on install/upgrade. An OFFLINE render (`helm
+  template`) sees no cluster and no operator — the CI renders declare
+  the operator's API version explicitly (--api-versions, see
+  charts/ci/render-base-flags) so the CR is still rendered and still
+  validated against the CRD by chart:crd-validate.
+*/}}
+{{- if .Capabilities.APIVersions.Has "opentelemetry.io/v1beta1/OpenTelemetryCollector" }}
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
-  name: {{ $obs.collectorCRName | default "genieai-collector" }}
+  name: {{ include "genieai-umbrella.collectorCRName" . }}
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
@@ -203,5 +225,26 @@ spec:
           receivers: [otlp]
           processors: [memory_limiter]
           exporters: [nop/traces]
+{{- end }}
+{{- else }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "genieai-umbrella.collectorCRName" . }}-prereq
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+data:
+  collector: >-
+    skipped — the OpenTelemetryCollector CRD (opentelemetry.io/v1beta1) is
+    not served by this cluster, so the collector CR was NOT rendered and
+    the observability tier (OTLP ingest; metrics, logs and traces export)
+    stays dark. The release upgrade is NOT blocked by it. Install the
+    OpenTelemetry Operator (scripts/install-prereqs.sh, or the deploy
+    overlay's HelmRelease) and the next reconcile brings the collector
+    up on its own. This record covers the otel-operator CRs only — the
+    VictoriaMetrics and Grafana tiers keep their own operator
+    prerequisites (charts/README.md).
 {{- end }}
 {{- end }}

@@ -6,8 +6,13 @@
   VMSingle CR — single-node VictoriaMetrics.
   apiVersion: VMSingle stays on operator.victoriametrics.com/v1beta1
   in vmoperator v0.75.0 (VMSingle was not promoted to v1 alongside
-  VLSingle/VTSingle). Validation deferred to first reconcile — the
-  operator is not installed locally.
+  VLSingle/VTSingle).
+
+  The operator decodes this CR STRICTLY: its admission webhook refuses
+  a field the served CRD does not declare ("json: unknown field"), and
+  one rejected CR fails the WHOLE atomic Helm upgrade. `spec.storage`
+  is parsed as a PVC spec, so the class field there is
+  `storageClassName` — `className` is refused by the webhook.
 
   The operator creates the in-cluster Service as <kind>-<metadata.name>
   ("vmsingle-vmetrics") on the standard VM HTTP port 8428. Remote-write
@@ -52,10 +57,19 @@ spec:
     tier too. Omitted when unset: the operator then creates the PVC
     against the cluster default class. */ -}}
     {{- with ($obsMetrics.storageClassName | default $pluggable.storageClassName) }}
-    className: {{ . }}
+    storageClassName: {{ . }}
     {{- end }}
     resources:
       requests:
         storage: {{ $obsMetrics.storageSize | quote }}
+  {{- /* Extra command-line arguments for the VictoriaMetrics binary. The
+  operator renders each key as "-<key>=<value>", so the key carries the
+  flag name WITHOUT its leading dash. */ -}}
+  {{- with ($obsMetrics.extraArgs | default dict) }}
+  extraArgs:
+    {{- range $arg, $value := . }}
+    {{ $arg | quote }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
   replicaCount: 1
 {{- end }}

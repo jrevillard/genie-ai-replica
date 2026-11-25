@@ -93,8 +93,10 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--chunk-text-field",
-        default="chunk_text",
-        help="Document field carrying the chunk text (default: chunk_text). Match your ingestion schema.",
+        default=os.getenv("ARANGO_TEXT_FIELD", "text"),
+        help="Document field carrying the chunk text (default: $ARANGO_TEXT_FIELD or 'text' — the SERVED"
+        " column the retrieval contract reads; the gold's content_hash must hash the same field"
+        " run_eval's key→hash map hashes, or every match fails on a contextualized corpus).",
     )
     p.add_argument(
         "--min-preview-len",

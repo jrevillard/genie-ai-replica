@@ -1160,44 +1160,63 @@ def run_config_c(
 # ---------------------------------------------------------------------------
 
 
-def corpus_presence_for(entries: list[dict], *, file_ids_by_graph: dict[str, set[str]] | None) -> dict[str, bool | None] | None:
+def corpus_presence_for(entries: list[dict], *, file_ids_by_graph: dict[str, set[str]] | None) -> dict[tuple, bool | None] | None:
     """The corpus-presence map the security verdicts' precondition reads
-    (#2155): every authorization case's declared source identity ->
-    ``True`` (present), ``False`` (absent) or ``None`` (unknown).
+    (#2155): ``(identity, declared_graphs) -> True | False | None``.
 
-    ``file_ids_by_graph`` maps a graph name to the file ids its
-    ``<graph>_SOURCE`` collection carries — the live resolver reads ArangoDB
-    (:func:`eval.arango.source_file_ids`, one AQL per graph); tests inject.
-    A legacy file id resolves against the graphs the case declares in its
-    context; an OKF-shaped identity (``<repo>/<concept>``) resolves ``None``
-    — the SOURCE collections carry file ids, so the precondition refuses to
-    call OKF content absent from a resolution it cannot make.
+    The resolution depends on the graphs the CASE declares, so the map is
+    keyed per (identity, declared-graphs) — a per-identity memo would hand a
+    restricted case the public graph's verdict for the same file id (a
+    vacuous pass over the empty restricted graph, exactly what the
+    precondition prevents). ``file_ids_by_graph`` maps a graph name to the
+    file ids its ``<graph>_SOURCE`` collection carries — the live resolver
+    reads ArangoDB (:func:`eval.arango.source_file_ids`, one AQL per graph);
+    tests inject.
+
+    Per declared identity:
+
+    * present in ANY queried declared graph → ``True``;
+    * a declared graph that was NOT armed (absent from the map) was never
+      queried → ``None`` (unknown, never absent — calling it absent would
+      fire the precondition on a corpus that exists);
+    * all declared graphs queried and none carries it → ``False``;
+    * no graphs declared → ``None`` (nothing to resolve against).
+
+    OKF identities — a bare repo id (an ``authorized_repos`` entry) or a
+    ``<repo>/<concept>`` id — resolve ``None``: the SOURCE collections carry
+    file ids, so the precondition refuses to call OKF content absent from a
+    resolution it cannot make.
     """
     if file_ids_by_graph is None:
         return None
     from .verdicts import authorized_identities
 
-    presence: dict[str, bool | None] = {}
+    presence: dict[tuple, bool | None] = {}
     for case in entries:
         if not isinstance(case, dict):
             continue
         context = case.get("context") or {}
         declared = authorized_identities(context) or set()
-        graphs = context.get("authorized_graph_names")
-        graph_sets = (
-            [file_ids_by_graph.get(str(graph)) for graph in graphs if isinstance(graphs, (list, tuple))]
-            if isinstance(graphs, (list, tuple))
-            else []
-        )
+        repo_ids = {
+            str(entry["repo_id"])
+            for entry in (context.get("authorized_repos") or [])
+            if isinstance(entry, dict) and entry.get("repo_id")
+        }
+        graphs_raw = context.get("authorized_graph_names")
+        graphs = tuple(sorted(str(graph) for graph in graphs_raw)) if isinstance(graphs_raw, (list, tuple)) else ()
+        graph_sets = [file_ids_by_graph.get(graph) for graph in graphs]
+        queried = [file_ids for file_ids in graph_sets if file_ids is not None]
+        unqueried = any(file_ids is None for file_ids in graph_sets)
         for identity in declared:
-            if identity in presence:
-                continue
-            if "/" in identity:
-                # OKF concept identity: not resolvable against SOURCE file ids.
-                presence[identity] = None
-                continue
-            resolved = [identity in file_ids for file_ids in graph_sets if file_ids is not None]
-            presence[identity] = any(resolved) if resolved else None
+            if identity in repo_ids or "/" in identity:
+                # OKF identity: not resolvable against SOURCE file ids.
+                presence[(identity, graphs)] = None
+            elif any(identity in file_ids for file_ids in queried):
+                presence[(identity, graphs)] = True
+            elif unqueried or not queried:
+                presence[(identity, graphs)] = None
+            else:
+                presence[(identity, graphs)] = False
     return presence
 
 

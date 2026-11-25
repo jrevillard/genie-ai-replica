@@ -39,6 +39,7 @@ type cannot enforce them, and this module says so rather than pretending.
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, Protocol
@@ -528,8 +529,15 @@ class DocumentCapabilityPort(Protocol):
         context: CallerContext,
         request: SearchKnowledgeInput,
         budget: OperationBudget,
+        abstention_sink: "Callable[[str], None] | None" = None,
     ) -> SearchKnowledgeResult:
-        """Search the authorized corpus and report what was found."""
+        """Search the authorized corpus and report what was found.
+
+        ``abstention_sink`` is an OPTIONAL per-call hook the executor
+        threads through when a caller supplies one: an insufficiency hands
+        its exact reason string to it. Implementations may ignore it (the
+        default ``None`` keeps a plain call a plain call).
+        """
         ...
 
     async def read_source(

@@ -239,12 +239,6 @@ function deviceSources(service) {
 }
 
 /**
- * The published host ports a rendered service exposes.
- *
- * @param {Object} service - a rendered compose service
- * @returns {string[]}
- */
-/**
  * Does one rendered service's argv carry a tool-calling pin?
  *
  * Per-TOKEN PREFIX check, not a substring match: argparse's default
@@ -296,6 +290,12 @@ describe('the tool-calling pin guard (per-token prefix)', () => {
   });
 });
 
+/**
+ * The published host ports a rendered service exposes.
+ *
+ * @param {Object} service - a rendered compose service
+ * @returns {string[]}
+ */
 function publishedPorts(service) {
   return (service.ports || []).map((port) => String(port.published));
 }

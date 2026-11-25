@@ -178,7 +178,9 @@ class SearchKnowledgeCapability:
         surface — the reason stays off the result type (the contract is
         accepted at ``1.0``; adding a field there is a major change), and it
         travels WITH the call, never on shared state, so concurrent runs are
-        safe. The executor's protocol call passes no sink and is unchanged.
+        safe. The DECLARED protocol carries the optional kwarg (the executor
+        threads it through when a caller supplies one); the executor itself
+        never mints a sink of its own.
         """
         if not context.authorized_graph_names:
             raise AuthorizationError(

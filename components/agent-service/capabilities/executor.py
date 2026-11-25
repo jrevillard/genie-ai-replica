@@ -111,10 +111,13 @@ class AuthorizedExecutor:
 
         ``abstention_sink`` is the same OPTIONAL per-call hook the inner
         port takes: threading it here means an insufficiency answered
-        through the executor records its exact reason the way the direct
-        capability path does, instead of losing the reason at the executor
-        boundary (the reason survives only in logs there). The executor's
-        own authorization refusals (no authorized graphs, no surviving
+        through the executor records its exact reason WHEN a caller
+        supplies the sink — the reason no longer dies at the executor
+        boundary for a caller that wants it. Today's callers that scrape
+        reasons (the noagent pipeline) call the capability directly; the
+        agent path's toolset call passes no sink yet (the wiring to the
+        run's metadata is the remaining seam). The executor's own
+        authorization refusals (no authorized graphs, no surviving
         authorized hits) record no reason through it — they are
         authorization outcomes, not retrieval insufficiencies.
         """

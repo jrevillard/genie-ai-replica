@@ -65,8 +65,19 @@ class TestFindMatchesWindowFallback:
 class TestParseArgsChunkTextField:
     """The default --chunk-text-field is `chunk_text`, matching the chunk_text schema."""
 
-    def test_default_is_chunk_text(self, monkeypatch):
+    def test_default_is_the_served_column(self, monkeypatch):
+        # The served column (`text`) is the default, matching run_eval's own
+        # default: the gold's content_hash must hash the SAME field the
+        # eval's key→hash map hashes, or every match fails on a
+        # contextualized corpus (the silent all-zero anchor).
         monkeypatch.setattr(sys, "argv", ["match_gold_chunks.py", "--gold-dataset", "x.json"])
+        monkeypatch.delenv("ARANGO_TEXT_FIELD", raising=False)
+        args = parse_args()
+        assert args.chunk_text_field == "text"
+
+    def test_env_override_takes_effect(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["match_gold_chunks.py", "--gold-dataset", "x.json"])
+        monkeypatch.setenv("ARANGO_TEXT_FIELD", "chunk_text")
         args = parse_args()
         assert args.chunk_text_field == "chunk_text"
 

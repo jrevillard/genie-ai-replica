@@ -383,8 +383,47 @@ def test_the_port_declares_both_operations_with_the_context_and_the_budget():
         method = getattr(contract.DocumentCapabilityPort, method_name)
         parameters = list(inspect.signature(method).parameters)
 
-        assert parameters == ["self", "context", "request", "budget"]
+        if method_name == "search_knowledge":
+            # The optional per-call abstention sink is part of the DECLARED
+            # protocol: the executor threads it into the inner port call, so
+            # a port conforming to the declared signature must accept it —
+            # a 3-args-only port raises TypeError the moment a caller
+            # supplies a sink.
+            assert parameters == ["self", "context", "request", "budget", "abstention_sink"]
+        else:
+            assert parameters == ["self", "context", "request", "budget"]
         assert inspect.iscoroutinefunction(method)
+
+
+def test_the_port_protocol_accepts_the_abstention_sink_keyword():
+    """A port conforming to the DECLARED signature accepts the sink kwarg —
+    the executor passes it by name when a caller supplies one."""
+    import asyncio
+
+    class ConformingPort(contract.DocumentCapabilityPort):
+        async def search_knowledge(self, context, request, budget, abstention_sink=None):
+            if abstention_sink is not None:
+                abstention_sink("no_documents_retrieved")
+            return SearchKnowledgeResult(
+                outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+                query_preparation_status=request.query.preparation_status,
+            )
+
+        async def read_source(self, context, request, budget):
+            raise AssertionError("not called here")
+
+    sink_calls = []
+    port = ConformingPort()
+    result = asyncio.run(
+        port.search_knowledge(
+            a_caller_context(),
+            SearchKnowledgeInput(query=a_prepared_query()),
+            OperationBudget(timeout_ms=1000, max_results=1, max_result_bytes=100),
+            abstention_sink=sink_calls.append,
+        )
+    )
+    assert result.outcome is OutcomeCode.INSUFFICIENT_EVIDENCE
+    assert sink_calls == ["no_documents_retrieved"]
 
 
 # --- versioning -------------------------------------------------------------

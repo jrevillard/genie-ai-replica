@@ -40,7 +40,7 @@ def test_dump_chunks_default_text_field_is_the_served_column(no_text_field_env):
     assert module.TEXT_FIELD == "text"
 
 
-def test_dump_chunks_fallback_retries_the_other_field(no_text_field_env, monkeypatch, capsys):
+def test_dump_chunks_fallback_retries_the_other_field(no_text_field_env, monkeypatch, capsys, tmp_path):
     """All-null rows under the served-column projection fall back to the
     display column (a corpus that predates the contextualized-write
     contract), with the warning naming the override."""
@@ -65,7 +65,7 @@ def test_dump_chunks_fallback_retries_the_other_field(no_text_field_env, monkeyp
         return rows
 
     monkeypatch.setattr(module, "_query_rows", spy)
-    module.main(out_path="/tmp/wave-p4-dump-probe.json")
+    module.main(out_path=str(tmp_path / "dump-probe.json"))
     assert len(calls) == 2
     assert "doc.text" in calls[0] and "doc.chunk_text" in calls[1]
     assert rows_by_call[1][0]["text"] == "raw chunk"

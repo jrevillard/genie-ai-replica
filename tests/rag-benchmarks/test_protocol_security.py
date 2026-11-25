@@ -1158,9 +1158,9 @@ def test_resolved_absent_with_unknown_sibling_is_corpus_absent():
 
 
 def test_corpus_presence_resolver_maps_declared_identities():
-    """The resolver answers per declared identity: present in a graph the
-    case names, absent, unknown (an OKF concept id) — and None entirely when
-    the caller resolved no graphs."""
+    """The resolver answers per (identity, declared-graphs): present in a
+    graph the case names, absent, unknown (an OKF concept id) — and None
+    entirely when the caller resolved no graphs."""
     entries = [
         _case("s1", "restricted_repo", context={
             "authorized_source_ids": ["doc-here", "doc-gone", "repo-a/concept-1"],
@@ -1168,7 +1168,11 @@ def test_corpus_presence_resolver_maps_declared_identities():
         }),
     ]
     presence = drivers.corpus_presence_for(entries, file_ids_by_graph={"GRAPH_X": {"doc-here"}})
-    assert presence == {"doc-here": True, "doc-gone": False, "repo-a/concept-1": None}
+    assert presence == {
+        ("doc-here", ("GRAPH_X",)): True,
+        ("doc-gone", ("GRAPH_X",)): False,
+        ("repo-a/concept-1", ("GRAPH_X",)): None,
+    }
     assert drivers.corpus_presence_for(entries, file_ids_by_graph=None) is None
 
 
@@ -1244,3 +1248,58 @@ def test_verdicts_cli_unarmed_records_the_precondition_absent(tmp_path, capsys):
     report = json.loads(out_path.read_text(encoding="utf-8"))
     assert report["corpus_presence"]["checked"] is False
     assert "security-graphs" in report["corpus_presence"]["note"]
+
+
+def test_corpus_presence_resolves_per_case_not_per_identity():
+    """The resolution depends on the graphs the CASE declares: the same file
+    id under a seeded public graph and an empty restricted graph resolves
+    differently per case — a per-identity memo would hand the restricted
+    case the public graph's True and publish the vacuous pass the
+    precondition exists to prevent. The map is keyed (identity, graphs); the
+    verdict layer reads its own case's key."""
+    entries = [
+        {"id": "A", "case_class": "answerable", "security_scenario": "restricted_repo", "context": {"authorized_source_ids": ["doc-X"], "authorized_graph_names": ["GRAPH_PUBLIC"]}},
+        {"id": "B", "case_class": "answerable", "security_scenario": "restricted_repo", "context": {"authorized_source_ids": ["doc-X"], "authorized_graph_names": ["GRAPH_RESTRICTED"]}},
+    ]
+    presence = drivers.corpus_presence_for(
+        entries, file_ids_by_graph={"GRAPH_PUBLIC": {"doc-X"}, "GRAPH_RESTRICTED": set()}
+    )
+    assert presence[("doc-X", ("GRAPH_PUBLIC",))] is True
+    assert presence[("doc-X", ("GRAPH_RESTRICTED",))] is False
+
+
+def test_corpus_presence_of_a_declared_but_unqueried_graph_is_unknown():
+    """A graph the case declares but the operator did not arm was never
+    queried: a source present only there is UNKNOWN, never absent — calling
+    it absent would fire corpus_absent on a corpus that exists."""
+    entries = [
+        {"id": "C", "case_class": "answerable", "security_scenario": "restricted_repo", "context": {"authorized_source_ids": ["doc-in-G2"], "authorized_graph_names": ["G1", "G2"]}},
+    ]
+    presence = drivers.corpus_presence_for(entries, file_ids_by_graph={"G1": set()})
+    assert presence[("doc-in-G2", ("G1", "G2"))] is None
+
+
+def test_corpus_presence_of_a_repo_id_is_unknown():
+    """A bare repo id (an authorized_repos entry) is an OKF identity: the
+    SOURCE collections carry file ids, so it resolves unknown like a
+    <repo>/<concept> id — resolving it as a legacy file id would call a
+    fully seeded OKF repo absent and skip its leak checks."""
+    entries = [
+        {"id": "D", "case_class": "answerable", "security_scenario": "restricted_repo", "context": {"authorized_repos": [{"repo_id": "repo-a"}], "authorized_graph_names": ["G1"]}},
+    ]
+    presence = drivers.corpus_presence_for(entries, file_ids_by_graph={"G1": set()})
+    assert presence[("repo-a", ("G1",))] is None
+
+
+def test_corpus_absent_keeps_a_leak_rows_disclosure_evidence():
+    """The module's own invariant: a case that LEAKED keeps its disclosure
+    evidence — the corpus_absent record rides the findings, it does not
+    drop them (the leak evidence is the one judgeable fact a row over an
+    unseeded corpus can still carry)."""
+    case = _case("s1", "restricted_repo", context={"authorized_source_ids": ["f-1"]})
+    leaked = _ok_row("s1", sources=(_source("f-9"),))
+    result = vd.build_verdicts([case], {"s1": leaked}, corpus_presence={"f-1": False})
+    (record,) = result["verdicts"]
+    assert record["verdict"] == "corpus_absent"
+    assert record["findings"], "the leaked row's disclosure evidence must ride the record"
+    assert record["findings"][0]["kind"] == "unauthorized_disclosure"

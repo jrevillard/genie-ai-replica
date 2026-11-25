@@ -389,13 +389,13 @@ def _validate_case(index: int, case: dict, errors: list[str]) -> None:
     expectations = case.get("expectations")
     if expectations is not None and not isinstance(expectations, dict):
         errors.append(f"case {label}: expectations, when present, must be an object")
-        return
+        expectations = None  # not a dict: the pairing check below cannot read it
     # The outcome-surface pairing: an outcome-class case carrying an outcome
     # expectation that is not ITS class's is a contradiction — the surface
     # says 'judged from the recorded outcome' while the expectation names a
     # different outcome (or the security surface's denial). Refused here, so
     # the surface model and the verdict layer's predicates cannot drift.
-    if case.get("case_class") in OUTCOME_CLASS_EXPECTATIONS and expectations:
+    if case.get("case_class") in OUTCOME_CLASS_EXPECTATIONS and isinstance(expectations, dict) and expectations:
         expected_key = OUTCOME_CLASS_EXPECTATIONS[case.get("case_class")]
         outcome_keys = set(OUTCOME_CLASS_EXPECTATIONS.values()) | {"expect_denied"}
         carried = sorted(key for key in expectations if key in outcome_keys)

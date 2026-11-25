@@ -114,8 +114,11 @@ const REQUIREMENTS_FILE =
 /** A lock file: whatever the tool calls it (uv.lock, poetry.lock, Pipfile.lock). */
 const LOCK_FILE = /(^|\/)[^/]*\.lock$/;
 
-/** A PYTHON ecosystem lock (the three tools the overlay tree itself uses). */
-const PYTHON_LOCK_FILE = /(^|\/)(?:uv|poetry|Pipfile)\.lock$/;
+/** A PYTHON ecosystem lock (the tools the overlay tree itself uses, plus pdm).
+ *  A Python lock from a tool not listed here is misclassified as non-Python
+ *  and loses the PEP 508 direct-reference detection — add the tool when its
+ *  lock appears on an agent path. */
+const PYTHON_LOCK_FILE = /(^|\/)(?:uv|poetry|Pipfile|pdm)\.lock$/;
 
 /** A lock file from ANOTHER ecosystem (yarn, Cargo, composer, flake, …). */
 const isNonPythonLock = (file) => LOCK_FILE.test(file) && !PYTHON_LOCK_FILE.test(file);

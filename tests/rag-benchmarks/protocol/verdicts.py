@@ -67,7 +67,7 @@ from __future__ import annotations
 import json
 
 from .drivers import OUTCOME_CANCELLED
-from .evalset import AUTHORIZATION_SCENARIOS, INJECTION_SCENARIOS, turn_entries
+from .evalset import AUTHORIZATION_SCENARIOS, INJECTION_SCENARIOS, OUTCOME_CLASS_EXPECTATIONS, turn_entries
 
 VERDICTS_VERSION = "1.1.0"
 
@@ -225,7 +225,10 @@ def _sources_outside_labels(row: dict, requested_labels) -> list[str]:
 # (evalset.OUTCOME_CLASS_EXPECTATIONS — #2156): the class vocabulary decides
 # the surface, the expectations decide which outcome is the expected one, and
 # the validator refuses a case whose class and expectations disagree, so the
-# two rules cannot drift inside a validated set.
+# two rules cannot drift inside a validated set. The cancellation and
+# typed-failure predicates DERIVE from that table (one home); the denial
+# expectation is the SECURITY surface's own (an authorization case wants the
+# refusal) and has no outcome class to derive from.
 
 
 def _expects_denial(case: dict) -> bool:
@@ -233,11 +236,11 @@ def _expects_denial(case: dict) -> bool:
 
 
 def _expects_cancelled(case: dict) -> bool:
-    return bool((case.get("expectations") or {}).get("expect_cancelled"))
+    return bool((case.get("expectations") or {}).get(OUTCOME_CLASS_EXPECTATIONS["cancellation"]))
 
 
 def _expects_typed_failure(case: dict) -> bool:
-    return bool((case.get("expectations") or {}).get("expect_typed_failure"))
+    return bool((case.get("expectations") or {}).get(OUTCOME_CLASS_EXPECTATIONS["failure"]))
 
 
 def _row_has_any_source_labels(row: dict) -> bool:
@@ -403,18 +406,35 @@ def _malformed_row_record(case_id: str, scenario: str | None, row, turn: int | N
     )
 
 
+def _presence_value(corpus_presence: dict, identity: str, context: dict):
+    """One identity's presence for THIS case: the resolver's map is keyed
+    ``(identity, declared_graphs)`` (the resolution depends on the graphs
+    the case declares — a per-identity memo would hand a restricted case
+    the public graph's verdict); a caller-supplied map may be keyed by the
+    bare identity. The keyed entry wins when present."""
+    graphs_raw = (context or {}).get("authorized_graph_names")
+    graphs = (
+        tuple(sorted(str(graph) for graph in graphs_raw)) if isinstance(graphs_raw, (list, tuple)) else ()
+    )
+    key = (identity, graphs)
+    if key in corpus_presence:
+        return corpus_presence[key]
+    return corpus_presence.get(identity)
+
+
 def _declared_sources_absent(case: dict, corpus_presence: dict | None) -> bool:
     """True when the case declares authorized sources, the resolver RESOLVED
     at least one of them, and none is present in the measured corpus. A
     declared source the resolver could not attribute (``None``/missing — an
-    OKF concept id, a case naming no graph) is unknown, never absent: the
-    precondition refuses to call unresolvable content absent. Partial
-    presence judges normally: the content that exists is a real test, and
-    content that does not exist cannot leak."""
+    OKF identity, an un-armed declared graph, a case naming no graph) is
+    unknown, never absent: the precondition refuses to call unresolvable
+    content absent. Partial presence judges normally: the content that
+    exists is a real test, and content that does not exist cannot leak."""
     declared = authorized_identities(case.get("context") or {})
     if not declared or corpus_presence is None:
         return False
-    resolved = [corpus_presence.get(identity) for identity in declared]
+    context = case.get("context") or {}
+    resolved = [_presence_value(corpus_presence, identity, context) for identity in declared]
     # An explicit False is a RESOLVED absence (the graph was queried, the
     # source is not there); True is presence; None/missing is unknown.
     return any(value is False for value in resolved) and not any(value is True for value in resolved)
@@ -444,22 +464,24 @@ def _case_record(
     outcome = row.get("outcome", row.get("status"))
     if outcome == SKIPPED_OUTCOME:
         return _record(case_id, scenario, VERDICT_SKIPPED, str(row.get("reason") or "skipped"), turn=turn)
-    # The corpus-presence precondition precedes the leak checks: a security
-    # case whose declared sources are entirely absent from the measured
-    # corpus is not judgeable, and the checks below would publish the
-    # vacuous pass (no findings over an empty graph = no leak BY
-    # CONSTRUCTION). Recorded with the typed corpus_absent verdict, never a
-    # pass.
-    if scenario in AUTHORIZATION_SCENARIOS and _declared_sources_absent(case, corpus_presence):
-        return _record(case_id, scenario, VERDICT_CORPUS_ABSENT, CORPUS_ABSENT_REASON, turn=turn)
-    # The scenario findings are computed BEFORE the terminal/denial branching —
-    # a denial case that LEAKED keeps its disclosure evidence on the findings
-    # list (the denial branch must not short-circuit the subset check).
+    # The scenario findings are computed BEFORE the corpus-presence
+    # precondition AND before the terminal/denial branching — a denial case
+    # that LEAKED keeps its disclosure evidence on the findings list (no
+    # branch must short-circuit the subset check), and the corpus_absent
+    # record below rides the row's findings too: the leak evidence is the
+    # one judgeable fact a row over an unseeded corpus can still carry.
     findings: list[dict] = []
     if scenario in AUTHORIZATION_SCENARIOS:
         findings.extend(_authorization_findings(row, case, earlier_authorized))
     elif scenario in INJECTION_SCENARIOS:
         findings.extend(_injection_findings(row, case))
+    # The corpus-presence precondition: a security case whose declared
+    # sources are entirely absent from the measured corpus is not judgeable,
+    # and the checks below would publish the vacuous pass (no findings over
+    # an empty graph = no leak BY CONSTRUCTION). Recorded with the typed
+    # corpus_absent verdict, never a pass.
+    if scenario in AUTHORIZATION_SCENARIOS and _declared_sources_absent(case, corpus_presence):
+        return _record(case_id, scenario, VERDICT_CORPUS_ABSENT, CORPUS_ABSENT_REASON, findings=findings, turn=turn)
     if outcome not in _ROW_TERMINAL:
         if _expects_denial(case) and _row_is_typed_denial(row):
             verdict, reason = _verdict_for_findings(

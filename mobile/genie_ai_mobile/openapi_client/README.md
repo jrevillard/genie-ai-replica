@@ -74,6 +74,11 @@ Class | Method | HTTP request | Description
 *AdminApi* | [**apiAdminSystemHealthGet**](doc//AdminApi.md#apiadminsystemhealthget) | **GET** /api/admin/system-health | Get system health metrics
 *AdminApi* | [**apiAdminUserStatsGet**](doc//AdminApi.md#apiadminuserstatsget) | **GET** /api/admin/user-stats | Get user statistics
 *AdminApi* | [**apiAdminUsersSearchGet**](doc//AdminApi.md#apiadminuserssearchget) | **GET** /api/admin/users/search | Search users with filtering
+*AgricultureApi* | [**apiAgriCropHealthGet**](doc//AgricultureApi.md#apiagricrophealthget) | **GET** /api/agri/crop-health | Crop health (NDVI) per El Salvador department
+*AgricultureApi* | [**apiAgriHealthGet**](doc//AgricultureApi.md#apiagrihealthget) | **GET** /api/agri/health | Per-source adapter health
+*AgricultureApi* | [**apiAgriMarketPricesCategoryGet**](doc//AgricultureApi.md#apiagrimarketpricescategoryget) | **GET** /api/agri/market-prices/{category} | Market price series for a commodity category
+*AgricultureApi* | [**apiAgriNewsGet**](doc//AgricultureApi.md#apiagrinewsget) | **GET** /api/agri/news | Recent agriculture news for the prediction dialogs
+*AgricultureApi* | [**apiAgriPestAlertsGet**](doc//AgricultureApi.md#apiagripestalertsget) | **GET** /api/agri/pest-alerts | Pest advisories, regional news and community sightings
 *AnalyticsApi* | [**apiAnalyticsDashboardGet**](doc//AnalyticsApi.md#apianalyticsdashboardget) | **GET** /api/analytics/dashboard | Get dashboard analytics
 *AnalyticsApi* | [**apiAnalyticsEventsGet**](doc//AnalyticsApi.md#apianalyticseventsget) | **GET** /api/analytics/events | Get events records
 *AnalyticsApi* | [**apiAnalyticsEventsPost**](doc//AnalyticsApi.md#apianalyticseventspost) | **POST** /api/analytics/events | Track an event

@@ -29,6 +29,7 @@ part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 
 part 'api/admin_api.dart';
+part 'api/agriculture_api.dart';
 part 'api/analytics_api.dart';
 part 'api/authentication_api.dart';
 part 'api/chat_history_api.dart';

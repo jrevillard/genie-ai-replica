@@ -14,10 +14,13 @@
   apiVersion: vmoperator v0.75.0 consolidates VLSingle under
   operator.victoriametrics.com/v1. Earlier releases exposed it under
   logs.victoriametrics.com/v1beta1; that group is no longer served by
-  the current CRD. Validation is deferred to first reconcile — the
-  operator is not installed locally, so helm template + lint cannot
-  catch a group mismatch; the field shape was checked against the
-  vmoperator v0.75.0 API docs (VLSingleSpec).
+  the current CRD.
+
+  The operator decodes this CR STRICTLY: its admission webhook refuses
+  a field the served CRD does not declare ("json: unknown field"), and
+  one rejected CR fails the WHOLE atomic Helm upgrade. `spec.storage`
+  is parsed as a PVC spec, so the class field there is
+  `storageClassName` — `className` is refused by the webhook.
 */}}
 apiVersion: operator.victoriametrics.com/v1
 kind: VLSingle
@@ -34,12 +37,23 @@ spec:
     (pluggable.storageClassName) — a venue that points the data tier at
     a fast or tmpfs-backed StorageClass must reach the observability
     tier too. Omitted when unset: the operator then creates the PVC
-    against the cluster default class. */ -}}
+    against the cluster default class. The key is the PVC spec's
+    `storageClassName`: the operator parses this block as a PVC spec and
+    refuses any other spelling ("json: unknown field \"className\""). */ -}}
     {{- with ($obsLogs.storageClassName | default $pluggable.storageClassName) }}
-    className: {{ . }}
+    storageClassName: {{ . }}
     {{- end }}
     resources:
       requests:
         storage: {{ $obsLogs.storageSize | quote }}
+  {{- /* Extra command-line arguments for the VictoriaLogs binary. The
+  operator renders each key as "-<key>=<value>", so the key carries the
+  flag name WITHOUT its leading dash. */ -}}
+  {{- with ($obsLogs.extraArgs | default dict) }}
+  extraArgs:
+    {{- range $arg, $value := . }}
+    {{ $arg | quote }}: {{ $value | quote }}
+    {{- end }}
+  {{- end }}
   replicaCount: 1
 {{- end }}

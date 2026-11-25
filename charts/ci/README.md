@@ -46,6 +46,26 @@ only shows for one host shape (a DNS name with dots, an explicit port, an
 IP literal — which changes the derived egress ipBlock) was covered in one
 job and missing from the other.
 
+## The API versions the renders declare
+
+`--api-versions opentelemetry.io/v1beta1/OpenTelemetryCollector` — one
+line, in `render-base-flags`, so every render (the pipeline's jobs and
+the gate scripts' own) declares it.
+
+The chart renders the `OpenTelemetryCollector` CR only where the
+operator's CRD is served: the OpenTelemetry Operator is a cluster
+bootstrap prerequisite, and a cluster without it cannot map the kind —
+which aborts the WHOLE atomic Helm upgrade. The guard reads Helm's
+`Capabilities.APIVersions`, which an OFFLINE render (`helm template`)
+fills with nothing, so the CR would silently vanish from every CI
+render — and with it the coverage `chart:contract` (the collector's
+config) and `chart:crd-validate` (the CR against the installed CRD)
+exist to provide. Declaring the API version explicitly restores it.
+
+A flag file carries no comments: the readers split each line on
+whitespace and pass it straight to `helm`, so a `#` line would reach
+the binary as an argument.
+
 ## The realm's placeholders, and the Job that must export them
 
 `configs/keycloak/genie-realm.yaml` carries `$(env:VAR)` placeholders that

@@ -971,6 +971,10 @@ joblib==1.6.0 \
     --hash=sha256:2ccc96785b12046c08fd6d55839c12857831b54a3c1673ffadd2f04bfc4eda03 \
     --hash=sha256:3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba
     # via nltk
+json-repair==0.63.0 \
+    --hash=sha256:27ce6724ede2eff84c39c7d142dbfcd07c3635ebb79e4fa8e81d1b57367a1cbe \
+    --hash=sha256:e086519c8aba422a08f3b1c0882dcf5a0d2a47e65b450e3f23b224cdc12c545d
+    # via -r requirements-slim.in
 jsonpatch==1.47 \
     --hash=sha256:5ed650b7517789e0f43428aa7b09442c0b90de0a0fd17a53fd0ebf55205c601e \
     --hash=sha256:c9ba6de59c481bf2be05041514ecb0d97f994aa645c4e00831805dbe2281811a

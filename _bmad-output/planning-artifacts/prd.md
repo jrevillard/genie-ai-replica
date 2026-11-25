@@ -5,6 +5,7 @@ updated: 2026-11-16
 status: final
 initiative: Agentic foundations (OPEA-free) — governed document QA agent
 umbrella_branch: feat/agentic-foundations/prd
+umbrella_mr: "!938"
 framing_issue: "1729"
 owner: jrevillard (ITU)
 sources_of_truth:

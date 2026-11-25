@@ -190,7 +190,8 @@ service; the frontend never talks to anything but the BFF.
   (dataprep precedent, `genieai_dataprep_microservice.py:118-147` — note:
   that idiom is **intra-container only**; its locks live in the container's
   `/tmp` and compose declares dataprep a SINGLE-REPLICA CONTRACT,
-  docker-compose.yaml:2375). **Iteration-1 deployment contract: the
+  docker-compose.yaml:2834 — the `deploy:` block of `dataprep-arango-service`).
+  **Iteration-1 deployment contract: the
   activation flag runs agent-service at exactly one replica (0 or 1)** —
   with one replica, the slot pool IS the global bound (429 only when all
   slots busy); scaling beyond one replica requires an explicitly shared
@@ -298,7 +299,8 @@ service; the frontend never talks to anything but the BFF.
 - **Rule:** Before the contract is accepted, V02 records the OPEA
   retriever/embedding query-path semantics **as deployed** — RRF k, BM25
   analyzer, label-filter strategy are env-tunable values
-  (`config.py:83,112,123`), not constants; the port preserves the recorded
+  (`retriever/config.py:122,133,93` — RRF k, BM25 analyzer, label-filter
+  strategy), not constants; the port preserves the recorded
   values and exposes the same knobs. Behavior set to preserve: dense cosine
   (brute-force default), BM25 view, RRF fusion, label filter +
   defense-in-depth post-filter, file_id enrichment, CAP-1 identity join

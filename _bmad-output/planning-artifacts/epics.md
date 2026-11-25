@@ -151,7 +151,7 @@ NFR-7: Epic 2 — runtime seam, replacement scope + swap cost per candidate
 
 ### Epic 1: OPEA-free document capability layer (S3)
 Engineering and evaluation can search and read the knowledge base through a GENIE-owned, OPEA-free capability contract whose query-path behavior deliberately matches the current pipeline (V02-recorded), with authorization enforced by construction and every execution attributable. Includes the **activation-flag mechanism** (compose + routing seam, so the service is born switchable) and the **V03 baseline measurement as an early parallel track** (no code dependency — starts day one, feeds E4's reference).
-**FRs covered:** FR-1..FR-8, FR-12 (executor), FR-20, FR-21, FR-22, FR-28, FR-29 · FR-15 (mechanism) · AR-1..AR-5, AR-2 gate, AR-11 skeleton · Gates: V02 (before design), V04 (contract acceptance), V05 (compatibility).
+**FRs covered:** FR-1..FR-8, FR-12 (executor), FR-20, FR-21, FR-22, FR-28, FR-29 · FR-15 (mechanism) · FR-19 (V07a checklist, story 1.3) · AR-1..AR-5, AR-2 gate, AR-11 skeleton · Gates: V02 (before design), V04 (contract acceptance), V05 (compatibility).
 
 ### Epic 2: Governed document-QA agent with visible work (S4a)
 Users receive source-grounded agentic answers or explicit insufficiency — with a visible activity line (started/completed/failed per operation), honest tri-state verdicts, bounded execution, working cancellation, and full version attribution; the runtime (D03) closes at epic entry from V06+V07a.
@@ -226,7 +226,7 @@ So that FR-20 holds from the first delivered stage by machine, not memory.
 **When** the OPEA-free gate runs
 **Then** agent-path packages (agent-service now; the list is extensible) are scanned for `comps` imports and OPEA build-time downloads, and a violation fails the pipeline
 **And** a deliberate violation on a scratch branch turns the gate red (verified once, documented)
-**And** the gate's scope note records what it cannot see (the BFF's runtime call graph — covered by the E3 routing-helper test, not by grep)
+**And** the gate's scope note records what it cannot see (the BFF's runtime call graph — covered by the Epic 3 routing-helper test, not by grep)
 
 ### Story 1.5: Define the document capability contract (with V04 acceptance)
 
@@ -383,7 +383,7 @@ So that the client contract is owned in one place and cancellation actually prop
 **When** the BFF proxies an agentic request
 **Then** it writes every client frame itself — chunk relay, `agent_activity`, `agent_verdict`, metadata (+ version-record persistence), translation injection, `done`/`error` — with the five existing types and terminal order preserved verbatim
 **And** client disconnect is detected on the stream (replacing the dead `req.on('close')` path), aborting the upstream call and cancelling in-flight work
-**And** the shared routing helper (guarded in E3's 3.1) is the only way either agentic endpoint is exposed — the BFF integration and the guarded seam land together
+**And** the shared routing helper (born with the flag mechanism in Epic 1, operationally activated and provably applied in Epic 3's 3.1) is the only way either agentic endpoint is exposed — the BFF integration and the guarded seam land together
 **And** the `queries` doc is minted per turn with the same shape as the legacy path (queryId continuity for persistence, analytics, saved conversations)
 
 ### Story 2.4b: Non-streaming integration (JSON path)
@@ -406,13 +406,13 @@ As an end user,
 I want the agent to answer from evidence or say it cannot,
 So that I never receive confident invention.
 
-**Integration slice — assembles the deliverables of 2.1/2.3/2.6/2.10 and the capability layer into the complete user flow; it owns the end-to-end acceptance evidence, not a second implementation of the loop or verifier. It CONSUMES 2.6 and 2.10 — they precede it (numbering is identity, not execution order).**
+**Integration slice — assembles the deliverables of 2.1/2.3/2.6/2.10 and the capability layer into the complete user flow; it owns the end-to-end acceptance evidence. It is also the story that builds the PRODUCTION agent loop: the runtime D03 selected (2.2) runs here, on the seam, behind the governed orchestrator — one loop, not a second implementation beside the slice's evidence. It CONSUMES 2.6 and 2.10 — they precede it (numbering is identity, not execution order).**
 
 **Acceptance Criteria:**
 
 **Given** a question and the registered toolset
 **When** the full flow runs
-**Then** it returns either a source-grounded answer with traceable citations (rendered through the existing RAG citation components, FR-13) or an explicit insufficient-evidence response
+**Then** the production agent loop — the runtime D03 selected, running on the seam behind the governed orchestrator (no probe runtime, no second engine) — returns either a source-grounded answer with traceable citations (rendered through the existing RAG citation components, FR-13) or an explicit insufficient-evidence response
 **And** retrieved content is data, never instructions — hostile instructions embedded in documents or tool outputs are not followed (AD-13), and an injection attempt is a recorded finding
 **And** degraded retrieval (partial availability, fallback strategy) reports insufficiency, never a confident answer (FR-12)
 **And** multilingual behavior carries over: preparation (story 1.8) for retrieval, BFF answer translation for display — asserted end-to-end in this story
@@ -443,9 +443,10 @@ So that the wait is legible and failures are visible.
 
 **Given** the UX design contract (DESIGN.md + EXPERIENCE.md)
 **When** `agent_activity` frames arrive before the first chunk
-**Then** the line renders as the first child of `.answer-card` (with `.message-bubble`'s `v-else` converted to an explicit `v-if`), replacing the typing indicator, with states running/completed/failed per the spec — failed uses the warning family (never `--danger`) and the failed label wraps rather than truncates
+**Then** the line renders as the first child of `.answer-card` — the same slot the legacy typing indicator occupies, so the bubble's `v-else` stays adjacent to its own `v-if` (no conversion needed) — replacing the typing indicator, with states running/completed/failed per the spec — failed uses the warning family (never `--danger`) and the failed label wraps rather than truncates
 **And** the line collapses at the first `chunk` and never re-opens; post-chunk activity frames are accepted but unrendered
 **And** `agent_verdict` renders per the truth table: `grounded` → no warning (with the translation-scope caption when a translation was delivered); `ungrounded` → the existing ungrounded warning; `unverified` → the distinct neutral note (`chatbot.agentActivity.verificationUnavailable`)
+**And** the client store carries the TRI-STATE verdict as its own field (`grounding_status`: `grounded` | `ungrounded` | `unverified`) and the rendering reads that field — the legacy `is_grounded` boolean alone cannot tell `unverified` from `ungrounded`, and rendering the ungrounded warning on `is_grounded:false` would claim "not based on library documents" for a verdict that never made that claim (UX-DR6)
 **And** all 11 `chatbot.agentActivity.*` keys ship in all 14 locale files (the `localeConsistency` gate enforces it)
 **And** accessibility holds: `role="status"` + `aria-live="polite"`, decorative marker, state carried by the word, reduced-motion respected (scoped to the line)
 **And** handles follow the spec (`data-testid="agent-activity-line"`, per-op rows); the line is non-interactive and persists nothing
@@ -464,6 +465,7 @@ So that the experience is identical across surfaces.
 **And** all 11 keys ship in all 14 dart locale files (review-enforced; missing keys would fall back to English silently — the delivery checklist asserts the full set)
 **And** `ValueKey('agent-activity-line')` and per-op keys mirror the web handles; `Semantics(liveRegion: true)` and `MediaQuery.disableAnimationsOf` honor the a11y floor
 **And** the verdict truth table and translated-grounded caption render identically to web, including on restored conversations
+**And** `sse_parser.dart` parses the agentic frames explicitly — `grounding_status` (the tri-state verdict), `agent_activity` and `agent_verdict` each land in their own case instead of falling into `extra` or being dropped — and the run's metadata PERSISTS `grounding_status` (not only the `is_grounded` boolean), so a restored conversation can tell `unverified` from `ungrounded`
 
 ### Story 2.9: SSE contract regression coverage
 
@@ -520,7 +522,7 @@ So that a deployment can never be half-agentic.
 
 **Acceptance Criteria:**
 
-**Given** the routing seam (`initStreamQuery` for `/stream`, `createQuery` for the non-stream path — genuinely separate code)
+**Given** the routing seam (`initStreamQuery` for `/stream`, `createQuery` for the non-stream path — genuinely separate code) and the shared routing helper born with the flag mechanism in Epic 1 (story 1.3)
 **When** the flag switches
 **Then** both paths branch through one shared routing helper, with a test asserting the two entries cannot disagree
 **And** the agentic branch never targets the chatqna/OPEA URL (the AD-1 BFF-leg test — grep cannot see this)
@@ -567,7 +569,7 @@ So that A/B/C run on the same machinery with controlled inputs.
 
 **Acceptance Criteria:**
 
-**Given** the E1 equivalence suite as config-B driver
+**Given** the Epic 1 equivalence suite as config-B driver
 **When** the harness is built
 **Then** every run versions its corpus, cases, configurations, models, prompts and evaluator instructions; tuning cases are kept separate from the assessment set (FR-24)
 **And** the set composition is fixed and explicit: answerable and unanswerable questions, citation checks, representative languages (incl. non-Latin), restricted/public access scenarios, failure and cancellation cases
@@ -659,11 +661,11 @@ So that release gates rest on available evidence.
 | 1.6 search port | FR-6, AR-5 | 1.1, 1.5 | equivalence fixtures |
 | 1.7 read + authz | FR-2, 12, 28 | 1.5, 1.6 | negative matrix + policy record |
 | 1.8 preparation | AR-4 (EP-01) | 1.1, 1.5 | per-class failure outcomes |
-| 1.9 equivalence + no-agent B | FR-23 (B), AR-10 lane | 1.6..1.8 | suite + full-answer mode |
+| 1.9 equivalence + no-agent B | AR-7 lane primitive, FR-8 (equivalence) | 1.6..1.8 | suite + full-answer mode |
 | 2.1 seam + probe | FR-9, AR-6 | Epic 1 | probe evidence (pre-D03) |
 | 2.2 V06 + D03 | FR-19a, NFR-2, D03 | 2.1, V03 | matrix + ADR |
 | 2.3 orchestrator | FR-11, AR-7 | 2.2 | budget/admission tests |
-| 2.4 BFF frame writer | AR-9, FR-14 | 2.2, 3.1 helper | frame tests |
+| 2.4 BFF frame writer | AR-9, FR-14 | 2.2, Epic 1 routing helper (born with the flag mechanism) | frame tests |
 | 2.4b non-streaming | FR-14 (JSON) | 2.4 | e2e JSON contract |
 | 2.5 answer path (slice) | FR-9..13, AD-13 | 2.1..2.4b, **2.6, 2.10**, Epic 1 | end-to-end acceptance |
 | 2.6 citations tri-state | FR-10, AR-8 | 2.1 seam + drafted-answer contract, 1.5 | verdict tests (built against the seam contract, before the slice) |
@@ -672,8 +674,8 @@ So that release gates rest on available evidence.
 | 2.9 SSE regression | FR-14/30, NFR-5 | 2.4, 2.7 | pinned e2e set |
 | 2.10 translation | FR-14, AR-14 | 2.3 counters, 2.4 | residual-budget tests |
 | 2.11 attribution | FR-17, 18, AR-11 | 2.3 | handshake + crash tests |
-| (admission-lane primitive) | AR-10 lane | — implemented in E1 foundation work (with 1.9's no-agent mode); 2.3 hardens it with agent budgets | shared primitive, no cross-epic cycle |
-| 3.1 one flag both paths | FR-15, AR-10 | 1.3 | routing-disagreement test |
+| 1.9 (admission-lane primitive) | AR-7 lane | — implemented in Epic 1's foundation work (with 1.9's no-agent mode); 2.3 hardens it with agent budgets | shared primitive, no cross-epic cycle |
+| 3.1 one flag both paths | FR-15, AR-10 | 1.3 (the helper itself is born in 1.3) | routing-disagreement test |
 | 3.2 rollback continuity | FR-16 | 3.1, Epic 2 | continuation scenario |
 | 3.3 V08 rehearsals | FR-16, NFR-4 | 3.2 | rollout records |
 | 4.1 harness | FR-23/24 | 1.9 | versioned runs |

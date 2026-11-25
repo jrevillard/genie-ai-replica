@@ -1151,6 +1151,52 @@ def run_config_c(
 
 
 # ---------------------------------------------------------------------------
+# The corpus-presence resolution (the security verdicts' precondition)
+# ---------------------------------------------------------------------------
+
+
+def corpus_presence_for(entries: list[dict], *, file_ids_by_graph: dict[str, set[str]] | None) -> dict[str, bool | None] | None:
+    """The corpus-presence map the security verdicts' precondition reads
+    (#2155): every authorization case's declared source identity ->
+    ``True`` (present), ``False`` (absent) or ``None`` (unknown).
+
+    ``file_ids_by_graph`` maps a graph name to the file ids its
+    ``<graph>_SOURCE`` collection carries — the live resolver reads ArangoDB
+    (:func:`eval.arango.source_file_ids`, one AQL per graph); tests inject.
+    A legacy file id resolves against the graphs the case declares in its
+    context; an OKF-shaped identity (``<repo>/<concept>``) resolves ``None``
+    — the SOURCE collections carry file ids, so the precondition refuses to
+    call OKF content absent from a resolution it cannot make.
+    """
+    if file_ids_by_graph is None:
+        return None
+    from .verdicts import authorized_identities
+
+    presence: dict[str, bool | None] = {}
+    for case in entries:
+        if not isinstance(case, dict):
+            continue
+        context = case.get("context") or {}
+        declared = authorized_identities(context) or set()
+        graphs = context.get("authorized_graph_names")
+        graph_sets = (
+            [file_ids_by_graph.get(str(graph)) for graph in graphs if isinstance(graphs, (list, tuple))]
+            if isinstance(graphs, (list, tuple))
+            else []
+        )
+        for identity in declared:
+            if identity in presence:
+                continue
+            if "/" in identity:
+                # OKF concept identity: not resolvable against SOURCE file ids.
+                presence[identity] = None
+                continue
+            resolved = [identity in file_ids for file_ids in graph_sets if file_ids is not None]
+            presence[identity] = any(resolved) if resolved else None
+    return presence
+
+
+# ---------------------------------------------------------------------------
 # Model-id discovery (the manifest's "resolved model ids read from the
 # serving endpoints")
 # ---------------------------------------------------------------------------

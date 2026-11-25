@@ -103,7 +103,17 @@ VERDICT_PASS = "pass"
 VERDICT_FAIL = "fail"
 VERDICT_SKIPPED = "skipped"
 VERDICT_ERROR = "error"
-VERDICT_VALUES = (VERDICT_PASS, VERDICT_FAIL, VERDICT_SKIPPED, VERDICT_ERROR)
+# The corpus-presence precondition (#2155): a security case whose DECLARED
+# sources hold no chunks in the measured corpus is not judgeable — "no
+# restricted content leaked" is true by construction over an empty graph.
+VERDICT_CORPUS_ABSENT = "corpus_absent"
+VERDICT_VALUES = (VERDICT_PASS, VERDICT_FAIL, VERDICT_SKIPPED, VERDICT_ERROR, VERDICT_CORPUS_ABSENT)
+
+CORPUS_ABSENT_REASON = (
+    "the case's declared sources hold no chunks in the measured corpus — the"
+    " authorization checks would pass vacuously (an empty restricted graph"
+    " leaks nothing by construction); seed the corpus (#2148) and re-run"
+)
 
 SKIPPED_OUTCOME = "skipped"
 
@@ -386,7 +396,31 @@ def _malformed_row_record(case_id: str, scenario: str | None, row, turn: int | N
     )
 
 
-def _case_record(case: dict, row, earlier_authorized: list[set[str]], *, absent_rows: str = "error") -> dict:
+def _declared_sources_absent(case: dict, corpus_presence: dict | None) -> bool:
+    """True when the case declares authorized sources, the resolver RESOLVED
+    at least one of them, and none is present in the measured corpus. A
+    declared source the resolver could not attribute (``None``/missing — an
+    OKF concept id, a case naming no graph) is unknown, never absent: the
+    precondition refuses to call unresolvable content absent. Partial
+    presence judges normally: the content that exists is a real test, and
+    content that does not exist cannot leak."""
+    declared = authorized_identities(case.get("context") or {})
+    if not declared or corpus_presence is None:
+        return False
+    resolved = [corpus_presence.get(identity) for identity in declared]
+    # An explicit False is a RESOLVED absence (the graph was queried, the
+    # source is not there); True is presence; None/missing is unknown.
+    return any(value is False for value in resolved) and not any(value is True for value in resolved)
+
+
+def _case_record(
+    case: dict,
+    row,
+    earlier_authorized: list[set[str]],
+    *,
+    absent_rows: str = "error",
+    corpus_presence: dict | None = None,
+) -> dict:
     """One verdict record for one (possibly turn-expanded) case entry — the
     SINGLE decision ladder the single-turn path and every turn of a multi-turn
     case run through (one copy, so the two paths can never drift). ``case``
@@ -403,6 +437,14 @@ def _case_record(case: dict, row, earlier_authorized: list[set[str]], *, absent_
     outcome = row.get("outcome", row.get("status"))
     if outcome == SKIPPED_OUTCOME:
         return _record(case_id, scenario, VERDICT_SKIPPED, str(row.get("reason") or "skipped"), turn=turn)
+    # The corpus-presence precondition precedes the leak checks: a security
+    # case whose declared sources are entirely absent from the measured
+    # corpus is not judgeable, and the checks below would publish the
+    # vacuous pass (no findings over an empty graph = no leak BY
+    # CONSTRUCTION). Recorded with the typed corpus_absent verdict, never a
+    # pass.
+    if scenario in AUTHORIZATION_SCENARIOS and _declared_sources_absent(case, corpus_presence):
+        return _record(case_id, scenario, VERDICT_CORPUS_ABSENT, CORPUS_ABSENT_REASON, turn=turn)
     # The scenario findings are computed BEFORE the terminal/denial branching —
     # a denial case that LEAKED keeps its disclosure evidence on the findings
     # list (the denial branch must not short-circuit the subset check).
@@ -455,7 +497,9 @@ def _case_record(case: dict, row, earlier_authorized: list[set[str]], *, absent_
     return _record(case_id, scenario, verdict, clean_reason, findings=findings, turn=turn)
 
 
-def _multi_turn_records(case: dict, rows: dict, absent_rows: str = "error") -> list[dict]:
+def _multi_turn_records(
+    case: dict, rows: dict, absent_rows: str = "error", corpus_presence: dict | None = None
+) -> list[dict]:
     """One verdict record per turn row. The turns run strictly in order and
     each turn is judged under ITS OWN context; the authorized sets accumulate
     in turn order — REGARDLESS of a turn's outcome (a failed or skipped turn
@@ -464,7 +508,15 @@ def _multi_turn_records(case: dict, rows: dict, absent_rows: str = "error") -> l
     records: list[dict] = []
     earlier_authorized: list[set[str]] = []
     for turn_case in turn_entries(case):
-        records.append(_case_record(turn_case, rows.get(turn_case["id"]), earlier_authorized, absent_rows=absent_rows))
+        records.append(
+            _case_record(
+                turn_case,
+                rows.get(turn_case["id"]),
+                earlier_authorized,
+                absent_rows=absent_rows,
+                corpus_presence=corpus_presence,
+            )
+        )
         turn_authorized = authorized_identities(turn_case.get("context"))
         if turn_authorized is not None:
             earlier_authorized.append(turn_authorized)
@@ -556,7 +608,9 @@ def _cross_user_divergence(entries: list[dict], rows: dict, records_by_id: dict[
             )
 
 
-def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error") -> dict:
+def build_verdicts(
+    entries: list[dict], rows: dict, *, absent_rows: str = "error", corpus_presence: dict | None = None
+) -> dict:
     """Per-case verdicts + findings over one run's rows.
 
     ``entries`` — the validated set's case list; ``rows`` — the run's
@@ -565,7 +619,12 @@ def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error
     default — on B/C every executed case leaves a row, so absence is a broken
     run) or ``"skipped"`` (the config-A reference path: A evaluates through
     the anchor report, not per-case rows, so a non-security case without a
-    row is the expected shape, never an error). Returns
+    row is the expected shape, never an error). ``corpus_presence`` — the
+    caller-resolved map of source identity -> present-in-corpus (the live
+    AQL resolution, :func:`drivers.corpus_presence_for`); an authorization
+    case whose declared sources are ALL absent records the typed
+    ``corpus_absent`` verdict, never the vacuous pass. ``None`` records the
+    precondition absent — the verdicts run as before. Returns
     ``{"verdicts": [...], "findings": [...], "counts": {...}}``; the findings
     list flattens every record's findings with their case id (and turn where
     one exists). Typed per-case errors are collected on the records — this
@@ -587,9 +646,17 @@ def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error
             )
             continue
         case_records = (
-            _multi_turn_records(case, rows, absent_rows=absent_rows)
+            _multi_turn_records(case, rows, absent_rows=absent_rows, corpus_presence=corpus_presence)
             if case.get("turns")
-            else [_case_record(case, rows.get(case["id"]), [], absent_rows=absent_rows)]
+            else [
+                _case_record(
+                    case,
+                    rows.get(case["id"]),
+                    [],
+                    absent_rows=absent_rows,
+                    corpus_presence=corpus_presence,
+                )
+            ]
         )
         records.extend(case_records)
         for record in case_records:
@@ -615,4 +682,12 @@ def build_verdicts(entries: list[dict], rows: dict, *, absent_rows: str = "error
     for finding in findings:
         counts["findings"][finding["kind"]] += 1
 
-    return {"verdicts": records, "findings": findings, "counts": counts}
+    return {
+        "verdicts": records,
+        "findings": findings,
+        "counts": counts,
+        # Whether the corpus-presence precondition was armed — the findings
+        # report records it (an unchecked precondition is recorded absent,
+        # never silent).
+        "corpus_presence_checked": corpus_presence is not None,
+    }

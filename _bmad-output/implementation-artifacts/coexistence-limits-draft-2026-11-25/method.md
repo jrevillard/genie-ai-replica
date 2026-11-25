@@ -4,7 +4,7 @@ The PROPOSAL package for NFR-3's legacy limits (issue #2146, blocker 2's
 buildable half). Everything here is a draft for the operator's decision —
 nothing is agreed, no verdict opens on it: the artifact carries
 `status: "draft"` and the coexistence harness REFUSES a draft artifact
-outright (`draft_limits`), so the criterion's verdict stays BLOCKED until
+outright (typed refusal reason `unagreed_limits`), so the criterion's verdict stays BLOCKED until
 the operator agrees. The harness applies limits, it never authors or
 defaults them — this package is the authoring, and the agreement act is the
 operator's: flip the `status` key of `legacy-limits.draft.json` (the JSON

@@ -323,14 +323,35 @@ async function resolveContext(input = {}) {
       warnings.push(message);
       logger.warn('eval_context.open_context_empty', { scope_mode: view.scope_mode });
     } else if (effective.length === 0 && principalRefs.length) {
-      // The group resolved and carries NO scope role. In open mode that
-      // principal still traverses the PUBLIC set — which is a true answer,
-      // but not the one an operator naming a "restricted" group expects.
+      // The group resolved and carries NO scope role. What that means depends
+      // on the deployment's serving set: over PUBLIC (unfenced) repositories
+      // the principal traverses the public set; where every repository is
+      // fenced it authorizes nothing (measured live 2026-11-25: scope_mode
+      // "open", serving 13 all fenced, authorized 0). Either way the
+      // operator naming a "restricted" group must hear it.
       warnings.push(
-        "the referenced group(s) carry no okf scope, so this context resolves the deployment's " +
-          'DEFAULT (public) set — not a restricted one. If that is not what you meant, the group ' +
-          'holds no scope.'
+        'the referenced group(s) carry no okf scope, so this context authorizes nothing in its own ' +
+          "right — it traverses only the deployment's PUBLIC (unfenced) repositories. If that is not " +
+          'what you meant, the group holds no scope.'
       );
+    }
+    if (!openContext && view.repos.length === 0) {
+      // Live 2026-11-25 (David's generate refusal): a FENCED context that
+      // resolves to nothing is not a quiet zero — a suite minted for it is
+      // refused at run time ("the evaluation context names none of them").
+      // The operator learns it HERE, at compose time. MEASURED live
+      // (scope_mode "open", serving 13, authorized 0): an empty scope set
+      // authorizes NOTHING — the old "resolves the public set" claim was
+      // wrong, and this is the honest statement for both empty causes.
+      const why =
+        effective.length === 0 && principalRefs.length
+          ? 'the referenced group(s) carry no okf scope'
+          : 'its memberships name no repository the caller can read';
+      warnings.push(
+        `this context resolves to NO repository: ${why}. A suite minted for it will be refused — ` +
+          'grant the group access to a serving repository, then save (or Refresh).'
+      );
+      logger.warn('eval_context.empty_carrier', { principal_refs: principalRefs.length, scopes: effective.length });
     }
 
     span.setAttribute('okf.evalctx.open_context', openContext);
@@ -633,7 +654,6 @@ async function refreshContext(id, opts = {}) {
 async function updateContext(id, payload = {}, opts = {}) {
   const doc = await getContext(id);
   const next = { ...doc };
-  let reResolved = null;
   if (payload.name !== undefined) {
     // ONE rule, ONE code: the create's own validator owns the name contract
     // (non-empty string, ≤80 characters) — a rename is not a second,
@@ -645,24 +665,26 @@ async function updateContext(id, payload = {}, opts = {}) {
     if (!Array.isArray(payload.principal_refs) || payload.principal_refs.some((r) => typeof r !== 'string')) {
       throw new EvalContextError('INVALID_REFS', 'principal_refs must be an array of group names', 400);
     }
-    const changed =
-      JSON.stringify([...payload.principal_refs].sort()) !== JSON.stringify([...doc.principal_refs].sort());
-    if (changed) {
-      reResolved = await resolveContext({ scopes: doc.scopes, principal_refs: payload.principal_refs });
-      if (reResolved.unreadable.length) {
-        throw new EvalContextError(
-          'PRINCIPAL_UNREADABLE',
-          `the principal reference(s) ${reResolved.unreadable.join(', ')} could not be read, so the context ` +
-            "could not be updated. Its stored snapshot stands; the deployment's public set is not a " +
-            'fallback for a principal that could not be read.',
-          422
-        );
-      }
-      next.principal_refs = payload.principal_refs;
-      next.resolved = resolvedSnapshot(reResolved);
-      next.warnings = reResolved.warnings;
-    }
+    next.principal_refs = payload.principal_refs;
   }
+  // ALWAYS re-resolve on save (live 2026-11-25, David's generate refusal):
+  // a context created BEFORE its group was granted the repository kept its
+  // empty snapshot through an unchanged-refs save — while the edit banner
+  // promised "saving re-resolves the union". The effective refs (the
+  // payload's, else the stored ones) resolve through the one authority with
+  // the CURRENT grants, every time.
+  const reResolved = await resolveContext({ scopes: doc.scopes, principal_refs: next.principal_refs });
+  if (reResolved.unreadable.length) {
+    throw new EvalContextError(
+      'PRINCIPAL_UNREADABLE',
+      `the principal reference(s) ${reResolved.unreadable.join(', ')} could not be read, so the context ` +
+        "could not be updated. Its stored snapshot stands; the deployment's public set is not a " +
+        'fallback for a principal that could not be read.',
+      422
+    );
+  }
+  next.resolved = resolvedSnapshot(reResolved);
+  next.warnings = reResolved.warnings;
   next.version = (doc.version || 1) + 1;
   next.updated_at = new Date().toISOString();
   next.updated_by = (opts.actor && opts.actor.user_id) || 'system';
@@ -683,8 +705,7 @@ async function updateContext(id, payload = {}, opts = {}) {
       version: next.version,
       name: next.name,
       principal_refs: next.principal_refs.length,
-      graph_count: next.resolved.graph_names.length,
-      re_resolved: Boolean(reResolved)
+      graph_count: next.resolved.graph_names.length
     }
   });
   return next;

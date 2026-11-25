@@ -55,6 +55,7 @@ jest.mock('../services/keycloak-access-service', () => ({
 const { __mockDb } = require('../shared-lib/db-connection-service');
 const retrievalConfigService = require('../services/retrieval-config-service');
 const { writeAudit } = require('../services/audit-service');
+const keycloakAccess = require('../services/keycloak-access-service');
 const evalCtx = require('../services/evaluation-context-service');
 
 function servingRow(repo_id) {
@@ -300,6 +301,48 @@ describe('#2061 phase-4 amendment: managing an evaluation context', () => {
     expect(refused.status).toBe(409);
     const still = await evalCtx.getContext(doc._key);
     expect(still.version).toBe(doc.version + 1);
+  });
+
+  // Live 2026-11-25 (David's generate refusal): the context was created
+  // BEFORE its group was granted the repo (empty snapshot frozen), the
+  // grant landed, the preview showed the repo — and then a save with an
+  // UNCHANGED membership list skipped the re-resolution, so the stale
+  // empty snapshot survived while the edit banner promised a re-resolve.
+  test("an update with UNCHANGED memberships STILL re-resolves — the banner's promise", async () => {
+    const doc = await makeContext(); // group-a -> r-a, v1
+    // The group's grants GREW after the create (the live case: the repo
+    // grant landed ten seconds later): the same refs must now resolve the
+    // union the CURRENT grants produce, not the create-time snapshot.
+    keycloakAccess.groupRealmRoles.mockResolvedValueOnce([{ name: 'okf:t:r-a:read' }, { name: 'okf:t:r-b:read' }]);
+    seedServing([servingRow('r-a'), servingRow('r-b')]);
+    const updated = await evalCtx.updateContext(
+      doc._key,
+      { principal_refs: ['group-a'] }, // UNCHANGED
+      { actor: { user_id: 'u-admin' } }
+    );
+    expect(updated.version).toBe(doc.version + 1);
+    expect(updated.resolved.repos.map((r) => r.repo_id).sort()).toEqual(['r-a', 'r-b']);
+  });
+
+  test('a FENCED context resolving to zero repos carries a LOUD warning, not silence', async () => {
+    // group-c's grant names r-c, but r-c is not serving: the resolution is
+    // empty and NOT open — a run minted for it would be refused, and the
+    // operator must learn that at COMPOSE time, not at generate time.
+    seedServing([servingRow('r-a')]);
+    const doc = await evalCtx.createContext(
+      { name: 'empty carrier', principal_refs: ['group-c'] },
+      { actor: { user_id: 'u-admin' } }
+    );
+    expect(doc.resolved.repos).toEqual([]);
+    expect(doc.resolved.open_context).toBe(false);
+    expect((doc.warnings || []).some((w) => /no repository/i.test(w))).toBe(true);
+    // The OPEN context is exempt — it is the deployment's default posture.
+    const open = await evalCtx.createContext(
+      { name: 'open one', principal_refs: [] },
+      { actor: { user_id: 'u-admin' } }
+    );
+    expect(open.resolved.open_context).toBe(true);
+    expect((open.warnings || []).some((w) => /no repository/i.test(w))).toBe(false);
   });
 
   test('the manage routes carry the superadmin gate', () => {

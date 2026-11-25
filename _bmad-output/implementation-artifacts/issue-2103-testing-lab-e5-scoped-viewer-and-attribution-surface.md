@@ -101,6 +101,22 @@ badge and the boundary readout ride the scoped viewer."*
 - The run dispatch contract change (always names the context, `''` = open)
   updated the two dialog assertions that pinned the old payload.
 
+### The live-testing round's fix (2026-11-25, before merge)
+
+David's flow: context created → group granted the repo ten seconds later →
+preview showed the repo → save kept the OLD empty snapshot → generate
+refused ("names none of them"). Root cause: the update skipped
+re-resolution when the membership list was unchanged — while the edit
+banner promised a re-resolve. Fixes (both RED→GREEN):
+
+- `updateContext` ALWAYS re-resolves through the current grants (the
+  unchanged-refs short-circuit is gone).
+- A fenced context resolving to zero repositories carries a LOUD warning
+  at compose time ("a suite minted for it will be refused — grant the
+  group access, then save (or Refresh)"); the old no-scope warning's
+  claim that open mode resolves the public set was measured WRONG live
+  (authorized:0, scope_mode:open, serving:13) and now states the truth.
+
 ## Still open after this wave
 
 - Phase 5 (#2104) per the epic.

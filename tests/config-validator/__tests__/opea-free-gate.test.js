@@ -114,6 +114,12 @@ const REQUIREMENTS_FILE =
 /** A lock file: whatever the tool calls it (uv.lock, poetry.lock, Pipfile.lock). */
 const LOCK_FILE = /(^|\/)[^/]*\.lock$/;
 
+/** A PYTHON ecosystem lock (the three tools the overlay tree itself uses). */
+const PYTHON_LOCK_FILE = /(^|\/)(?:uv|poetry|Pipfile)\.lock$/;
+
+/** A lock file from ANOTHER ecosystem (yarn, Cargo, composer, flake, …). */
+const isNonPythonLock = (file) => LOCK_FILE.test(file) && !PYTHON_LOCK_FILE.test(file);
+
 /** A packaging file: the pyproject and the setuptools forms. */
 const PACKAGING_FILE = /(^|\/)(pyproject\.toml|setup\.(py|cfg))$/;
 
@@ -178,6 +184,25 @@ const OPEA_DEPENDENCY_MARKERS = [
     id: 'opea-dependency-entry',
     pattern:
       /["'](?:opea-|genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|["'][ \t]*(?:,|\]|\))|["'][ \t]*$)|^[ \t]*(?:install_requires|requires)[ \t]*=[ \t]*[^#\n]*?(?<![a-z0-9._-])(?:opea-|genai-)?comps(?![a-z0-9._-])/im
+  }
+];
+
+/**
+ * The dependency markers a NON-Python lock is read under: the version
+ * operators only, no direct-reference continuations. The `name @ path` /
+ * `name = path` forms are PEP 508 — Python-ecosystem shapes; inside a
+ * non-Python lock a `@` is that ecosystem's own name@version separator, and
+ * a yarn.lock entry for an npm package literally named `comps` is not the
+ * OPEA overlay (reading it as a declaration failed the pipeline for a
+ * coupling that does not exist). The opea-dependency-entry quoted form is
+ * likewise scoped out: a quoted `comps@` in a foreign lock is the same
+ * separator. The BUILD markers still search every lock — a git URL naming
+ * the OPEA tree fires opea-source-tree whatever the lock format is.
+ */
+const OPEA_NON_PYTHON_LOCK_MARKERS = [
+  {
+    id: 'opea-requirement',
+    pattern: /^[ \t]*-?[ \t]*(?:opea-|genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*$)/im
   }
 ];
 
@@ -393,7 +418,8 @@ function scanFiles(files, read) {
         }
       }
       if (isDependencyFile(file)) {
-        for (const marker of OPEA_DEPENDENCY_MARKERS) {
+        const markers = isNonPythonLock(file) ? OPEA_NON_PYTHON_LOCK_MARKERS : OPEA_DEPENDENCY_MARKERS;
+        for (const marker of markers) {
           if (marker.pattern.test(text)) {
             violations.push({ file, rule: `opea-build:${marker.id}` });
           }
@@ -664,6 +690,31 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
       );
       expect(violations.map((violation) => violation.rule)).toEqual(sample.rules.map((rule) => `opea-build:${rule}`));
     }
+  });
+
+  it('a non-Python lock entry that merely names comps is not an OPEA coupling', () => {
+    // A yarn.lock v1 entry for an npm package literally named `comps` is
+    // not the OPEA overlay: the `@` there is that ecosystem's own
+    // name@version separator, and reading it as a PEP 508 direct
+    // requirement would fail the pipeline for a coupling that does not
+    // exist. The build markers still search every lock — a git URL naming
+    // the OPEA tree fires whatever the lock format is.
+    const violations = withTree(
+      'opea-free-yarn-',
+      {
+        'pkg/yarn.lock':
+          'comps@^1.5.0:\n  version "1.5.0"\n  resolved "https://registry.yarnpkg.com/comps/-/comps-1.5.0.tgz"\n'
+      },
+      (root) => scanFiles(['pkg/yarn.lock'], readerFor(root))
+    );
+    expect(violations).toEqual([]);
+
+    const coupled = withTree(
+      'opea-free-yarn-coupled-',
+      { 'pkg/yarn.lock': 'comps@file:vendor/GenAIComps:\n  version "1.5.0"\n' },
+      (root) => scanFiles(['pkg/yarn.lock'], readerFor(root))
+    );
+    expect(coupled.map((violation) => violation.rule)).toEqual(['opea-build:opea-source-tree']);
   });
 
   it('detects the overlay Dockerfile a contributor copies', () => {

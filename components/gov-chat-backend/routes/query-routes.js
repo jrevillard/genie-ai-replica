@@ -688,39 +688,29 @@ module.exports = (queryService) => {
     const translationExpected = wantsTranslation(targetLanguage);
     const translateNow = !skipPostStreamTranslation && translationExpected && Boolean(fullResponseText);
 
-    // The AGENTIC LEG resolves its translation BEFORE the metadata frame: its
-    // V05 status must ride that frame — the client reads the live status
-    // there (the persisted doc carries it too). The legacy terminal keeps its
-    // deployed order (the metadata frame first, the translation after): its
-    // timing is untouched.
-    const legResult = translateFullAnswer && translateNow ? await translateFullAnswer(fullResponseText) : null;
-    if (legResult?.accounting) {
-      // The leg's accounting is the observable record of WHY the answer is in
-      // its language, and the V05 status rides the metadata frame (live) and
-      // the persisted doc (durable). Its presence alone discriminates the leg
-      // path: the legacy core never returns one.
-      logger.info('QueryService.agentic_translation_accounting', { queryId, accounting: legResult.accounting });
-      metadata.query_translation_status = legResult.queryTranslationStatus;
-    }
-    if (legResult?.failed) {
-      translationFailed = true;
-    }
-
     // The answer-translation outcome, presence-keyed (the noagent lane's
     // vocabulary): 'ok' when a translation was delivered, 'failed' when one
     // was attempted and failed, absent when none was asked for. The agentic
     // lane records it, so a restored conversation derives the same fact the
     // live stream carried. The legacy lane's metadata keeps its deployed
     // shape.
+    //
+    // The RELAY path knows its outcome here (the translated units were the
+    // delivery, or a unit failed); the leg path's outcome lands with its
+    // result below.
     if (agenticLane) {
-      if (translationFailed) {
+      if (alreadyFailedTranslation) {
         metadata.translation_status = 'failed';
-      } else if (legResult?.text || (skipPostStreamTranslation && translationExpected && /\S/.test(fullResponseText))) {
-        // The relay path: the translated units were the delivery.
+      } else if (skipPostStreamTranslation && translationExpected && /\S/.test(fullResponseText)) {
         metadata.translation_status = 'ok';
       }
     }
 
+    // The metadata frame comes FIRST: the sources, the confidence and the
+    // grounding status must reach the client with the answer, not after the
+    // translation settled (the leg's window is the translation reserve —
+    // tens of seconds are legal). The leg's V05 status therefore rides the
+    // DONE frame below, and the persisted doc carries it too.
     res.write(`data: ${JSON.stringify({ type: 'metadata', ...metadata, responseTime })}\n\n`);
 
     if (translateNow) {
@@ -728,7 +718,24 @@ module.exports = (queryService) => {
       // its own contract, the leg's bound translator by the leg module's
       // never-raises helper — so no caller-side guard lives here: the English
       // text stands on any failure and the failure travels on `done`.
-      const result = legResult ?? (await translateWholeAnswer(translator, fullResponseText));
+      const result = translateFullAnswer
+        ? await translateFullAnswer(fullResponseText)
+        : await translateWholeAnswer(translator, fullResponseText);
+      if (result.accounting) {
+        // The leg's accounting is the observable record of WHY the answer is
+        // in its language, and the V05 status rides the DONE frame (the live
+        // carrier) and the persisted doc (the durable one). Its presence
+        // alone discriminates the leg path: the legacy core never returns one.
+        logger.info('QueryService.agentic_translation_accounting', { queryId, accounting: result.accounting });
+        metadata.query_translation_status = result.queryTranslationStatus;
+      }
+      if (agenticLane) {
+        if (result.failed) {
+          metadata.translation_status = 'failed';
+        } else if (result.text) {
+          metadata.translation_status = 'ok';
+        }
+      }
       if (result.failed) {
         const reason = result.error
           ? result.error.message
@@ -783,7 +790,15 @@ module.exports = (queryService) => {
       return;
     }
 
-    res.write(`data: ${JSON.stringify({ type: 'done', queryId, translationFailed })}\n\n`);
+    // The V05 status rides the DONE frame when the leg produced one: the
+    // metadata frame was written before the translation settled (the sources
+    // must not wait for it), so the done frame is the client's live carrier.
+    // The legacy lane has no status — its done frame stays byte-identical.
+    const doneFrame = { type: 'done', queryId, translationFailed };
+    if (metadata.query_translation_status) {
+      doneFrame.queryTranslationStatus = metadata.query_translation_status;
+    }
+    res.write(`data: ${JSON.stringify(doneFrame)}\n\n`);
     res.end();
     logger.info('QueryService.stream_complete', { queryId, responseTime });
   }

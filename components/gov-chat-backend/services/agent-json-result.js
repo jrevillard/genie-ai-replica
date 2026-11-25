@@ -330,12 +330,17 @@ async function runAgentJsonTurn({ queryService, queryData, queryId, headers, tar
           // Run lifecycle and the text-message envelope are seam-internal.
           break;
         case 'run_finished':
-          // The run reached its terminal: the deadline is cleared (the
-          // answer is complete — an abort now would discard it) and the
-          // completion is recorded, so a late abort cannot be read as a
-          // timeout of a COMPLETED run.
+          // The run reached its terminal: the completion is recorded, so a
+          // late abort cannot be read as a timeout of a COMPLETED run.
+          //
+          // The DEADLINE STAYS ARMED here: the agent service emits the
+          // terminal usage record AFTER this event (the run's own teardown
+          // sits between the two), and that window is unbounded — a
+          // deployment that stalls there (or a proxy that drops the usage
+          // frame) would hang the request with no bound left. The deadline
+          // is cleared when the usage record arrives, or when the stream
+          // ends.
           runCompleted = true;
-          clearDeadline();
           break;
         case 'text_message_content': {
           const text = event.payload?.text;

@@ -22,6 +22,7 @@
 // with the caller-visible serving repository, so the row opens again.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:openapi/api.dart';
 
 import '../services/i18n_service.dart';
 import '../utils/theme_manager.dart';
@@ -53,11 +54,23 @@ Future<bool> openOkfCitation(
   final conceptId = citationConceptId(doc);
   var repoId = citationRepoId(doc);
   if (repoId == null && conceptId != null) {
-    final resolved = await _resolveRepo(context, conceptId, repository);
-    if (resolved == null) {
+    try {
+      repoId = await _resolveRepo(context, conceptId, repository);
+    } on ApiException catch (e) {
+      if (e.code == 401) {
+        // The session is dead app-wide: that is the app's re-auth flow's
+        // business, NOT an "unavailable" arm (the concept browser's
+        // discipline). The row stays handled — an OKF row never degrades to
+        // an external launch — and no notice claims the document is missing.
+        debugPrint('$logTag session_expired ${citationLogTag(doc)}');
+        return true;
+      }
+      debugPrint('$logTag resolve_failed ${citationLogTag(doc)}');
+      repoId = null;
+    }
+    if (repoId == null) {
       debugPrint('$logTag unresolved ${citationLogTag(doc)}');
     }
-    repoId = resolved;
   }
   // The live resolution crossed an async gap: a surface that was torn down
   // meanwhile gets no notice and no navigation — the row stays handled (an
@@ -94,6 +107,10 @@ Future<String?> _resolveRepo(
   if (repo == null) return null;
   try {
     return await repo.resolveRepo(conceptId);
+  } on ApiException {
+    // A 401 is not an arm (the caller branches on it); every other failure
+    // degrades to the honest notice.
+    rethrow;
   } catch (e) {
     debugPrint('okf.citation resolve_failed concept=$conceptId error=$e');
     return null;

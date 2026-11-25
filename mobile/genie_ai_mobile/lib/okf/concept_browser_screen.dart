@@ -56,6 +56,7 @@ const int _previewRunWidth = 500;
   if (body.length <= _maxPreviewChars && !_hasLongRun(body)) {
     return (text: body, truncated: false);
   }
+  final fenced = _fencedCodeRanges(body);
   final buffer = StringBuffer();
   int run = 0;
   // The body characters the preview keeps — the breaks the preview inserts
@@ -72,7 +73,14 @@ const int _previewRunWidth = 500;
       continue;
     }
     run++;
-    if (run >= _previewRunWidth && buffer.length < _maxPreviewChars) {
+    // A FENCED code block is never broken: its content is copied verbatim
+    // (a base64 blob or a hex digest broken by a soft space decodes to
+    // nothing, and the truncation notice does not say the preview rewrote
+    // it). The run continues across the block, so the prose after it is
+    // still broken when it needs it.
+    if (run >= _previewRunWidth &&
+        buffer.length < _maxPreviewChars &&
+        !_insideFence(fenced, i)) {
       buffer.write(' ');
       run = 0;
     }
@@ -89,6 +97,46 @@ const int _previewRunWidth = 500;
   // preview inserts count against the bound, so the flag cannot be derived
   // from the body's length alone.
   return (text: text, truncated: kept < body.length);
+}
+
+/// The fenced code blocks' ranges (the ``` and ~~~ fences), as
+/// (start, end) offsets into the body.
+///
+/// The preview must not alter a fenced block's content: the runs inside it
+/// are data (a base64 blob, a hex digest), not prose.
+List<(int, int)> _fencedCodeRanges(String body) {
+  final ranges = <(int, int)>[];
+  int? fenceStart;
+  String? fenceMarker;
+  var offset = 0;
+  for (final line in body.split('\n')) {
+    final trimmed = line.trimLeft();
+    final isFence = trimmed.startsWith('```') || trimmed.startsWith('~~~');
+    if (isFence) {
+      if (fenceStart == null) {
+        fenceStart = offset;
+        fenceMarker = trimmed.substring(0, 3);
+      } else if (trimmed.startsWith(fenceMarker!)) {
+        ranges.add((fenceStart, offset + line.length));
+        fenceStart = null;
+        fenceMarker = null;
+      }
+    }
+    offset += line.length + 1; // the newline the split consumed
+  }
+  if (fenceStart != null) {
+    // An unterminated fence: everything from it on is code.
+    ranges.add((fenceStart, body.length));
+  }
+  return ranges;
+}
+
+/// Whether the offset sits inside one of the fenced code blocks.
+bool _insideFence(List<(int, int)> ranges, int offset) {
+  for (final range in ranges) {
+    if (offset >= range.$1 && offset < range.$2) return true;
+  }
+  return false;
 }
 
 bool _isAlnum(int unit) =>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openapi/api.dart';
 import 'package:genie_ai_mobile/okf/concept_browser_repository.dart';
 import 'package:genie_ai_mobile/okf/concept_browser_screen.dart';
 import 'package:genie_ai_mobile/okf/okf_citation_open.dart';
@@ -49,6 +50,33 @@ void main() {
     );
     return captured;
   }
+
+  testWidgets('a 401 during the live resolution is NOT an unavailable answer', (
+    tester,
+  ) async {
+    // The session is dead app-wide: that is the app's re-auth flow's
+    // business, not a missing document. The notice would tell the user
+    // the source is unavailable — a fact the app does not know.
+    final fake = FakeConceptBrowserRepository();
+    fake.resolveThrows['c1'] = ApiException(401, 'session expired');
+    final context = await pumpHost(tester, repository: fake);
+
+    final handled = await openOkfCitation(
+      context,
+      <String, dynamic>{'source': 'okf-concept', 'concept_id': 'c1'},
+      logTag: 'test.citation',
+      repository: fake,
+    );
+
+    // Handled (an OKF row never degrades to an external launch), but NO
+    // notice: the concept is not missing, the session is.
+    expect(handled, isTrue);
+    // The SnackBar is shown through the ScaffoldMessenger — the tree has
+    // to render before the finder can see it.
+    await tester.pump();
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(ConceptBrowserScreen), findsNothing);
+  });
 
   testWidgets(
     'an OKF row whose repository cannot be resolved answers the notice — never an external launch',

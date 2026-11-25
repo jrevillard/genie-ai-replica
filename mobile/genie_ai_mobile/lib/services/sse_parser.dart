@@ -82,7 +82,22 @@ class SseDoneEvent extends SseEvent {
   /// as if it were the requested language.
   final bool translationFailed;
 
-  const SseDoneEvent(this.queryId, {this.translationFailed = false});
+  /// What the answer-translation step recorded about the query
+  /// translation ("translated", "passthrough_english",
+  /// "passthrough_unknown_language", "fallback_timeout" or
+  /// "fallback_error").
+  ///
+  /// It rides the DONE frame: the metadata frame is written before the
+  /// translation settles (the sources and the grounding must reach the
+  /// client with the answer, not after the translation), so the terminal
+  /// frame is the live carrier. Null when the turn recorded no status.
+  final String? queryTranslationStatus;
+
+  const SseDoneEvent(
+    this.queryId, {
+    this.translationFailed = false,
+    this.queryTranslationStatus,
+  });
 }
 
 class SseErrorEvent extends SseEvent {
@@ -304,6 +319,7 @@ class SseParser {
       'done' => SseDoneEvent(
         json['queryId'] as String?,
         translationFailed: json['translationFailed'] == true,
+        queryTranslationStatus: _asString(json, 'queryTranslationStatus'),
       ),
       'error' => SseErrorEvent(
         json['message'] as String? ?? 'Unknown error',

@@ -747,6 +747,45 @@ describe('POST /api/queries — genuine failures keep the JSON error contract, t
     }
   });
 
+  it('the wall-clock deadline still bounds the run teardown after run_finished', async () => {
+    // The agent service emits the terminal usage record AFTER the
+    // run_finished event: the run's own teardown sits between the two, and
+    // that window is unbounded. The deadline must stay armed there — a
+    // deployment that stalls there (or a proxy that drops the usage frame)
+    // would hang the request with no bound left.
+    process.env.AGENT_UPSTREAM_TIMEOUT_MS = '40000';
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    try {
+      const mockStream = new Readable({ read() {} });
+      let capturedSignal = null;
+      axios.post.mockImplementation((_url, _body, opts) => {
+        capturedSignal = opts.signal;
+        return Promise.resolve({ status: 200, headers: {}, data: mockStream });
+      });
+
+      const responsePromise = postQuery();
+      responsePromise.catch(() => {});
+      for (let i = 0; i < 200 && mockStream.listenerCount('data') === 0; i++) {
+        await new Promise(setImmediate);
+      }
+      // The run finishes; the usage record never arrives.
+      mockStream.push(`data: ${JSON.stringify(envelope('run_finished', { outcome: 'answered' }, { seq: 0 }))}\n\n`);
+      await new Promise(setImmediate);
+      expect(capturedSignal.aborted).toBe(false);
+
+      // The bound still fires — the teardown window is not unbounded.
+      jest.advanceTimersByTime(40000);
+      expect(capturedSignal.aborted).toBe(true);
+      mockStream.emit('error', new Error('aborted'));
+
+      const response = await responsePromise;
+      expect(response.status).toBe(504);
+    } finally {
+      jest.useRealTimers();
+      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+    }
+  });
+
   it('unparsable 429/503/422 bodies degrade to the documented error names, never raw passthrough', async () => {
     const cases = [
       { status: 429, body: '<html>gateway timeout</html>', error: 'admission_refused' },

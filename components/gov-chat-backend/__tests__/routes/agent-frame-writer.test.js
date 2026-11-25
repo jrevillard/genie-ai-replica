@@ -1434,20 +1434,16 @@ describe('POST /api/queries/stream — translation on the agentic path (the shar
       const text = response.text;
       const metaPos = text.indexOf('"type":"metadata"');
       const translationPos = text.indexOf('"type":"translation"');
-      // The agentic leg resolves its translation BEFORE the metadata frame
-      // (the leg's V05 status rides that frame), so the translation window —
-      // and the keepalive ticks covering it — land BEFORE the metadata frame.
-      const keepalivePos = text.lastIndexOf(': keepalive', metaPos);
+      // The FIRST keepalive AT OR AFTER the metadata frame: a setup tick that
+      // fired before the terminal (possible on a loaded runner) lands earlier
+      // in the stream and must not satisfy the window assertion.
+      const keepalivePos = text.indexOf(': keepalive', metaPos);
       expect(metaPos).toBeGreaterThan(-1);
       expect(translationPos).toBeGreaterThan(-1);
-      // The keepalive ticked DURING the translation window — the wire never
-      // went silent. The window is 250ms with a 50ms tick: more than one tick
-      // before the metadata frame is the window's own coverage (a setup tick
-      // that fired before the terminal cannot account for it).
-      const ticksBeforeMetadata = text.slice(0, metaPos).split(': keepalive').length - 1;
-      expect(ticksBeforeMetadata).toBeGreaterThan(1);
+      // The keepalive ticked DURING the translation window (after metadata,
+      // before the translation frame) — the wire never went silent.
       expect(keepalivePos).toBeGreaterThan(-1);
-      expect(keepalivePos).toBeLessThan(metaPos);
+      expect(keepalivePos).toBeLessThan(translationPos);
       const frames = parseSSEEvents(text);
       expect(frames[frames.length - 1].type).toBe('done');
       expect(frames[frames.length - 1].translationFailed).toBe(false);
@@ -2175,13 +2171,23 @@ describe('POST /api/queries/stream — the terminal facts (the W-P2 wave)', () =
       context: { language: 'FR' }
     });
 
-    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
-    // The leg's V05 status rides the metadata frame — the client reads the
-    // live status there (the persisted doc carries it too).
-    expect(metadata.query_translation_status).toBe('translated');
+    const frames = parseSSEEvents(response.text);
+    const metadata = frames.find((f) => f.type === 'metadata');
+    // The leg's V05 status rides the DONE frame: the metadata frame (the
+    // sources, the grounding) must reach the client with the answer, not
+    // after the translation settled.
+    expect(metadata.query_translation_status).toBeUndefined();
+    const done = frames[frames.length - 1];
+    expect(done.queryTranslationStatus).toBe('translated');
     // The answer-translation outcome, presence-keyed: 'ok' — a translation
-    // was delivered.
-    expect(metadata.translation_status).toBe('ok');
+    // was delivered (the persisted metadata carries it).
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      expect.any(String),
+      expect.any(Number),
+      expect.objectContaining({ translation_status: 'ok' }),
+      expect.anything()
+    );
   });
 
   it('a failed leg translation persists the failed outcome', async () => {
@@ -2210,9 +2216,16 @@ describe('POST /api/queries/stream — the terminal facts (the W-P2 wave)', () =
     });
 
     const frames = parseSSEEvents(response.text);
-    const metadata = frames.find((f) => f.type === 'metadata');
-    expect(metadata.translation_status).toBe('failed');
     const done = frames[frames.length - 1];
     expect(done.translationFailed).toBe(true);
+    // The outcome is persisted, presence-keyed: 'failed' — a translation was
+    // attempted and broke.
+    expect(queryService.finalizeStreamQuery).toHaveBeenCalledWith(
+      'q1',
+      expect.any(String),
+      expect.any(Number),
+      expect.objectContaining({ translation_status: 'failed' }),
+      expect.anything()
+    );
   });
 });

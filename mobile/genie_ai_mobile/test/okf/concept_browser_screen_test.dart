@@ -403,6 +403,28 @@ void main() {
     },
   );
 
+  testWidgets('a fenced code block is never broken by the preview bound', (
+    tester,
+  ) async {
+    // The runs inside a fenced block are DATA (a base64 blob, a hex
+    // digest): a soft space every 500 characters makes the blob
+    // undecodable, and the truncation notice does not say the preview
+    // rewrote it.
+    final blob = 'A' * 1200;
+    final body = 'Intro\n\n```\n$blob\n```\n\nTail';
+    fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
+    fake.cardsByRepo['repo-a'] = {'c1': card('repo-a', 'c1', body: body)};
+    await pumpBrowser(tester);
+    await tester.tap(find.text('Title c1'));
+    await tester.pump();
+
+    final rendered = tester
+        .widgetList<MarkdownBody>(find.byType(MarkdownBody))
+        .map((body) => body.data)
+        .join();
+    expect(rendered, contains(blob));
+  });
+
   testWidgets('a single-paragraph body still renders exactly one chunk', (
     tester,
   ) async {

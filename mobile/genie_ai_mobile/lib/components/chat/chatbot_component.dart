@@ -1447,9 +1447,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       _agentChunkSeen = true;
                     });
                     _scrollToBottom();
-                  case SseDoneEvent(:final queryId, :final translationFailed):
+                  case SseDoneEvent(
+                    :final queryId,
+                    :final translationFailed,
+                    :final queryTranslationStatus,
+                  ):
                     streamQueryId = queryId;
                     answerTranslationFailed = translationFailed;
+                    // The V05 status rides the done frame (the metadata frame
+                    // is written before the translation settles).
+                    if (queryTranslationStatus != null) {
+                      streamQueryTranslationStatus = queryTranslationStatus;
+                    }
                   case SseErrorEvent(:final message):
                     debugPrint('[SSE] Error event: $message');
                 }
@@ -1461,9 +1470,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 switch (event) {
                   case SseChunkEvent(:final content):
                     accumulatedContent += content;
-                  case SseDoneEvent(:final queryId, :final translationFailed):
+                  case SseDoneEvent(
+                    :final queryId,
+                    :final translationFailed,
+                    :final queryTranslationStatus,
+                  ):
                     streamQueryId = queryId;
                     answerTranslationFailed = translationFailed;
+                    // The V05 status rides the done frame (the metadata frame
+                    // is written before the translation settles).
+                    if (queryTranslationStatus != null) {
+                      streamQueryTranslationStatus = queryTranslationStatus;
+                    }
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
@@ -1684,7 +1702,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       // the outcome into the metadata when the lane did not, so a restored
       // conversation derives the same fact the live one showed.
       if (metadata != null && !metadata.containsKey('translation_status')) {
-        metadata['translation_status'] = translationFailed ? 'failed' : 'ok';
+        // Only ever 'failed': the backend's own key is presence-keyed (it
+        // carries 'ok' when a translation was delivered and stays absent when
+        // none was), and an 'ok' written here would claim a translation that
+        // never happened — the streaming path's rule (#2143).
+        if (translationFailed) {
+          metadata['translation_status'] = 'failed';
+        }
       }
 
       final assistantMessage = {

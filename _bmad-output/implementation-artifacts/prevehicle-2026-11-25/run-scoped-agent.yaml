@@ -102,7 +102,9 @@ spec:
             # The legacy corpus BY NAME — the same value the BFF authorizes.
             # A divergence (the BFF on another name) makes every legacy hit
             # read as a foreign graph, and every answer degrades to the
-            # insufficiency statement.
+            # insufficiency statement. The value MUST equal the venue's
+            # chart value (`opea.retriever.arangoGraphName`); a later
+            # change there silently reinstates the defect.
             - { name: ARANGO_GRAPH_NAME, value: "GRAPH" }
             - { name: TEI_EMBEDDING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/embed" }
             - { name: TEI_RERANKING_ENDPOINT, value: "https://ai.assembly.govstack.global:444/rerank" }

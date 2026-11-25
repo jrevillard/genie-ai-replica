@@ -62,7 +62,7 @@ function agentServiceUrl() {
  * The path is appended HERE, once, so every consumer of the agent seam dials
  * the same url and the shipped default works without an operator override.
  * A configured url that ALREADY names the run surface is used as it stands:
- * a deployment that pinned the full path (`…:8080/v1/runs`) keeps working,
+ * a deployment that pinned the full path (`…:8010/v1/runs`) keeps working,
  * and the two spellings cannot disagree about where the seam lives.
  *
  * @returns {string} The absolute url of POST /v1/runs.

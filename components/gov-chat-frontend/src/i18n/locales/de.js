@@ -3330,7 +3330,51 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'RAGAS-Vergleichstests'
+        ragas: 'RAGAS-Vergleichstests',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'Ein Kontext ist ein benannter Principal: eine Menge von Gruppenmitgliedschaften, einmal aufgelöst und eingefroren. Eine für einen Kontext erzeugte Suite wird über diesem Kontext gemessen — nie über die gesamte Bereitstellung.',
+        empty:
+          'Noch kein Evaluationskontext. Erstellen Sie unten einen — er ist der Bereich, über den eine bereichsbezogene Evaluation gemessen wird.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Mitgliedschaft hinzufügen (eine Gruppe)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        membersTruncated: '{n}+ Mitglied(er) — der Lesevorgang ist gedeckelt',
+        noMemberships:
+          'Noch keine Mitgliedschaft — ohne welche löst sich der Kontext zur gesamten Bereitstellung auf (der offene Kontext).',
+        preview: 'Vorschau, was dies erreicht',
+        previewRepos: 'Reaches',
+        unreadable: 'Diese Mitgliedschaften konnten nicht gelesen werden: {list}',
+        create: 'Create the context',
+        created: 'Der Kontext wurde erstellt und eingefroren.',
+        refreshed: 'Der Kontext wurde neu aufgelöst.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'Kein Kontext — die gesamte Bereitstellung',
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: '{name} wird bearbeitet — beim Speichern wird die Vereinigung neu aufgelöst und die Version erhöht.',
+        updated: 'Der Kontext wurde aktualisiert und neu aufgelöst.',
+        deleted: 'Der Kontext wurde entfernt.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',
@@ -3522,7 +3566,14 @@ export default {
           'Dies entfernt die Suite und ihren Laufverlauf endgültig. Dies kann nicht rückgängig gemacht werden.',
         deleteConfirm: 'Suite löschen',
         deleteCancel: 'Abbrechen',
-        unnamedFallback: 'unbenannte Suite'
+        unnamedFallback: 'unbenannte Suite',
+        bindingOpen: 'Für die Bereitstellung erzeugt — kein Evaluationskontext',
+        binding: 'Gemessen über „{name}“ (v{version} · {repos} Repositorys)',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryPartial: '({measured} von {total} gemessen)',
+        boundaryNotMeasured: 'Bereichsgrenze: nicht gemessen'
       },
       error: {
         explain: 'Erklärung fehlgeschlagen',
@@ -3960,6 +4011,9 @@ export default {
       },
       results: {
         title: 'Ergebnisse des Vergleichstests',
+        attributionBy: 'Beantwortet von',
+        attributionOutside: 'Außerhalb des Carriers begründet: {pct}%',
+        attributionNoCarrier: 'Begründung außerhalb des Carriers: ohne Evaluationskontext nicht messbar',
         failing: '{n} fehlgeschlagen',
         advisorHint:
           '{n} Fragen liegen unter ihren Metrik-Schwellenwerten. Starten Sie den Advisor, um jeden Fehlschlag einer Pipeline-Stufe zuzuordnen und konkrete Maßnahmen zu erhalten.',

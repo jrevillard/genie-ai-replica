@@ -51,6 +51,9 @@ jest.mock('../services/head-test-service', () => ({
   }))
 }));
 
+// The same module OBJECT the service draws from — the spy has to land on
+// the live binding, not on a copy taken at import time.
+const nodeCrypto = require('node:crypto');
 const svc = require('../services/head-suite-service');
 const frontmatterService = require('../services/frontmatter-service');
 const repositoryService = require('../services/repository-service');
@@ -85,9 +88,9 @@ beforeEach(() => {
 
 describe('generateSuite', () => {
   it('merges all four negative classes, labels every row with cls, and persists a suite doc', async () => {
-    // Deterministic pool sampling: Math.random()=0 always pops pool[0]
-    // → topics [geography, sports, cooking, music] (default n=4).
-    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    // Deterministic pool sampling: the topic draw returns 0, so it always
+    // pops pool[0] → topics [geography, sports, cooking, music] (n=4).
+    const randSpy = jest.spyOn(nodeCrypto, 'randomInt').mockReturnValue(0);
     try {
       frontmatterService.vllmChatCompletions.mockResolvedValue(
         llmResponse({
@@ -194,7 +197,7 @@ describe('generateSuite', () => {
   });
 
   it('respects n_negative_random (default 4; 99 requested delivers 99 — the 1-8f uncapped pool)', async () => {
-    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    const randSpy = jest.spyOn(nodeCrypto, 'randomInt').mockReturnValue(0);
     try {
       __mockDb.query.mockResolvedValue({ all: async () => [] });
       frontmatterService.vllmChatCompletions.mockResolvedValue(
@@ -1856,7 +1859,7 @@ describe('getSuite + updateSuiteRows (1-8f)', () => {
 
 describe('generateSuite batching + names (1-8f2)', () => {
   it('batches a large ask across LLM calls, dedupes, and delivers the count', async () => {
-    const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0);
+    const randSpy = jest.spyOn(nodeCrypto, 'randomInt').mockReturnValue(0);
     try {
       let call = 0;
       frontmatterService.vllmChatCompletions.mockImplementation(async () => {

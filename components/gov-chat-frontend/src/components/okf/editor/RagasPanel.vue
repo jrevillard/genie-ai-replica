@@ -145,6 +145,16 @@
         />
       </div>
       <div class="okf-ragas__actions">
+        <!-- #2061 phase 4 (E-5): the Evaluation Context this benchmark is
+             minted FOR. Without it the questions are written against the
+             whole deployment and the run measures the deployment, not a
+             principal's scope. -->
+        <EvalContextPicker
+          v-if="canUseContexts"
+          v-model="contextId"
+          input-id="okf-ragas-context"
+          :disabled="generateBusy"
+        />
         <DsButton
           v-if="!readOnly"
           variant="primary"
@@ -434,6 +444,17 @@
         <DsButton v-if="!readOnly" variant="secondary" small :disabled="explainBusy" @click="onExplain">
           {{ translate('okf.ragas.explain.button', 'Explain failures') }}
         </DsButton>
+      </div>
+
+      <!-- #2061 E-5: the evidence line — the binding (which principal this
+           measures) and, once a run lands, the attribution the carrier
+           enabled (which repository answered; how often outside the carrier). -->
+      <div class="okf-ragas__evidence">
+        <DsPill variant="neutral">{{ suiteBindingLabel }}</DsPill>
+        <span v-if="runAttribution" class="okf-ragas__attribution">
+          {{ translate('okf.ragas.results.attributionBy', 'Answered by') }}: {{ attributionByLabel }} ·
+          {{ attributionOutsideLabel }}
+        </span>
       </div>
 
       <!-- advisor hint — rows are failing and no advisor output is on screen;
@@ -901,7 +922,11 @@ import DsProgress from '../../ds/Progress.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsDialog from '../../ds/Dialog.vue';
 import RagasGuideDialog from './RagasGuideDialog.vue';
+// #2061 phase 4 (E-5): the Evaluation Context picker — which principal a
+// benchmark is minted FOR and measured over.
+import EvalContextPicker from './EvalContextPicker.vue';
 import translateMixin from '../../../mixins/translateMixin';
+import evalContextSurfaceMixin from '../../../mixins/evalContextSurfaceMixin';
 import { translateLabError } from '../../../services/okfRepoOps';
 import { useChartTheme } from '@/composables/useChartTheme';
 
@@ -950,8 +975,17 @@ const METRIC_NOTE_FALLBACKS = {
 
 export default {
   name: 'OkfRagasPanel',
-  components: { DsButton, DsPill, DsSpinner, DsProgress, DsInfoTip, DsDialog, RagasGuideDialog },
-  mixins: [translateMixin],
+  components: {
+    DsButton,
+    DsPill,
+    DsSpinner,
+    DsProgress,
+    DsInfoTip,
+    DsDialog,
+    RagasGuideDialog,
+    EvalContextPicker
+  },
+  mixins: [translateMixin, evalContextSurfaceMixin],
   props: {
     repo: { type: Object, default: null },
     readOnly: { type: Boolean, default: false },
@@ -978,6 +1012,10 @@ export default {
       pollSignal: { aborted: false },
       showHelp: false,
       showGuide: false,
+      // #2061 phase 4 (E-5): the Evaluation Context this benchmark is
+      // minted FOR. Empty = the OPEN context (the deployment's default
+      // posture) — the pre-contexts behaviour, kept as the default.
+      contextId: '',
       repoChoices: [],
       selectedRepoIds: [],
       genSize: 20,
@@ -1039,6 +1077,8 @@ export default {
     };
   },
   computed: {
+    // canUseContexts / suiteBindingLabel: evalContextSurfaceMixin (ONE
+    // authority — the gate mirrors the server's superadmin predicate).
     /** DsDialog emits the action KEY (RepoEditor's piiBulkAsk discipline). */
     runDeleteActions() {
       return [
@@ -1198,6 +1238,36 @@ export default {
     },
     runRows() {
       return (this.runDoc && this.runDoc.payload && this.runDoc.payload.results) || [];
+    },
+    /** The run's attribution roll-up (E-4): which repo answered, how often
+     *  grounded outside the carrier. Null until a run carries it. */
+    runAttribution() {
+      const a = this.runDoc && this.runDoc.payload && this.runDoc.payload.source_attribution;
+      return a && typeof a === 'object' ? a : null;
+    },
+    attributionByLabel() {
+      const h = (this.runAttribution && this.runAttribution.repo_histogram) || {};
+      const parts = Object.entries(h)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([k, n]) => `${k} ×${n}`);
+      return parts.join(' · ');
+    },
+    attributionOutsideLabel() {
+      const rate = this.runAttribution ? this.runAttribution.wrong_source_rate : null;
+      // Null is NOT zero: without a carrier there is nothing to be wrong
+      // against (E-4's rule) — say that instead of faking a clean 0%.
+      if (rate === null || rate === undefined) {
+        return this.translate(
+          'okf.ragas.results.attributionNoCarrier',
+          'Grounding outside the carrier: not measurable without an evaluation context'
+        );
+      }
+      const pct = Math.round(Number(rate) * 100);
+      return this.translate('okf.ragas.results.attributionOutside', 'Grounded outside the carrier: {pct}%').replace(
+        '{pct}',
+        String(pct)
+      );
     },
     aggregateRows() {
       const summary = (this.runDoc && this.runDoc.payload && this.runDoc.payload.summary) || {};
@@ -1566,6 +1636,19 @@ export default {
     }
   },
   watch: {
+    /**
+     * A run belongs to ONE suite (live 2026-11-25: a regenerate created a
+     * new suite while the OLD suite's run stayed on screen; the explain
+     * click then fired old-run/new-suite and the server rightly refused).
+     * The moment the loaded suite's key changes, the previous suite's run
+     * and its advisor travel off — the panel can never act on a run the
+     * loaded suite does not own.
+     */
+    'suite.suite_key'(nextKey, prevKey) {
+      if (prevKey && nextKey !== prevKey) {
+        this.resetSuiteRecords();
+      }
+    },
     /** A pick the dropdown cannot DISPLAY must never travel with the
      * request (live 2026-10-21): the run went to a personal MiniMax key
      * while the panel showed "Deployment default" — the active GLM config
@@ -1996,11 +2079,26 @@ export default {
       const latestRun = this.runHistory.find((r) => r.status === 'done');
       if (latestRun) this.onLoadRun(latestRun._key, latestRun.suite_key, { silent: true });
     },
+    /** ONE home for "the loaded suite changed — its previous records go":
+     *  the run, its advisor, the explain progress, the error. Called by
+     *  loadSuite's key-change branch AND the suite-key watcher (a
+     *  regenerate can replace this.suite without loadSuite running). */
+    resetSuiteRecords() {
+      this.runDoc = null;
+      this.explainDoc = null;
+      this.explainProgress = null;
+      this.error = '';
+    },
     async loadSuite(suiteKey) {
       // A genuinely different suite invalidates the user's selection (the
       // new suite's own memory should load); a re-load of the SAME suite is
-      // the clobber path the metricsTouched guard exists for.
-      if (this.suite && this.suite.suite_key !== suiteKey) this.metricsTouched = false;
+      // the clobber path the metricsTouched guard exists for. The run
+      // records reset through the SAME one home the suite-key watcher
+      // calls — a new suite-keyed state lands in ONE method, not two.
+      if (this.suite && this.suite.suite_key !== suiteKey) {
+        this.metricsTouched = false;
+        this.resetSuiteRecords();
+      }
       const epoch = ++this.suiteEpoch;
       const res = await this.$store.dispatch('okf/ragasGetSuite', {
         repoId: this.repo && this.repo.repo_id,
@@ -2129,7 +2227,10 @@ export default {
             // override). The generation's model and the run's judge are
             // separate operations with separate picks (David, 2026-10-25).
             judge_config_key: this.genConfigKey || undefined,
-            judge_model: this.genConfigKey ? this.genModel || undefined : undefined
+            judge_model: this.genConfigKey ? this.genModel || undefined : undefined,
+            // #2061 phase 4 (E-5): the Evaluation Context this benchmark is
+            // minted FOR. Absent → the OPEN context (the deployment).
+            context_id: this.contextId || undefined
           },
           signal: this.pollSignal,
           onStarted: (suiteKey) => {
@@ -2271,6 +2372,10 @@ export default {
         this.probeBusy = '';
       }
     },
+    /** #2061 phase 4 (E-5): the context id a run must name — the suite's
+     *  OWN binding (a benchmark minted for a context may only be measured
+     *  over THAT context). */
+    // suiteContextIdFor: evalContextSurfaceMixin
     async onRun() {
       this.error = '';
       this.runBusy = true;
@@ -2281,6 +2386,10 @@ export default {
           repoId: this.repo && this.repo.repo_id,
           suiteKey: this.suite.suite_key,
           metrics: this.selectedMetrics,
+          // #2061 phase 4 (E-5): the context the run measures over — the
+          // suite's OWN binding. A benchmark minted for a context may only
+          // be measured over THAT context.
+          contextId: this.suiteContextIdFor(this.suite),
           // 8-7: explicit judge pick ('' fields simply omit the override)
           judge_config_key: this.judgeConfigKey || undefined,
           judge_model: this.judgeConfigKey ? this.judgeModel || undefined : undefined,
@@ -2995,6 +3104,22 @@ export default {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 10px;
+}
+
+/* #2061 E-5: the evidence line — the binding badge renders as DsPill (the
+   same status pill the results header uses); the attribution sentence sits
+   beside it, muted like the other secondary facts. */
+.okf-ragas__evidence {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-sm);
+}
+
+.okf-ragas__attribution {
+  color: var(--muted);
 }
 
 .okf-ragas__muted {

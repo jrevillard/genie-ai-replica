@@ -3289,7 +3289,51 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Vipimo vya kulinganisha vya RAGAS'
+        ragas: 'Vipimo vya kulinganisha vya RAGAS',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'Muktadha ni mkuu aliyeitwa: mkusanyiko wa uanachama wa kikundi, unaotatuliwa mara moja kisha kugandishwa. Suite iliyounganishwa kwa muktadha hupimwa katika muktadha huo — kamwe katika upelekaji mzima.',
+        empty:
+          'Hakuna muktadha wa tathmini bado. Tengeneza mmoja hapa chini — ndio wigo ambao tathmini ya wigo hupimwa.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Ongeza uanachama (kikundi)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        membersTruncated: '{n}+ wanachama — usomaji umekomezwa',
+        noMemberships:
+          'Hakuna uanachama bado — bila wowote, muktadha unatatuliwa kuwa upelekaji mzima (muktadha wazi).',
+        preview: 'Onyesha awali inachofikia',
+        previewRepos: 'Reaches',
+        unreadable: 'Uanachama huu haukuweza kusomwa: {list}',
+        create: 'Create the context',
+        created: 'Muktadha imeundwa na kugandishwa.',
+        refreshed: 'Muktadha imetatuliwa upya.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'Hakuna muktadha — upelekaji mzima',
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Inahariri {name} — kuhifadhi kunatatua muunganisho upya na kuongeza toleo.',
+        updated: 'Muktadha imesasishwa na kutatuliwa upya.',
+        deleted: 'Muktadha imefutwa.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',
@@ -3474,7 +3518,14 @@ export default {
         deleteConfirmBody: 'Hiki kinaondoa kabisa vipima na historia yake ya upimaji. Hakiwezi kurejeshwa.',
         deleteConfirm: 'Futa vipima',
         deleteCancel: 'Ghairi',
-        unnamedFallback: 'vipima isiyo na jina'
+        unnamedFallback: 'vipima isiyo na jina',
+        bindingOpen: 'Imeunganishwa kwa upelekaji — hakuna muktadha wa tathmini',
+        binding: 'Inapimwa katika “{name}” (v{version} · hifadhi {repos})',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryPartial: '(kupimwa {measured} kati ya {total})',
+        boundaryNotMeasured: 'Mipaka ya wigo: haijapimwa'
       },
       error: {
         explain: 'Uelelezo umeshindikana',
@@ -3907,6 +3958,9 @@ export default {
       },
       results: {
         title: 'Matokeo ya kipimo',
+        attributionBy: 'Imejibu',
+        attributionOutside: 'Imethibitishwa nje ya carrier: {pct}%',
+        attributionNoCarrier: 'Uthibitisho nje ya carrier: hauwezi kupimwa bila muktadha wa tathmini',
         failing: '{n} zimeshindwa',
         advisorHint:
           'Maswali {n} yako chini ya vikwazo vyao vya kipimo. Endesha mshauri ili kuhusisha kila kushindwa na hatua ya pipeline na kupata vitendo maalum.',

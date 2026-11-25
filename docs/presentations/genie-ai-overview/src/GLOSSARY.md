@@ -11,10 +11,14 @@ before translating, so the six versions say the same thing the same way.
 `Grafana`, `VictoriaMetrics`, `VictoriaLogs`, `VictoriaTraces`, `vLLM`, `TEI`,
 `Hugging Face`, `ClamAV`, `Apache 2.0`, `BM25`, `RAG`, `PDF`, `DOCX`,
 `XLSX`, `CSV`, `MD`, `HTML`, `TXT`, `JSON`, `API`, `GPU`, `CPU`, `CUDA`,
-`ROCm`, `NVIDIA`, `AMD`, `Flutter`, `ClamAV`.
+`ROCm`, `NVIDIA`, `AMD`, `OKF`, `OKF Studio`, `Testing Lab`, `Query Inspector`.
 
 Product names keep their Latin spelling in every language, including the
 right-to-left ones. They are never given an Arabic or Chinese translation.
+
+`RAG` is one of them. When a slide has to spell the acronym out, every
+language writes `RETRIEVAL-AUGMENTED GENERATION (RAG)`: the expansion is the
+term's own name, and it is not translated either.
 
 ## Terms to translate
 
@@ -55,6 +59,7 @@ point, and adjust the sentence around them so it reads naturally.
 | evidence in the permit example | justificatif | documento justificativo | подтверждающий документ | مستند داعم | 证明材料 |
 | knowledge available for serving | connaissances mises à disposition pour la recherche | conocimiento disponible para la búsqueda | знания, доступные для поиска | معرفة متاحة للبحث | 可供检索的知识 |
 | model endpoint | API du modèle | API del modelo | API модели | واجهة النموذج البرمجية | 模型 API |
+| branding | identité visuelle | identidad visual | оформление | الهوية البصرية | 品牌 |
 
 Keep `Pending` and `Ingest` unchanged when naming the exact interface states or
 actions. In explanatory prose, describe the document-ingestion workflow using
@@ -115,5 +120,12 @@ the preferred wording above.
 
 - Keep `fr` informal-neutral: "vous" in the slides, the speaker notes in
   the same register.
-- In French, use French quotation marks and narrow non-breaking spaces before
-  `:` `;` `?` and `!`, and inside `« … »`.
+- In French, the text a slide shows is written in the infinitive: a title,
+  a row or a takeaway opens with `Choisir la plateforme`, not `Choisissez la
+  plateforme`, and a coordinated verb follows (`… et placer le GPU`). The
+  imperative is for the speaker notes and for what the deck quotes — the
+  assistant's answer, the excerpt of the source document — which keep their
+  own voice. The build refuses a `-ez` form anywhere else in the text a
+  slide shows.
+- In French, put a narrow no-break space (U+202F) before `:` `;` `?` and `!`,
+  an ordinary no-break space (U+00A0) inside `« … »`, and the apostrophe `’`.

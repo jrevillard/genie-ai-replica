@@ -119,7 +119,12 @@ jest.mock('../services/head-suite-service', () => ({
   getExplainFailures: jest.fn().mockResolvedValue({ status: 'done' }),
   listRuns: jest.fn().mockResolvedValue([]),
   beginRecommendTagSet: jest.fn().mockResolvedValue({ job_key: 'jk' }),
-  getRecommendJob: jest.fn().mockResolvedValue({ status: 'done' })
+  getRecommendJob: jest.fn().mockResolvedValue({ status: 'done' }),
+  // #2061 phase 3 (E-7): the EXPLICIT rebind of a suite to a context.
+  bindSuite: jest.fn().mockResolvedValue({
+    suite_key: 'sk',
+    payload: { context: { id: 'ctx-1', name: 'group-a', version: 1 } }
+  })
 }));
 jest.mock('../services/studio-draft-service', () => ({
   getDraft: jest.fn().mockResolvedValue({ draft: null }),
@@ -1766,5 +1771,115 @@ describe('repository-controller — #1817/#1827 origin-availability stamp on the
     expect(res.body.sources[0].missing).toBe(true);
     // ...and the steward-only ceiling field still rides (the composition).
     expect(res.body.max_doc_chars).toBeDefined();
+  });
+});
+
+/**
+ * #2061 phase 3 (E-7) — the TWO superadmin powers the Lab gained, at the
+ * controller surface.
+ *
+ * Both are DEPLOYMENT-WIDE powers, and both are new in this phase:
+ *
+ *   binding a suite to a context — the bind says what the suite was
+ *     measured for, and nobody else may say it;
+ *   lifting the cross-context block — a suite minted for one context may
+ *     only be measured over that context, and the exception is a
+ *     deployment-wide override.
+ *
+ * A repo-scoped admin is NOT superadmin for either: a context may name ANY
+ * repository, so the authority to write one (or to measure one against
+ * another) is deployment-wide. The predicate is the SAME one the context
+ * write surface uses (`isSuperadminCaller`), so the Lab's powers and the
+ * catalogue's powers cannot drift apart.
+ */
+describe('repository-controller — the evaluation-context superadmin powers', () => {
+  const auditService = require('../services/audit-service');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    headSuiteService.bindSuite.mockResolvedValue({
+      suite_key: 'sk',
+      payload: { context: { id: 'ctx-1', name: 'group-a', version: 1 } }
+    });
+    headSuiteService.beginRunSuite.mockResolvedValue({ run_key: 'rk', done: Promise.resolve() });
+  });
+
+  it('binding a suite to a context is a SUPERADMIN power — a scoped admin is refused and nothing is bound', async () => {
+    const { next } = await drive(controller.bindTestSuite, {
+      body: { context_id: 'ctx-1' },
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:r1:admin']
+    });
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('FORBIDDEN_SCOPE');
+    expect(next.mock.calls[0][0].status).toBe(403);
+    // Nothing was bound, and nothing was audited: the refusal is the whole
+    // answer — no half-done bind, no audit row for a bind that never was.
+    expect(headSuiteService.bindSuite).not.toHaveBeenCalled();
+    expect(auditService.writeAudit).not.toHaveBeenCalled();
+  });
+
+  it('a bind names the context to bind to — an empty request is a 400, not a silent no-op', async () => {
+    const { next } = await drive(controller.bindTestSuite, { body: {} });
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('VALIDATION_ERROR');
+    expect(next.mock.calls[0][0].status).toBe(400);
+    expect(headSuiteService.bindSuite).not.toHaveBeenCalled();
+  });
+
+  it('a superadmin binds the suite, and the bind is audited', async () => {
+    const { res, next } = await drive(controller.bindTestSuite, { body: { context_id: 'ctx-1' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ suite_key: 'sk' });
+    expect(headSuiteService.bindSuite).toHaveBeenCalledWith('r1', 'sk', 'ctx-1', expect.anything());
+    expect(auditService.writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'eval_context.suite_bind' })
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('lifting the cross-context block is a SUPERADMIN power — a scoped admin is refused BEFORE the run starts', async () => {
+    const { next } = await drive(controller.runTestSuite, {
+      body: { allow_cross_context: true, reason: 'deliberate comparison' },
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:r1:admin']
+    });
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('FORBIDDEN_SCOPE');
+    expect(next.mock.calls[0][0].status).toBe(403);
+    // The refusal is synchronous: no run doc, no worker, nothing to go and
+    // look for later.
+    expect(headSuiteService.beginRunSuite).not.toHaveBeenCalled();
+  });
+
+  it('a cross-context experiment must say WHY — an unexplained one is a 400', async () => {
+    const { next } = await drive(controller.runTestSuite, {
+      body: { allow_cross_context: true },
+      okfIsSuperAdmin: true
+    });
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('VALIDATION_ERROR');
+    expect(next.mock.calls[0][0].status).toBe(400);
+    expect(headSuiteService.beginRunSuite).not.toHaveBeenCalled();
+  });
+
+  it('a superadmin records the experiment, it travels with the run, and it is audited', async () => {
+    const { res, next } = await drive(controller.runTestSuite, {
+      body: { allow_cross_context: true, reason: 'deliberate comparison' },
+      okfIsSuperAdmin: true
+    });
+    expect(res.statusCode).toBe(202);
+    expect(next).not.toHaveBeenCalled();
+    const opts = headSuiteService.beginRunSuite.mock.calls[0][2];
+    expect(opts.experiment).toMatchObject({ reason: 'deliberate comparison' });
+    expect(auditService.writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'eval_context.cross_context_experiment' })
+    );
+  });
+
+  it('a run without the flag carries NO experiment — the block is lifted by nobody', async () => {
+    await drive(controller.runTestSuite, { body: {} });
+    const opts = headSuiteService.beginRunSuite.mock.calls[0][2];
+    expect(opts.experiment).toBeNull();
   });
 });

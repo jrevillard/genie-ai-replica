@@ -49,6 +49,10 @@ const headTestService = require('../services/head-test-service');
 // #2061 phase 2 (E-2): the Evaluation Context catalogue — the carrier a
 // scoped run is measured against.
 const evaluationContextService = require('../services/evaluation-context-service');
+// #2061 phase 3 (E-7): the superadmin PREDICATE, asked in the same place as
+// the context write surface (the cross-context experiment is a
+// deployment-wide power too).
+const evaluationContextController = require('./evaluation-context-controller');
 const headSuiteService = require('../services/head-suite-service');
 const studioDraftService = require('../services/studio-draft-service');
 const ragasSuiteService = require('../services/ragas-suite-service');
@@ -2263,6 +2267,69 @@ async function carrierFromRequest(req) {
   });
 }
 
+/**
+ * #2061 phase 3 (E-7): the BINDING a request asks to mint for.
+ *
+ * The binding is the carrier PLUS the excluded set (what the caller may
+ * read but the context does NOT name — the abstention probes' source) and
+ * the two comparison keys. It is narrowed to THIS caller exactly like the
+ * carrier is: a repo-scoped admin naming a context gets a binding measured
+ * over what they may traverse, and an excluded set they may read — never
+ * one they may not.
+ */
+async function bindingFromRequest(req) {
+  const body = req.body || {};
+  const contextId = body.context_id;
+  if (!contextId) return null;
+  return evaluationContextService.bindingFor(contextId, {
+    okfScopes: req.okfScopes,
+    isSuperAdmin: req.okfIsSuperAdmin
+  });
+}
+
+/**
+ * #2061 phase 3 (E-7): the recorded EXPERIMENT that lifts the
+ * cross-context block.
+ *
+ * A suite minted for one context may only be measured over that context. A
+ * superadmin may record a deliberate exception — and the record must say
+ * WHY, because the run's result is not comparable and somebody has to be
+ * able to see why it was run at all. The experiment is audited.
+ */
+async function experimentFromRequest(req) {
+  const body = req.body || {};
+  if (!body.allow_cross_context) return null;
+  if (!evaluationContextController.isSuperadminCaller(req)) {
+    const err = new Error(
+      'lifting the cross-context block is a superadmin power — record the experiment as a superadmin ' +
+        '(the tools-admin role or a wildcard okf:*:*:admin scope)'
+    );
+    err.code = 'FORBIDDEN_SCOPE';
+    err.status = 403;
+    throw err;
+  }
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  if (!reason) {
+    const err = new Error('a cross-context experiment must say why it is being run');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
+  }
+  const experiment = {
+    actor: (actorFrom(req) || {}).user_id || 'unknown',
+    reason,
+    at: new Date().toISOString()
+  };
+  await auditService.writeAudit({
+    actor: actorFrom(req).sub || 'system',
+    actor_name: actorFrom(req).name || null,
+    action: 'eval_context.cross_context_experiment',
+    source_ip: actorFrom(req).source_ip || null,
+    description: `Recorded a cross-context evaluation experiment: ${reason}`
+  });
+  return experiment;
+}
+
 const routingTest = call(async (req) =>
   headTestService.routingTest(req.params.repo_id, req.body || {}, {
     ...adminOpts(req),
@@ -2360,13 +2427,60 @@ const generateTestSuite = call(
     const { suite_key, done } = await headSuiteService.beginSuiteGeneration(
       req.params.repo_id,
       req.body || {},
-      adminOpts(req)
+      // #2061 phase 3 (E-7): the binding is resolved SYNCHRONOUSLY, so a
+      // context that does not name this repository (or a stale one) is a
+      // 409 the operator sees now — not a failed poll later.
+      { ...adminOpts(req), binding: await bindingFromRequest(req) }
     );
     done.catch(() => {}); // the service logs; the poll surfaces the timeout
     return { suite_key, status: 'generating' };
   },
   { status: 202 }
 );
+/**
+ * #2061 phase 3 (E-7): the EXPLICIT rebind.
+ *
+ * A suite minted before contexts existed has no binding and is never bound
+ * automatically. A superadmin may bind it to the OPEN context — the
+ * deployment's default posture, which is what such a suite was minted
+ * against — and the bind is audited.
+ */
+const bindTestSuite = call(
+  async (req) => {
+    if (!evaluationContextController.isSuperadminCaller(req)) {
+      const err = new Error(
+        'binding a suite to an evaluation context is a superadmin power (the tools-admin role or a ' +
+          'wildcard okf:*:*:admin scope) — the bind says what the suite was measured for, and nobody ' +
+          'else may say it'
+      );
+      err.code = 'FORBIDDEN_SCOPE';
+      err.status = 403;
+      throw err;
+    }
+    const contextId = (req.body || {}).context_id;
+    if (!contextId) {
+      const err = new Error('a bind names the evaluation context to bind to');
+      err.code = 'VALIDATION_ERROR';
+      err.status = 400;
+      throw err;
+    }
+    const suite = await headSuiteService.bindSuite(req.params.repo_id, req.params.suite_key, contextId, {
+      ...adminOpts(req),
+      okfScopes: req.okfScopes,
+      isSuperAdmin: req.okfIsSuperAdmin
+    });
+    await auditService.writeAudit({
+      actor: actorFrom(req).sub || 'system',
+      actor_name: actorFrom(req).name || null,
+      action: 'eval_context.suite_bind',
+      source_ip: actorFrom(req).source_ip || null,
+      description: `Bound suite ${req.params.suite_key} to the evaluation context ${contextId}`
+    });
+    return { suite_key: suite.suite_key, context: suite.payload.context };
+  },
+  { status: 200 }
+);
+
 /**
  * Story 1-8 MR-B — POST /repos/:repo_id/routing-testsuite/:suite_key/queries.
  * Curator free-text additions to an existing suite (kind positive|negative).
@@ -2407,6 +2521,7 @@ const runTestSuite = call(
   async (req) => {
     // 1-8g: the corpus probe leg defaults ON (Run All fills the Corpus
     // column); scripts can opt out with {"probe": false}.
+    const binding = await bindingFromRequest(req);
     const { run_key, done } = await headSuiteService.beginRunSuite(req.params.repo_id, req.params.suite_key, {
       ...adminOpts(req),
       probe: !(req.body && req.body.probe === false),
@@ -2414,7 +2529,15 @@ const runTestSuite = call(
       // Evaluation Context's carrier. The carrier is resolved ONCE, here, and
       // travels with the run — so every row of the run is scored against the
       // SAME set, and the record says which set.
-      carrier: await carrierFromRequest(req)
+      // #2061 phase 3 (E-7): the BINDING carries the two comparison keys
+      // (the serving set's hash and the head vectors' hash) — the context
+      // version alone says nothing about comparability.
+      carrier: binding ? binding.carrier : null,
+      keys: binding ? { repo_set_hash: binding.repo_set_hash, head_version_hash: binding.head_version_hash } : null,
+      // …and the recorded superadmin EXPERIMENT that lifts the
+      // cross-context block. Only a superadmin may record one, and it must
+      // say why: the run then goes on and is rendered NOT comparable.
+      experiment: await experimentFromRequest(req)
     });
     done.catch(() => {}); // the service logs + records the failure doc
     return { run_key, status: 'running' };
@@ -2484,7 +2607,10 @@ const generateRagasSuite = call(
     const { suite_key, done } = await ragasSuiteService.beginSuiteGeneration(
       req.params.repo_id,
       req.body || {},
-      adminOpts(req)
+      // #2061 phase 3 (E-7): the benchmark pool is the CARRIER's when the
+      // suite is minted for a context — resolved synchronously, so a
+      // context that does not name this repository is a 409 now.
+      { ...adminOpts(req), binding: await bindingFromRequest(req) }
     );
     done.catch(() => {});
     return { suite_key, status: 'generating' };
@@ -2534,13 +2660,21 @@ const rescoreRagasSuiteRun = call(
 );
 const runRagasSuite = call(
   async (req) => {
+    const binding = await bindingFromRequest(req);
     const { run_key, done } = await ragasSuiteService.beginRunSuite(
       req.params.repo_id,
       req.params.suite_key,
       req.body || {},
       // #2061 phase 2 (E-4): the served run is measured over the named
       // Evaluation Context's carrier — the group the benchmark asks about.
-      { ...adminOpts(req), carrier: await carrierFromRequest(req) }
+      // #2061 phase 3 (E-7): the binding carries the two comparison keys
+      // and the recorded experiment that lifts the cross-context block.
+      {
+        ...adminOpts(req),
+        carrier: binding ? binding.carrier : null,
+        keys: binding ? { repo_set_hash: binding.repo_set_hash, head_version_hash: binding.head_version_hash } : null,
+        experiment: await experimentFromRequest(req)
+      }
     );
     done.catch(() => {});
     return { run_key, status: 'running' };
@@ -2636,6 +2770,7 @@ module.exports = {
   recommendTagSet,
   recommendJob,
   generateTestSuite,
+  bindTestSuite,
   addTestSuiteQueries,
   getTestSuite,
   getTestSuiteRun,

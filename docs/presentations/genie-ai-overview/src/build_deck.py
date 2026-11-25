@@ -14,7 +14,11 @@ The build is the completeness gate. A language that is missing a string
 fails the build, rather than leaving an English sentence in the middle of
 a translated slide.
 
-Usage: python3 src/build_deck.py [--output PATH]
+The deck also comes in two lengths. A slide names the variants that show
+it on its own line (`@layout|Title|+light`), so a slide keeps its place
+in the file whichever length is built.
+
+Usage: python3 src/build_deck.py [--variant full|light|all] [--output PATH]
 """
 
 from argparse import ArgumentParser
@@ -23,19 +27,30 @@ from dataclasses import dataclass, field
 from html import escape
 from json import dumps, loads
 from pathlib import Path
-from re import findall, sub
+from re import IGNORECASE, findall, match, sub
+
+from fetch_fonts import FACES, characters
 
 WORK = Path(__file__).parent
 ASSETS = WORK / 'assets'
 REVEAL = WORK.parent / 'node_modules' / 'reveal.js'
 SLIDES = WORK / 'slides'
 I18N = WORK / 'i18n'
-DEFAULT_OUTPUT = WORK.parents[3] / 'site/static/presentations/genie-ai/index.html'
+# Every variant has a published path of its own, so the two decks live
+# side by side.
+DEFAULT_OUTPUT = {
+    'full': WORK.parents[3] / 'site/static/presentations/genie-ai/index.html',
+    'light': WORK.parents[3] / 'site/static/presentations/genie-ai-30/index.html',
+}
 DOC = 'https://genie-ai-7e342b.opensource.unicc.org'
 REPO = 'https://opensource.unicc.org/un/itu/genie-ai'
 
 LOCALES = loads((WORK / 'languages.json').read_text(encoding='utf-8'))
 CODES = [locale['code'] for locale in LOCALES]
+# The variants of the deck, by name. A slide names the variants that show
+# it; a variant declares the chapter timings it runs with. The slide files
+# are the same for every variant.
+VARIANTS = loads((WORK / 'variants.json').read_text(encoding='utf-8'))
 DIRECTION = {locale['code']: locale['dir'] for locale in LOCALES}
 # The slide title shrinks as it grows: a title that runs past a length
 # takes the next smaller size, so the content below it keeps its place.
@@ -55,6 +70,7 @@ SOURCES = {
     'project': DOC + '/',
     'welcome': DOC + '/docs/get-started/welcome/',
     'mobile': DOC + '/docs/mobile/chat-pipeline/',
+    'account': DOC + '/docs/frontend/settings-page/',
     'api': DOC + '/docs/reference/api-contracts/',
     'architecture': DOC + '/docs/get-started/concepts/',
     'rag': DOC + '/docs/rag-pipeline/',
@@ -76,21 +92,18 @@ SOURCES = {
     'web': DOC + '/docs/frontend/chat-ux/',
     'branding': DOC + '/docs/configure/branding-customization/',
     'locale': DOC + '/docs/configure/locale-whitelist/',
-    'routes': DOC + '/docs/reference/routes/',
     'ingestPipeline': DOC + '/docs/rag-pipeline/ingestion/',
     'rerank': DOC + '/docs/rag-pipeline/reranking/',
     'generation': DOC + '/docs/rag-pipeline/generation/',
     'okfConfig': DOC + '/docs/knowledge-base/okf-variables/',
     'okfResolver': REPO + '/-/blob/main/components/okf-server/services/authz-resolver-service.js',
     'idp': DOC + '/docs/configure/external-idp-integration-guide/',
-    'security': DOC + '/docs/architecture/trust-boundaries/',
     'observeOverview': DOC + '/docs/observe/overview/',
     'observeConfig': DOC + '/docs/observe/configuration/',
     'compose': DOC + '/docs/deploy/docker-compose-setup/#6e-remote-gpu-node-optional',
     'swarm': DOC + '/docs/deploy/docker-swarm-setup/#remote-gpu-node',
     'topologies': DOC + '/docs/deploy/topologies/',
     'gpu': DOC + '/docs/deploy/gpu/',
-    'slim': DOC + '/docs/deploy/slim-images/',
     'tracing': DOC + '/docs/operate/tracing-howto/',
     'repo': REPO,
 }
@@ -108,13 +121,12 @@ MARKS = {
     'opea': ('OPEA', None), 'hf': ('Hugging Face TEI', '#956613'), 'vllm': ('vLLM', None),
     'otel': ('OpenTelemetry', None), 'victoria': ('VictoriaMetrics', '#632CA5'), 'grafana': ('Grafana', '#b74600'),
     'docker': ('Docker', '#176cb4'), 'kube': ('Kubernetes', '#326CE5'), 'helm': ('Helm', '#253575'),
-    'nginx': ('NGINX', '#007A37'), 'kong': ('Kong', '#093f2f'), 'envoy': ('Envoy Gateway', None),
     'nvidia': ('NVIDIA', '#507400'), 'amd': ('AMD', '#9b261f'),
 }
 SLIDE_MARKS = {
-    11: (('vue','flutter'), ('node','keycloak'), ('docling','arango'), ('opea','hf','vllm'), ('otel','victoria','grafana'), ('docker','kube','helm')),
+    15: (('vue','flutter'), ('node','keycloak'), ('docling','arango'), ('opea','hf','vllm'), ('otel','victoria','grafana'), ('docker','kube','helm')),
     5: (('vue',), ('flutter',)),
-    7: (('keycloak',), ('node',), (), ('nginx','kong','envoy')),
+    7: ((), (), ('docling',), ('vllm','nvidia','amd')),
     23: (('keycloak',), ()),
     26: ((), ('otel',), ('victoria',), ('grafana',)),
     29: (('docker',), ('docker',), ('kube','helm')),
@@ -156,6 +168,12 @@ class Slide:
     takeaway: str = ''
     notes: str = ''
     sources: list[str] = field(default_factory=list)
+    # The variants that show this slide. Every slide is in the full deck;
+    # a slide that names another variant is in that one as well.
+    variants: set[str] = field(default_factory=set)
+    # The documentation the resource menu lists. The build sets it on the
+    # menu slide alone: the pages the deck cites, in the menu's order.
+    menu: list[str] = field(default_factory=list)
 
 
 def parse(code):
@@ -164,6 +182,11 @@ def parse(code):
     A row is split on every pipe: the first field is the heading, the rest
     are the body cells. A row with no pipe is a body on its own, so it keeps
     an empty heading.
+
+    The slide line may end with the variants that also show it, the
+    field introduced by `+`: `@layout|Title|+light`. The field is machine
+    data, so every language must carry the same one. Everything between
+    the layout and that field is the title, so a title may carry a pipe.
     """
     slides = []
     chapter = timing = ''
@@ -178,8 +201,35 @@ def parse(code):
             chapter, timing = line[2:].split('|', 1)
             chapter_number += 1
         elif line.startswith('@'):
-            layout, title = line[1:].split('|', 1)
-            slides.append(Slide(layout, title, chapter, timing, chapter_number))
+            fields = line[1:].split('|')
+            layout, title, variants = fields[0], '|'.join(fields[1:]), {'full'}
+            first = fields[1].strip() if len(fields) > 1 else ''
+            if not first or first.startswith('+') or first in VARIANTS:
+                raise SystemExit(f'{code}.txt: slide {len(slides) + 1} names no title before its variants field')
+            if any(field.strip().startswith('+') or field.strip() in VARIANTS for field in fields[1:-1]):
+                raise SystemExit(f'{code}.txt: slide "{title}": the variants field comes last')
+            if len(fields) > 2:
+                last = fields[-1].strip()
+                if last.startswith('+'):
+                    if not last[1:].strip():
+                        raise SystemExit(f'{code}.txt: slide "{title}": the variants field names no variant')
+                    title = '|'.join(fields[1:-1])
+                    names = last[1:].split(',')
+                    if any(not name.strip() for name in names):
+                        raise SystemExit(f'{code}.txt: slide "{title}": the variants field names no variant')
+                    variants.update(name.strip() for name in names)
+                elif last in VARIANTS:
+                    # The mark lost its `+`: without this it would be
+                    # swallowed by the title, in silence.
+                    raise SystemExit(
+                        f'{code}.txt: slide "{title}": the variants field starts with +'
+                    )
+            unknown = variants - set(VARIANTS)
+            if unknown:
+                raise SystemExit(
+                    f'{code}.txt: slide "{title}" names unknown variants: {sorted(unknown)}'
+                )
+            slides.append(Slide(layout, title, chapter, timing, chapter_number, variants=variants))
         elif line.startswith('? '):
             slides[-1].eyebrow = line[2:]
         elif line.startswith('= '):
@@ -198,13 +248,75 @@ def structure(slides):
     """The shape of a slide file — what every language must reproduce."""
     return [
         (
-            slide.layout, slide.chapter_number, len(slide.items),
+            slide.layout, slide.chapter_number, slide.timing, len(slide.items),
             [len(item) for item in slide.items],
             bool(slide.eyebrow), bool(slide.takeaway), bool(slide.notes),
-            tuple(slide.sources),
+            tuple(slide.sources), tuple(sorted(slide.variants)),
         )
         for slide in slides
     ]
+
+
+def first_drift(mine, theirs):
+    """Name the first slide whose shape differs between two structures.
+
+    The structures come from `structure`. A language file that drifted is
+    diagnosed slide by slide, so the message names the line to look at
+    rather than a count that matches.
+    """
+    for index, (candidate, english) in enumerate(zip(mine, theirs), 1):
+        if candidate != english:
+            return f'slide {index}: {candidate} does not match the English structure {english}'
+    return f'the file has {len(mine)} slides against {len(theirs)} in English'
+
+
+# French shows the infinitive. The imperative is the voice of the speaker
+# notes and of what the deck quotes; `-ez` marks its second person plural,
+# and `faites` and `dites` are its two irregular forms.
+IMPERATIVE = r'\b(?:[a-zà-öø-ÿ]+ez|faites|dites)\b'
+QUOTED = r'«[^»]*»'
+# The glossary sets a narrow no-break space before each of these. An ordinary
+# word that ends like an imperative, or a clock time, would be refused too:
+# the deck has none, and the message names what it refused.
+SPACED = ':;?!'
+NARROW = '\u202f'
+# The text a chapter divider shows.
+DIVIDER_TEXT = r'chapter\.\d+\.(title|summary|steps(\.\d+)?)$'
+# What the deck quotes keeps its own voice: a chat slide shows what the
+# assistant said, the ingestion slide an excerpt of the source document.
+QUOTING = ('chat', 'ingestion')
+
+
+def register_problems(code, slides):
+    """The French text a slide shows that breaks a rule of the glossary."""
+    if code != 'fr':
+        return []
+    shown = []
+    for number, slide in enumerate(slides, 1):
+        texts = [(field, getattr(slide, field)) for field in ('title', 'eyebrow', 'takeaway')]
+        if slide.layout not in QUOTING:
+            texts += [(f'row {index}', '|'.join(row)) for index, row in enumerate(slide.items, 1)]
+        shown += [(f'slide {number} {field}', text) for field, text in texts]
+    shown += [(key, CHROME[code][key]) for key in CHROME[code] if match(DIVIDER_TEXT, key)]
+    found = []
+    for where, text in shown:
+        found += [
+            (where, f'the imperative "{word}"')
+            for word in findall(IMPERATIVE, sub(QUOTED, '', text), IGNORECASE)
+        ]
+        found += [
+            (where, f'"{mark}" without a narrow no-break space before it')
+            for index, mark in enumerate(text)
+            if mark in SPACED and (index == 0 or text[index - 1] != NARROW)
+        ]
+    if not found:
+        return []
+    return [
+        (
+            'fr: the text a slide shows breaks the glossary rules, the infinitive and the '
+            'spacing before : ; ? !:'
+        )
+    ] + [f'  {where}: {problem}' for where, problem in found]
 
 
 def e(value):
@@ -241,18 +353,34 @@ def language_fonts():
     its own subset, generated by fetch_fonts.py from the characters the
     translation actually prints. A face is added only once — the browser
     picks the face that holds the character, so the rules can coexist.
+
+    The browser hides a face that fell behind its translation: a missing
+    character is drawn by another font and nothing reports it. So the
+    characters the language prints are checked against the list the face
+    was cut for. A face that fell behind, a missing note or a missing face
+    fails the build.
     """
     faces = ''
     directory = ASSETS / 'fonts'
     if not directory.exists():
         return faces
-    for coverage_path in sorted(directory.glob('*.json')):
+    rerun = 'Rerun: python3 src/fetch_fonts.py --code {code}'
+    for code in sorted(FACES):
+        coverage_path = directory / f'{code}.json'
+        if not coverage_path.exists():
+            raise SystemExit(f'assets/fonts/{coverage_path.name} is missing. ' + rerun.format(code=code))
         coverage = loads(coverage_path.read_text(encoding='utf-8'))
+        uncut = sorted(set(characters(code)) - set(coverage.get('characters', '')))
+        if uncut:
+            raise SystemExit(
+                f'assets/fonts/{coverage_path.name}: the {code} face was cut before the translation '
+                f'printed {len(uncut)} of its characters ({"".join(uncut[:12])}). ' + rerun.format(code=code)
+            )
         family = coverage['family']
         for name in coverage['files']:
             path = directory / name
             if not path.exists():
-                continue
+                raise SystemExit(f'assets/fonts/{name}: the face the coverage note lists is missing. ' + rerun.format(code=code))
             weight = findall(r'-(\d+)\.woff2$', name)
             faces += (
                 '@font-face{font-family:"%s";font-style:normal;font-weight:%s;'
@@ -303,8 +431,20 @@ def blocks(prefix, items, css='blocks', guided=False, marks=()):
     ) + '</div>'
 
 
+def slide_marks(n):
+    """The brand marks of a slide whose rows carry logos.
+
+    The marks are keyed by the slide's number, so they follow the slide
+    when it moves. A slide that shows logos and has none here is a build
+    error, not an empty strip.
+    """
+    if n not in SLIDE_MARKS:
+        raise SystemExit(f'Slide {n} carries brand marks but has no entry in SLIDE_MARKS.')
+    return SLIDE_MARKS[n]
+
+
 def stack(prefix, slide, n):
-    return blocks(prefix, slide.items, 'stack-grid', marks=SLIDE_MARKS[n])
+    return blocks(prefix, slide.items, 'stack-grid', marks=slide_marks(n))
 
 
 def matrix(prefix, slide, n):
@@ -319,7 +459,7 @@ def matrix(prefix, slide, n):
     rows = []
     for i, item in enumerate(slide.items):
         rows.append(
-            f'<tr><th scope="row">{brand_strip(SLIDE_MARKS[n][i])}'
+            f'<tr><th scope="row">{brand_strip(slide_marks(n)[i])}'
             f'<span{A(f"{prefix}.items.{i}.f0")}>{e(t(f"{prefix}.items.{i}.f0", item[0]))}</span></th>'
             + ''.join(
                 f'<td{A(f"{prefix}.items.{i}.f{j + 1}")}>{e(t(f"{prefix}.items.{i}.f{j + 1}", cell))}</td>'
@@ -384,7 +524,7 @@ def surfaces(prefix, slide, n):
         f'<div class="device-phone" data-light="1"><span class="earpiece"></span>'
         f'<b{A("chrome.surfaces.browserTitle")}>{e(T("chrome.surfaces.browserTitle"))}</b>'
         f'<span{A("chrome.surfaces.example")}>{e(T("chrome.surfaces.example"))}</span><div class="ghost-lines"></div></div>'
-        f'</div>{blocks(prefix, slide.items, "device-notes", True, SLIDE_MARKS[n])}{stages(len(slide.items))}</div>'
+        f'</div>{blocks(prefix, slide.items, "device-notes", True, slide_marks(n))}{stages(len(slide.items))}</div>'
     )
 
 
@@ -580,9 +720,16 @@ def trace(prefix, slide, n):
     )
 
 
+# The resource menu, in its order. The build keeps the entries the deck
+# cites; the repository is listed whatever the deck cites.
+MENU = ('itu','architecture','rag','okf','authz','observe','compose','swarm','k8s','repo')
+
+
 def resources(prefix, slide, n):
-    keys = ('itu','architecture','rag','okf','authz','observe','compose','swarm','k8s','repo')
-    return '<div class="resources">' + ''.join(links(keys)) + '</div>'
+    # The menu lists the documentation this deck cites. A deck that leaves
+    # a subject out therefore has no link to it: the short deck never
+    # presents the OKF tooling, and its menu does not offer it.
+    return '<div class="resources">' + ''.join(links(slide.menu)) + '</div>'
 
 
 def editorial(prefix, slide, n):
@@ -662,10 +809,24 @@ def render(slide, n, position, total, opening=False):
     )
 
 
-def build_slides(slides):
+def build_slides(slides, numbers):
+    """Render the slides, and the chapter openers that precede them.
+
+    `numbers` is the set of slide numbers a variant shows. A slide keeps
+    the number it holds in the slide file, so a variant that leaves slides
+    out does not renumber the ones it keeps: the brand marks, the diagrams
+    and the translation slots all keep their keys.
+    """
+    shown = [slide for i, slide in enumerate(slides, 1) if i in numbers]
+    cited = {key for slide in shown for key in slide.sources}
+    for slide in shown:
+        if slide.layout == 'resources':
+            slide.menu = [key for key in MENU if key == 'repo' or key in cited]
     sequence = []
     last_chapter = 1
     for i, slide in enumerate(slides, 1):
+        if i not in numbers:
+            continue
         if slide.chapter_number != last_chapter:
             sequence.append((slide, i, True))
             last_chapter = slide.chapter_number
@@ -718,28 +879,78 @@ def ready_languages():
     return ready
 
 
-def build():
-    """Render the deck once per language and merge them into one file."""
+def keep(slides, variant):
+    """The slide numbers a variant shows.
+
+    A slide names the variants that show it, so the numbers follow the
+    slide file rather than a list of its own: inserting a slide does not
+    change what the other variants show.
+    """
+    numbers = {i for i, slide in enumerate(slides, 1) if variant in slide.variants}
+    if not numbers:
+        raise SystemExit(f'The {variant} variant shows no slide.')
+    return numbers
+
+
+def retime(slides, variant):
+    """Apply the variant's chapter timings to the parsed slides.
+
+    The timing a slide carries comes from the chapter it opens in the
+    slide file. A variant that runs in another length declares its own
+    timings, so the two decks do not carry the same clock. Every chapter
+    the variant shows must have one, and it must not time a chapter it
+    leaves out: a gap or a hole in the clock is a defect nothing on the
+    page would show.
+    """
+    timings = VARIANTS[variant].get('timings')
+    if not timings:
+        return
+    shown = {str(slide.chapter_number) for slide in slides if variant in slide.variants}
+    missing = sorted(shown - set(timings))
+    extra = sorted(set(timings) - shown)
+    if missing:
+        raise SystemExit(f'The {variant} variant has no timing for chapter(s) {", ".join(missing)}.')
+    if extra:
+        raise SystemExit(f'The {variant} variant times chapter(s) {", ".join(extra)} it does not show.')
+    for slide in slides:
+        slide.timing = timings[str(slide.chapter_number)]
+
+
+def collect(variant):
+    """Read every language, check they agree, and record the translations.
+
+    The translations are recorded for the slides the variant shows: the
+    runtime fills those slots, and a slot no language translated would keep
+    its English text. Each language is rendered once, in its own language,
+    and the first one is the content the page carries.
+    """
     global ACTIVE, CODES
     codes = ready_languages()
     if len(codes) < len(CODES):
         missing = [code for code in CODES if code not in codes]
         print(f'Languages not built yet: {", ".join(missing)}')
     CODES = codes
-    slides_by_code = {}
+    for code in CODES:
+        TRANSLATION[code].clear()
+    content = None
     reference = None
     for code in CODES:
         ACTIVE = code
         slides = parse(code)
+        retime(slides, variant)
         if reference is None:
             reference = structure(slides)
         elif structure(slides) != reference:
             raise SystemExit(
                 f"{code}.txt does not match the English structure: "
-                f"{len(slides)} slides against {len(reference)}"
+                f"{first_drift(structure(slides), reference)}"
             )
-        slides_by_code[code] = slides
-        build_slides(slides)
+        problems = register_problems(code, slides)
+        if problems:
+            raise SystemExit('\n'.join(problems))
+        rendered = build_slides(slides, keep(slides, variant))
+        if code == CODES[0]:
+            content = rendered
     # The interface strings are not part of a slide: the buttons and the
     # controls live outside the deck. Each language's own file holds
     # them, so they are registered here and travel with the deck.
@@ -748,9 +959,15 @@ def build():
         for key in CHROME[code]:
             T(key)
     check_complete()
+    return content
 
+
+def build(variant):
+    """Render the deck once per language and merge them into one file."""
+    global ACTIVE
+    content = collect(variant)
+    # The page itself is written in the first language.
     ACTIVE = CODES[0]
-    content = build_slides(slides_by_code[CODES[0]])
     artwork = {'globe':'epfl-globe', 'wave':'epfl-wave', 'footer':'epfl-footer', 'waves-dark':'waves-dark'}
     art = ':root{' + ''.join(f'--art-{key}:url("{asset(name + ".webp")}");' for key, name in artwork.items()) + '}'
     font = ''
@@ -814,8 +1031,23 @@ def build():
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Build the standalone GENIE.AI presentation.')
-    parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT)
-    target = parser.parse_args().output
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(build(), encoding='utf-8')
-    print(target)
+    parser.add_argument('--variant', choices=sorted(VARIANTS) + ['all'], default='all',
+                        help='The variant to build. "all" builds every one of them.')
+    parser.add_argument('--output', type=Path, default=None,
+                        help='Where to write a single variant. Defaults to its published path.')
+    args = parser.parse_args()
+    variants = sorted(VARIANTS) if args.variant == 'all' else [args.variant]
+    if args.output and len(variants) > 1:
+        parser.error('--output writes one variant: name it with --variant')
+    if args.output is None:
+        unpublished = [variant for variant in variants if variant not in DEFAULT_OUTPUT]
+        if unpublished:
+            parser.error(f'no published path for: {", ".join(unpublished)}')
+    # Every variant is rendered before the first one is written, so a
+    # failure leaves no pair half-updated.
+    pages = {variant: build(variant) for variant in variants}
+    for variant, content in pages.items():
+        target = args.output or DEFAULT_OUTPUT[variant]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding='utf-8')
+        print(target)

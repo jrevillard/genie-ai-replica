@@ -40,9 +40,17 @@ const keycloakAccess = require('./keycloak-access-service');
 const { writeAudit } = require('./audit-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
+// The ONE worker-pool implementation (new callers require it).
+const { runPool } = require('./run-pool');
+const { isArangoConflict } = require('./arango-errors');
 
 const COLLECTION = 'okf_evaluation_contexts';
 const SUPERADMIN_REALM_ROLE = 'tools-admin';
+// The suite KINDS that can carry a context binding — minted by
+// head-suite-service ('suite') and ragas-suite-service ('ragas_suite'). The
+// delete guard asks THIS list (bind param), so a new suite family must be
+// added here or its contexts lose their delete protection.
+const SUITE_KINDS = ['suite', 'ragas_suite'];
 // A Keycloak group id is an opaque uuid. A principal reference that is NOT
 // uuid-shaped and does not resolve by name is a name that does not exist —
 // it never becomes a path segment.
@@ -55,6 +63,29 @@ class EvalContextError extends Error {
     this.name = 'EvalContextError';
     this.code = code;
     this.status = status;
+  }
+}
+
+/**
+ * The optimistic-concurrency replace (2026-11-25 review round): a carried
+ * `_rev` is a PRECONDITION only when `ignoreRevs: false` is passed — the
+ * arangojs default IGNORES the revision, so a bare `replace(id, doc)` let
+ * the LAST writer silently win (both audits claiming the same version over
+ * different membership sets). A conflict here answers 409 CONTEXT_MODIFIED
+ * and the stored row stays the winner's write.
+ */
+async function replaceChecked(col, id, doc) {
+  try {
+    await col.replace(id, doc, { ignoreRevs: false });
+  } catch (err) {
+    if (isArangoConflict(err)) {
+      throw new EvalContextError(
+        'CONTEXT_MODIFIED',
+        `evaluation context ${id} was modified by another writer while this change was being made; reload it and retry`,
+        409
+      );
+    }
+    throw err;
   }
 }
 
@@ -72,6 +103,32 @@ async function ensureCollection(db) {
     }
   }
   return col;
+}
+
+/**
+ * The STORED resolution projection — ONE field list for the create, the
+ * refresh and the preview (the preview's whole job is showing exactly what
+ * the create would freeze; a field list that lives in three places drifts
+ * to two the next time the resolution grows one).
+ */
+function resolvedSnapshot(resolved) {
+  return {
+    // The EFFECTIVE scopes — the union the authority actually resolved
+    // from — not the input list. A context that names only groups has an
+    // empty INPUT scope list, and storing that alone would under-report
+    // the principal the snapshot was measured against.
+    scopes: resolved.scopes,
+    graph_names: resolved.graph_names,
+    repos: resolved.repos,
+    scope_mode: resolved.scope_mode,
+    resolved_at: resolved.resolved_at,
+    hash: resolved.hash,
+    // Whether THIS resolution is the open posture. The snapshot records it
+    // because the question "is this the open context?" is asked later, by a
+    // gate that reads a STORED document — and an answer that lives only in
+    // memory can never satisfy a stored gate.
+    open_context: resolved.open_context
+  };
 }
 
 /**
@@ -181,6 +238,48 @@ function repoSetHash(repos) {
 }
 
 /**
+ * The HEAD-version hash: sha256 over the sorted (repo_id, head_version)
+ * pairs.
+ *
+ * The second comparison key, and it is not a duplicate of the repo-set hash.
+ * The repo-set hash answers "did the evaluation see the same SERVING set?" —
+ * the graph name carries the serving version. The head leg races the head
+ * VECTOR, so two evaluations over the same serving set are still different
+ * measurements when a head was re-built in between (the frontmatter changed,
+ * the head was recomputed, the serving graph did not move). One key cannot
+ * answer both questions, so the record carries both.
+ *
+ * A repository with NO head contributes `repo_id:` — the missing head is a
+ * fact about the measurement, not an absence from it.
+ */
+function headVersionHash(repos) {
+  const pairs = (repos || [])
+    .map((r) => `${r.repo_id}:${r.head_version === null || r.head_version === undefined ? '' : r.head_version}`)
+    .sort()
+    .join('\n');
+  return nodeCrypto.createHash('sha256').update(pairs).digest('hex').slice(0, 32);
+}
+
+/**
+ * The head versions of the given repositories, read from the repository
+ * documents (the head is stored on the repo doc — `head.version`).
+ */
+async function headVersionsFor(db, repoIds) {
+  const ids = (repoIds || []).filter(Boolean);
+  const out = new Map();
+  if (!ids.length) return out;
+  const cursor = await db.query(
+    'FOR r IN okf_repositories FILTER r._key IN @ids ' +
+      'RETURN { repo_id: r._key, head_version: r.head ? r.head.version : null }',
+    { ids }
+  );
+  for (const row of (await cursor.all()) || []) {
+    if (row && row.repo_id) out.set(row.repo_id, row.head_version === undefined ? null : row.head_version);
+  }
+  return out;
+}
+
+/**
  * RESOLVE a context's inputs into a snapshot. The authority's answer is used
  * verbatim — no recomposition.
  *
@@ -224,14 +323,35 @@ async function resolveContext(input = {}) {
       warnings.push(message);
       logger.warn('eval_context.open_context_empty', { scope_mode: view.scope_mode });
     } else if (effective.length === 0 && principalRefs.length) {
-      // The group resolved and carries NO scope role. In open mode that
-      // principal still traverses the PUBLIC set — which is a true answer,
-      // but not the one an operator naming a "restricted" group expects.
+      // The group resolved and carries NO scope role. What that means depends
+      // on the deployment's serving set: over PUBLIC (unfenced) repositories
+      // the principal traverses the public set; where every repository is
+      // fenced it authorizes nothing (measured live 2026-11-25: scope_mode
+      // "open", serving 13 all fenced, authorized 0). Either way the
+      // operator naming a "restricted" group must hear it.
       warnings.push(
-        "the referenced group(s) carry no okf scope, so this context resolves the deployment's " +
-          'DEFAULT (public) set — not a restricted one. If that is not what you meant, the group ' +
-          'holds no scope.'
+        'the referenced group(s) carry no okf scope, so this context authorizes nothing in its own ' +
+          "right — it traverses only the deployment's PUBLIC (unfenced) repositories. If that is not " +
+          'what you meant, the group holds no scope.'
       );
+    }
+    if (!openContext && view.repos.length === 0) {
+      // Live 2026-11-25 (David's generate refusal): a FENCED context that
+      // resolves to nothing is not a quiet zero — a suite minted for it is
+      // refused at run time ("the evaluation context names none of them").
+      // The operator learns it HERE, at compose time. MEASURED live
+      // (scope_mode "open", serving 13, authorized 0): an empty scope set
+      // authorizes NOTHING — the old "resolves the public set" claim was
+      // wrong, and this is the honest statement for both empty causes.
+      const why =
+        effective.length === 0 && principalRefs.length
+          ? 'the referenced group(s) carry no okf scope'
+          : 'its memberships name no repository the caller can read';
+      warnings.push(
+        `this context resolves to NO repository: ${why}. A suite minted for it will be refused — ` +
+          'grant the group access to a serving repository, then save (or Refresh).'
+      );
+      logger.warn('eval_context.empty_carrier', { principal_refs: principalRefs.length, scopes: effective.length });
     }
 
     span.setAttribute('okf.evalctx.open_context', openContext);
@@ -251,10 +371,12 @@ async function resolveContext(input = {}) {
   });
 }
 
-/** The input shape: a name is required; scopes and group refs are lists. */
-function validateInput(payload = {}) {
+/** The input shape: a name is required; scopes and group refs are lists.
+ *  `requireName: false` is the PREVIEW's shape — an operator composes the
+ *  memberships BEFORE naming the thing they are composing. */
+function validateInput(payload = {}, { requireName = true } = {}) {
   const name = typeof payload.name === 'string' ? payload.name.trim() : '';
-  if (!name) {
+  if (!name && requireName) {
     throw new EvalContextError('VALIDATION_ERROR', 'an evaluation context needs a name', 400);
   }
   if (name.length > 80) {
@@ -313,18 +435,7 @@ async function createContext(payload = {}, opts = {}) {
     principal_refs: input.principal_refs,
     tenant: input.tenant,
     filters: input.filters,
-    resolved: {
-      // The EFFECTIVE scopes — the union the authority actually resolved
-      // from — not the input list. A context that names only groups has an
-      // empty INPUT scope list, and storing that alone would under-report
-      // the principal the snapshot was measured against.
-      scopes: resolved.scopes,
-      graph_names: resolved.graph_names,
-      repos: resolved.repos,
-      scope_mode: resolved.scope_mode,
-      resolved_at: resolved.resolved_at,
-      hash: resolved.hash
-    },
+    resolved: resolvedSnapshot(resolved),
     warnings,
     version: 1,
     // The snapshot is immutable: the ONLY way to change what a context
@@ -350,6 +461,99 @@ async function createContext(payload = {}, opts = {}) {
     }
   });
   return doc;
+}
+
+/**
+ * PREVIEW a composition: the resolution the create WOULD freeze, without
+ * writing anything.
+ *
+ * WHY it exists: a context is IMMUTABLE and there is no DELETE route — a
+ * membership an operator got wrong would be a permanent, undeletable
+ * document. So the composer must be able to SEE the union (the scopes it
+ * would hold, the repositories it would reach, the warnings) BEFORE it
+ * commits to a name. The resolution is the SAME `resolveContext` the create
+ * calls, so the preview and the created context cannot disagree.
+ */
+async function previewContext(payload = {}) {
+  const input = validateInput(payload, { requireName: false });
+  const resolved = await resolveContext(input);
+  return {
+    name: input.name,
+    scopes: input.scopes,
+    principal_refs: input.principal_refs,
+    resolved: {
+      scopes: resolved.scopes,
+      graph_names: resolved.graph_names,
+      repos: resolved.repos,
+      scope_mode: resolved.scope_mode,
+      resolved_at: resolved.resolved_at,
+      hash: resolved.hash,
+      open_context: resolved.open_context
+    },
+    warnings: resolved.warnings,
+    unreadable: resolved.unreadable,
+    invalid: resolved.invalid
+  };
+}
+
+/**
+ * The deployment's GROUPS, each with the GRANTS it carries and the MEMBERS
+ * it holds — the composer's source of truth.
+ *
+ * A membership is a group; the group carries realm roles whose names are
+ * scope strings; the union of those is the principal the context resolves.
+ * The composer shows the operator exactly that: which grants a membership
+ * brings, and whose view it is. `privileged` says the membership carries
+ * `tools-admin` — the union would then be a superadmin union, which the
+ * resolution honours, so the composer must not hide it.
+ */
+async function listGroups(term = '') {
+  const groups = await keycloakAccess.searchGroups(term, 100);
+  // Per-group enrichment is TWO Keycloak round-trips (roles + members); a
+  // serial loop over a ~100-group realm is ~200 sequential calls, each with
+  // its own timeout. runPool (the one implementation) keeps the fan-out
+  // polite without serializing it, and preserves result positions. The
+  // composer renders COUNTS, not member names, so the members cross the
+  // boundary as `member_count` (+ the truncation flag), never as arrays.
+  return runPool(groups || [], 8, async (g) => {
+    // The two reads are independent — overlap them rather than paying the
+    // members read's latency after the roles read's.
+    const [rolesOrError, membersOrError] = await Promise.all([
+      keycloakAccess.groupRealmRoles(g.id).catch((err) => {
+        logger.warn('eval_context.group_grants_unreadable', { group: g.name, error: err.message });
+        return null;
+      }),
+      keycloakAccess.groupMembers(g.id).catch((err) => {
+        // A group whose members cannot be read is still a membership an
+        // operator may compose — it is the GRANTS that decide what it reaches.
+        logger.warn('eval_context.group_members_unreadable', { group: g.name, error: err.message });
+        return null;
+      })
+    ]);
+    const grants = [];
+    let privileged = false;
+    for (const role of rolesOrError || []) {
+      const name = role && role.name;
+      if (!name) continue;
+      if (name === SUPERADMIN_REALM_ROLE) {
+        privileged = true;
+        continue;
+      }
+      // Only GRAMMAR-VALID scopes count: a typo level grants nothing,
+      // exactly as it would in a token.
+      if (parseOkfScope(name)) grants.push(name);
+    }
+    const raw = membersOrError;
+    const memberNames = ((raw && raw.members) || []).map((u) => u.username).filter(Boolean);
+    return {
+      id: g.id,
+      name: g.name,
+      grants: grants.sort(),
+      privileged,
+      member_count: memberNames.length,
+      members_truncated: Boolean(raw && raw.truncated)
+    };
+  });
 }
 
 /** READ one context. */
@@ -410,26 +614,19 @@ async function refreshContext(id, opts = {}) {
   }
   const next = {
     ...doc,
-    resolved: {
-      scopes: resolved.scopes,
-      graph_names: resolved.graph_names,
-      repos: resolved.repos,
-      scope_mode: resolved.scope_mode,
-      resolved_at: resolved.resolved_at,
-      hash: resolved.hash
-    },
+    resolved: resolvedSnapshot(resolved),
     warnings: resolved.warnings,
     version: (doc.version || 1) + 1,
     refreshed_at: new Date().toISOString(),
     refreshed_by: (opts.actor && opts.actor.user_id) || 'system'
   };
   delete next._id;
-  // `_rev` STAYS: the replace is then revision-checked, so two concurrent
-  // refreshes cannot silently clobber each other — the loser gets a
-  // conflict instead of an overwritten snapshot.
+  // `_rev` STAYS and the replace is `replaceChecked` — two concurrent
+  // refreshes cannot silently clobber each other; the loser gets 409
+  // CONTEXT_MODIFIED instead of an overwritten snapshot.
   const db = await dbService.getConnection();
   const col = await ensureCollection(db);
-  await col.replace(id, next);
+  await replaceChecked(col, id, next);
   await writeAudit({
     action: 'eval_context.refresh',
     actor: next.refreshed_by,
@@ -442,6 +639,118 @@ async function refreshContext(id, opts = {}) {
     }
   });
   return next;
+}
+
+/**
+ * UPDATE a context (David, 2026-11-25): an operator can rename one and
+ * add/remove its group memberships. A membership change is a RE-RESOLVE —
+ * the same `resolveContext` the create and the refresh call — and the
+ * unreadable-membership rule applies unchanged: an update that names a
+ * principal that cannot be read is REFUSED (422) and the stored snapshot
+ * stands, because falling back to the public corpus is the silent widening
+ * this whole surface exists to prevent. Every update bumps the version:
+ * runs recorded against version N stay comparable with version N.
+ */
+async function updateContext(id, payload = {}, opts = {}) {
+  const doc = await getContext(id);
+  const next = { ...doc };
+  if (payload.name !== undefined) {
+    // ONE rule, ONE code: the create's own validator owns the name contract
+    // (non-empty string, ≤80 characters) — a rename is not a second,
+    // drifting copy of it.
+    validateInput({ name: payload.name });
+    next.name = payload.name.trim();
+  }
+  if (payload.principal_refs !== undefined) {
+    if (!Array.isArray(payload.principal_refs) || payload.principal_refs.some((r) => typeof r !== 'string')) {
+      throw new EvalContextError('INVALID_REFS', 'principal_refs must be an array of group names', 400);
+    }
+    next.principal_refs = payload.principal_refs;
+  }
+  // ALWAYS re-resolve on save (live 2026-11-25, David's generate refusal):
+  // a context created BEFORE its group was granted the repository kept its
+  // empty snapshot through an unchanged-refs save — while the edit banner
+  // promised "saving re-resolves the union". The effective refs (the
+  // payload's, else the stored ones) resolve through the one authority with
+  // the CURRENT grants, every time.
+  const reResolved = await resolveContext({ scopes: doc.scopes, principal_refs: next.principal_refs });
+  if (reResolved.unreadable.length) {
+    throw new EvalContextError(
+      'PRINCIPAL_UNREADABLE',
+      `the principal reference(s) ${reResolved.unreadable.join(', ')} could not be read, so the context ` +
+        "could not be updated. Its stored snapshot stands; the deployment's public set is not a " +
+        'fallback for a principal that could not be read.',
+      422
+    );
+  }
+  next.resolved = resolvedSnapshot(reResolved);
+  next.warnings = reResolved.warnings;
+  next.version = (doc.version || 1) + 1;
+  next.updated_at = new Date().toISOString();
+  next.updated_by = (opts.actor && opts.actor.user_id) || 'system';
+  delete next._id;
+  // `_rev` stays and the replace is `replaceChecked`: two concurrent updates
+  // cannot silently clobber each other — the loser gets 409 CONTEXT_MODIFIED
+  // and the stored row is exactly the winner's write. getContext(id) ensured
+  // the collection THIS request; the write only needs the handle.
+  const db = await dbService.getConnection();
+  const col = db.collection(COLLECTION);
+  await replaceChecked(col, id, next);
+  await writeAudit({
+    action: 'eval_context.update',
+    actor: next.updated_by,
+    repo_id: null,
+    details: {
+      context_id: id,
+      version: next.version,
+      name: next.name,
+      principal_refs: next.principal_refs.length,
+      graph_count: next.resolved.graph_names.length
+    }
+  });
+  return next;
+}
+
+/**
+ * DELETE a context (David, 2026-11-25) — REFUSED while any test suite is
+ * bound to it: a suite minted FOR a context carries the context's id, and
+ * deleting the principal out from under it would leave runs whose pairing
+ * can never be re-explained. The refusal NAMES the bound suites so the
+ * operator can see exactly what holds the context in place. Historical
+ * RUNS are unaffected in either case — they froze their own carriers.
+ */
+async function deleteContext(id, opts = {}) {
+  const doc = await getContext(id);
+  // getContext(id) ensured the context collection; the guard reads the RUNS
+  // collection and the remove goes straight through its handle.
+  const db = await dbService.getConnection();
+  const bound = await (
+    await db.query(
+      'FOR d IN okf_head_test_runs FILTER d.payload && d.payload.context && d.payload.context.id == @id ' +
+        'FILTER d.kind IN @kinds ' +
+        'SORT d.created_at DESC LIMIT 50 RETURN KEEP(d, ["_key", "kind", "suite_key", "name"])',
+      { id, kinds: SUITE_KINDS }
+    )
+  ).all();
+  if (bound.length) {
+    const names = bound.map((s) => s.name || s.suite_key || s._key);
+    const err = new EvalContextError(
+      'CONTEXT_IN_USE',
+      `evaluation context ${doc.name || id} is bound to ${bound.length} test suite(s): ${names.join(', ')}. ` +
+        'Delete or re-mint those suites first.',
+      409
+    );
+    err.details = { suites: bound };
+    throw err;
+  }
+  await db.collection(COLLECTION).remove(id);
+  await writeAudit({
+    action: 'eval_context.delete',
+    actor: (opts.actor && opts.actor.user_id) || 'system',
+    repo_id: null,
+    details: { context_id: id, name: doc.name, version: doc.version }
+  });
+  return { deleted: true, context_id: id };
 }
 
 /**
@@ -502,7 +811,7 @@ async function carrierOf(contextId) {
  *
  * @param {{context: object, repos: Array}} carrier
  */
-async function assertCarrierCurrent(carrier) {
+async function assertCarrierCurrent(carrier, allowed = null) {
   const rows = Array.isArray(carrier.repos) ? carrier.repos : [];
   if (!rows.length) return; // nothing frozen to check
   const serving = await servingRepos();
@@ -511,17 +820,43 @@ async function assertCarrierCurrent(carrier) {
   for (const row of rows) {
     const liveName = live.get(row.repo_id);
     if (!liveName) {
-      stale.push({ repo: row.name || row.repo_id, frozen: row.graph_name || null, live: null });
+      stale.push({
+        repo_id: row.repo_id,
+        repo: row.name || row.repo_id,
+        frozen: row.graph_name || null,
+        live: null
+      });
     } else if (liveName !== row.graph_name) {
-      stale.push({ repo: row.name || row.repo_id, frozen: row.graph_name || null, live: liveName });
+      stale.push({
+        repo_id: row.repo_id,
+        repo: row.name || row.repo_id,
+        frozen: row.graph_name || null,
+        live: liveName
+      });
     }
   }
   if (!stale.length) return;
-  const lines = stale.map((s) =>
-    s.live
-      ? `  repository "${s.repo}" now serves ${s.live}, but the context froze ${s.frozen}.`
-      : `  repository "${s.repo}" no longer serves anything, but the context froze ${s.frozen}.`
-  );
+  // The refusal NAMES what is stale — but only what this caller may
+  // traverse. A repository outside their reach is counted, never named: the
+  // check still sees it (the context's hash covers the FULL frozen set), but
+  // a caller must not learn the identity, or the live graph name, of a
+  // repository they cannot read.
+  const lines = [];
+  let withheld = 0;
+  for (const s of stale) {
+    if (allowed && !allowed.has(s.repo_id)) {
+      withheld += 1;
+      continue;
+    }
+    lines.push(
+      s.live
+        ? `  repository "${s.repo}" now serves ${s.live}, but the context froze ${s.frozen}.`
+        : `  repository "${s.repo}" no longer serves anything, but the context froze ${s.frozen}.`
+    );
+  }
+  if (withheld) {
+    lines.push(`  ${withheld} further repository(ies) this caller may not traverse are also stale (names withheld).`);
+  }
   throw new EvalContextError(
     'EVAL_CONTEXT_STALE',
     `the evaluation context "${carrier.context.name}" (version ${carrier.context.version}) names serving ` +
@@ -558,11 +893,28 @@ async function assertCarrierCurrent(carrier) {
  */
 async function carrierFor(contextId, caller = {}) {
   const carrier = await carrierOf(contextId);
-  await assertCarrierCurrent(carrier);
+  return narrowCarrier(carrier, caller);
+}
+
+/**
+ * Narrow a FROZEN carrier to what this caller may measure — the staleness
+ * gate, then the authority, then the intersection (refused when empty).
+ *
+ * The one rule, shared: `carrierFor` and `bindingFor` must never disagree
+ * about what a caller may measure.
+ */
+async function narrowCarrier(carrier, caller = {}, authority = null) {
   const okfScopes = Array.isArray(caller.okfScopes) ? caller.okfScopes : [];
   const isSuperAdmin = !!caller.isSuperAdmin;
-  const view = await resolveGraphSet({ okfScopes, isSuperAdmin });
+  const view = authority || (await resolveGraphSet({ okfScopes, isSuperAdmin }));
   const allowed = new Set((view.repos || []).map((r) => r.repo_id));
+  // The staleness gate runs over the carrier's FROZEN rows — BEFORE the
+  // narrowing, because narrowing first would drop the repositories this
+  // caller may not traverse and the check would never see a stale one. The
+  // CALLER'S AUTHORITY is resolved first so the gate can WITHHOLD what is
+  // outside their reach: the check still sees it, the refusal does not
+  // describe it.
+  await assertCarrierCurrent(carrier, allowed);
   const rows = (carrier.repos || []).filter((r) => allowed.has(r.repo_id));
   if (!rows.length) {
     throw new EvalContextError(
@@ -587,15 +939,70 @@ async function carrierFor(contextId, caller = {}) {
   };
 }
 
+/**
+ * The BINDING: what a suite minted for this context measures, what it does
+ * NOT measure, and the two keys two runs must share to be comparable.
+ *
+ * Three parts, and the middle one is the load-bearing:
+ *
+ *   repos    — the MEASURED set (the carrier, narrowed to this caller) with
+ *              the head versions the head leg races;
+ *   out_set  — the EXCLUDED set: what this caller may read but the context
+ *              does NOT name. These are the abstention probes' source — a
+ *              query about a repository the evaluated group cannot traverse
+ *              must not be routed to the repository under test. It is empty
+ *              for a caller who may not read those repositories (a
+ *              repo-scoped admin), because a probe that leaks a repository
+ *              the caller cannot see is worse than no probe;
+ *   the keys — repo_set_hash (the serving set) and head_version_hash (the
+ *              head vectors), both over the measured set.
+ *
+ * @param {string} contextId
+ * @param {{okfScopes?: string[], isSuperAdmin?: boolean}} caller
+ * @returns {Promise<{context: object, carrier: object, repos: Array, out_set: Array, repo_set_hash: string, head_version_hash: string}>}
+ */
+async function bindingFor(contextId, caller = {}) {
+  const frozen = await carrierOf(contextId);
+  const okfScopes = Array.isArray(caller.okfScopes) ? caller.okfScopes : [];
+  const isSuperAdmin = !!caller.isSuperAdmin;
+  const authority = await resolveGraphSet({ okfScopes, isSuperAdmin });
+  const carrier = await narrowCarrier(frozen, caller, authority);
+
+  const frozenIds = new Set(frozen.repo_ids || []);
+  const outSet = (authority.repos || []).filter((r) => !frozenIds.has(r.repo_id));
+
+  const db = await dbService.getConnection();
+  const versions = await headVersionsFor(db, carrier.repo_ids);
+  const repos = (carrier.repos || []).map((r) => ({
+    ...r,
+    head_version: versions.has(r.repo_id) ? versions.get(r.repo_id) : null
+  }));
+
+  return {
+    context: carrier.context,
+    carrier,
+    repos,
+    out_set: outSet,
+    repo_set_hash: repoSetHash(repos),
+    head_version_hash: headVersionHash(repos)
+  };
+}
+
 module.exports = {
   COLLECTION,
   EvalContextError,
   resolveContext,
   effectiveScopes,
   repoSetHash,
+  headVersionHash,
   createContext,
+  previewContext,
+  listGroups,
   getContext,
   listContexts,
   refreshContext,
-  carrierFor
+  updateContext,
+  deleteContext,
+  carrierFor,
+  bindingFor
 };

@@ -109,9 +109,15 @@ const headTestService = {
    * polls getRun until the doc lands (a 100+100 suite outlives the
    * gateway's 60s; live 2026-10-11 the results 504'd twice and were never
    * shown even though the server finished them). */
-  async runSuite(repoId, suiteKey) {
+  async runSuite(repoId, suiteKey, contextId = '') {
+    // #2061 phase 4 (E-5): the run names the Evaluation Context it
+    // measures over. A suite minted FOR a context may only be measured over
+    // THAT context — the server refuses a run that names no context at all
+    // (the deployment is not the context), so the client sends the suite's
+    // own binding. An empty id keeps the pre-contexts behaviour.
     const res = await httpService.post(
-      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/run`
+      `/okf/repos/${rid(repoId)}/routing-testsuite/${encodeURIComponent(suiteKey)}/run`,
+      contextId ? { context_id: contextId } : {}
     );
     return res && res.data ? res.data : null;
   },

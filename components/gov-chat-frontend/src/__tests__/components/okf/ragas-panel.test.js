@@ -1720,3 +1720,92 @@ describe('metric selection survives background loads (2026-10-28)', () => {
     expect(w.vm.selectedMetrics).toContain('noise_sensitivity');
   });
 });
+
+// #2061 phase 4 (E-5, #2103): the scoped benchmark must STATE its evidence —
+// the binding (which principal the suite was minted for) and the attribution
+// the carrier enables (which repository answered, how often an answer was
+// grounded outside the carrier). The engine has persisted both since E-4/E-7;
+// these pin the SURFACE.
+describe('#2061 E-5: the scoped benchmark states its binding and its attribution', () => {
+  it('the binding badge names the context the suite was minted for — or says the open context', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const scoped = suiteFixture();
+    scoped.payload.context = {
+      id: 'ec-9',
+      name: 'extension readers',
+      version: 3,
+      hash: 'abc123',
+      repos: [{ repo_id: 'me' }, { repo_id: 'other' }]
+    };
+    w.vm.suite = scoped;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('extension readers');
+    expect(w.text()).toContain('v3');
+    expect(w.text()).toContain('2');
+
+    const open = suiteFixture();
+    delete open.payload.context;
+    w.vm.suite = open;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('no evaluation context');
+  });
+
+  it('the attribution readout names which repository answered and the outside-carrier rate', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.suite = suiteFixture();
+    const run = runFixture();
+    run.payload.source_attribution = {
+      repo_histogram: { me: 6, other: 2 },
+      wrong_source_rate: 0.25,
+      sources: 8,
+      attributable: 8
+    };
+    w.vm.runDoc = run;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('25%');
+    expect(w.text()).toContain('me ×6');
+    expect(w.text()).toContain('other ×2');
+  });
+
+  it('a null wrong-source rate reads as not measurable, never as zero', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    w.vm.suite = suiteFixture();
+    const run = runFixture();
+    run.payload.source_attribution = {
+      repo_histogram: { me: 8 },
+      wrong_source_rate: null,
+      sources: 8,
+      attributable: 8
+    };
+    w.vm.runDoc = run;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('not measurable');
+    expect(w.text()).not.toContain('0%');
+  });
+
+  // Live 2026-11-25: a regenerate created a NEW suite while the OLD suite's
+  // run stayed on screen; Explain then fired old-run/new-suite and the
+  // server rightly refused — after two minutes of dead polling. A run
+  // belongs to ONE suite: when the loaded suite's key changes, the previous
+  // suite's run and advisor travel off.
+  it('changing the loaded suite clears the stale run and its advisor', async () => {
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    const before = suiteFixture();
+    w.vm.suite = before;
+    w.vm.runDoc = Object.assign(runFixture(), { suite_key: before.suite_key });
+    w.vm.explainDoc = { payload: { advice: {} } };
+    await w.vm.$nextTick();
+
+    const regenerated = suiteFixture();
+    regenerated.suite_key = 'rs-new-suite';
+    w.vm.suite = regenerated;
+    await w.vm.$nextTick();
+    expect(w.vm.runDoc).toBeNull();
+    expect(w.vm.explainDoc).toBeNull();
+  });
+});

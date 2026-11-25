@@ -133,6 +133,9 @@ router.get('/:repo_id/routing-testsuite/runs', requireRepoScope('repo_id', 'read
 router.get('/:repo_id/routing-testsuite/:suite_key', requireRepoScope('repo_id', 'read'), ctrl.getTestSuite);
 router.post('/:repo_id/routing-testsuite', requireRepoScope('repo_id', 'admin'), ctrl.generateTestSuite);
 router.post('/:repo_id/routing-testsuite/:suite_key/run', requireRepoScope('repo_id', 'admin'), ctrl.runTestSuite);
+// #2061 phase 3 (E-7): the EXPLICIT rebind — a superadmin binds a suite
+// that predates contexts to the OPEN context. Never automatic.
+router.post('/:repo_id/routing-testsuite/:suite_key/bind', requireRepoScope('repo_id', 'admin'), ctrl.bindTestSuite);
 // 1-8g-v — poll/load ONE run: the async run's keep-waiting envelope
 // ({status:'running'}), its terminal failure, or the full run doc. Read
 // scope (same as the runs listing). Must sit ABOVE /:suite_key so the

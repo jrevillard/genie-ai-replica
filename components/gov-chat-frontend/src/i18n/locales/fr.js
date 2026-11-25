@@ -3323,7 +3323,51 @@ export default {
         head: 'Head',
         test: 'Test',
         suites: 'Suites & analytics',
-        ragas: 'Bancs d’essai RAGAS'
+        ragas: 'Bancs d’essai RAGAS',
+        contexts: 'Evaluation contexts'
+      },
+      contexts: {
+        catalogue: 'Evaluation contexts',
+        catalogueHint:
+          'Un contexte est un principal nommé : un ensemble d’appartenances de groupe, résolu une fois puis figé. Une suite créée pour un contexte est mesurée sur ce contexte — jamais sur tout le déploiement.',
+        empty:
+          'Aucun contexte d’évaluation pour l’instant. Composez-en un ci-dessous — c’est la portée sur laquelle une évaluation à portée est mesurée.',
+        version: 'v{n}',
+        open: 'open context',
+        memberships: '{n} membership(s)',
+        repos: '{n} repository(ies)',
+        hash: 'set {h}',
+        refresh: 'Refresh',
+        compose: 'Compose a context',
+        name: 'Name',
+        namePlaceholder: 'e.g. ministry-a readers',
+        addMembership: 'Ajouter une appartenance (un groupe)',
+        groupPlaceholder: 'Search the realm groups…',
+        groupSearch: 'Search groups…',
+        noGroups: 'No group matches',
+        remove: 'Remove {n}',
+        grants: '{n} grant(s)',
+        members: '{n} member(s)',
+        membersTruncated: '{n}+ membre(s) — la lecture est plafonnée',
+        noMemberships:
+          'Aucune appartenance pour l’instant — sans aucune, le contexte se résout au déploiement entier (le contexte ouvert).',
+        preview: 'Prévisualiser ce que cela atteint',
+        previewRepos: 'Reaches',
+        unreadable: 'Ces appartenances n’ont pas pu être lues : {list}',
+        create: 'Create the context',
+        created: 'Le contexte a été créé et figé.',
+        refreshed: 'Le contexte a été résolu à nouveau.',
+        pickerLabel: 'Evaluation context',
+        pickerNone: 'Aucun contexte — tout le déploiement',
+        reposShort: 'repos',
+        edit: 'Edit',
+        delete: 'Delete',
+        save: 'Save the changes',
+        cancelEdit: 'Cancel',
+        editing: 'Modification de {name} — l’enregistrement résout à nouveau l’union et incrémente la version.',
+        updated: 'Le contexte a été mis à jour et résolu à nouveau.',
+        deleted: 'Le contexte a été supprimé.',
+        grantsUnknown: 'grants unknown'
       },
       head: {
         dim: 'Dimensions',
@@ -3511,7 +3555,14 @@ export default {
         deleteConfirmBody: "Cela supprime définitivement la suite et son historique d'exécution. Irréversible.",
         deleteConfirm: 'Supprimer la suite',
         deleteCancel: 'Annuler',
-        unnamedFallback: 'suite sans nom'
+        unnamedFallback: 'suite sans nom',
+        bindingOpen: 'Créée pour le déploiement — aucun contexte d’évaluation',
+        binding: 'Mesurée sur « {name} » (v{version} · {repos} dépôts)',
+        boundary: 'Scope boundary',
+        boundaryHeld: '{held} held',
+        boundaryBreached: '{n} breached',
+        boundaryPartial: '({measured} sur {total} mesurées)',
+        boundaryNotMeasured: 'Limite de portée : non mesurée'
       },
       error: {
         explain: "Échec de l'explication",
@@ -3946,6 +3997,9 @@ export default {
       },
       results: {
         title: 'Résultats du banc d’essai',
+        attributionBy: 'Répondu par',
+        attributionOutside: 'Ancré hors du porteur : {pct}%',
+        attributionNoCarrier: 'Ancrage hors du porteur : non mesurable sans contexte d’évaluation',
         failing: '{n} en échec',
         advisorHint:
           '{n} questions sont sous leurs seuils de métriques. Lancez le conseiller pour attribuer chaque échec à une étape du pipeline et obtenir des actions concrètes.',

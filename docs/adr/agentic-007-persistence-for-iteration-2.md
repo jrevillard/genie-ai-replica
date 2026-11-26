@@ -36,8 +36,9 @@ rollback continuity or adds an migration burden ». Its scope is iteration 1.
 
 Iteration 2 adds state the record does not cover: a pending pause with its continuation,
 a tool-call audit trail, and conversation context — the run receives one `question`
-today, while the legacy path condenses up to eight prior message segments — four
-exchanges (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`).
+today, while the deployed module takes NO history by default (`MULTI_TURN_MODE=blend`
+with `MULTI_TURN_BLEND_ENABLED=false`); its opt-in condense mode condenses up to eight
+prior message segments — four exchanges (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`).
 
 Read from the documentation of six runtimes on 2026-11-25, the prevailing pattern is that
 storage belongs to the application behind an interface, and that a pause is a serialized
@@ -58,34 +59,40 @@ DeepSeek Harness, which keeps its sessions in its own home directory.
 ## Decision
 
 **The BFF and its existing collections remain the only store. The per-turn `queries`
-record gains an additive `agent` block that the legacy path never reads.**
+record's agent state grows inside the block that already ships, which the legacy path
+never reads.**
 
 1. **AD-12, re-declared for iteration 2.** The rule is kept and completed: the agentic
-   path writes only through the existing shapes; the `queries` record gains an additive
-   `agent` block.
-2. **Where each piece of state lives.**
+   path writes only through the existing shapes; the `queries` record's `metadata.agent_run`
+   block gains the pause, the continuation and the tool-call audit.
+2. **The agent block is the one that ships.** The turn's agent state already has a
+   home: `queries.metadata.agent_run` carries the run id, the execution versions, the usage
+   record and the outcome. The pause, its continuation and the tool-call audit join THAT
+   block; a second block beside it would split one run's story across two paths of one
+   document, and the finalize rebuilds the metadata wholesale.
+3. **Where each piece of state lives.**
 
    | State | Owner | Where |
    |---|---|---|
    | Conversation and messages | BFF | existing `conversations`, `messages`, `queryMessages` |
    | Execution versions of a run | BFF | `queries`, at `run_started` (unchanged) |
    | Run-internal state | agent-service | in memory, for the duration of the request |
-   | Pending pause and continuation | BFF | `queries.agent.pause` |
-   | Tool-call audit summary | BFF | `queries.agent.tool_calls[]` |
-   | Approval decision | BFF | `queries.agent.pause.decision` |
+   | Pending pause and continuation | BFF | `queries.metadata.agent_run.pause` |
+   | Tool-call audit summary | BFF | `queries.metadata.agent_run.tool_calls[]` |
+   | Approval decision | BFF | `queries.metadata.agent_run.pause.decision` |
 
-3. **Conversation context travels with the request.** The run request gains `turns`: a
+4. **Conversation context travels with the request.** The run request gains `turns`: a
    bounded list of prior user and assistant messages that the BFF assembles from existing
-   records. Two deployment knobs bound it (proposed defaults: 8 messages — four exchanges,
-   the depth the legacy path condenses — and 12 000 characters);
+   records. Two deployment knobs bound it (proposed defaults: 8 messages — four exchanges —
+   and 12 000 characters);
    history tokens count against the run's token budget. There is no separate condense
    step: the model sees the turns and writes standalone search queries itself.
-4. **Audit summary.** Per tool call: `call_id`, tool, outcome, duration, bytes. For a
+5. **Audit summary.** Per tool call: `call_id`, tool, outcome, duration, bytes. For a
    write: the idempotency key, the receipt reference and the decision. Raw arguments and
    results of read tools are not stored in this block.
-5. **Crash.** A run is lost if `agent-service` restarts mid-run. The BFF reports the
+6. **Crash.** A run is lost if `agent-service` restarts mid-run. The BFF reports the
    failure; nothing is retried automatically. Accepted while runs are short.
-6. **Rollback continuity.** The legacy path ignores the `agent` block. A pending pause is
+7. **Rollback continuity.** The legacy path ignores the `agent_run` block. A pending pause is
    never resumed after a rollback; the conversation continues.
 
 ## Alternatives considered

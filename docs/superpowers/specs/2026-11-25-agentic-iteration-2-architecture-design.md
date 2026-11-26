@@ -105,19 +105,20 @@ The map deliberately contains **no storage port**. The application that owns the
 | # | Rule | `pytestarch` form |
 |---|---|---|
 | C | Every module of the service belongs to one layer: host, core, leaf adapters, capability | the module list of the graph, each name passed through one classification function; the modules left over are asserted to be none |
-| R1 | A core module imports no I/O library | `Rule().modules_that().are_named(<core module>).should_not().import_modules_that().are_named(<library>)`, on a graph built with `exclude_external_libraries=False` |
-| R2 | A core module imports nothing of another layer, the telemetry facade excepted | the same form, with `app` and the adapter modules in place of the library |
-| T | The telemetry SDK is imported by `tracing` only | R1's form for `opentelemetry`, over every module outside the host |
+| R1 | A core module imports no I/O library | `Rule().modules_that().are_named(<core module>).should_not().import_modules_that().are_named([<library>])`, on a graph built with `exclude_external_libraries=False`. The library is named by its PACKAGE, because `pytestarch` names an import after the package it comes from: `from urllib import request` is the import of `urllib` |
+| R2 | A core module imports nothing of another layer, the telemetry facade excepted | the same form, with the roots of the other layers in place of the library: the host modules, `capabilities.adapters`, `capabilities.search_knowledge` |
+| T | The telemetry SDK is imported by `tracing` and by nothing else | R1's form for `opentelemetry`, over every module of the tree except the facade — the host included |
 | L1 | A leaf adapter accesses only the ports it implements | `LayeredArchitecture` plus `LayerRule().layers_that().are_named("leaf adapters").should_only().access_layers_that().are_named(["ports"])` |
 | L2 | The search capability accesses only the ports and the leaf adapters | the same layer rule for the `capability` layer, allowed `["ports", "leaf adapters"]` |
-| R3 | Only the composition root imports the adapters | `Rule().modules_that().are_named(<adapters>).should_not().be_imported_by_modules_except_modules_that().are_named(<composition root>)`; it is switched on once composition has left the core (§2.3) |
+| R3 | The modules that import the leaf adapters are a listed set | R1's form over every module that is not itself an adapter, the importers asserted equal to a listed set — the direct form, not the transitive one, which reports the whole import chain. The set is emptied by plan 2 (§2.3) |
 | R4 | The event vocabulary never carries a BFF frame name | already enforced at import (`agent/events.py`) |
 
 Properties of `pytestarch` 5.1.1 that the rules rely on. All but the last were checked against the service or on a synthetic package; the last is read from its documentation:
 
 - A node is named after the root folder: `agent-service.agent`, not `agent`.
 - External libraries are excluded by default; R1 needs `exclude_external_libraries=False`.
-- A rule that names a module absent from the graph raises `ModuleUnknown`: a typo fails the test. A library that no module imports is absent too, so the I/O list is filtered by presence first.
+- A rule that names a module absent from the graph raises `ModuleUnknown`: a typo fails the test. A library that no module imports is absent too, so the I/O list declares the libraries the service does not import yet, and a rule checks that the declaration and the tree agree — a name that is neither imported nor declared fails the test.
+- An import is named after the PACKAGE it comes from: `from urllib import request` is the import of `urllib`. The rules name packages, or they miss that spelling.
 - A module outside every layer still counts: a layer rule raises `AssertionError` when a listed layer accesses it.
 - A cache or environment directory (`__pycache__`, `.venv`, `.ruff_cache`) leaves a node in the graph even when its files are excluded; the module list drops those nodes.
 - `import_modules_that` and `should_not().be_imported_by_modules_that()` look at direct imports; the `…except…` and `should_only().be_imported_by…()` forms evaluate the transitive importers, and the latter also requires that the named module imports the subject.
@@ -146,8 +147,8 @@ Today `AgentLoop` does three jobs: the loop itself, governance (budget checks, e
 class RunInputs:
     question: str
     instruction: str                  # the system prompt of this run or step
-    tools: Sequence[ToolDefinition]   # what the model may call: the registered tools
-    model: LoopModelClient            # bounded by the monitor through a core-owned decorator
+    tools: tuple[dict, ...]           # the model-facing definitions: registry.definitions()
+    model: BoundedModelClient         # the client the core built, its output bound already capped
     dispatcher: ToolDispatcher
     monitor: RunBudgetMonitor
     token: CancellationToken
@@ -165,7 +166,11 @@ class RuntimeDriver(Protocol):
 | returns the drafted text and its `RunResult` | verifies, scans, or keeps anything between two runs |
 | lets `CancelledError` propagate | knows a BFF frame name |
 
-The inputs are what the current loop takes per run: the question, the system prompt (`instruction`), the definitions of the registered tools (`tools`, from `registry.definitions()`) and the model client. The orchestrator builds that client per request, as it does today, bounds it with the core's decorator, hands it to the runtime in `RunInputs.model`, and keeps it: the verification judge and the record's model axis (`model_identity()`) use the same object.
+The inputs are what the current loop takes per run: the question, the system prompt (`instruction`), the definitions of the registered tools (`tools`) and the model client.
+
+Two of them are shaped by the code as it stands, and the port says so. `tools` is `registry.definitions()` — the OpenAI function-tool shape (`tuple[dict, ...]`), which is what the model clients speak; the port does not invent a second shape. `model` is a client whose output bound is ALREADY capped: today the cap rides as an optional `max_output_tokens` argument that each call site passes by hand (`agent/loop.py`, `agent/verification.py`), and a runtime that forgets it runs unbounded. The core therefore wraps the client once — `BoundedModelClient`, capping the argument itself — and hands the wrapper to the runtime. That is where the bound becomes structural rather than a convention every call site must honour.
+
+The client itself is process-wide: `app.py` builds the orchestrator once (`_RUNTIME`) and the model client with it, because the client is stateless and expensive. The per-request object is the authorization executor. The port carries the shared client; the record's model axis (`model_identity()`) and the verification judge read it from there.
 
 `ToolDispatcher` is the body of the current `_dispatch_tool` in `agent/loop.py`, moved: budget and token checks, `tool_call_started`, execution through the registry, declared errors mapped to data, evidence-ledger feed, injection scan, `tool_call_finished`.
 
@@ -300,7 +305,7 @@ Two consequences for deployment: `pii-service` is currently parked behind the `o
 ### 4.9 Write tools
 
 - `requires_approval` triggers the pause of §5.4. The resumed run executes the approved call through the same dispatcher; there is no direct path.
-- Every write call carries an idempotency key derived from `run_id` and `call_id`, riding the MCP request `_meta`. The receiving server honoring that key is part of the mock servers' contract.
+- Every write call carries an idempotency key riding the MCP request `_meta`; honoring it is part of the mock servers' contract. The key is derived from the TURN and the call, not from the run: `run_id` is a fresh uuid per run (`agent/orchestrator.py`), so a key built on it changes when the user retries the turn, and the retry would land the write twice (§8.4).
 - A refused call is not executed; the model is told as data; the pipeline continues or ends honestly.
 
 ### 4.10 Out of scope
@@ -377,10 +382,12 @@ It is delivered in two increments: first `web_search` as a tool of the simple ru
 |---|---|---|---|
 | `find` | agent | `scheduler.list_slots` (read), `search_knowledge` | required |
 | pause | pause step | `scheduler.book`, its slot filled from the chosen option | — |
-| `execute` | direct | `scheduler.book` (write) | required |
+| `execute` | resume step | the pending `scheduler.book` — the call the pause recorded | required |
 | `confirm` | direct, then agent | `scheduler.get_appointment` (read) | required |
 
 `confirm` reads after writing: if the write's outcome is unknown (§8.4), the read settles it.
+
+The write happens exactly once. The pause step records the pending call and the arguments it will be given; the `execute` step of the resumed segment IS that call — it dispatches the recorded pending call through the dispatcher, with the slot filled from the chosen option. There is no second write, and no write outside the dispatcher: the `execute` step is a resume step, not a code path that calls the tool by itself.
 
 ### 5.7 Delegation, later
 
@@ -417,6 +424,7 @@ Additive and versioned (AD-8): the five client event types are preserved verbati
 - `agent_activity` gains an optional `step` field.
 - A new frame, `agent_pause`, carries the pause for display: `pause_id`, `kind`, items (tool, human-readable label, argument summary, risk), options. No raw argument that could hold a secret.
 - The non-streaming JSON entry answers with `paused: true` and the same pause summary instead of an answer.
+- The BFF contract test pins the seam-kind set: the frame writer ignores a kind it does not know, at debug level (`agent-frame-writer.js`), so a BFF older than the agent service would drop `run_paused` and finalize the turn as an answer. The seam vocabulary is additive by design — the forward compatibility is real — and the pair is deployed together. The test that says so is the BFF's.
 
 Frame and endpoint names are proposals; the BFF contract test fixes them.
 
@@ -443,18 +451,23 @@ AD-12 is scoped « iteration 1 is read-only » and prevents two things: « a ses
 | Conversation and messages | BFF | existing `conversations`, `messages`, `queryMessages` |
 | Execution versions of a run | BFF | `queries`, at `run_started` (AD-11, unchanged) |
 | Run-internal state | agent-service | in memory, for the duration of the request |
-| Pending pause and continuation | BFF | `queries.agent.pause` |
-| Tool-call audit summary | BFF | `queries.agent.tool_calls[]` |
-| Approval decision | BFF | `queries.agent.pause.decision` |
+| Pending pause and continuation | BFF | `queries.metadata.agent_run.pause` |
+| Tool-call audit summary | BFF | `queries.metadata.agent_run.tool_calls[]` |
+| Approval decision | BFF | `queries.metadata.agent_run.pause.decision` |
 
-Rollback continuity holds: the legacy path ignores the `agent` block. After a rollback, a pending pause is simply never resumed; the conversation continues.
+The agent block is the one that ships: `queries.metadata.agent_run` already carries the run id, the
+execution versions, the usage record and the outcome (`agent-run-contract.js`). The pause, its
+continuation and the tool-call audit join THAT block — a second block beside it would split one
+run's story across two paths of one document, and the finalize rebuilds the metadata wholesale.
+
+Rollback continuity holds: the legacy path ignores the `agent_run` block. After a rollback, a pending pause is simply never resumed; the conversation continues.
 
 ### 7.3 Conversation context
 
-The run receives one `question` today. The legacy path condenses up to eight prior message segments — four exchanges, since the knob counts segments (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8` in the deployed chatqna module). Iteration 2 carries the context with the request:
+The run receives one `question` today. The deployed chatqna module has three history knobs, and the shipped defaults are worth stating exactly: `MULTI_TURN_MODE` is `blend` and `MULTI_TURN_BLEND_ENABLED` is `false`, so the default configuration takes NO history; the condense mode is opt-in, and its knob (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`) counts message segments — eight of them are four exchanges. Iteration 2 carries the context with the request:
 
 - `turns` is a bounded list of prior user and assistant messages, assembled by the BFF from existing records.
-- Two deployment knobs bound it: number of messages (proposed default 8 — four exchanges, the depth the legacy path condenses) and characters (proposed default 12 000). History tokens count against the run's token budget.
+- Two deployment knobs bound it: number of messages (proposed default 8 — four exchanges) and characters (proposed default 12 000). The bound is a decision of this design, not a parity claim: the shipped default takes no history at all, and the condense depth is the nearest comparable number. History tokens count against the run's token budget.
 - No separate condense step: the model sees the turns and writes standalone search queries itself.
 - A free-text reply that answers a paused question is an ordinary turn: the assistant's last message in `turns` carries the options.
 
@@ -618,7 +631,7 @@ Proposed in this change, in the existing convention (`docs/adr/agentic-00N-<slug
 | `agentic-007` persistence, iteration 2 | re-declares AD-12: the additive `agent` block, conversation context, audit, crash-loss acceptance |
 | `agentic-008` Server-Side Tools disposition | kept: the three governance phases, roles, outbound PII, honest degradation, the SearXNG license decision; re-based: web search as a tool source; dropped: pipeline fusion as the execution model |
 
-The architecture spine (AD-3, AD-12, the deferred list), issue #603 and the framing issue #1729 are updated to point at these records, so that one canonical home exists per decision (FR-29).
+The architecture spine (AD-3, AD-12, the deferred list), issue #603 and the framing issue #1729 are updated to point at these records, so that one canonical home exists per decision (FR-29). That update is a follow-up, not part of this change: this merge request carries the records alone, and until the follow-up lands the spine's deferred list still names the workflow layer, #603 still carries the LangGraph plan, and #1729 still frames the problem the old way.
 
 ---
 

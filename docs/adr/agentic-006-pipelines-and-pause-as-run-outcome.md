@@ -83,6 +83,9 @@ keeps the continuation.**
    honestly. For an input, the decision must name one of the options: the pending call's
    arguments are built from it, and a value outside the options is refused — it never
    reaches the tool.
+   The write happens exactly once. The pause records the pending call and the arguments it
+   will be given; the resumed segment's execute step IS that call, dispatched through the
+   dispatcher. No step calls a write tool by itself.
 6. **Budgets.** Each segment has one monitor, the source of every counter. A pipeline
    declares a wall-clock share and a model-call cap per step, whose sum fits the segment's
    deadline minus the verification reserve. Segments are linked by a `pipeline_id` on

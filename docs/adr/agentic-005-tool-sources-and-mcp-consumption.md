@@ -97,8 +97,10 @@ the request.**
    project's 26.8.2 is unverified and is checked by a probe before the first write path.
 8. **Write tools.** `requires_approval` triggers the pause of ADR agentic-006. The
    resumed run executes the approved call through the same dispatcher; there is no direct
-   path. Every write call carries an idempotency key derived from `run_id` and `call_id`,
-   riding the MCP request `_meta`; honoring it is part of the mock servers' contract.
+   path. Every write call carries an idempotency key riding the MCP request `_meta`;
+   honoring it is part of the mock servers' contract. The key is derived from the turn and
+   the call, not from the run: `run_id` is a fresh uuid per run, so a key built on it changes
+   when the user retries the turn, and the retry would land the write twice.
 
 ## Alternatives considered
 

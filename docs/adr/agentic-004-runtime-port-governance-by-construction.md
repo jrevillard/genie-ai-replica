@@ -60,8 +60,11 @@ the objects it is given.**
    `run(inputs) -> RunResult`. `RunInputs` carries the question, the instruction (the system
    prompt of the run), the definitions of the registered tools, the model client, the tool
    dispatcher, the budget monitor, the cancellation token and the event emitter. The
-   orchestrator builds the model client per request, bounds it and hands it over; the
-   verification judge and the record's model axis use that same client.
+   orchestrator hands over a client whose output bound is already capped: the cap rides
+   today as an optional `max_output_tokens` argument that each call site passes by hand, so
+   the core wraps the client once and the runtime cannot forget the bound. The client is
+   process-wide (`app.py` builds the orchestrator once); the verification judge and the
+   record's model axis read it from there.
 2. **What a runtime does and never does.** It calls the model through the client it is
    given, bounded by the monitor through a core-owned decorator around that client; it
    dispatches tools only through the dispatcher; it returns the drafted text and its
@@ -129,4 +132,8 @@ What maps onto the port, read from the frameworks' documentation on 2026-11-25:
 - `docs/adr/agentic-002-first-agent-runtime-d03.md`
 - Architecture spine: `_bmad-output/planning-artifacts/architecture/architecture-genie-ai-2026-11-16/ARCHITECTURE-SPINE.md` (AD-4, AD-5, AD-6, AD-7)
 - `components/agent-service/agent/loop.py`, `components/agent-service/agent/orchestrator.py`
-- LangChain tools documentation, `handle_tool_errors`; Deep Agents customization documentation (commit `2b76e167`); DeepSeek Harness `packages/sdk/server/README.md` (commit `4b399c39`)
+- LangChain tools documentation, `handle_tool_errors`
+- Deep Agents customization documentation, `docs.langchain.com/oss/python/deepagents/customization` (the
+  quote is on the documentation site, not in the repository)
+- DeepSeek Harness, commit `4b399c39`: `docs/subsystems/tools.md` (the registration contract)
+  and `packages/sdk/server/README.md` (the wire's limits)

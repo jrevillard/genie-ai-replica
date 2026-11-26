@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **No breaking change, but one manual step:** a controller that deployed before this release must install the newly declared Ansible collection (`ansible-galaxy collection install -r requirements.yml`) — without it the `config_bootstrap` role still aborts. The [upgrade guide](https://opensource.unicc.org/un/itu/genie-ai/-/blob/v3.1.1/docs/UPGRADE.md) carries the procedure.
 
+**The fix is in the deployment path, not in the application images:** the `v3.1.1` images carry the same service code as `v3.1.0` — what changes is the playbook the operator applies on the deploy host.
+
 ### Fixed
 
 - **The `config_bootstrap` role no longer aborts on a controller without the `community.general` collection.** The role pairs each Keycloak theme with each realm entrypoint through the `cartesian` lookup, and `ansible.builtin.cartesian` is only a REDIRECT to `community.general.cartesian` in ansible-core's runtime table — so the collection has to be installed on the controller, and the requirements declared `community.docker` alone. Every controller without it failed the role mid-run with "The lookup plugin 'ansible.builtin.cartesian' was not found". The collection is now declared. (!1093)

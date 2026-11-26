@@ -1022,7 +1022,12 @@ async function getRepoLinks(req, res, next) {
     // a Kong temp-file spool per graph mount. summary=1 asks for counts
     // only; limit/offset paginate the edges. Default = the full graph
     // (RepoGraphView behavior unchanged).
-    res.status(200).json(
+    // Explicit conditional GET (#2190, shared helper from #2191): express's
+    // built-in freshness check never fires in this service (measured), and
+    // a repeat graph mount MUST 304 — that is the acceptance.
+    sendConditional(
+      req,
+      res,
       await conceptMetaService.getRepoLinks(repo_id, {
         summary: summary === '1' || summary === 'true',
         limit: limit === undefined ? undefined : parseInt(limit, 10),

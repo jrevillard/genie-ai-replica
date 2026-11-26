@@ -15,14 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Wire-citations no longer silently no-ops on a title hijack** (#2198, live 2026-11-26: three clicks, three HTTP 200s, zero Sources pages). The wire query's projection carried NO `is_index`, so the hub-detection guard `!r.is_index` was vacuously true for every row — and the title branch was a SUBSTRING match, so an index titled **"28-living-reference"** was "found" as the Sources hub, generation never ran, and the response rode back as bare success (`wired: 0`). Three fixes: the projection carries `is_index`; the title branch requires it explicitly false and matches **exactly** (`Sources`/`Citations`/`References`), never a substring; and the response now distinguishes its outcomes — `generated` / `using_existing` (with the alias page named) / `wired` / `nothing_to_do` — rendered honestly in the Validate step. UI strings in all 14 locales.
 
-- **The okf-scopes migration no longer wipes the profile of the accounts it grants** (!1100, seen live 2026-11-26: at every deploy the keycloak-config service re-granted the wildcard `okf_scopes` attribute through a PUT that carried ONLY the attributes map — and a Keycloak PUT replaces the payload, clearing the fields it omits. The realm's user profile marks `email`/`firstName`/`lastName` required for every user, so the wiped account landed on the "Update Account Information" form at every login under Keycloak 26.8). The migration now merges the scope into the FULL user representation with jq (the keycloak-config image installs jq) — attribute values with special characters survive byte-for-byte — and a failed grant warns and skips the user instead of aborting the migration loop.
-- **Chat no longer breaks deployment-wide when `KEYCLOAK_INTERNAL_URL` is not set** (!1101, seen live 2026-11-26: every chat request answered 503 before reaching any model service). Since the split-URL OIDC contract the compose file passes the var to chatqna as present-but-EMPTY on deployments that do not define it, and chatqna's validator kept that empty string as the JWKS base — the fetch URL had no protocol at all ("Request URL is missing an 'http://' or 'https://' protocol"). An empty value now falls back to the in-network Keycloak host (the contract dataprep and okf-server already follow), and a trailing slash on the value no longer doubles into the JWKS path.
 
 ### Changed
 
 - **`GET /okf/repos` ships card summaries, not full documents** (#2191, measured 2026-11-26: 5,238,230 bytes for 33 repositories — ~158 KB per repo — with a Kong temp-file spool per call and a main-thread `JSON.parse` on the dashboard's 5 s poll). The list endpoint now returns a card projection pinned from the fields the dashboard and the wizard actually read (identity, domain, version, lifecycle, timestamps, ingestion state, metrics, and the `concept_count`/`failed_count`/`indexing_pending` enrichments — the wizard Choose-step's clone-patch contract is test-pinned). The full document — frontmatter, documents, crawl seeds, artifacts — stays behind `GET /:id` where it always belonged. Internal service callers are unchanged (additive `projection` parameter, default off). Conditional GET is EXPLICIT (a small sendConditional helper): measured on the local build, express 4's built-in freshness check never fires in this service — every route answered 200 on a matched If-None-Match — so the list route compares the validator itself and answers 304.
 
 - **The editor-graph links endpoint slims down** (#2190, measured 2026-11-26: 1,655,486 bytes per fetch on a dense repo — Kong spooled every graph mount to a temp file). `GET /okf/repos/:id/links` gains `?summary=1` (counts only — the edges never leave the server) and `limit`/`offset` edge pagination (with `link_count` carrying the full count). The default remains the full graph, byte-identical shape — RepoGraphView behavior unchanged; Repeat mounts 304 through the explicit conditional GET (#2191's shared sendConditional helper — express 4's built-in freshness check never fires in this service, measured). The Kong proxy-buffer sizing that finishes the temp-file fix ships with the instance-sizing guide (#2197).
+
+## [3.1.2] - 2026-11-26
+
+**In one line: two deployment-blocking defects found live on 2026-11-26 are fixed — the okf-scopes migration no longer wipes the profile of the accounts it grants, and the chat no longer 503s on a deployment that does not set `KEYCLOAK_INTERNAL_URL`.**
+
+**No breaking change and no manual step.** The [upgrade guide](https://opensource.unicc.org/un/itu/genie-ai/-/blob/v3.1.2/docs/UPGRADE.md) is unchanged for this patch: a deployment that upgrades the images picks both fixes up with the release.
+
+### Fixed
+
+- **The okf-scopes migration no longer wipes the profile of the accounts it grants** (!1100, seen live 2026-11-26: at every deploy the keycloak-config service re-granted the wildcard `okf_scopes` attribute through a PUT that carried ONLY the attributes map — and a Keycloak PUT replaces the payload, clearing the fields it omits. The realm's user profile marks `email`/`firstName`/`lastName` required for every user, so the wiped account landed on the "Update Account Information" form at every login under Keycloak 26.8). The migration now merges the scope into the FULL user representation with jq (the keycloak-config image installs jq) — attribute values with special characters survive byte-for-byte — and a failed grant warns and skips the user instead of aborting the migration loop.
+
+- **Chat no longer breaks deployment-wide when `KEYCLOAK_INTERNAL_URL` is not set** (!1101, seen live 2026-11-26: every chat request answered 503 before reaching any model service). Since the split-URL OIDC contract the compose file passes the var to chatqna as present-but-EMPTY on deployments that do not define it, and chatqna's validator kept that empty string as the JWKS base — the fetch URL had no protocol at all ("Request URL is missing an 'http://' or 'https://' protocol"). An empty value now falls back to the in-network Keycloak host (the contract dataprep and okf-server already follow), and a trailing slash on the value no longer doubles into the JWKS path.
 
 ## [3.1.1] - 2026-11-26
 
@@ -1501,8 +1511,9 @@ Initial release for El Salvador agricultural AI assistant deployment.
 [R_1_0_0]: https://opensource.unicc.org/un/itu/genie-ai/-/tags/R_1_0_0
 [2.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/R_1_0_0...v2.0.0
 [2.0.1]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.0...v2.0.1
-[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.1...main
+[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.2...main
 [3.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.1.0...v3.0.0
 [3.1.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.0.0...v3.1.0
 [3.1.1]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.0...v3.1.1
+[3.1.2]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.1...v3.1.2
 [2.1.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.1...v2.1.0

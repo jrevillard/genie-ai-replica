@@ -251,6 +251,15 @@ A release requires a few manual actions — everything else is automated by CI:
 
    Then add a fresh `[Unreleased]` section at the top. Merge this via MR.
 
+   **Open the release section with a summary**, before the first `###`
+   subsection: one short paragraph saying what the release introduces, and one
+   naming the breaking changes with a link to the upgrade guide **pinned to the
+   tag**. The GitLab Release notes are extracted verbatim from this section by
+   the `release:create` job, so the summary is what a deployer reads first — a
+   section of 200+ entries without a digest is not a release note. The extractor
+   cuts at the first line that starts with `[`, so never wrap the text in a way
+   that puts a markdown link at the start of a line.
+
 6. **Create the release branch from `main`:**
 
    ```bash
@@ -515,6 +524,7 @@ Copy this checklist into the release MR or issue.
 
 - [ ] CI pipeline green on `main` before creating the release branch
 - [ ] `CHANGELOG.md` updated: `[Unreleased]` renamed to `[X.Y.Z]` with date
+- [ ] Release section opens with a summary and the upgrade-guide link (pinned to the tag)
 - [ ] Breaking changes marked with `**Breaking:**` in changelog
 - [ ] `docs/UPGRADE.md` updated with migration steps for each breaking change
 - [ ] Fresh `[Unreleased]` section added

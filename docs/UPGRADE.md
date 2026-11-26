@@ -8,6 +8,43 @@ change requires manual action from deployers.
 
 ## Unreleased
 
+## v3.1.0 → v3.1.1
+
+v3.1.1 is a deployment-path patch: the `config_bootstrap` role no longer aborts on a controller without the
+`community.general` collection, and the SSL directory check no longer dies on the second run. No breaking change.
+
+### Manual Steps Required
+
+#### Install the newly declared Ansible collection on the controller
+
+The `config_bootstrap` role pairs each Keycloak theme with each realm entrypoint through the `cartesian`
+lookup. `ansible.builtin.cartesian` is only a REDIRECT to `community.general.cartesian` in ansible-core's runtime
+table, so the collection has to be installed on the controller — and the requirements declared `community.docker`
+alone until v3.1.1. A controller that deployed before this release does not have it, and the role fails mid-run with
+"The lookup plugin 'ansible.builtin.cartesian' was not found".
+
+**Migration**: re-run the collection install on the controller, from a checkout of the release you deploy:
+
+```bash
+cd deploy/ansible
+ansible-galaxy collection install -r requirements.yml
+```
+
+A controller that already installed the collections after v3.1.1 needs nothing.
+
+### Non-Breaking Changes Worth Noting
+
+- The SSL directory check (`secrets/ssl`) now runs as root, like the directory normalization that already does. The
+  play stat'ed it as `ansible_user` in a directory it had just chowned to `root:root` 0750, so the unprivileged stat
+  died EACCES and, under `failed_when: false`, registered a result without a `stat` key — the next task raised
+  "object of type 'dict' has no attribute 'stat'". The directory's mode is set at the END of the play (`root:101`
+  0750), so the first run found it still 0755 and passed: the failure was a second-run failure on every host.
+- The CI validation (`docs:validate`) now resolves the Ansible lookups the playbooks CALL, instead of only parsing
+  them: `--syntax-check` never evaluates a lookup, which is why a lookup whose collection was missing from the
+  requirements survived CI and died on the deploy host.
+
+---
+
 ## v3.0.0 → v3.1.0
 
 v3.1.0 carries breaking changes across deployment, configuration and

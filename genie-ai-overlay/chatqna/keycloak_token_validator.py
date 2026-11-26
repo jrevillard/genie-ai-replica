@@ -29,7 +29,14 @@ class JwksUnavailableError(Exception):
 
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
-KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+# `or`, not a default argument: the compose file passes this var as
+# ${KEYCLOAK_INTERNAL_URL:-} (empty when the deployment does not define it),
+# and an EMPTY value must behave like an UNSET one — a default argument keeps
+# the empty string, and the JWKS URI then has no protocol at all
+# ("Request URL is missing an 'http://' or 'https://' protocol" on every
+# authenticated request). dataprep's keycloak_service_account.py and
+# okf-server's service-token.js already treat the empty string as unset.
+KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL") or "http://keycloak:8080"
 
 
 def _expected_issuers() -> list:

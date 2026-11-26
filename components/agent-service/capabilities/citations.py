@@ -49,7 +49,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .contract import LegacyFileProvenance, OkfConceptProvenance
+from .contract import OkfConceptProvenance
 from .sources import ConceptSource, DocumentMetadataSource
 
 logger = logging.getLogger(__name__)
@@ -117,6 +117,15 @@ def _legacy_file_id(provenance) -> str | None:
     if isinstance(provenance, dict):
         return provenance.get("file_id")
     return getattr(provenance, "file_id", None)
+
+
+def _concept_version(provenance) -> int | None:
+    """The bundle version a concept's card was served at — ``None`` when the
+    identity join did not resolve one (the contract's nullable field)."""
+
+    if isinstance(provenance, dict):
+        return provenance.get("bundle_version")
+    return getattr(provenance, "bundle_version", None)
 
 
 async def resolve_source_records(
@@ -214,11 +223,12 @@ def hit_identity(hit) -> tuple[str, str] | None:
     namespace-safe variant, and the collision is theoretical (E01's corpus
     is legacy-only)."""
     provenance = hit.provenance
-    if isinstance(provenance, OkfConceptProvenance):
-        return (provenance.repo_id, provenance.concept_id)
-    if isinstance(provenance, LegacyFileProvenance):
-        return (None, provenance.file_id)
-    return None
+    if _is_concept(provenance):
+        return _concept_address(provenance)
+    file_id = _legacy_file_id(provenance)
+    if file_id is None:
+        return None
+    return (None, file_id)
 
 
 def _crawled_url(record: dict) -> str:
@@ -307,11 +317,14 @@ def source_document_envelope(hits, score_calibrator=None, *, records: SourceReco
             # The D1 rule: a source whose record did not resolve is not
             # surfaced (and contributes no score to the aggregate).
             continue
-        if isinstance(provenance, OkfConceptProvenance):
-            entry = _okf_entry(provenance.concept_id, provenance.repo_id, provenance.bundle_version, score, record)
+        if _is_concept(provenance):
+            # The shape-agnostic read: a provenance reaches this projection
+            # in either shape (the contract's object, the ledger's dict),
+            # and the variant is decided the same way in both.
+            repo_id, concept_id = _concept_address(provenance)
+            entry = _okf_entry(concept_id, repo_id, _concept_version(provenance), score, record)
         else:
-            legacy: LegacyFileProvenance = provenance
-            entry = _legacy_entry(legacy.file_id, score, record)
+            entry = _legacy_entry(_legacy_file_id(provenance), score, record)
         envelope.append(entry)
     return envelope
 

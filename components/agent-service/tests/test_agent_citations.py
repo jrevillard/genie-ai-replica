@@ -16,6 +16,7 @@ the identical shape; the dedup keeps the first served source.
 """
 
 import asyncio
+from types import SimpleNamespace
 
 from conftest import FakeConceptSource, FakeMetadataSource
 
@@ -228,6 +229,22 @@ def test_a_platform_that_answers_nothing_surfaces_nothing():
     )
     assert records.record_for(LegacyFileProvenance(file_id="f-1")) is None
     assert records.record_for(OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)) is None
+
+
+def test_the_projection_reads_a_provenance_in_either_shape():
+    """The hits carry the contract's provenance object; the ledger carries
+    the dict. The projection reads BOTH and picks the variant the same way
+    in each: a dict provenance must not fall through to the legacy branch
+    (where it would raise on a missing attribute) nor be deduped into one
+    slot."""
+    dict_hit = SimpleNamespace(
+        provenance={"source": "okf-concept", "concept_id": "c-1", "repo_id": "r-1", "bundle_version": 3},
+        score=0.8,
+    )
+    [entry] = source_document_envelope([dict_hit], records=SourceRecords(concepts={("r-1", "c-1"): _CARD}))
+    assert entry["document_name"] == "Hangar Access Notes"
+    assert entry["source"] == "okf-concept"
+    assert entry["concept_id"] == "c-1"
 
 
 def test_the_governed_lane_s_shapes_resolve_through_the_same_ports():

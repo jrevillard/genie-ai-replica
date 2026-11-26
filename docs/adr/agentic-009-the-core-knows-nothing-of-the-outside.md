@@ -121,7 +121,7 @@ without a rule is a leak that returns.
 | F2 | The **Arango adapter** imported by a core module | **R3** + **L2** — the capability leaves `KNOWN_ADAPTER_IMPORTERS` and reaches the corpus through the ports alone | closed (`a1c7e5c67`) |
 | F3 | The **charset of an Arango graph name** | **R6** — the core states no foreign system's acceptance rules | closed (`c68f856b4`) |
 | F4 | The **vocabulary of the OKF counterparty** | the port boundary itself — the core consumes the port's types and declares none of its own | verified, no change |
-| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed on **both** branches: the legacy branch resolves the document's name through the doc-repo port (`f8100fab9`), the OKF branch resolves the concept's title through the OKF port — and the R4 ratchet's known-leak set is **empty** |
+| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed on **both** branches: the legacy branch resolves the document's name through the doc-repo port (`f8100fab9`), the OKF branch resolves the concept's title through the OKF port — and the R4 ratchet's known-leak set is **empty**. The scope is the **agent service's core** (the modules R4 scans): the BFF's compatibility fallback for an OLDER agent payload still derives a label from an id (`components/gov-chat-backend/services/agent-run-contract.js:119`), unreachable with a payload that carries `source_documents` — the backend is the adapter to the client, not the core |
 
 **R6 is generic.** It reads the core's text for the SHAPE of an acceptance
 claim — a subject and an acceptance verb, or a `<name>-safe` compound — and
@@ -200,6 +200,15 @@ token** (`components/okf-server/controllers/repository-controller.js`). A
 concept the server does not serve is not surfaced, and a 403 and a 404 both
 mean "does not resolve". The decision about a concept's NAME was never a
 decision about who may read it.
+
+**The resolution's bound.** The names are resolved at answer time, one read
+per DISTINCT delivered source (the ledger dedups by identity, so the fan-out
+is the answer's source count, not the tool-call budget). Each read carries the
+adapter's own timeout (10 s), and every failure is a resolution that did not
+happen — the D1 rule, never a failed answer. A platform that accepts the
+connection and stops answering therefore delays the verdict frame by that
+timeout and then drops its sources: the same shape the legacy branch already
+had, now with the OKF branch on top of it.
 
 **Recorded, not decided here.** This slice carries the divergence as a known
 delta; the OKF pillar's own story owns the decision, with the pillar deployed

@@ -102,10 +102,20 @@ FRENCH_SAMPLE = (
 ARABIC_SAMPLE = "كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار خلال موسم الصيف؟"
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def seeded_langdetect():
-    """Deterministic detection for the suites that exercise it; production
-    stays unseeded (the AST check in the detection suite pins that)."""
+    """Deterministic detection for EVERY suite; production stays unseeded
+    (the AST check in the detection suite pins that).
+
+    AUTOLSE, because the detector is non-deterministic by construction:
+    a suite that forgets to request the fixture detects whatever the
+    detector's own randomness decides — and a test that asserts a
+    preparation status then fails at random (the CI lane caught one:
+    "grid outage report" detected as a foreign language on one run and
+    as English on the next). The production module stays unseeded — the
+    deployed parity is the point — so the seeding lives HERE, in the
+    test tree.
+    """
     DetectorFactory.seed = 0
     yield
 

@@ -23,6 +23,13 @@ Seven rules keep the layers apart:
 * **L1**, **L2** — a leaf adapter accesses only the ports it implements; the
   capability accesses only the ports and the leaf adapters.
 
+Three more rules read the code's TEXT rather than its imports: **R4** (the
+deciding modules carry no platform vocabulary), **R5** (the identifier guards
+accept any safe token) and **R6** (the core states no platform's acceptance
+rules). An import rule cannot see a claim the code makes about a platform —
+a guard that encodes the database's identifier rules refuses what the database
+accepts — so the claims get their own rule (ADR agentic-009).
+
 R1 and R2 do not hold on the whole tree yet. They are written as a ratchet:
 the violations found on the tree are asserted equal to a listed set
 (``KNOWN_IO_VIOLATIONS``, ``KNOWN_INTERNAL_VIOLATIONS``). A violation is a
@@ -39,6 +46,7 @@ a synthetic package and checks that the same helpers report it.
 """
 
 import ast
+import re
 import tokenize
 from pathlib import Path
 from typing import NamedTuple
@@ -490,7 +498,7 @@ def _docstring_lines(source: str) -> set[int]:
     return lines
 
 
-def _code_text(path: Path) -> str:
+def _code_text(path: Path, *, keep_docstrings: bool = False) -> str:
     """The module's CODE — its source, without the comments and the docstrings.
 
     The scan reads the source itself, not a re-joined token stream: an
@@ -498,6 +506,10 @@ def _code_text(path: Path) -> str:
     and a token stream would spell it differently. ``tokenize`` finds the
     comments (blanked in place) and the AST finds the docstrings (their
     lines blanked), so the text that remains is the code.
+
+    ``keep_docstrings`` keeps the docstrings in the text — for the rules
+    that read a CLAIM the code makes about a platform, which a docstring
+    states as often as a message does.
     """
 
     source = path.read_text(encoding="utf-8")
@@ -518,9 +530,10 @@ def _code_text(path: Path) -> str:
             start = column if index == row - 1 else 0
             stop = end_column if index == end_row - 1 else len(line)
             lines[index] = line[:start] + " " * max(0, stop - start) + line[stop:]
-    for number in docstrings:
-        if 0 < number <= len(lines):
-            lines[number - 1] = "\n"
+    if not keep_docstrings:
+        for number in docstrings:
+            if 0 < number <= len(lines):
+                lines[number - 1] = "\n"
     return "".join(lines)
 
 
@@ -556,6 +569,157 @@ def test_the_core_carries_no_platform_vocabulary() -> None:
     """
 
     assert _platform_vocabulary_findings() == KNOWN_PLATFORM_VOCABULARY
+
+
+# R6 — the core states no FOREIGN system's acceptance rules.
+#
+# R4 reads the deciding modules' code for a platform's NAMES, from an
+# explicit list: a leak is named and a new one joins the list. R6 asks the
+# generic question instead — does the core state what a system it does not
+# implement ACCEPTS?
+#
+# A claim has a SHAPE: a subject and an acceptance verb ("ArangoDB accepts",
+# "the corpus database allows", "Redis-safe"), and the subject of a claim
+# about the outside is a proper noun. The rule reads every acceptance
+# statement in the core's text and asks whether its subject is one of the
+# core's OWN concepts. The allow-list below holds the core's vocabulary and
+# NEVER a platform's name: a platform joins nothing, and a platform nobody
+# has used yet (Redis, S3, the database of tomorrow) is caught by the shape
+# alone.
+#
+# A claim is not documentation: the code's behaviour changes when the
+# system's rules change, so the claim is a dependency no import rule can
+# see, and it is the shape of the F1 defect — a guard that encodes a
+# system's rules refuses what that system accepts.
+#
+# The scan KEEPS the docstrings: a claim's usual hiding place is the
+# docstring of the very guard that enforces it, and the next module written
+# from that docstring inherits the rule.
+#
+# The leaf adapters are the connectors: stating the platform's rules is
+# their job, so they are out of scope.
+CORE_VOCABULARY = frozenset(
+    {
+        "Agent",
+        "Answer",
+        "Capability",
+        "Chunk",
+        "Concept",
+        "Connector",
+        "Context",
+        "Contract",
+        "Corpus",
+        "Database",
+        "Deployment",
+        "Document",
+        "Error",
+        "Graph",
+        "Guard",
+        "Identifier",
+        "Label",
+        "Leg",
+        "Model",
+        "Operation",
+        "Operator",
+        "Platform",
+        "Port",
+        "Prompt",
+        "Query",
+        "Refusal",
+        "Request",
+        "Response",
+        "Result",
+        "Run",
+        "Search",
+        "Service",
+        "Source",
+        "Token",
+        "Value",
+    }
+)
+
+# The shape of a claim about what a system accepts: a subject and an
+# acceptance verb, or a "<name>-safe" compound.
+ACCEPTANCE_CLAIM = re.compile(
+    r"(?<![\w'])([A-Za-z][A-Za-z0-9'\-]*(?: [A-Za-z][A-Za-z0-9'\-]*){0,2})[ ]+"
+    r"(?:accepts?|allows?|permits?|supports?|requires?|rejects?)\b"
+    r"|(?<![\w])([A-Za-z][A-Za-z0-9'\-]*)-safe\b"
+)
+
+
+def _is_a_name(word: str) -> bool:
+    """Is this word a NAME rather than an ordinary word?
+
+    A name is capitalised (``Redis``), all-caps (``TEI``), carries an
+    internal capital (``vLLM``) or is a hyphenated compound
+    (``okf-server``). An ordinary English word is none of those — which is
+    what keeps "the datastore accepts" out of the findings: a datastore is
+    a word, a system is a name.
+    """
+
+    return (
+        word[:1].isupper()
+        or word.isupper()
+        or any(character.isupper() for character in word[1:])
+        or "-" in word
+        or "." in word
+    )
+
+
+def _foreign_claim_subjects(text: str) -> set[str]:
+    """The foreign subjects the text claims an acceptance rule about.
+
+    A word is a foreign subject when it is a NAME and is not one of the
+    core's own concepts. The FIRST word of a multi-word subject is exempt:
+    a sentence capitalises it for the sentence, not because it names a
+    system ("The guard accepts ...").
+    """
+
+    subjects: set[str] = set()
+    for match in ACCEPTANCE_CLAIM.finditer(text):
+        subject = match.group(1) or match.group(2) or ""
+        words = subject.split()
+        if len(words) > 1:
+            words = words[1:]
+        for word in words:
+            if word not in CORE_VOCABULARY and _is_a_name(word):
+                subjects.add(word)
+    return subjects
+
+
+# The foreign subjects the core still claims about. A fix removes one
+# finding and shrinks this list in the same commit; a NEW claim adds one and
+# turns the test red.
+KNOWN_FOREIGN_CLAIMS: set[tuple[str, str]] = set()
+
+
+def _foreign_claim_findings() -> set[tuple[str, str]]:
+    """The (module, subject) pairs that state a foreign system's rules."""
+
+    findings: set[tuple[str, str]] = set()
+    modules = _leaf_modules(_modules(_graph(SERVICE, with_libraries=False), SERVICE.name))
+    for module in _in_layers(modules, DECIDING_LAYERS, SERVICE_LAYOUT):
+        path = SERVICE / Path(*module.split(".")).with_suffix(".py")
+        if not path.exists():
+            continue
+        text = _code_text(path, keep_docstrings=True)
+        for subject in _foreign_claim_subjects(text):
+            findings.add((module, subject))
+    return findings
+
+
+def test_the_core_states_no_foreign_acceptance_rule() -> None:
+    """R6 — the core states no foreign system's acceptance rules (ADR agentic-009).
+
+    The core's guard is a guard on a TOKEN: a safe shape and a length. What
+    the corpus database accepts is the database's own rule, and the core
+    that encodes it refuses the deployment's corpus leg by a rule the
+    deployment never wrote — the same defect as the document-id guard (F1),
+    one layer up: a refusal the operator cannot act on, on the channel that
+    says the caller is not allowed.
+    """
+
+    assert _foreign_claim_findings() == KNOWN_FOREIGN_CLAIMS
 
 
 def test_the_identifier_guards_accept_any_safe_token() -> None:

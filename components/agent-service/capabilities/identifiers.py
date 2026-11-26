@@ -66,20 +66,30 @@ def validate_concept_id(value: str, *, operation: OperationName) -> str:
 
 
 def validate_graph_name(value: str, *, operation: OperationName) -> str:
-    """A graph name: the only characters ArangoDB accepts in an identifier."""
+    """A corpus leg label: an opaque token the platform serving the leg
+    resolves.
+
+    The core does not know what that platform accepts — the label is a token
+    with a safe shape and a length, and the platform's own rules belong to
+    the connector that resolves it (ADR agentic-009).
+    """
     return _guard(_TOKEN_PATTERN, value, _GRAPH_NAME_MAX_LEN, "graph_name", operation=operation)
 
 
 def ensure_graph_name_config(value: str) -> str:
     """The graph name as a deployment-configuration value (not caller-supplied).
 
-    Same charset, different error channel: a bad ``ARANGO_GRAPH_NAME`` is the
+    Same shape, different error channel: a bad ``ARANGO_GRAPH_NAME`` is the
     operator's configuration defect, and reporting it as a caller
-    authorization failure would send the operator to the wrong layer.
+    authorization failure would send the operator to the wrong layer. The
+    refusal names the deployment's configuration — what a corpus leg label
+    may be is the core's own safety rule, not a rule the corpus database
+    imposes (ADR agentic-009).
     """
     if not isinstance(value, str) or not _TOKEN_PATTERN.fullmatch(value) or len(value) > _GRAPH_NAME_MAX_LEN:
         raise ValueError(
-            "invalid deployment configuration: graph name "
-            f"{value!r} is not an ArangoDB-safe identifier (expected [A-Za-z0-9_-], max {_GRAPH_NAME_MAX_LEN})"
+            "invalid deployment configuration: the corpus leg label "
+            f"{value!r} is not a safe token (letters, digits, underscore and hyphen; "
+            f"max {_GRAPH_NAME_MAX_LEN} characters)"
         )
     return value

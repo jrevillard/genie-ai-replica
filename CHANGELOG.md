@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-11-26
+
+**In one line: two deployment-blocking defects found live on 2026-11-26 are fixed — the okf-scopes migration no longer wipes the profile of the accounts it grants, and the chat no longer 503s on a deployment that does not set `KEYCLOAK_INTERNAL_URL`.**
+
+**No breaking change and no manual step.** The [upgrade guide](https://opensource.unicc.org/un/itu/genie-ai/-/blob/v3.1.2/docs/UPGRADE.md) is unchanged for this patch: a deployment that upgrades the images picks both fixes up with the release.
+
+### Fixed
+
+- **The okf-scopes migration no longer wipes the profile of the accounts it grants** (!1100, seen live 2026-11-26: at every deploy the keycloak-config service re-granted the wildcard `okf_scopes` attribute through a PUT that carried ONLY the attributes map — and a Keycloak PUT replaces the payload, clearing the fields it omits. The realm's user profile marks `email`/`firstName`/`lastName` required for every user, so the wiped account landed on the "Update Account Information" form at every login under Keycloak 26.8). The migration now merges the scope into the FULL user representation with jq (the keycloak-config image installs jq) — attribute values with special characters survive byte-for-byte — and a failed grant warns and skips the user instead of aborting the migration loop.
+
+- **Chat no longer breaks deployment-wide when `KEYCLOAK_INTERNAL_URL` is not set** (!1101, seen live 2026-11-26: every chat request answered 503 before reaching any model service). Since the split-URL OIDC contract the compose file passes the var to chatqna as present-but-EMPTY on deployments that do not define it, and chatqna's validator kept that empty string as the JWKS base — the fetch URL had no protocol at all ("Request URL is missing an 'http://' or 'https://' protocol"). An empty value now falls back to the in-network Keycloak host (the contract dataprep and okf-server already follow), and a trailing slash on the value no longer doubles into the JWKS path.
+
 ## [3.1.1] - 2026-11-26
 
 **In one line: the Ansible deployment runs again — the `cartesian` lookup the `config_bootstrap` role needs is now declared, and the SSL directory check runs with the privileges that check requires.**
@@ -1482,8 +1494,9 @@ Initial release for El Salvador agricultural AI assistant deployment.
 [R_1_0_0]: https://opensource.unicc.org/un/itu/genie-ai/-/tags/R_1_0_0
 [2.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/R_1_0_0...v2.0.0
 [2.0.1]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.0...v2.0.1
-[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.1...main
+[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.2...main
 [3.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.1.0...v3.0.0
 [3.1.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.0.0...v3.1.0
 [3.1.1]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.0...v3.1.1
+[3.1.2]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.1...v3.1.2
 [2.1.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.1...v2.1.0

@@ -71,20 +71,10 @@ from noagent.config import NoAgentConfig
 
 logger = logging.getLogger(__name__)
 
-# The one-call output-budget arithmetic — the deployed estimate the answer
-# translator runs over the same endpoint family (``noagent.pipeline``):
-# the prompt is estimated at 4 chars/token (+20 offset), the room is the
-# window minus that estimate minus 128 safety tokens, and a ``max_tokens``
-# larger than the room would make vLLM reject the call outright
-# ("prompt + max_tokens exceeds the context window"). Matched values, one
-# comment home each — the translation leg owns the translation-shaped
-# copies, this client the generation-shaped one.
-
 RUNTIME_ID = AgentLoop.runtime_id
 """The runtime the probe drives — read from the runtime itself, so the
 probe's evidence and the run's execution-version record cannot drift
 apart."""
-"""The provisional candidate's runtime id — the field the runtime decision compares on."""
 
 QUESTION_ID = "probe-multihop-001"
 TOOLSET = ("search_knowledge", "read_source")

@@ -91,22 +91,25 @@ class ToolDispatcher:
             # The declared-error surface flows back as data (see _execute):
             # the span records THAT fact, never the payload text.
             tool_span.set_attribute("errored", "error" in result_payload)
+        # The taint scan: retrieved content is data, never instructions. An
+        # instruction pattern in a retrieved text is a recorded finding — the
+        # ledger, the verdict payload and the usage record — and the content
+        # STILL passes as data: the same payload feeds the model's role-tool
+        # message either way, no behavior change from content.
+        #
+        # The scan does NOT wait for a ledger: a safety scan that only runs
+        # when something is there to record its findings is a scan that
+        # silently does not run.
+        findings = scan_tool_result(request.name, result_payload)
+        if findings:
+            self._monitor.record_injection_findings(len(findings))
         if self._verifier is not None:
             # Every dispatched result reaches the verification ledger —
             # success shapes contribute their citations, error envelopes
             # record the attempt (the ledger classifies both itself).
             self._verifier.record_tool_result(request.name, result_payload)
-            # The taint scan: retrieved content is data, never
-            # instructions. An instruction pattern in a retrieved text is a
-            # recorded finding — ledger, verdict payload and usage record —
-            # and the content STILL passes as data: the same payload feeds
-            # the model's role-tool message either way, no behavior change
-            # from content.
-            findings = scan_tool_result(request.name, result_payload)
             for finding in findings:
                 self._verifier.record_finding(finding)
-            if findings:
-                self._monitor.record_injection_findings(len(findings))
         self._emitter.emit(EventKind.TOOL_CALL_FINISHED, result_payload, call_id=request.call_id)
         return result_payload
 

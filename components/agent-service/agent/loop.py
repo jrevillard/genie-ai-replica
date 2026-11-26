@@ -65,6 +65,7 @@ class AgentLoop:
     """
 
     runtime_id = "custom-minimal-loop"
+    """The provisional candidate's runtime id — the field the runtime decision compares on."""
     """The runtime's identity — it rides the execution-version record, so a
     run is attributable to the runtime that drove it. ONE string: the
     probe's evidence carries the same one (it reads it from here), and a

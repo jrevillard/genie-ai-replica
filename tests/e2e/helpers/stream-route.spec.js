@@ -29,16 +29,18 @@ function parseFrames(body) {
 }
 
 test.describe('sseBody — the legacy five-type dialect', () => {
-  test('two-arg call builds exactly the legacy bytes', () => {
+  test('two-arg call builds exactly the deployed bytes', () => {
+    // The backend's ONE frame writer: every frame is `data: {...}`
+    // terminated by a blank line (the backend's services/sse-frame.js).
     expect(sseBody(['a', 'b'], { is_grounded: true })).toBe(
       [
         'data: {"type":"chunk","content":"a"}',
         'data: {"type":"chunk","content":"b"}',
         'data: {"type":"metadata","is_grounded":true}',
-        '',
-        'data: {"type":"done","queryId":"mock-query-1"}',
-        ''
-      ].join('\n')
+        'data: {"type":"done","queryId":"mock-query-1"}'
+      ]
+        .map((line) => `${line}\n\n`)
+        .join('')
     );
   });
 

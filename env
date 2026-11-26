@@ -1501,13 +1501,13 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_DOCREPO_URL=
 # AGENT_OKF_URL=
 # The agent service reads the SAME OKF feature flag as the rest of the
-# stack (the OKF_ENABLED section above) — no second variable:
-#   0 (default) — the OKF pillar is NOT deployed: the agent does not look
-#     for the OKF control plane at all (the CAP-1 identity join is not
-#     attempted, so the retrieval is never degraded for a join that could
-#     not resolve) and AGENT_OKF_URL is not required — the agentic RAG
-#     works in the legacy posture.
-#   1 — the pillar runs: the identity join is part of the retrieval, and
+# stack (the OKF_ENABLED section above) — no second variable, and no second
+# copy of what the flag means stack-wide. What the flag means FOR THE AGENT:
+#   the pillar OFF — the agent does not look for the OKF control plane at
+#     all (the CAP-1 identity join is not attempted, so the retrieval is
+#     never degraded for a join that could not resolve) and AGENT_OKF_URL
+#     is not required: the agentic RAG works in the legacy posture.
+#   the pillar ON — the identity join is part of the retrieval, and
 #     AGENT_OKF_URL is required (an unset URL is answered 503 with the code
 #     run_surface_unconfigured naming what is missing).
 # The shared corpus/model endpoints the agent service's assembly reads at

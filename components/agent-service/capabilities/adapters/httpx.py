@@ -46,18 +46,23 @@ class HttpxTransport:
         """
         raise TransportTimeoutError(f"{type(failure).__name__}: {failure}") from failure
 
-    async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]:
+    async def _request(self, timeout_s: float, send):
+        """Run one call and read its answer: the status and the JSON body.
+
+        The client is per call (the deployed seam's shape — see the class
+        docstring); the timeout and the TLS knob ride that call. The two
+        verbs differ in their request, not in their failure handling, so
+        the handling lives here and each verb states only its request.
+        """
         try:
             async with httpx.AsyncClient(timeout=timeout_s, verify=self._verify) as client:
-                response = await client.get(url, headers=headers)
+                response = await send(client)
         except httpx.TimeoutException as failure:
             self._raise_transport_failure(failure)
         return response.status_code, response.json()
 
+    async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]:
+        return await self._request(timeout_s, lambda client: client.get(url, headers=headers))
+
     async def post_json(self, url: str, headers: dict, payload: dict, timeout_s: float) -> tuple[int, Any]:
-        try:
-            async with httpx.AsyncClient(timeout=timeout_s, verify=self._verify) as client:
-                response = await client.post(url, headers=headers, json=payload)
-        except httpx.TimeoutException as failure:
-            self._raise_transport_failure(failure)
-        return response.status_code, response.json()
+        return await self._request(timeout_s, lambda client: client.post(url, headers=headers, json=payload))

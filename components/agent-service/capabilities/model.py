@@ -11,7 +11,7 @@ and the adapters exchange these shapes, so they are a port.
 
 import math
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol, runtime_checkable
 
 # The model identity's vocabulary: where the served model id came from.
 MODEL_SOURCE_OVERRIDE = "override"
@@ -106,6 +106,20 @@ class ModelTurn:
     finish_reason: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+
+
+@runtime_checkable
+class ModelTransport(Protocol):
+    """The HTTP seam the model client speaks: two verbs, JSON in and out.
+
+    The client names this Protocol, never a transport library — the
+    production transport is the httpx adapter, and the tests answer it with
+    a fake.
+    """
+
+    async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]: ...
+
+    async def post_json(self, url: str, headers: dict, payload: dict, timeout_s: float) -> tuple[int, Any]: ...
 
 
 class LoopModelClient(Protocol):

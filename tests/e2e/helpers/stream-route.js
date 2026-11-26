@@ -44,7 +44,7 @@ const CORS_HEADERS = { 'access-control-allow-origin': '*' };
  * WITH the chunks); `options.verdict` carries the projection payload
  * and emits an `agent_verdict` frame after the last chunk, before the
  * metadata frame — the pinned terminal order (agent-frame-writer.js).
- * A two-arg call builds exactly the legacy bytes, so the
+ * A two-arg call builds the deployed bytes, so the
  * five existing event types keep their dialect by construction.
  */
 function sseBody(chunks, metadata, options = {}) {
@@ -76,7 +76,14 @@ function sseBody(chunks, metadata, options = {}) {
     frames.push(frameLine({ type: 'agent_verdict', version: 1, ...verdictProjection }));
   }
   if (metadata) frames.push(frameLine({ type: 'metadata', ...metadata }));
-  return [...frames, '', frameLine({ type: 'done', queryId: 'mock-query-1' }), ''].join('\n');
+  frames.push(frameLine({ type: 'done', queryId: 'mock-query-1' }));
+  // The DEPLOYED bytes: every frame is `data: {...}` terminated by a blank
+  // line — the backend's ONE writer (sse-frame.js) writes the legacy
+  // frames, the agentic frames and the error frame the same way, and the
+  // app reads them line by line. The mock speaks those bytes: a mock that
+  // speaks a dialect the backend never writes proves the app against a
+  // stream that does not exist.
+  return frames.map((line) => `${line}\n\n`).join('');
 }
 
 /**

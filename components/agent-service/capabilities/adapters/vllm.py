@@ -23,6 +23,7 @@ from capabilities.model import (
     MODEL_SOURCE_DISCOVERED,
     MODEL_SOURCE_OVERRIDE,
     MODEL_SOURCE_UNRESOLVED,
+    ModelTransport,
     ModelTurn,
     ToolCallRequest,
     VllmModelConfig,
@@ -53,7 +54,7 @@ class VllmModelClient:
     process; the discovered model id is resolved once.
     """
 
-    def __init__(self, config: VllmModelConfig, transport):
+    def __init__(self, config: VllmModelConfig, transport: ModelTransport):
         self._config = config
         self._transport = transport
         self._model_id: str | None = None

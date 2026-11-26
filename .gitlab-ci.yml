@@ -1308,6 +1308,22 @@ container_scanning:
 # the build-patches files its Dockerfile COPYs — install_site_startup.sh in
 # all five, docarray_alias_shim.py in retriever/reranker/dataprep,
 # unstructured_html_pi_patch.py in dataprep only.
+# The agent service's own paths: its image jobs and its test lane answer the
+# same question — "did the service change?" — so the list is named once.
+.agent_service_source_changes: &agent_service_source_changes
+  ["components/agent-service/**/*", ".gitlab-ci.yml"]
+
+# The seam's trigger list: the vocabulary drift guard (the BFF's
+# tests/test_wire_contract.py) lives in the agent-service lane, so that lane
+# must run when the seam's CONSUMER changes too — the three rules below
+# answer the same question and must not drift apart.
+.agent_service_seam_changes: &agent_service_seam_changes
+  - "components/agent-service/**/*"
+  - "components/gov-chat-backend/services/agent-frame-writer.js"
+  - "components/gov-chat-backend/services/agent-json-result.js"
+  - "components/gov-chat-backend/services/agent-seam-parser.js"
+  - ".gitlab-ci.yml"
+
 .chatqna_server_source_changes: &chatqna_server_source_changes
   [ "genie-ai-overlay/chatqna/**/*", "components/gov-chat-backend/services/translation/language-maps/language-registry.json", "genie-ai-overlay/core/**/*", "genie-ai-overlay/tracing.py", "genie-ai-overlay/build-patches/comps_llm_stream_offloop_patch.py", "genie-ai-overlay/build-patches/install_site_startup.sh", "genie-ai-overlay/contracts/**/*", "configs/ssl/**/*", ".gitlab-ci.yml" ]
 
@@ -2300,13 +2316,13 @@ build:agent-service:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
 
 scan:agent-service:
   <<: *scan_template
@@ -2324,13 +2340,13 @@ scan:agent-service:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
 
 promote:agent-service:
   <<: *promote_template
@@ -2348,13 +2364,13 @@ promote:agent-service:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths: *agent_service_source_changes
 
 # genie-ai-agent-server — test lane: the service's own suite (health, the
 # observability gate, the span export and its PII redaction).
@@ -2386,28 +2402,13 @@ test:agent-service:
         # The BFF's seam files are in the list: the vocabulary drift guard
         # (tests/test_wire_contract.py) lives in THIS lane, so the lane must
         # run when the seam's consumer changes too.
-        paths:
-          - "components/agent-service/**/*"
-          - "components/gov-chat-backend/services/agent-frame-writer.js"
-          - "components/gov-chat-backend/services/agent-json-result.js"
-          - "components/gov-chat-backend/services/agent-seam-parser.js"
-          - ".gitlab-ci.yml"
+        paths: *agent_service_seam_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths:
-          - "components/agent-service/**/*"
-          - "components/gov-chat-backend/services/agent-frame-writer.js"
-          - "components/gov-chat-backend/services/agent-json-result.js"
-          - "components/gov-chat-backend/services/agent-seam-parser.js"
-          - ".gitlab-ci.yml"
+        paths: *agent_service_seam_changes
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths:
-          - "components/agent-service/**/*"
-          - "components/gov-chat-backend/services/agent-frame-writer.js"
-          - "components/gov-chat-backend/services/agent-json-result.js"
-          - "components/gov-chat-backend/services/agent-seam-parser.js"
-          - ".gitlab-ci.yml"
+        paths: *agent_service_seam_changes
 
 # genie-ai-ragas-service (OKF RAGAS benchmark sidecar)
 build:ragas-service:
@@ -3907,8 +3908,12 @@ lint:agent-service:
         - lint-python-
   script:
     - cd components/agent-service
-    - ruff check app.py tracing.py lane.py assembly.py capabilities/ preparation/ noagent/ agent/ measurement/ tests/
-    - ruff format --check app.py tracing.py lane.py assembly.py capabilities/ preparation/ noagent/ agent/ measurement/ tests/
+    # The component root, not an enumeration of its directories: an
+    # enumeration drifts the day a directory is added, and the new one is
+    # then never linted. The ruff config is the component's pyproject.toml,
+    # which the root carries.
+    - ruff check .
+    - ruff format --check .
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

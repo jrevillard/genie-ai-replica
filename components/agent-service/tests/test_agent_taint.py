@@ -15,15 +15,24 @@ import asyncio
 import re
 
 from conftest import (
+    GOVERNED_CONTEXT,
+    PROBE_OPERATION_BUDGET,
     AgentFakePort,
+    CancellationToken,
+    EventEmitter,
+    LoopRunner,
+    RunBudgetMonitor,
     ScriptedLoopModel,
     _governed_loop,
     canned_read_result,
     canned_search_result,
     multihop_turns,
+    run_budget,
 )
 
+from agent.loop import AgentLoop
 from agent.taint import INSTRUCTION_MARKERS, scan_text, scan_tool_result
+from agent.toolset import document_toolset
 from capabilities.contract import LegacyFileProvenance, OkfConceptProvenance, SearchHit
 
 HOSTILE = (
@@ -124,6 +133,35 @@ def test_a_hostile_read_is_recorded_everywhere_and_still_passes_as_data():
     # scripted answer shows the task was followed, not the injection.
     served = [message for request in model.requests for message in request["messages"]]
     assert any(message.get("role") == "tool" and HOSTILE in message.get("content", "") for message in served)
+
+
+def test_the_taint_scan_runs_even_when_no_ledger_is_wired():
+    """A safety scan that waits for something to record its findings is a
+    scan that silently does not run.
+
+    The verification ledger is where a finding is DETAILED; the detection
+    itself belongs to the dispatcher, whatever the run carries. A hostile
+    document is counted on the usage record even with no pipeline wired.
+    """
+    port = AgentFakePort(
+        search_result=canned_search_result(),
+        read_result=canned_read_result(content=HOSTILE),
+    )
+    monitor = RunBudgetMonitor(run_budget())
+    runner = LoopRunner(
+        AgentLoop(),
+        model=ScriptedLoopModel(multihop_turns(answer="The grievance process takes thirty days.")),
+        registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
+        monitor=monitor,
+        token=CancellationToken(),
+        emitter=EventEmitter(run_id="run-1", sink=lambda _event: None),
+        verifier=None,
+        instruction="the production prompt",
+    )
+
+    asyncio.run(runner.run("How are complaints handled?"))
+
+    assert monitor.injection_findings == 1
 
 
 def test_a_clean_run_records_no_findings():

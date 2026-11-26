@@ -8,7 +8,6 @@
 const sendConditional = require('../lib/conditional-get');
 
 function harness(body) {
-  const set = {};
   const res = {
     headers: {},
     body: null,
@@ -62,7 +61,6 @@ test('matched If-None-Match → 304, no body', () => {
 test("'*' matches any validator", () => {
   const { res, reqFor, body } = harness({ a: 1 });
   sendConditional(reqFor(null), res, body);
-  const etag = res.headers.etag;
   const fresh = harness(body);
   sendConditional(fresh.reqFor('*'), fresh.res, fresh.body);
   expect(fresh.res.statusCode).toBe(304);

@@ -3,10 +3,15 @@
 """The model call's contract: what a model turn IS, and the seam that
 produces one.
 
-The two dataclasses and the protocol live here, not in the core's loop:
-the client that produces a turn is an adapter, and an adapter may not
-import the core (rule L1 binds the leaf adapters to the ports). The core
-and the adapters exchange these shapes, so they are a port.
+This module is a PORT: the shapes (``ModelTurn``, ``ToolCallRequest``,
+``VllmModelConfig``), the protocols (``ModelTransport``,
+``LoopModelClient``) and the shared request-shape helpers (the URL, the
+headers, the payload) live here so the core and the adapters exchange
+them without either importing the other.
+
+The client that produces a turn is an adapter, and an adapter may not
+import the core (rule L1 binds the leaf adapters to the ports) — which
+is why the shapes the core hands the adapter are declared HERE.
 """
 
 import math
@@ -184,6 +189,9 @@ def coerce_int(value) -> int | None:
     return None
 
 
+MAX_SANE_TOKENS = 10_000_000
+
+
 def coerce_sane_int(value) -> int | None:
     """Coerce a JSON scalar to an int inside the sane token bound, or None.
 
@@ -197,9 +205,6 @@ def coerce_sane_int(value) -> int | None:
     if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
         return coerced
     return None
-
-
-MAX_SANE_TOKENS = 10_000_000
 
 
 @dataclass(frozen=True)

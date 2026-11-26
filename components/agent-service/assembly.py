@@ -111,6 +111,30 @@ class _PillarNotDeployed:
         )
 
 
+def _arango_db_factory(arango_config: ArangoConfig):
+    """The one Arango client and the one factory the assembly hands out.
+
+    The client is built HERE (the import stays a call-time import, so the
+    seam stays import-light) and the factory closes over it: two copies of
+    this closure were two clients, two factories and two signatures.
+    """
+    import arango
+
+    client = arango.ArangoClient(hosts=arango_config.url)
+
+    def db_factory(_graph_name: str = ""):
+        # One factory for the whole assembly: the search capability names
+        # the graph it searches, the chunk adapter does not — the handle is
+        # the same database either way.
+        return client.db(
+            arango_config.database,
+            username=arango_config.username,
+            password=arango_config.password,
+        )
+
+    return db_factory
+
+
 def build_metadata_source(env=None) -> DocRepoAdapter:
     """The document repository's port: the adapter that resolves a legacy
     file id to the document's own record (its name, its labels).
@@ -180,20 +204,7 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     # dependency only a live assembly needs, and keeping it off the module
     # import path keeps importing the seam (loop/budget/events consumers)
     # free of it.
-    import arango
-
-    client = arango.ArangoClient(hosts=arango_config.url)
-
-    def db_factory(_graph_name: str = ""):
-        # One factory for the whole assembly: the search capability names
-        # the graph it searches, the chunk adapter does not — the handle is
-        # the same database either way.
-        return client.db(
-            arango_config.database,
-            username=arango_config.username,
-            password=arango_config.password,
-        )
-
+    db_factory = _arango_db_factory(arango_config)
     search = build_search_capability(env, db_factory=db_factory, arango_config=arango_config)
 
     return StatelessAdapters(
@@ -227,17 +238,8 @@ def build_search_capability(env=None, db_factory=None, arango_config=None):
     if db_factory is None or arango_config is None:
         # The driver import lives here, not at module import, so the port
         # surface stays import-light for the tests that fake the adapters.
-        import arango
-
         arango_config = ArangoConfig.load(env)
-        client = arango.ArangoClient(hosts=arango_config.url)
-
-        def db_factory(_graph_name: str):
-            return client.db(
-                arango_config.database,
-                username=arango_config.username,
-                password=arango_config.password,
-            )
+        db_factory = _arango_db_factory(arango_config)
 
     # The embedding call carries ITS OWN budget, under the knob names the
     # deployed embed clients read — not the reranker's.

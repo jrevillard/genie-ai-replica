@@ -232,11 +232,7 @@ def build_pipeline():
     """
     sys.path.insert(0, AGENT_SERVICE_HOME)
     from agent.orchestrator import OrchestratorConfig
-    from assembly import (
-        build_concept_source,
-        build_metadata_source,
-        build_search_capability,
-    )
+    from assembly import build_stateless_adapters
     from capabilities.adapters.httpx import HttpxTransport
     from lane import AdmissionLane
     from noagent.config import NoAgentConfig
@@ -245,25 +241,26 @@ def build_pipeline():
     env = dict(os.environ)
     orchestrator_config = OrchestratorConfig.load(env)
     noagent_config = NoAgentConfig.load(env)
-    capability = build_search_capability(env)
     budget = orchestrator_config.operation_budget
     transport = HttpxTransport(noagent_config.tls_verify)
     lane = AdmissionLane.from_config(noagent_config)
-    metadata_source = build_metadata_source(env)
-    # The OKF server, through ITS port: the concepts' names are read from
-    # the card the server served, like the documents' names come from the
-    # document repository (ADR agentic-009, F5).
-    concept_source = build_concept_source(env)
+    # The host's port assembly — the SAME assembly the governed run's port
+    # builds: the search capability, the document repository's port (the
+    # documents' names) and the OKF server's port (the concepts' names, read
+    # from the card the server served — ADR agentic-009, F5) come from one
+    # place, so the driver cannot wire one of them differently from the
+    # deployment it measures.
+    adapters = build_stateless_adapters(env)
 
     pipeline = NoAgentPipeline.create(
         noagent_config,
-        capability,
+        adapters.search_port,
         budget,
         transport,
         lane,
         env,
-        metadata_source=metadata_source,
-        concept_source=concept_source,
+        metadata_source=adapters.docrepo,
+        concept_source=adapters.okf,
     )
     generation = getattr(pipeline, "_generation", None)
     model_id = resolve_model_id(generation)

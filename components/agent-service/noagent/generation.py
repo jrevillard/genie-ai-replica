@@ -198,7 +198,7 @@ class TokenCounter:
         """
         model_id = await self._model_id_getter()
         url = f"{self._config.generation_endpoint}/tokenize"
-        headers = {"Authorization": f"Bearer {self._config.probe_bearer}"} if self._config.probe_bearer else {}
+        headers = chat_auth_headers(self._config.probe_bearer)
         try:
             status, body = await self._transport.post_json(
                 url, headers, {"model": model_id, "prompt": text}, self._config.probe_timeout_seconds

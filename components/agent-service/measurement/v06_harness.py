@@ -55,19 +55,20 @@ import httpx
 
 from agent.budget import RunBudgetMonitor
 from agent.cancellation import CancellationToken
-from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter, EventKind
 from agent.governance import governed_run
 from agent.loop import AgentLoop
 from agent.registry import ToolDefinition, ToolRegistry
-from agent.runtime import BoundedModelClient, RunInputs
+from agent.runtime import build_run_inputs
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.model import (
     RECORDED_SAMPLING_PARAMS,
     VllmModelConfig,
+    chat_auth_headers,
     chat_choice,
     chat_choice_content,
+    chat_completions_url,
     coerce_sane_int,
 )
 from measurement.probe import PROBE_RUN_BUDGET
@@ -732,21 +733,6 @@ class HttpxSseStream:
             self._closed = True
 
 
-def chat_completion_url(config: VllmModelConfig) -> str:
-    return f"{config.generation_endpoint}/v1/chat/completions"
-
-
-def _auth_headers(config: VllmModelConfig) -> dict:
-    return {"Authorization": f"Bearer {config.bearer}"} if config.bearer else {}
-
-
-def _discovery_headers(config: VllmModelConfig) -> dict:
-    """The discovery credential: the probe client's rule (``discovery_bearer``),
-    so the harness's discovery measures the same auth path the probe's
-    ``/v1/models`` probe uses — not the generation bearer."""
-    return {"Authorization": f"Bearer {config.discovery_bearer}"} if config.discovery_bearer else {}
-
-
 def _matrix_payload(mode: str, strictness: str, *, streaming: bool, model_id: str) -> dict:
     definition = {
         "type": "function",
@@ -780,8 +766,8 @@ def _sse_factory(config: VllmModelConfig):
 
     def build(payload: dict) -> SseStream:
         return HttpxSseStream(
-            chat_completion_url(config),
-            _auth_headers(config),
+            chat_completions_url(config.generation_endpoint),
+            chat_auth_headers(config.bearer),
             payload,
             verify=config.tls_verify,
             timeout_s=config.llm_timeout_seconds,
@@ -819,7 +805,10 @@ async def run_cell(
 
 async def _run_nonstreaming_cell(config: VllmModelConfig, transport, payload: dict) -> ToolCallObservation:
     status, body = await transport.post_json(
-        chat_completion_url(config), _auth_headers(config), payload, config.llm_timeout_seconds
+        chat_completions_url(config.generation_endpoint),
+        chat_auth_headers(config.bearer),
+        payload,
+        config.llm_timeout_seconds,
     )
     if status >= 400:
         raise VerificationTransientError(f"the endpoint answered {status}: {str(body)[:_ERROR_PREVIEW_CHARS]}")
@@ -902,7 +891,9 @@ async def read_endpoint_identity(config: VllmModelConfig, transport, venue: str 
     version_note: str | None = None
     url = f"{config.generation_endpoint}/version"
     try:
-        status, body = await transport.get_json(url, _discovery_headers(config), config.discovery_timeout_seconds)
+        status, body = await transport.get_json(
+            url, chat_auth_headers(config.discovery_bearer), config.discovery_timeout_seconds
+        )
         if status < 400:
             version_raw = json.dumps(body)[:_ERROR_PREVIEW_CHARS]
         else:
@@ -927,7 +918,9 @@ async def _discover_model(config: VllmModelConfig, transport) -> tuple[str | Non
         return config.model_id_override, None
     url = f"{config.generation_endpoint}/v1/models"
     try:
-        status, body = await transport.get_json(url, _discovery_headers(config), config.discovery_timeout_seconds)
+        status, body = await transport.get_json(
+            url, chat_auth_headers(config.discovery_bearer), config.discovery_timeout_seconds
+        )
     except Exception as failed:  # noqa: BLE001
         raise VerificationTransientError(f"the model discovery failed: {_error_preview(failed)}") from failed
     if status >= 400:
@@ -1196,22 +1189,19 @@ async def demo_loop_cancel(config: VllmModelConfig, transport, model_id: str | N
     registry = ToolRegistry()
     registry.register(_CLOCK_TOOL, _read_clock_executor)
     monitor = _demo_monitor()
-    dispatcher = ToolDispatcher(registry=registry, monitor=monitor, token=token, emitter=emitter)
     loop = AgentLoop()
-    inputs = RunInputs(
+    # The run's inputs come from the OWN builder (agent.runtime): the
+    # harness measures the seam, so its wiring must be the seam's wiring.
+    inputs = build_run_inputs(
         question="What time is it right now?",
         instruction="You answer using the provided tools. Answer in English.",
-        tools=registry.definitions(),
-        model=BoundedModelClient(
-            _CancelDuringModelCall(
-                VllmModelClient(config, transport=_DispatchRecordingTransport(transport, recorder)), token, recorder
-            ),
-            monitor,
-        ),
-        dispatcher=dispatcher,
+        registry=registry,
         monitor=monitor,
         token=token,
         emitter=emitter,
+        model_client=_CancelDuringModelCall(
+            VllmModelClient(config, transport=_DispatchRecordingTransport(transport, recorder)), token, recorder
+        ),
     )
     cancelled_error_propagated = False
     error: str | None = None
@@ -1277,7 +1267,10 @@ async def run_plain_control(config: VllmModelConfig, transport, model_id: str) -
     }
     try:
         status, body = await transport.post_json(
-            chat_completion_url(config), _auth_headers(config), payload, config.llm_timeout_seconds
+            chat_completions_url(config.generation_endpoint),
+            chat_auth_headers(config.bearer),
+            payload,
+            config.llm_timeout_seconds,
         )
     except Exception as failed:  # noqa: BLE001 — the control records its failure like a cell
         return PlainControlObservation(

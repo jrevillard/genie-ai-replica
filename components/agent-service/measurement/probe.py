@@ -41,19 +41,18 @@ import json
 import logging
 import os
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
-from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter
 from agent.governance import governed_run
 from agent.loop import AgentLoop
 from agent.runtime import (
     OUTCOME_ANSWERED,
     OUTCOME_CANCELLED,
-    BoundedModelClient,
-    RunInputs,
+    RunResult,
+    build_run_inputs,
 )
 
 # The registered toolset is a production surface, not a probe artifact — it
@@ -134,6 +133,32 @@ class ProbeEvidence:
     completion_tokens: int | None
     error: str | None = None
 
+    @classmethod
+    def from_run(
+        cls, result: RunResult, *, runtime_id: str, toolset: tuple[str, ...], question_id: str
+    ) -> "ProbeEvidence":
+        """One evidence record, built from the run's terminal record.
+
+        ONE field list, in ONE place: a copy of the counters at each call
+        site is a list that drifts — a counter added to the run's record
+        would be missing from the probe's evidence until someone remembers
+        both lists.
+        """
+
+        return cls(
+            runtime_id=runtime_id,
+            toolset=toolset,
+            question_id=question_id,
+            outcome=result.outcome,
+            steps=result.steps,
+            model_calls=result.model_calls,
+            tool_calls=result.tool_calls,
+            wall_clock_seconds=result.wall_clock_seconds,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            error=result.error,
+        )
+
     def as_dict(self) -> dict:
         return asdict(self)
 
@@ -163,69 +188,38 @@ async def run_probe(
     token = token if token is not None else CancellationToken()
     registry = document_toolset(port, context, operation_budget)
     emitter = EventEmitter(run_id=f"probe-{uuid.uuid4().hex}")
-    dispatcher = ToolDispatcher(registry=registry, monitor=monitor, token=token, emitter=emitter)
     loop = AgentLoop()
-    inputs = RunInputs(
+    # The run's inputs are assembled by the OWN builder
+    # (agent.runtime.build_run_inputs): a hand-assembly here is a second
+    # copy of the wiring, and a copy that drifts — a change to the
+    # builder (the bound, the dispatcher) would leave the probe measuring
+    # a different seam than the one it measures on purpose.
+    inputs = build_run_inputs(
         question=question,
         instruction=PROBE_SYSTEM_PROMPT,
-        tools=registry.definitions(),
-        model=BoundedModelClient(model_client, monitor),
-        dispatcher=dispatcher,
+        registry=registry,
         monitor=monitor,
         token=token,
         emitter=emitter,
+        model_client=model_client,
     )
-
-    def _record(
-        outcome: str,
-        *,
-        steps: int,
-        model_calls: int,
-        tool_calls: int,
-        wall_clock_seconds: float,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
-        error: str | None = None,
-    ) -> ProbeEvidence:
-        """One evidence record: the run identity is the probe's, the counts are the run's."""
-        return ProbeEvidence(
-            runtime_id=RUNTIME_ID,
-            toolset=TOOLSET,
-            question_id=question_id,
-            outcome=outcome,
-            steps=steps,
-            model_calls=model_calls,
-            tool_calls=tool_calls,
-            wall_clock_seconds=wall_clock_seconds,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            error=error,
-        )
 
     try:
         result = await governed_run(loop, inputs, verifier=None)
     except asyncio.CancelledError:
         # The loop's RunResult never exists on this path; the monitor's
         # partial counts are the honest record.
-        return _record(
-            OUTCOME_CANCELLED,
-            steps=monitor.steps,
-            model_calls=monitor.model_calls,
-            tool_calls=monitor.tool_calls,
-            wall_clock_seconds=monitor.elapsed_seconds,
+        # The run's terminal record never exists on this path; the
+        # monitor's partial counts are the honest record — and its token
+        # counts are NOT comparable (a cancelled run served part of its
+        # context), so they stay None.
+        cancelled = replace(
+            RunResult.from_monitor(monitor, OUTCOME_CANCELLED),
             prompt_tokens=None,
             completion_tokens=None,
         )
-    return _record(
-        result.outcome,
-        steps=result.steps,
-        model_calls=result.model_calls,
-        tool_calls=result.tool_calls,
-        wall_clock_seconds=result.wall_clock_seconds,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
-        error=result.error,
-    )
+        return ProbeEvidence.from_run(cancelled, runtime_id=RUNTIME_ID, toolset=TOOLSET, question_id=question_id)
+    return ProbeEvidence.from_run(result, runtime_id=RUNTIME_ID, toolset=TOOLSET, question_id=question_id)
 
 
 @dataclass(frozen=True)

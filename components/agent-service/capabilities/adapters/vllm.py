@@ -67,7 +67,7 @@ class VllmModelClient:
         if self._model_id is None:
             url = f"{self._config.generation_endpoint}/v1/models"
             bearer = self._config.discovery_bearer
-            headers = {"Authorization": f"Bearer {bearer}"} if bearer else {}
+            headers = chat_auth_headers(bearer)
             try:
                 status, body = await self._transport.get_json(url, headers, self._config.discovery_timeout_seconds)
             except Exception as e:  # noqa: BLE001 — every discovery failure is transient

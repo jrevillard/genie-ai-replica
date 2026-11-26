@@ -6,7 +6,7 @@
 
 **Architecture:** Four tasks, each green before the next. (1) **The move** — the two tools leave `agent/toolset.py` for `agent/sources.py` and become `DocumentToolSource`; the definitions, the executors, the preparation leg and the insufficiency recorder move VERBATIM, and the byte-identical event stream proves the move changed nothing. (2) **The catalog** — a static JSON deployment file (`configs/agent/tool-catalog.json`) plus a loader and a validator in the HOST (`tool_catalog.py`), carrying the startup rules (a duplicate exposed name is an error; a catalogued tool a source does not serve is a warning and an absent tool). (3) **The assembly** — the orchestrator takes the sources from the HOST (a factory over the per-request bundle) instead of composing the document source itself, and the catalog filters the pairs the sources offer. (4) **The deployment** — the knob, the env template, the compose mount, the ansible seeding and the config-validator gates.
 
-**Tech Stack:** Python 3.11, pytest 9.1.1, pytestarch 5.1.1 (the rules of plan 1), ruff 0.16.3. JSON for the catalog file — the tree carries no YAML parser, and NFR-2 prices every new dependency.
+**Tech Stack:** Python 3.11, pytest 9.1.1, pytestarch 5.1.1 (the rules of plan 1), ruff 0.16.3. JSON for the catalog file — the agent service's own requirements pin no YAML parser, and NFR-2 prices every new dependency.
 
 **Spec:** `docs/superpowers/specs/2026-11-25-agentic-iteration-2-architecture-design.md` — §4.1 (one door), §4.2 (the document source, unchanged), §4.3 (the port), §4.4 (the catalog), §4.5 (the call path), §2.5 (the dependency rules), §8 (budgets, cancellation, errors), §11 (the slices), §13 (non-goals, decisions needed, risks). ADR: `docs/adr/agentic-005-tool-sources-and-mcp-consumption.md`.
 
@@ -14,7 +14,7 @@
 
 - **Where the work lands.** Branch `feat/agentic-foundations/s3-tool-sources`, STACKED on `feat/agentic-foundations/architecture` (merge request !1088, whose target is `feat/agentic-foundations/prd`). The S3 branch's own merge request targets the ARCHITECTURE branch, not the PRD branch: this slice's diff is the stack's diff, and a review that reads `main...HEAD` would read the whole architecture slice with it. Commit on the S3 branch only. Do not push without the operator's word, do not touch `main`, the PRD branch or the architecture branch, never run `git stash`, never run `git reset --hard`.
 - **No path is written in this plan.** Every command block starts with the same guard, which moves to the root of the checkout it is run from and refuses anything but that branch.
-- **The document tools' behaviour is FROZEN.** The recorded contract is `docs/baselines/v02-opea-query-path-contract.md`; `components/agent-service/tests/test_equivalence_v02.py` stays green AND untouched (this plan does not edit that file). The migration MOVES the tools, it does not change them: the definitions, the parameter schemas, the query validation, the preparation leg, the insufficiency envelope and the abstention recorder move verbatim.
+- **The document tools' behaviour is FROZEN.** The recorded contract is `docs/baselines/v02-opea-query-path-contract.md`, and `components/agent-service/tests/test_equivalence_v02.py` stays green AND untouched (this plan does not edit that file) — but read what that suite actually witnesses: it drives the CAPABILITY and the PREPARATION, not the tools. The witness of the tools' behaviour is `tests/test_agent_toolset.py` — the suite this plan RENAMES. So the freeze is carried by that suite's pins (kept EXACTLY as they are) plus the definitions pin this plan adds, and by the recorded event stream (the fixture does not change). The equivalence suite proves the capability did not move; the renamed suite proves the tools did not change.
 - **The event stream is FROZEN.** `components/agent-service/tests/test_event_stream_gate.py` compares the recorded stream byte for byte and its fixture (`tests/fixtures/event_stream/orchestrated_run.json`) does not change. The gate's CONSTRUCTION may change (the orchestrator's constructor changes — that is the assembly's move), its COMPARISON and its FIXTURE may not.
 - **The registry stays the authorization surface.** A tool absent from the registry is refused before any resolution (`UnregisteredToolError`); a duplicate exposed name is refused by `ToolRegistry.register`. The catalog decides what is REGISTERED; the registry decides what is CALLABLE. Neither replaces the other.
 - **The core composes nothing.** The sources are declared by the HOST (the composition root: `app.py` / `tool_catalog.py`). The core asks the declared sources for the tools they offer and registers the pairs it is handed.
@@ -44,6 +44,7 @@ Beyond this slice: the MCP source and the `mcp` SDK (S6), the pydantic-ai spike 
 | `components/agent-service/agent/registry.py` | the authorization surface, plus `build_registry(pairs)` | 1 |
 | `components/agent-service/agent/orchestrator.py` | the per-request assembly: the sources come from the host | 1, 3 |
 | `components/agent-service/agent/__init__.py` | the package's exports | 1 |
+| `docs/adr/agentic-005-tool-sources-and-mcp-consumption.md` | its Context sentence and its References line name the module this plan deletes | 1 |
 | `components/agent-service/measurement/probe.py` | the probe's registry, built over the source | 1 |
 | `components/agent-service/tool_catalog.py` | **the host's** catalog: the model, the loader, the startup validation, the per-request filter | 2, 3 |
 | `configs/agent/tool-catalog.json` | the deployment file — the two document entries | 2 |
@@ -62,16 +63,16 @@ Beyond this slice: the MCP source and the `mcp` SDK (S6), the pydantic-ai spike 
 
 Each was checked against the code before being written here.
 
-- **The catalog is JSON, and it lives under the repo's `configs/` home.** `configs/` is the repository's configuration home (`otel/`, `grafana/`, `keycloak/`), and the catalog is a DEPLOYMENT file, not source. The extension is JSON because the service's tree carries no YAML parser (`grep -rn "import yaml" components/ genie-ai-overlay/` finds nothing): a YAML catalog would put a new package in the audited tree for a file the deployment reads once — NFR-2 prices that, and A6 forbids the adoption for flexibility's sake.
+- **The catalog is JSON, and it lives under the repo's `configs/` home.** `configs/` is the repository's configuration home (`otel/`, `grafana/`, `keycloak/`), and the catalog is a DEPLOYMENT file, not source. The extension is JSON because the AGENT SERVICE's own tree pins no YAML parser (`components/agent-service/requirements.txt` and `requirements-test.txt` name no `yaml` package): a YAML catalog would put a new package in the audited tree for a file the deployment reads once — NFR-2 prices that, and A6 forbids the adoption for flexibility's sake. (The wider repository DOES parse YAML elsewhere — the OPEA overlay pins `pyyaml`, and the frontend imports a YAML grammar for its editor — which is exactly why the claim is scoped to this service's tree.)
 - **The catalog is entirely the HOST's.** The core never learns what a catalog is. The host loads it, validates it, and offers the run only the pairs the catalog allows; the core's registry stays the authorization surface, so the model's list and the dispatcher always agree. The alternative (a catalog model in the core) would put a deployment concept inside the core for no gain — the core has no opinion about WHICH tools exist.
 - **"Startup" means the ASSEMBLY, not the process boot.** The agent service builds its orchestrator lazily, on the first run request (`app.py`'s `_runtime()`), and the repository's contract says so ("the config is read lazily, so a mis-set policy still boots green until then"). A catalog defect is therefore a `ValueError` at assembly → the run surface's honest 503 (`run_surface_unconfigured`) naming the file and the defect. No request is ever served by a broken catalog, and the container's boot is not coupled to the file's content.
-- **The port carries two facts beside `tools()`.** The design's §4.3 signature is reproduced verbatim; beside it the port declares `source_id` (the catalog's `source` field names it) and `served_tool_names` (the §4.4 startup rules need to know what a source serves, and §4.3's single method cannot answer it before a caller exists — the context arrives with the call). This is the one place where the design is silent about the port's shape, and the silence is resolved by §4.4's own requirements.
+- **The port is the design's §4.3 protocol, verbatim — ONE method.** The design is NOT silent about the port's shape: it writes the protocol out (`docs/superpowers/specs/2026-11-25-agentic-iteration-2-architecture-design.md:259-260`), and ADR agentic-005 §1 says the same ("A `ToolSource` returns `(ToolDefinition, ToolExecutor)` pairs for a caller context and a bearer"). The port is therefore reproduced exactly, and the deployment's two extra facts — the id the catalog's `source` field names a source by, and the tools it serves — are the HOST's, not the port's: the host holds the catalog (§4.4) and the host discovers a source's tools at startup (§4.4's "MCP tools are discovered at startup"). The core reads neither, so declaring them on the port would put the catalog's vocabulary in the core's contract for nothing. `DocumentToolSource` keeps them as class attributes — the host reads them off the concrete class it declares.
 - **The identity arrives with the CALL.** The source is built per request (the operation budget, the preparation leg and the insufficiency recorder are the run's), and `tools(context, bearer)` hands the executor its identity. Derived from the design's "each executor captures that request's identity".
 - **The per-request bundle carries the run's wiring.** `ToolSourceContext` holds the caller's context, the bearer, the operation budget, the preparer, the preparation-status sink and the abstention recorder. The core owns the run's monitor, preparer and sinks; the host builds the sources FROM the bundle. That is what keeps the preparation leg where it is (the document source's business) while the core composes nothing.
-- **The catalog's per-tool budget may only TIGHTEN the deployment's ceiling.** The `AGENT_TOOL_*` knobs stay the deployment's ceiling on every tool (AD-6: the budget is server configuration); an entry that declares a budget may lower a dimension, never raise it, and an entry above the ceiling is a startup error naming the entry, the dimension and the two numbers. An entry with no budget uses the ceiling.
+- **The catalog's per-tool budget may only TIGHTEN the deployment's ceiling.** The `AGENT_TOOL_*` knobs stay the deployment's ceiling on every tool; an entry that declares a budget may lower a dimension, never raise it, and an entry above the ceiling is a startup error naming the entry, the dimension and the two numbers. An entry with no budget uses the ceiling. This tightening is the PLAN's own conservative default, not a rule the spec states: the catalog IS server configuration (AD-6 says exactly that, and §4.4 calls the catalog a static deployment file), so a deployment file *could* widen a bound. The trade-off is named: an operator who needs a per-tool bound above the `AGENT_TOOL_*` ceiling has no way to say so until this is revisited — a bound the environment sets for EVERY tool stays the bound for every tool.
 - **`allow` is the per-entry switch.** The design names the field without defining it. The catalog IS the allow-list, so `allow: false` keeps the entry (and its budget, its risk, its scopes) while taking the tool out of the run — neither listed nor dispatchable. It is not an error: switching a tool off is an operation, not a defect.
-- **The fields this deployment cannot HONOUR are refused at startup, never ignored.** A required `scopes` list (the enforcement lands with the identity slice's `CallerContext.scopes`, §4.8), `risk: write` or `requires_approval: true` (no approval path until ADR agentic-006), and `egress: open_web` (no PII egress path until plan 2) are startup errors naming the entry. A catalog that DECLARED a scope and was silently unenforced would be a lie the deployment believes — the same reason the field is carried in the schema now and enforced later.
-- **An entry naming an UNDECLARED source is an error; an entry naming a DECLARED source that does not serve the tool is a warning.** A typo must not silently disable a tool (error, naming the declared sources); the design's own sentence covers the served-but-not case (warning, and the tool is absent).
+- **The fields this deployment cannot HONOUR cost the ENTRY, not the service.** A required `scopes` list (the enforcement lands with the identity slice's `CallerContext.scopes`, §4.8), `risk: write` or `requires_approval: true` (no approval path until ADR agentic-006), and `egress: open_web` (no PII egress path until plan 2) are refused: the ENTRY is dropped with a loud startup ERROR naming it, and the rest of the catalog loads. The entry's tool is therefore ABSENT — never listed, never dispatchable — so nothing is ever served unenforced, and one mis-declared entry does not take the whole run surface down. (The ADR agentic-005 §7 rule is PER REQUEST — "a tool whose required scopes are not all present is not registered for that request" — and it needs `CallerContext.scopes`, which lands with the identity slice. Until then this plan's rule is STRICTER: the entry is refused for EVERY caller, at startup. The deviation is stated in "What it leaves open".)
+- **One rule for every refusal: the ENTRY is refused, the catalog still loads.** A DUPLICATE exposed name is the file's own defect (two tools with one name — the model would see an ambiguity), so it fails the whole catalog. Every other refusal — an entry naming a source this deployment does not declare, a server-scoped tool, a required scope, a write, an approval, an open-web egress — costs the ENTRY: a loud startup ERROR names it, the tool is absent (never listed, never dispatchable), and the rest of the deployment's tools keep working. One mis-declared entry must not take the whole run surface down, and the entry that is refused is exactly the one that must not be served. The design's own sentence covers the served-but-not case (a warning, and the tool is absent).
 - **`server` and `tool` are carried by the schema and required to be null in this slice.** The design's field list names them (the MCP slice's addressing); no MCP source is deployed, so an entry that names a server names a source that does not exist — refused by the rule above.
 - **The two tools' definitions and executors move VERBATIM.** The description strings, the parameter schemas, the `_QUERY_TEXT` validation, the preparation leg, the `_unprepared_envelope`, the `TransientError` on a translation overflow and the abstention recorder move as they are. The only change is where the caller's identity enters.
 - **The registry gains a builder, not a second door.** `build_registry(pairs)` loops over `ToolRegistry.register` — the duplicate refusal stays exactly where it was, and the orchestrator and the probe share one assembly.
@@ -141,9 +142,9 @@ the baseline that suite starts from.
 **Interfaces:**
 - Consumes: `agent.registry.ToolDefinition`, `ToolExecutor`, `ToolRegistry`; `capabilities.contract.CallerContext`, `DocumentCapabilityPort`, `OperationBudget`, `OperationName`, `OutcomeCode`, `PreparedQuery`, `QueryPreparationStatus`, `ReadSourceInput`, `SearchKnowledgeInput`, `SearchKnowledgeResult`, `SourceRef`, `TransientError`; `preparation.detection.detect_language`; `preparation.translation.TranslationInputTooLongError`; `preparation.prepare.QueryPreparer`.
 - Produces:
-  - `sources.ToolSource` — the port: `source_id: str`, `served_tool_names: frozenset[str]`, `def tools(self, context: CallerContext, bearer: str | None) -> Sequence[tuple[ToolDefinition, ToolExecutor]]`.
+  - `sources.ToolSource` — the port, the design's §4.3 protocol verbatim: `def tools(self, context: CallerContext, bearer: str | None) -> Sequence[tuple[ToolDefinition, ToolExecutor]]`.
   - `sources.ToolSourceContext` — the per-request bundle: `context`, `bearer`, `operation_budget`, `preparer`, `on_preparation_status`, `abstention_sink`.
-  - `sources.DocumentToolSource` — the two document tools, moved unchanged (`source_id = "document"`, `served_tool_names = frozenset({"search_knowledge", "read_source"})`).
+  - `sources.DocumentToolSource` — the two document tools, moved unchanged. It keeps two facts as CLASS attributes (`source_id = "document"`, `served_tool_names = frozenset({"search_knowledge", "read_source"})`) — the host reads them off the concrete class when it declares the source; the PORT does not carry them.
   - `registry.build_registry(pairs: Iterable[tuple[ToolDefinition, ToolExecutor]]) -> ToolRegistry`.
 
 - [ ] **Step 1: The failing test — the source's contract**
@@ -216,6 +217,52 @@ def test_the_executor_carries_the_identity_of_the_call_not_of_the_construction()
     assert call["context"] is second
 ```
 
+And the pin the move's own claim needs — the DEFINITIONS, which nothing in the tree pins today:
+
+```python
+def test_the_tool_definitions_move_verbatim():
+    """The model-facing contract moves byte for byte.
+
+    The definitions are what the model is told: the name, the
+    description and the parameter schema. Nothing else in the tree pins
+    them (the recorded event stream carries the CALLS, not the
+    definitions), so a drifted description or a dropped ``required`` key
+    would pass every other gate of this plan. This pin is the witness.
+    """
+    from agent.sources import READ_SOURCE_DEFINITION, SEARCH_KNOWLEDGE_DEFINITION
+
+    assert SEARCH_KNOWLEDGE_DEFINITION.name == "search_knowledge"
+    assert SEARCH_KNOWLEDGE_DEFINITION.description == (
+        "Search the authorized knowledge corpus. Returns ranked passages with their provenance, "
+        "or an explicit insufficient-evidence outcome."
+    )
+    assert SEARCH_KNOWLEDGE_DEFINITION.parameters == {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "The English search query."},
+        },
+        "required": ["query"],
+    }
+    assert READ_SOURCE_DEFINITION.name == "read_source"
+    assert READ_SOURCE_DEFINITION.description == (
+        "Read one source the search results pointed at. A legacy document is addressed by its "
+        'file_id ("target": {"file_id": ...}); an OKF concept by repo_id and concept_id '
+        '("target": {"repo_id": ..., "concept_id": ...}).'
+    )
+    assert READ_SOURCE_DEFINITION.parameters == {
+        "type": "object",
+        "properties": {
+            "target": {
+                "type": "object",
+                "description": 'Either {"file_id": ...} or {"repo_id": ..., "concept_id": ...}.',
+            },
+        },
+        "required": ["target"],
+    }
+```
+
+(The values are the ones `agent/toolset.py` carries today — copied VERBATIM from that file, not retyped. A retype is how a description drifts by a word.)
+
 - [ ] **Step 2: Run the suite and watch it fail**
 
 ```bash
@@ -240,15 +287,19 @@ compose them: the host names the sources a deployment runs and how they
 are configured, and the core asks each of them for the tools it may
 offer to ONE request.
 
-The port's shape is the design's (§4.3):
+The port's shape is the design's (§4.3), verbatim — the core's contract
+with a source is ONE method:
 
     class ToolSource(Protocol):
-        def tools(self, context: CallerContext, bearer: str | None) -> Sequence[tuple[ToolDefinition, ToolExecutor]]: ...
+        def tools(self, context, bearer) -> Sequence[tuple[ToolDefinition, ToolExecutor]]: ...
 
-Two facts travel beside it, both needed by the deployment's CATALOG
-(§4.4): the source's id (the catalog's ``source`` field names it) and
-the names it serves (the catalog is filtered against them — a catalogued
-tool a source does not serve is a startup warning and an absent tool).
+The deployment's facts about a source — the id the catalog's ``source``
+field names it by, and the tools it serves — do NOT live on the port:
+they are the HOST's, because the HOST is what holds the catalog (§4.4)
+and the host is what discovers a source's tools at startup (the MCP
+source's discovery — §4.4). The host's own record of a declared source
+carries them (``tool_catalog.DeclaredSource``), and the core reads
+neither.
 
 The identity travels with the CALL, never with the construction: the
 source is built per request (the budget, the preparation leg and the
@@ -349,18 +400,14 @@ class ToolSourceContext:
 class ToolSource(Protocol):
     """One declared source of tools.
 
-    ``source_id`` names the source in the deployment's catalog; the
-    catalog's ``source`` field carries it. ``served_tool_names`` is the
-    set the source can serve — the catalog is filtered against it at
-    startup, before any request is served.
+    The design's §4.3 protocol, verbatim: ONE method, and the core reads
+    only that method. The deployment's facts about a source — the id the
+    catalog names it by, the tools it serves — are the HOST's (the host
+    holds the catalog, and the host discovers a source's tools at
+    startup), so the port does not declare them.
     """
 
-    source_id: str
-    served_tool_names: frozenset[str]
-
-    def tools(
-        self, context: CallerContext, bearer: str | None
-    ) -> Sequence[tuple[ToolDefinition, ToolExecutor]]: ...
+    def tools(self, context: CallerContext, bearer: str | None) -> Sequence[tuple[ToolDefinition, ToolExecutor]]: ...
 
 
 class DocumentToolSource:
@@ -589,9 +636,7 @@ from .sources import DocumentToolSource
 In `components/agent-service/measurement/probe.py`, the registry becomes:
 
 ```python
-    registry = build_registry(
-        DocumentToolSource(lambda _context, _bearer: port, operation_budget).tools(context, None)
-    )
+    registry = build_registry(DocumentToolSource(lambda _context, _bearer: port, operation_budget).tools(context, None))
 ```
 
 with the import changed to `from agent.sources import DocumentToolSource` and `from agent.registry import build_registry`.
@@ -606,7 +651,18 @@ from .sources import DocumentToolSource, ToolSource, ToolSourceContext
 
 and in `__all__`, replace `"document_toolset"` with `"DocumentToolSource"`, `"ToolSource"`, `"ToolSourceContext"` (keeping the list's alphabetical order).
 
+The module's own docstring names the module it documents: "the registered toolset (:mod:`.toolset`)" becomes "the tool sources (:mod:`.sources`)" — a Sphinx reference to a deleted module dangles, and the package docstring is the first thing a reader sees.
+
 Delete `components/agent-service/agent/toolset.py` — its content moved, unchanged, into `agent/sources.py`.
+
+**The record that names the deleted module.** `docs/adr/agentic-005-tool-sources-and-mcp-consumption.md` points at it twice — its Context ("the agentic path registers two document tools in `document_toolset` (`components/agent-service/agent/toolset.py`)") and its References line. Both follow the move:
+
+```markdown
+The agentic path registers two document tools behind the `ToolSource` port
+(`components/agent-service/agent/sources.py`).
+```
+
+and in the References, `components/agent-service/agent/toolset.py` becomes `components/agent-service/agent/sources.py`.
 
 **The suites that imported the old builder.** Four files import it today, and deleting the module breaks all four at once — the plan names them in its file list, so the change belongs here rather than at the gate, where the breakage would look like a defect:
 
@@ -692,6 +748,8 @@ git commit -m "refactor(agent-service): the document tools become a source behin
   - `tool_catalog.CatalogError(ValueError)` — the catalog is unusable; the run surface maps it to the honest 503.
   - `tool_catalog.CatalogEntry` — one validated entry (the file's shape).
   - `tool_catalog.ToolCatalog` — the validated catalog: `entries`, `entry(name)`, `allows(name)`.
+  - `tool_catalog.DeclaredSource` — the HOST's record of one source a deployment runs: `source_id`, `served_tool_names`, `build` (the per-request builder). The deployment's facts about a source live here, not on the port.
+  - `tool_catalog.budget_overrides(catalog) -> dict[str, OperationBudget]` — the per-tool budgets the catalog declares, for the host's source builders.
   - `tool_catalog.load_catalog(path, *, served_names, ceiling) -> ToolCatalog` — the loader and the startup validation.
 
 - [ ] **Step 1: The failing test — the catalog's startup rules**
@@ -714,14 +772,18 @@ refusal into a pass — or a warning into silence — turns them red.
 
 import json
 import logging
+from pathlib import Path
 
 import pytest
-from capabilities.contract import CallerContext, OperationBudget
 
+from capabilities.contract import CallerContext, OperationBudget
 from tool_catalog import CatalogError, load_catalog
 
 CEILING = OperationBudget(timeout_ms=30000, max_results=10, max_result_bytes=262144)
 SERVED = {"document": frozenset({"search_knowledge", "read_source"})}
+# The caller's context the filter's pins run under — the same shape the
+# suites use everywhere else (a public caller over the legacy graph).
+CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 
 
 def _entry(name="search_knowledge", **overrides):
@@ -767,11 +829,16 @@ def test_a_duplicate_exposed_name_is_a_startup_error(tmp_path):
     assert "twice" in str(refusal.value)
 
 
-def test_an_entry_naming_an_undeclared_source_is_a_startup_error(tmp_path):
-    path = _write(tmp_path, [_entry(name="search_knowledge", source="web")])
-    with pytest.raises(CatalogError) as refusal:
-        load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "web" in str(refusal.value)
+def test_an_entry_naming_an_undeclared_source_is_refused_and_the_catalog_still_loads(tmp_path, caplog):
+    path = _write(tmp_path, [_entry(name="search_knowledge", source="web"), _entry(name="read_source")])
+    with caplog.at_level(logging.ERROR):
+        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
+    assert "web" in caplog.text
+    # The refused entry is ABSENT (the tool can never reach a run), and
+    # the rest of the catalog still loads — one mis-declared entry does
+    # not take the whole run surface down.
+    assert catalog.entry("search_knowledge") is None
+    assert catalog.entry("read_source") is not None
 
 
 def test_a_catalogued_tool_the_source_does_not_serve_is_a_warning(tmp_path, caplog):
@@ -786,32 +853,36 @@ def test_a_catalogued_tool_the_source_does_not_serve_is_a_warning(tmp_path, capl
     assert catalog.entry("other_tool").source == "document"
 
 
-def test_a_required_scope_is_refused_until_the_identity_slice_lands(tmp_path):
+def test_a_required_scope_is_refused_until_the_identity_slice_lands(tmp_path, caplog):
     path = _write(tmp_path, [_entry(name="search_knowledge", scopes=["okf:tenant:repo:read"])])
-    with pytest.raises(CatalogError) as refusal:
-        load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "scope" in str(refusal.value).lower()
+    with caplog.at_level(logging.ERROR):
+        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
+    assert "scope" in caplog.text.lower()
+    assert catalog.entry("search_knowledge") is None
 
 
-def test_a_write_tool_is_refused_until_the_approval_path_lands(tmp_path):
+def test_a_write_tool_is_refused_until_the_approval_path_lands(tmp_path, caplog):
     path = _write(tmp_path, [_entry(name="search_knowledge", risk="write", requires_approval=True)])
-    with pytest.raises(CatalogError) as refusal:
-        load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "approval" in str(refusal.value).lower()
+    with caplog.at_level(logging.ERROR):
+        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
+    assert "approval" in caplog.text.lower()
+    assert catalog.entry("search_knowledge") is None
 
 
-def test_an_open_web_egress_is_refused_until_the_pii_egress_lands(tmp_path):
+def test_an_open_web_egress_is_refused_until_the_pii_egress_lands(tmp_path, caplog):
     path = _write(tmp_path, [_entry(name="search_knowledge", egress="open_web")])
-    with pytest.raises(CatalogError) as refusal:
-        load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "egress" in str(refusal.value).lower()
+    with caplog.at_level(logging.ERROR):
+        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
+    assert "egress" in caplog.text.lower()
+    assert catalog.entry("search_knowledge") is None
 
 
-def test_a_server_scoped_entry_is_refused_while_no_mcp_source_is_deployed(tmp_path):
+def test_a_server_scoped_entry_is_refused_while_no_mcp_source_is_deployed(tmp_path, caplog):
     path = _write(tmp_path, [_entry(name="search_knowledge", server="govstack-auth", tool="list_users")])
-    with pytest.raises(CatalogError) as refusal:
-        load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "server" in str(refusal.value).lower()
+    with caplog.at_level(logging.ERROR):
+        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
+    assert "server" in caplog.text.lower()
+    assert catalog.entry("search_knowledge") is None
 
 
 def test_a_budget_above_the_ceiling_is_a_startup_error(tmp_path):
@@ -892,12 +963,14 @@ a lie the deployment believes.
 
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from agent.sources import ToolSource, ToolSourceContext
 from capabilities.contract import OperationBudget
 
 logger = logging.getLogger(__name__)
@@ -955,6 +1028,26 @@ class CatalogDocument(BaseModel):
     tools: tuple[CatalogEntry, ...]
 
 
+@dataclass(frozen=True)
+class DeclaredSource:
+    """One source a deployment runs, as the HOST declares it.
+
+    The port (``agent.sources.ToolSource``) carries ONE method — the
+    design's §4.3 protocol — and the deployment's facts about a source
+    live HERE: the id the catalog's ``source`` field names it by, and the
+    tools it serves. A DECLARED set (the document source's two tools) and
+    a DISCOVERED one (the MCP source's startup discovery — §4.4) reach
+    the catalog the same way.
+
+    ``build`` is the per-request builder: the source is built per request
+    because the budget, the preparation leg and the sinks are the run's.
+    """
+
+    source_id: str
+    served_tool_names: frozenset[str]
+    build: Callable[[ToolSourceContext], ToolSource]
+
+
 class ToolCatalog:
     """The validated catalog: what a run may call."""
 
@@ -993,11 +1086,19 @@ def load_catalog(
     serves — the host's declaration. ``ceiling`` is the deployment's
     budget ceiling: an entry's budget may TIGHTEN it, never widen it.
 
-    Raises :class:`CatalogError` for every defect the deployment must
-    fix (a duplicate exposed name, an entry naming an undeclared source,
-    an entry this deployment cannot honour, a budget above the ceiling,
-    a file that is missing or unreadable). A catalogued tool a declared
-    source does not serve is a WARNING and an absent tool.
+    Raises :class:`CatalogError` for the defects that fail the whole
+    file: a duplicate exposed name (the model would see an ambiguity), a
+    budget above the ceiling, a file that is missing, unreadable or not
+    the declared shape.
+
+    An entry THIS DEPLOYMENT cannot serve — an undeclared source, a
+    server-scoped tool, a required scope, a write, an approval, an
+    open-web egress — costs the ENTRY, not the catalog: a loud startup
+    ERROR names it and the tool is absent. The catalog still loads, and
+    the deployment's other tools keep working.
+
+    A catalogued tool a declared source does not serve is a WARNING and
+    an absent tool.
     """
     location = Path(path)
     try:
@@ -1014,6 +1115,7 @@ def load_catalog(
         raise CatalogError(f"the tool catalog {location} does not carry the declared shape: {invalid}") from invalid
 
     seen: set[str] = set()
+    usable: list[CatalogEntry] = []
     for entry in document.tools:
         if entry.name in seen:
             raise CatalogError(
@@ -1021,34 +1123,22 @@ def load_catalog(
                 "a duplicate exposed name is a startup error"
             )
         seen.add(entry.name)
-        if entry.source not in served_names:
-            raise CatalogError(
-                f"the tool catalog {location} declares {entry.name!r} on the source {entry.source!r}, "
-                f"which this deployment does not declare (declared: {', '.join(sorted(served_names))})"
+        refusal = _refusal(entry, served_names)
+        if refusal is not None:
+            # The ENTRY is refused, not the catalog: the tool is absent
+            # (never listed, never dispatchable), and the rest of the
+            # deployment's tools keep working. One mis-declared entry does
+            # not take the whole run surface down.
+            logger.error(
+                "the tool catalog %s declares %r: %s — the entry is refused and the tool is absent",
+                location,
+                entry.name,
+                refusal,
             )
-        if entry.server is not None or entry.tool is not None:
-            raise CatalogError(
-                f"the tool catalog {location} declares {entry.name!r} on a server-scoped tool: "
-                "no MCP source is deployed yet"
-            )
-        if entry.scopes:
-            raise CatalogError(
-                f"the tool catalog {location} declares {entry.name!r} with required scopes "
-                f"({', '.join(entry.scopes)}): the identity slice that enforces them has not landed, "
-                "and a scope that reads as enforced would be a lie"
-            )
-        if entry.risk == RISK_WRITE or entry.requires_approval:
-            raise CatalogError(
-                f"the tool catalog {location} declares {entry.name!r} as a write or approval tool: "
-                "no approval path is deployed yet"
-            )
-        if entry.egress == EGRESS_OPEN_WEB:
-            raise CatalogError(
-                f"the tool catalog {location} declares {entry.name!r} with an open-web egress: "
-                "no PII egress path is deployed yet"
-            )
+            continue
         if entry.budget is not None:
             _check_budget(location, entry, ceiling)
+        usable.append(entry)
         if entry.name not in served_names[entry.source]:
             logger.warning(
                 "the tool catalog %s declares %r, which the source %r does not serve: the tool is absent",
@@ -1056,7 +1146,36 @@ def load_catalog(
                 entry.name,
                 entry.source,
             )
-    return ToolCatalog(document.tools)
+    return ToolCatalog(tuple(usable))
+
+
+def _refusal(entry: CatalogEntry, served_names: Mapping[str, frozenset[str]]) -> str | None:
+    """Why this entry cannot be served HERE, or ``None`` when it can.
+
+    Every reason is a fact about THIS deployment's capabilities, not about
+    the file's shape: an entry that names a source this deployment does
+    not declare, a server-scoped tool (no MCP source yet), a required
+    scope (the enforcement lands with the identity slice), a write or an
+    approval (no approval path yet), an open-web egress (no PII egress
+    path yet). The tool is ABSENT rather than served unenforced.
+    """
+    if entry.source not in served_names:
+        return (
+            f"it names the source {entry.source!r}, which this deployment does not declare "
+            f"(declared: {', '.join(sorted(served_names))})"
+        )
+    if entry.server is not None or entry.tool is not None:
+        return "it is a server-scoped tool: no MCP source is deployed yet"
+    if entry.scopes:
+        return (
+            f"it requires scopes ({', '.join(entry.scopes)}): the identity slice that enforces them "
+            "has not landed, and a scope that reads as enforced would be a lie"
+        )
+    if entry.risk == RISK_WRITE or entry.requires_approval:
+        return "it is a write or an approval tool: no approval path is deployed yet"
+    if entry.egress == EGRESS_OPEN_WEB:
+        return "it has an open-web egress: no PII egress path is deployed yet"
+    return None
 
 
 def _check_budget(location: Path, entry: CatalogEntry, ceiling: OperationBudget) -> None:
@@ -1072,6 +1191,26 @@ def _check_budget(location: Path, entry: CatalogEntry, ceiling: OperationBudget)
                 f"the tool catalog {location} declares {entry.name!r} with {dimension}={value}, "
                 f"above the deployment's ceiling {limit}: the catalog may tighten a budget, never widen it"
             )
+
+
+def budget_overrides(catalog: ToolCatalog) -> dict[str, OperationBudget]:
+    """The per-tool budgets the catalog declares — each one already
+    validated against the deployment's ceiling.
+
+    PUBLIC: the host declares the sources, and a declared source's
+    builder needs the budgets the catalog declares for it. One reader, so
+    the host cannot read them differently.
+    """
+    overrides: dict[str, OperationBudget] = {}
+    for entry in catalog.entries:
+        if entry.budget is None:
+            continue
+        overrides[entry.name] = OperationBudget(
+            timeout_ms=entry.budget.timeout_ms,
+            max_results=entry.budget.max_results,
+            max_result_bytes=entry.budget.max_result_bytes,
+        )
+    return overrides
 ```
 
 - [ ] **Step 4: The shipped catalog**
@@ -1112,7 +1251,7 @@ No entry carries a `budget`: the deployment's `AGENT_TOOL_*` knobs are the ceili
 
 - [ ] **Step 5: The layer and the image**
 
-The catalog module is a HOST module (it reads the filesystem and composes the deployment's sources), so it joins the host in the architecture rules — in `components/agent-service/tests/test_architecture.py`, the layout's host tuple changes from:
+The catalog module is a HOST module (it reads the filesystem and composes the deployment's sources), so it joins the host in the architecture rules — in `components/agent-service/tests/test_architecture.py`, the SERVICE layout's host tuple (the one at the top of the file, `SERVICE_LAYOUT = Layout(...)`) changes from:
 
 ```python
     host=("app", "tracing", "lane", "assembly"),
@@ -1123,6 +1262,8 @@ to:
 ```python
     host=("app", "tracing", "lane", "assembly", "tool_catalog"),
 ```
+
+**That tuple appears TWICE in the file, and only the first one changes.** The second occurrence is the SYNTHETIC layout inside `test_the_rules_go_red_on_a_planted_violation` — the planted package the rule checks itself against, which has no `tool_catalog` module. Changing that one too makes the rule look for a module the fake package does not carry, and the architecture test fails with `ModuleUnknown: 'fakepkg.tool_catalog' was not found in the dependency graph`. (Found by replaying the plan's own code blocks against a scratch tree.)
 
 and the image must carry it — `components/agent-service/Dockerfile`:
 
@@ -1173,9 +1314,9 @@ git commit -m "feat(agent-service): the tool catalog — the deployment file tha
 - Modify: `components/agent-service/tests/test_agent_orchestrator.py`, `tests/test_app_runs.py`, `tests/test_version_record.py`, `tests/test_agent_sources.py` (the orchestrator's construction)
 
 **Interfaces:**
-- Consumes: `sources.ToolSourceContext`, `sources.DocumentToolSource` (Task 1); `tool_catalog.load_catalog`, `ToolCatalog` (Task 2).
+- Consumes: `sources.ToolSourceContext`, `sources.DocumentToolSource` (Task 1); `tool_catalog.load_catalog`, `ToolCatalog`, `DeclaredSource`, `budget_overrides` (Task 2).
 - Produces:
-  - `tool_catalog.build_tool_source_factory(*, catalog, port_factory) -> Callable[[ToolSourceContext], tuple[tuple[ToolDefinition, ToolExecutor], ...]]` — the HOST's per-request factory: the declared sources, filtered by the catalog.
+  - `tool_catalog.build_tool_source_factory(*, catalog, declared_sources) -> Callable[[ToolSourceContext], tuple[tuple[ToolDefinition, ToolExecutor], ...]]` — the HOST's per-request factory: the declared sources, filtered by the catalog.
   - `orchestrator.RequestOrchestrator(..., tool_source_factory=..., ...)` — the orchestrator takes the sources from the host instead of composing them.
 
 - [ ] **Step 1: The failing test — the catalog gates what a run may call**
@@ -1191,8 +1332,26 @@ def _bundle(context=CONTEXT):
     )
 
 
+def _declared(catalog, port):
+    """The suite's declaration of the document source — the host's shape."""
+    return (
+        DeclaredSource(
+            source_id=DocumentToolSource.source_id,
+            served_tool_names=DocumentToolSource.served_tool_names,
+            build=lambda bundle: DocumentToolSource(
+                lambda _context, _bearer: port,
+                bundle.operation_budget,
+                budgets=budget_overrides(catalog),
+                preparer=bundle.preparer,
+                on_preparation_status=bundle.on_preparation_status,
+                abstention_sink=bundle.abstention_sink,
+            ),
+        ),
+    )
+
+
 def _registry(catalog, port):
-    factory = build_tool_source_factory(catalog=catalog, port_factory=lambda _context, _bearer: port)
+    factory = build_tool_source_factory(catalog=catalog, declared_sources=_declared(catalog, port))
     return build_registry(factory(_bundle()))
 
 
@@ -1253,7 +1412,7 @@ def test_a_catalogued_budget_is_the_one_the_executor_runs_under(tmp_path):
     assert call["budget"].timeout_ms == 1000
 ```
 
-(The suite's imports grow: `asyncio`, `pytest` (already), `from agent.registry import ToolRegistry, UnregisteredToolError, build_registry`, `from agent.sources import ToolSourceContext`, `from capabilities.contract import ...`, `from conftest import AgentFakePort, canned_search_result`, and `from tool_catalog import build_tool_source_factory, load_catalog`.)
+(The suite's imports grow: `asyncio`, `pytest` (already), `from agent.registry import UnregisteredToolError, build_registry`, `from agent.sources import DocumentToolSource, ToolSourceContext`, `from capabilities.contract import CallerContext, OperationBudget`, `from conftest import AgentFakePort, canned_search_result`, and `from tool_catalog import DeclaredSource, budget_overrides, build_tool_source_factory, load_catalog`.)
 
 - [ ] **Step 2: Run the suite and watch it fail**
 
@@ -1267,19 +1426,27 @@ Expected: the collection FAILS — `build_tool_source_factory` does not exist ye
 
 - [ ] **Step 3: The host's factory**
 
-In `components/agent-service/tool_catalog.py`, add the factory (the module's imports gain `Callable` and the core's `ToolDefinition`, `ToolExecutor`, `DocumentToolSource`, `ToolSourceContext`):
+In `components/agent-service/tool_catalog.py`, add the factory (the module's imports gain `Sequence` — for the declared sources and the pairs — and the core's `ToolDefinition`, `ToolExecutor` — for the pairs' types):
+
+```python
+# the module's import block becomes:
+from collections.abc import Callable, Mapping, Sequence
+
+from agent.registry import ToolDefinition, ToolExecutor
+from agent.sources import ToolSource, ToolSourceContext
+```
 
 ```python
 def build_tool_source_factory(
     *,
     catalog: ToolCatalog,
-    port_factory: Callable[[CallerContext, str | None], DocumentCapabilityPort],
+    declared_sources: Sequence[DeclaredSource],
 ) -> Callable[[ToolSourceContext], tuple[tuple[ToolDefinition, ToolExecutor], ...]]:
     """The host's per-request factory: the declared sources, filtered by the catalog.
 
-    The DECLARATION lives here — the host names the sources a deployment
-    runs, and how each is configured. The core asks this factory, per
-    request, for the pairs to register.
+    The DECLARATION lives with the host — it names the sources a
+    deployment runs, and how each is built. The core asks this factory,
+    per request, for the pairs to register.
 
     The catalog filters what the sources offer: a tool the catalog does
     not name, does not allow, or names on another source is not offered
@@ -1288,40 +1455,19 @@ def build_tool_source_factory(
     """
 
     def factory(bundle: ToolSourceContext) -> tuple[tuple[ToolDefinition, ToolExecutor], ...]:
-        source = DocumentToolSource(
-            port_factory,
-            bundle.operation_budget,
-            budgets=_budget_overrides(catalog),
-            preparer=bundle.preparer,
-            on_preparation_status=bundle.on_preparation_status,
-            abstention_sink=bundle.abstention_sink,
-        )
         offered: list[tuple[ToolDefinition, ToolExecutor]] = []
-        for definition, executor in source.tools(bundle.context, bundle.bearer):
-            entry = catalog.entry(definition.name)
-            if entry is None or not entry.allow:
-                continue
-            if entry.source != source.source_id:
-                continue
-            offered.append((definition, executor))
+        for declared in declared_sources:
+            source = declared.build(bundle)
+            for definition, executor in source.tools(bundle.context, bundle.bearer):
+                entry = catalog.entry(definition.name)
+                if entry is None or not entry.allow:
+                    continue
+                if entry.source != declared.source_id:
+                    continue
+                offered.append((definition, executor))
         return tuple(offered)
 
     return factory
-
-
-def _budget_overrides(catalog: ToolCatalog) -> dict[str, OperationBudget]:
-    """The per-tool budgets the catalog declares — each one already
-    validated against the deployment's ceiling."""
-    overrides: dict[str, OperationBudget] = {}
-    for entry in catalog.entries:
-        if entry.budget is None:
-            continue
-        overrides[entry.name] = OperationBudget(
-            timeout_ms=entry.budget.timeout_ms,
-            max_results=entry.budget.max_results,
-            max_result_bytes=entry.budget.max_result_bytes,
-        )
-    return overrides
 ```
 
 - [ ] **Step 4: The orchestrator takes the sources from the host**
@@ -1365,7 +1511,7 @@ In `components/agent-service/agent/orchestrator.py`:
             registry = build_registry(self._tool_source_factory(bundle))
 ```
 
-- the imports change: `from .registry import build_registry` and `from .sources import ToolSourceContext` (the `DocumentToolSource` import goes away — the core no longer names a source).
+- the imports change: `from .registry import build_registry` and `from .sources import ToolSourceContext` (the `DocumentToolSource` import goes away — the core no longer names a source). **Both go in their alphabetical place** among the relative imports — `.registry` between `.prompt` and `.runtime`, `.sources` between `.runtime` and `.verification` — or the module's own lint gate reds with `I001` (the import block is un-sorted).
 
 - the module's docstring paragraph about the port factory is updated: the orchestrator holds a SOURCE FACTORY (the deployment's declared sources), not a port factory.
 
@@ -1390,10 +1536,27 @@ In `components/agent-service/app.py`, `_build_orchestrator` gains the catalog an
     )
 ```
 
-and the orchestrator is built with the host's factory:
+and the host DECLARES its sources — the deployment's facts about a source (the id the catalog names it by, the tools it serves) live here, and the port carries neither:
 
 ```python
-    tool_source_factory = build_tool_source_factory(catalog=catalog, port_factory=port_factory)
+    # The declared sources: what this deployment runs, and how each is
+    # built. The core composes nothing — it asks this factory per
+    # request for the pairs to register.
+    declared_sources = (
+        DeclaredSource(
+            source_id=DocumentToolSource.source_id,
+            served_tool_names=DocumentToolSource.served_tool_names,
+            build=lambda bundle: DocumentToolSource(
+                port_factory,
+                bundle.operation_budget,
+                budgets=budget_overrides(catalog),
+                preparer=bundle.preparer,
+                on_preparation_status=bundle.on_preparation_status,
+                abstention_sink=bundle.abstention_sink,
+            ),
+        ),
+    )
+    tool_source_factory = build_tool_source_factory(catalog=catalog, declared_sources=declared_sources)
 
     return RequestOrchestrator(
         config=orchestrator_config,
@@ -1406,7 +1569,7 @@ and the orchestrator is built with the host's factory:
     )
 ```
 
-with the imports: `from agent.sources import DocumentToolSource` and `from tool_catalog import build_tool_source_factory, load_catalog`.
+with the imports: `from agent.sources import DocumentToolSource` (between `from agent.orchestrator import (...)` and `from agent.version_record import ...`) and `from tool_catalog import DeclaredSource, budget_overrides, build_tool_source_factory, load_catalog` (after `from noagent.config import ...`, before `from tracing import setup_tracing`). The alphabetical place matters: ruff's `I001` fires on an unsorted import block, and the lint gate is one of the plan's own gates.
 
 The knob is read from the environment mapping — and the mapping is normalized ONCE, at the top of `_build_orchestrator`, so the read is not a second name for what the parameter already carries:
 
@@ -1446,10 +1609,56 @@ def document_source_factory(port_factory):
 
 It sits BESIDE `document_registry` (Task 1's helper), not instead of it: the two take different things. `document_registry(port, context, budget, **wiring)` answers "give me the registry over THIS port and context" — the suites that drive a loop or a probe need that. `document_source_factory(port_factory)` answers "give me the factory the ORCHESTRATOR asks per request" — the suites that build an orchestrator need that. Neither is the other's shape.
 
+Every suite that uses it imports it from `conftest` — and the name goes in the import block's ALPHABETICAL place (`document_source_factory` after `canned_search_result`, before `fake_port`), or the module's own lint gate reds with `I001`.
+
 Then every suite that built the orchestrator with `port_factory=` builds it with `tool_source_factory=` instead:
 
-- `tests/test_event_stream_gate.py`: `tool_source_factory=document_source_factory(lambda context, bearer: fake_port()),` — the CONSTRUCTION changes; the comparison and the fixture do not.
+- `tests/test_event_stream_gate.py`: the construction changes; the comparison and the fixture do not. **The gate builds its registry THROUGH THE CATALOG** — over the shipped file — so the frozen stream witnesses the DEPLOYED path (the catalog's filter included), not a path the catalog bypasses:
+
+  ```python
+      catalog = load_catalog(
+          Path(__file__).resolve().parents[2] / ".." / ".." / ".." / "configs" / "agent" / "tool-catalog.json",
+          served_names={"document": frozenset({"search_knowledge", "read_source"})},
+          ceiling=orchestrator_config().operation_budget,
+      )
+      orchestrator = RequestOrchestrator(
+          config=orchestrator_config(),
+          lane=AdmissionLane(1, str(lane_dir)),
+          model_client=model,
+          tool_source_factory=build_tool_source_factory(
+              catalog=catalog,
+              declared_sources=(
+                  DeclaredSource(
+                      source_id=DocumentToolSource.source_id,
+                      served_tool_names=DocumentToolSource.served_tool_names,
+                      build=lambda bundle: DocumentToolSource(
+                          lambda context, bearer: fake_port(),
+                          bundle.operation_budget,
+                          preparer=bundle.preparer,
+                          on_preparation_status=bundle.on_preparation_status,
+                          abstention_sink=bundle.abstention_sink,
+                      ),
+                  ),
+              ),
+          ),
+          metadata_source=FakeMetadataSource(),
+          concept_source=FakeConceptSource(),
+      )
+  ```
+
+  (the shipped file's path is `components/agent-service/tests/` → the repository root is `parents[3]`; the gate's `FIXTURE` constant already resolves its own path the same way.) Without the catalog in the gate's path, the frozen stream would prove the MOVE and not the DEPLOYED wiring — and a catalog that dropped a tool would never show up in it.
 - `tests/test_app_runs.py` (two constructions), `tests/test_version_record.py` (two), `tests/test_agent_orchestrator.py` (the helper's construction and the four direct ones), `tests/test_agent_sources.py` (one).
+
+**The assembly-level test needs the knob.** `tests/test_app_runs.py::test_the_app_assembly_wires_preparation_into_the_run_surface` builds the REAL assembly (`app._build_orchestrator`) and asserts a 200 — so after this task the assembly reads `AGENT_TOOL_CATALOG_PATH`, and without it the answer is the honest 503 and the test reds on a change the plan never mentioned. The test therefore declares the catalog the way a deployment does:
+
+```python
+    monkeypatch.setenv(
+        "AGENT_TOOL_CATALOG_PATH",
+        str(Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json"),
+    )
+```
+
+(the shipped file — the assembly's own contract), placed with the other `monkeypatch.setenv` calls of that test. `tests/test_app_runs.py` does NOT import `pathlib` today, so the import is added: `from pathlib import Path` (the stdlib's imports come first, above `import pytest`).
 
 `tests/test_agent_orchestrator.py`'s helper keeps its pin — the per-request port build is still recorded, and the factory now lives inside the source factory:
 
@@ -1577,11 +1786,14 @@ In `env`, in the AGENT section, right after the `AGENT_TOOL_MAX_RESULT_BYTES` li
 ```
 # The tool catalog: the deployment file that decides what a run may call
 # (the tools the model is told about and the dispatcher may run). The
-# agent service reads it at assembly, fail-closed: a missing file, a
-# duplicate exposed name, or an entry this deployment cannot honour is
-# answered 503 naming the defect — never a run served with the wrong
-# tools. The value is the file's location INSIDE the container (compose
-# mounts it read-only from the repository's configs/agent/ home).
+# agent service reads it at assembly, fail-closed: a missing file or a
+# duplicate exposed name is answered 503 naming the defect — never a run
+# served with the wrong tools. An entry this deployment cannot serve
+# costs the ENTRY (the tool is absent), not the service.
+# The value is the file's location INSIDE the container (compose mounts
+# it read-only from the repository's configs/agent/ home) — compose
+# DEFAULTS it to that mount's own path, so a compose deployment needs no
+# .env line; set it here only to mount the catalog somewhere else.
 # AGENT_TOOL_CATALOG_PATH=/app/config/tool-catalog.json
 ```
 
@@ -1594,6 +1806,12 @@ In `docker-compose.yaml`, in the `agent-service` block's `environment:` (after t
       # call. Read at assembly, fail-closed (a missing file or a defect is
       # answered 503 naming it). The path is where the file lands inside
       # the container; the mount below is where it comes from.
+      #
+      # DEFAULTED, unlike the budget knobs beside it: those are empty by
+      # default because an unset budget must stop the run, while this one
+      # names the mount's own path — the file the compose block ITSELF
+      # mounts. The fail-closed part is the FILE (a missing or broken
+      # catalog is a 503 naming it), not the path.
       - AGENT_TOOL_CATALOG_PATH=${AGENT_TOOL_CATALOG_PATH:-/app/config/tool-catalog.json}
 ```
 
@@ -1687,8 +1905,9 @@ git commit -m "feat(deploy): the tool catalog — the knob, the mount and the no
 | # | Gate | Command | Expected |
 |---|---|---|---|
 | G1 | the agent-service suite | `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q` | green |
-| G2 | the recorded event stream | the same run (the gate test) | the stream IDENTICAL to `tests/fixtures/event_stream/orchestrated_run.json` |
-| G3 | the frozen document contract | the same run (`tests/test_equivalence_v02.py`) | green — and the file UNTOUCHED: `git diff --exit-code -- components/agent-service/tests/test_equivalence_v02.py` is silent |
+| G2 | the recorded event stream | the same run (the gate test) | the stream IDENTICAL to `tests/fixtures/event_stream/orchestrated_run.json` — and the gate builds its registry THROUGH the shipped catalog, so the frozen stream witnesses the DEPLOYED path (the filter included), not a path the catalog bypasses |
+| G3 | the frozen capability contract | the same run (`tests/test_equivalence_v02.py`) | green — and the file UNTOUCHED: `git diff --exit-code -- components/agent-service/tests/test_equivalence_v02.py` is silent. This gate witnesses the CAPABILITY and the PREPARATION; the TOOLS' own witness is the renamed suite (G3b) |
+| G3b | the tools' own witness | the same run (`tests/test_agent_sources.py`), plus the diff of the renamed file | green — and the diff against `tests/test_agent_toolset.py` touches only the import lines, the helper and the added definitions pin: `git diff -M -- components/agent-service/tests/test_agent_toolset.py components/agent-service/tests/test_agent_sources.py` shows NO change to a behaviour pin. A behaviour pin that moved is a behaviour that moved |
 | G4 | the frozen fixture | `git diff --exit-code -- components/agent-service/tests/fixtures/event_stream/orchestrated_run.json` | silent — the wire did not move |
 | G5 | lint | `uvx ruff@0.16.3 check --no-cache …` and `uvx ruff@0.16.3 format --no-cache --check …` | silent |
 | G6 | the deployment gates | `cd tests/config-validator && npm test` | green |
@@ -1701,8 +1920,8 @@ A difference in G2 is a STOP: the move or the assembly changed something it was 
 - **`web_search` and the outbound PII egress** — plan 2 of this slice (the second source; `egress: open_web` becomes honourable there; the catalog refuses it here).
 - **The web citation variant** (`source: 'web'`) on web and mobile — plan 3 of this slice.
 - **The MCP source and the `mcp` SDK** — slice S6; the catalog's `server`/`tool` fields are carried and refused here.
-- **`CallerContext.scopes` and the scope enforcement** — the design's §4.8 (the identity slice); the catalog refuses a scope here.
-- **The write tools, the approval and the idempotency key** — ADR agentic-006; the catalog refuses a write here.
+- **`CallerContext.scopes` and the scope enforcement** — the design's §4.8 (the identity slice). **The deviation, stated:** ADR agentic-005 §7 filters a scope'd tool PER REQUEST ("a tool whose required scopes are not all present is not registered for that request"), and that rule needs the caller's scopes. This slice has no `CallerContext.scopes` yet, so it refuses the ENTRY at startup instead — for EVERY caller, not just the ones lacking the scope. Stricter, never laxer: the tool is absent either way, and nothing is ever served with an unenforced scope.
+- **The write tools, the approval and the idempotency key** — ADR agentic-006; the catalog refuses a write here (the entry is refused; the catalog still loads).
 - **The pydantic-ai spike** — slice S7.
 - **An admin surface for the catalog** (dynamic tool management) — the ADR defers it; a static file is iteration 2's decision.
 - **The Helm chart** — the agent service has no chart deployment (the compose and ansible surfaces are its delivery).
@@ -1713,7 +1932,7 @@ A difference in G2 is a STOP: the move or the assembly changed something it was 
 | Design item | Where | Evidence |
 |---|---|---|
 | The `ToolSource` port (§4.3) | `agent/sources.py` | the document source implements it; the core asks the declared sources per request |
-| `DocumentToolSource`, unchanged (§4.2) | `agent/sources.py` | the definitions and the executors moved verbatim; the equivalence suite is green and untouched |
+| `DocumentToolSource`, unchanged (§4.2) | `agent/sources.py` | the definitions and the executors moved verbatim — the definitions pin (the model-facing contract, which nothing else in the tree pins) and the renamed suite's behaviour pins, both green and unchanged |
 | The catalog's file, schema and startup rules (§4.4) | `configs/agent/tool-catalog.json`, `tool_catalog.py` | the loader's pins: a duplicate is an error, an unserved catalogued tool is a warning and an absent tool |
 | The core composes nothing (§2.5) | `agent/orchestrator.py`, `app.py` | the orchestrator takes the sources from the host; the host declares them |
 | The registry stays the authorization surface (§4.1) | `agent/registry.py` | a tool the catalog drops is never registered, so it is neither listed nor dispatchable |

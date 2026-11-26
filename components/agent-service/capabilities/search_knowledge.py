@@ -43,7 +43,7 @@ from collections.abc import Callable
 from pydantic import ValidationError
 
 from .adapters.arango_retrieval import ArangoRetrievalAdapter
-from .adapters.env_config import ArangoConfig, EmbeddingConfig, HybridConfig, ModelEndpointConfig, RerankingConfig
+from .adapters.env_config import ArangoConfig, HybridConfig
 from .adapters.tei_embedding import TeiEmbeddingAdapter
 from .adapters.tei_reranking import RerankerInputTooLongError, TeiRerankingAdapter
 from .contract import (
@@ -106,49 +106,6 @@ class SearchKnowledgeCapability:
         # The ensured-BM25-view cache spans the legs of every request: the
         # adapter instance is per leg, the cache is the capability's.
         self._ensured_bm25_views: set[str] = set()
-
-    @classmethod
-    def create(cls, env=None) -> "SearchKnowledgeCapability":
-        """Assemble the default wiring from the environment.
-
-        The driver import lives here, not at module import, so the port
-        surface stays import-light for the tests that fake the adapters.
-        A missing model endpoint is a boot error: the port has no default
-        embedding or reranker endpoint to silently point at.
-        """
-        import arango
-
-        arango_config = ArangoConfig.load(env)
-        hybrid_config = HybridConfig.load(env)
-        reranking_config = RerankingConfig.load(env)
-        embedding_config = EmbeddingConfig.load(env)
-        endpoints = ModelEndpointConfig.load(env)
-        if not endpoints.tei_embedding_endpoint:
-            raise ValueError("TEI_EMBEDDING_ENDPOINT must be set: the port has no default embedding endpoint")
-        if not endpoints.tei_reranking_endpoint:
-            raise ValueError("TEI_RERANKING_ENDPOINT must be set: the port has no default reranker endpoint")
-        client = arango.ArangoClient(hosts=arango_config.url)
-
-        def db_factory(_graph_name: str):
-            return client.db(
-                arango_config.database,
-                username=arango_config.username,
-                password=arango_config.password,
-            )
-
-        # The embedding call carries ITS OWN budget, under the knob names the
-        # deployed embed clients read — not the reranker's.
-        embedding = TeiEmbeddingAdapter(
-            endpoints.tei_embedding_endpoint,
-            connect_timeout_seconds=embedding_config.connect_timeout_seconds,
-            total_timeout_seconds=embedding_config.embed_timeout_seconds,
-            tls_verify=endpoints.tls_verify,
-            bearer=endpoints.bearer,
-        )
-        reranking = TeiRerankingAdapter(
-            endpoints.tei_reranking_endpoint, reranking_config, tls_verify=endpoints.tls_verify, bearer=endpoints.bearer
-        )
-        return cls(embedding, reranking, db_factory, arango_config, hybrid_config)
 
     async def search_knowledge(
         self,

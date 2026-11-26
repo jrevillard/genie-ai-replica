@@ -56,18 +56,13 @@ from agent.loop import (
 # lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
 # name stays importable from here for the probe harness and its suites.
 from agent.toolset import document_toolset
-from capabilities.adapters.chunks import LegacyChunkAdapter
-from capabilities.adapters.docrepo import DocRepoAdapter
-from capabilities.adapters.env_config import ArangoConfig
+from assembly import build_stateless_adapters
 from capabilities.adapters.httpx import HttpxTransport
-from capabilities.adapters.okf import OkfAdapter
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import AuthorizedRepo, CallerContext, DocumentCapabilityPort, OperationBudget
-from capabilities.executor import AuthorizedExecutor
 from capabilities.model import (
     LoopModelClient,
 )
-from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
 
 logger = logging.getLogger(__name__)
@@ -260,72 +255,6 @@ class ProbeConfig:
         )
 
 
-@dataclass(frozen=True)
-class StatelessAdapters:
-    """The stateless half of the port assembly: the read adapters and the
-    inner search port, built ONCE per process and shared by every request
-    (the executor that binds a caller context to them is per request)."""
-
-    docrepo: DocRepoAdapter
-    okf: OkfAdapter
-    chunks: LegacyChunkAdapter
-    search_port: DocumentCapabilityPort
-    legacy_graph_name: str
-
-    def bind_executor(self, context: CallerContext, bearer: str | None) -> AuthorizedExecutor:
-        """The per-request executor: one trusted context bound to the five
-        shared fields — the ONE place the binding lives (the probe's live
-        entry and the run surface's port factory both call it)."""
-        return AuthorizedExecutor(
-            context,
-            bearer=bearer,
-            legacy_graph_name=self.legacy_graph_name,
-            docrepo=self.docrepo,
-            okf=self.okf,
-            chunks=self.chunks,
-            search_port=self.search_port,
-        )
-
-
-def build_stateless_adapters(config: ProbeConfig, env=None) -> StatelessAdapters:
-    """Assemble the stateless adapters from the environment.
-
-    The search capability wires itself from the recorded knobs (a missing
-    TEI endpoint is its own boot error); doc-repo and okf-server need their
-    base URLs. Shared by the probe and the run surface — one port
-    assembly, so a governed run reads the same corpus the probe measures.
-    """
-    if not config.docrepo_url:
-        raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
-    if not config.okf_url:
-        raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
-    arango_config = ArangoConfig.load(env)
-    search = SearchKnowledgeCapability.create(env)
-
-    # The ArangoDB driver stays a call-time import: it is the one heavy
-    # dependency only a live assembly needs, and keeping it off the module
-    # import path keeps importing the seam (loop/budget/events consumers)
-    # free of it.
-    import arango
-
-    client = arango.ArangoClient(hosts=arango_config.url)
-
-    def db_factory():
-        return client.db(
-            arango_config.database,
-            username=arango_config.username,
-            password=arango_config.password,
-        )
-
-    return StatelessAdapters(
-        docrepo=DocRepoAdapter(config.docrepo_url),
-        okf=OkfAdapter(config.okf_url),
-        chunks=LegacyChunkAdapter(db_factory),
-        search_port=search,
-        legacy_graph_name=arango_config.graph_name,
-    )
-
-
 def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, CallerContext]:
     """Assemble the real port and its caller context from the environment.
 
@@ -354,7 +283,7 @@ def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, C
         authorized_graph_names=graphs,
         authorized_repos=tuple(AuthorizedRepo(repo_id=repo_id, graph_name=graph_name) for repo_id, graph_name in repos),
     )
-    adapters = build_stateless_adapters(config, env)
+    adapters = build_stateless_adapters(env)
     return adapters.bind_executor(context, config.user_bearer), context
 
 

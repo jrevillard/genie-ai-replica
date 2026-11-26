@@ -44,11 +44,11 @@ from agent.orchestrator import (
     build_preparer_factory,
 )
 from agent.version_record import IMPLEMENTATION_VERSION
+from assembly import build_stateless_adapters
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import CallerContext
 from lane import AdmissionLane
-from measurement.probe import ProbeConfig, build_stateless_adapters
 from noagent.config import NoAgentConfig
 from tracing import setup_tracing
 
@@ -118,9 +118,8 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     # before anything else is wired.
     orchestrator_config = OrchestratorConfig.load(env)
     noagent = NoAgentConfig.load(env)
-    probe_config = ProbeConfig.load(env)
     model_config = noagent.model_config()
-    adapters = build_stateless_adapters(probe_config, env)
+    adapters = build_stateless_adapters(env)
     transport = HttpxTransport(model_config.tls_verify)
     model_client = VllmModelClient(model_config, transport)
     lane = AdmissionLane.from_config(noagent)

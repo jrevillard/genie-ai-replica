@@ -65,7 +65,7 @@ class Layout(NamedTuple):
 
 
 SERVICE_LAYOUT = Layout(
-    host=("app", "tracing", "lane"),
+    host=("app", "tracing", "lane", "assembly"),
     core_packages=("agent", "noagent", "preparation"),
     core_modules=(
         "capabilities",
@@ -130,6 +130,7 @@ KNOWN_IO_VIOLATIONS: set[tuple[str, str]] = set()
 KNOWN_INTERNAL_VIOLATIONS: set[tuple[str, str]] = set()
 # R3 — the modules that import the leaf adapters.
 KNOWN_ADAPTER_IMPORTERS = {
+    "assembly",  # assembly.py: the host builds the corpus adapters
     "app",  # app.py: the composition root builds the transport adapter
     "capabilities.search_knowledge",  # the capability builds its own adapters
 }
@@ -375,7 +376,7 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
     package = tmp_path / "fakepkg"
     root = package.name
     layout = Layout(
-        host=("app", "tracing", "lane"),
+        host=("app", "tracing", "lane", "assembly"),
         core_packages=("core",),
         core_modules=("contract", "model"),
         leaf_adapters="adapters",
@@ -386,6 +387,7 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
     clean = {
         "app.py": "import fakepkg.adapters.x\nimport requests\n",
         "lane.py": '"""The host lane."""\n',
+        "assembly.py": '"""The host assembly."""\n',
         "tracing.py": "import opentelemetry\n",
         "contract.py": "",
         "model.py": "",

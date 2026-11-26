@@ -1444,6 +1444,8 @@ def document_source_factory(port_factory):
     return factory
 ```
 
+It sits BESIDE `document_registry` (Task 1's helper), not instead of it: the two take different things. `document_registry(port, context, budget, **wiring)` answers "give me the registry over THIS port and context" — the suites that drive a loop or a probe need that. `document_source_factory(port_factory)` answers "give me the factory the ORCHESTRATOR asks per request" — the suites that build an orchestrator need that. Neither is the other's shape.
+
 Then every suite that built the orchestrator with `port_factory=` builds it with `tool_source_factory=` instead:
 
 - `tests/test_event_stream_gate.py`: `tool_source_factory=document_source_factory(lambda context, bearer: fake_port()),` — the CONSTRUCTION changes; the comparison and the fixture do not.

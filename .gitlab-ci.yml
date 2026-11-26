@@ -4569,6 +4569,13 @@ test:rag-benchmarks:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "tests/rag-benchmarks/**/*"
+        # The driver consumption test assembles the agent service's OWN
+        # pipeline in-process (the no-agent lane's factory, its assembly,
+        # its ports). A change to the service's signatures can break that
+        # assembly while the service's own suite stays green — the lane that
+        # proves the driver works must therefore run when the SERVICE
+        # changes, not only when the protocol files do.
+        - "components/agent-service/**/*"
         # The graded assessment set is artifact content this suite gates
         # (#2145 verbatim gold) — a set-only edit must run the job too.
         - "_bmad-output/implementation-artifacts/e01-assessment-grade-2026-11-24/**/*"

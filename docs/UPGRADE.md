@@ -8,6 +8,24 @@ change requires manual action from deployers.
 
 ## Unreleased
 
+## v3.1.1 → v3.1.2
+
+v3.1.2 fixes two deployment-blocking defects found live on 2026-11-26. No breaking change, no manual step.
+
+### Non-Breaking Changes Worth Noting
+
+- The okf-scopes migration no longer wipes the profile of the accounts it grants. The `grant_scope()` step re-runs at
+  every deploy and PUT the user with an attributes-only payload — and a Keycloak admin PUT replaces the payload, so
+  the profile fields it omits (`email`, `firstName`, `lastName`) were cleared. The realm's user profile marks those
+  fields `required` for the role `user`, so a wiped profile forced an "Update Account Information" form on every
+  login. The step now PUTs the full user representation with the scope merged into its attributes.
+- The chat no longer 503s on a deployment that does not set `KEYCLOAK_INTERNAL_URL`. The compose file passes the
+  variable as empty when the deployment leaves it undefined, and the validator read it with a default-argument
+  `getenv`, which keeps the empty string — the JWKS URI was then built without a protocol. An empty value now
+  behaves like an unset one, and a trailing slash no longer doubles in the JWKS path.
+
+---
+
 ## v3.1.0 → v3.1.1
 
 v3.1.1 is a deployment-path patch: the `config_bootstrap` role no longer aborts on a controller without the

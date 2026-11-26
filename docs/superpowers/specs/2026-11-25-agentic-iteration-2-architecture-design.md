@@ -74,7 +74,7 @@ Apart from the leaks in §2.3, the core imports three things from outside itself
 | Leak | Why it is a leak | Fix |
 |---|---|---|
 | `agent/probe.py` hosts the production model client and `build_stateless_adapters`, which imports four adapters, the search capability and, inside a function, `arango` | an adapter and composition code inside the runtime-seam package | move both to adapters; `app.py` composes |
-| `agent/v06_harness.py` imports `httpx` | a measurement harness inside the seam | move to a measurement package outside `agent/` |
+| `agent/v06_harness.py` imports `httpx` | a measurement harness inside the seam | declare it a measurement surface, then move it to a measurement package outside `agent/` |
 | `preparation/translation.py` defines `HttpxTransport`, the HTTP client that six construction sites default to (`preparation/translation.py`, `noagent/pipeline.py`, `noagent/generation.py`, `agent/probe.py`, `agent/orchestrator.py`, `agent/v06_harness.py`) | a core module that performs I/O, and a concrete transport chosen inside the core | the transport moves to the adapters; the constructors stop defaulting to it — the composition root supplies it |
 | `capabilities/executor.py` imports three adapter classes (`LegacyChunkAdapter`, `DocRepoAdapter`, `OkfAdapter`) for type annotations | an enforcing implementation of the port that names concrete adapters | depend on Protocols declared next to the port |
 | `capabilities/search_knowledge.py` builds its own adapters in `create()` and imports the retrieval, embedding and reranking adapters; `noagent/prompt.py` imports one constant from it | composition inside a core module, and a core module importing that module | `create()` moves to the composition root; the shared constant moves to the contract |
@@ -88,6 +88,7 @@ BFF ── owns the state, the SSE contract and the existing shapes (AD-8, AD-12
  ▼
 ┌ agent-service ───────────────────────────────────────────────┐
 │ HOST         app.py — composition root                        │
+│ MEASUREMENT  the v06 harness — assembles its own runtime        │
 │ CORE         orchestrator → pipeline → runtime port           │
 │  (no I/O)    registry · dispatcher · budget · cancellation    │
 │              events {run_id, call_id, seq, kind, payload}     │
@@ -104,7 +105,7 @@ The map deliberately contains **no storage port**. The application that owns the
 
 | # | Rule | `pytestarch` form |
 |---|---|---|
-| C | Every module of the service belongs to one layer: host, core, leaf adapters, capability | the module list of the graph, each name passed through one classification function; the modules left over are asserted to be none |
+| C | Every module of the service belongs to one layer: host, core, leaf adapters, capability, measurement | the module list of the graph, each name passed through one classification function; the modules left over are asserted to be none |
 | R1 | A core module imports no I/O library | `Rule().modules_that().are_named(<core module>).should_not().import_modules_that().are_named([<library>])`, on a graph built with `exclude_external_libraries=False`. The library is named by its PACKAGE, because `pytestarch` names an import after the package it comes from: `from urllib import request` is the import of `urllib` |
 | R2 | A core module imports nothing of another layer, the telemetry facade excepted | the same form, with the roots of the other layers in place of the library: the host modules, `capabilities.adapters`, `capabilities.search_knowledge` |
 | T | The telemetry SDK is imported by `tracing` and by nothing else | R1's form for `opentelemetry`, over every module of the tree except the facade — the host included |

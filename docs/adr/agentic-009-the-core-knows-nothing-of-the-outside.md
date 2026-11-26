@@ -131,13 +131,23 @@ concepts. No platform is named in the rule: `Redis`, `S3`, `okf-server`,
 datastore accepts") is not. The allow-list holds the core's vocabulary and
 never a platform's name.
 
-**R4 is a floor, not the proof.** Its rule reads ONE spelling of an
-id-derived value (`replace("_", " ")`) — it catches the shape this codebase
-used, not every spelling a future change could invent. The property itself
-is carried by the BEHAVIOURAL assertions (the citation card carries the
-source's own name, on either branch), and those are where F5's closure is
-proven; the ratchet's empty known-leak set says the core carries no id-derived
-value **in the shape the rule reads**.
+**R4 is a floor, not the proof.** Its rule reads the SHAPE of an
+id-derived value (a `replace` whose separator is the token's own `_`), not
+the spelling this codebase used — the same call written `replace("_"," ")`
+or with single quotes is caught too. It still catches a shape, not every
+invention a future change could make. The property itself is carried by the
+BEHAVIOURAL assertions (the citation card carries the source's own name, on
+either branch), and those are where F5's closure is proven; the ratchet's
+empty known-leak set says the core carries no id-derived value **in the shape
+the rule reads**.
+
+**R5 sweeps by signature, not by name.** The rule looks for the port's
+public guards — a public function that takes an identifier and returns it —
+so a guard is covered whatever it is called. The prefix it once matched
+(`validate_`) left the port's SECOND guard (`ensure_graph_name_config`)
+unlooked-at: a sweep that reported "no guard encodes a form" over a guard
+that was never called proved nothing about it. A guard is a guard by what it
+DOES; a name is a convention.
 
 **F4 needed no code.** The counterparty's vocabulary stays in the port:
 `capabilities/contract.py` declares the OKF identity types

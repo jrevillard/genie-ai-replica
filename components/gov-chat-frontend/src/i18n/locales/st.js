@@ -3625,6 +3625,17 @@ export default {
         colContent: 'Tsa kahare tsa phisege'
       }
     },
+    opwait: {
+      title: 'Ho sebetsa…',
+      cancel: 'Khansela',
+      ops: {
+        conceptList: 'Ho kenya maikutlo',
+        reposList: 'Ho kenya li-repositories',
+        links: 'Ho kenya lihokelo',
+        ragas: 'Ho etsa benchmark',
+        topicLinkStart: 'Ho qala ho hokahanya lihlooho'
+      }
+    },
     ragas: {
       grounding: {
         note: 'dipotseko {kept} ho tse {requested} li kwalehile — {discarded} ea ka ke ea hokahana le corpus eo e neng e hlajoa ({rounds} dikou tsa kopo hape)'

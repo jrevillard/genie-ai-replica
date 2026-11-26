@@ -2142,6 +2142,17 @@ export default {
         colContent: 'Chunk content'
       }
     },
+    opwait: {
+      title: 'Working…',
+      cancel: 'Cancel',
+      ops: {
+        conceptList: 'Loading concepts',
+        reposList: 'Loading repositories',
+        links: 'Loading links',
+        ragas: 'Generating benchmark',
+        topicLinkStart: 'Starting topic linking'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept} of {requested} questions grounded — {discarded} could not be tied to the evaluated corpus (re-asked {rounds} round(s))'

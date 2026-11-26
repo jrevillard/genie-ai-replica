@@ -3559,6 +3559,17 @@ export default {
         colContent: 'เนื้อหาชังก์'
       }
     },
+    opwait: {
+      title: 'กำลังทำงาน…',
+      cancel: 'ยกเลิก',
+      ops: {
+        conceptList: 'กำลังโหลดแนวคิด',
+        reposList: 'กำลังโหลดคลังข้อมูล',
+        links: 'กำลังโหลดลิงก์',
+        ragas: 'กำลังสร้างเกณฑ์มาตรฐาน',
+        topicLinkStart: 'กำลังเริ่มเชื่อมโยงหัวข้อ'
+      }
+    },
     ragas: {
       grounding: {
         note: 'ตรึงคำถามได้ {kept} จาก {requested} — {discarded} ข้อเชื่อมโยงกับคลังเนื้อหาที่ประเมินไม่ได้ (ขอซ้ำ {rounds} รอบ)'

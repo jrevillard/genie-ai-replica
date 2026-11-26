@@ -3603,6 +3603,17 @@ export default {
         colContent: 'Maudhui ya kipande'
       }
     },
+    opwait: {
+      title: 'Inafanya kazi…',
+      cancel: 'Ghairi',
+      ops: {
+        conceptList: 'Inapakia dhana',
+        reposList: 'Inapakia hazina',
+        links: 'Inapakia viungo',
+        ragas: 'Inatengeneza benchmark',
+        topicLinkStart: 'Inaanza kuunganisha mada'
+      }
+    },
     ragas: {
       grounding: {
         note: 'maswali {kept} kati ya {requested} yamegundwa — {discarded} hayakuweza kuhusishwa na mkusanyiko uliopimwa (kombora tena: {rounds})'

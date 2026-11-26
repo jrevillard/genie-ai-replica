@@ -37,9 +37,14 @@ import logging
 import re
 import time
 from contextlib import suppress
-from typing import Any, Protocol
 
-from capabilities.model import MAX_SANE_TOKENS, chat_auth_headers, coerce_int, coerce_sane_int
+from capabilities.model import (
+    MAX_SANE_TOKENS,
+    ModelTransport,
+    chat_auth_headers,
+    coerce_int,
+    coerce_sane_int,
+)
 
 from .config import NEGATIVE_CACHE_SECONDS, PreparationConfig
 
@@ -215,22 +220,6 @@ def classify_transport_error(exc: Exception) -> TranslationFailedError:
     return TranslationFailedError(f"translation failed: {type(exc).__name__}: {str(exc)[:200]}")
 
 
-class TranslationTransport(Protocol):
-    """The transport seam: the two HTTP verbs the client needs.
-
-    Implementations return ``(status, parsed body)`` or raise. Raw transport
-    exceptions (connection errors, test doubles' arbitrary exceptions)
-    propagate to the client's classification; a TIMEOUT arrives as the
-    builtin ``TimeoutError`` — an implementation maps its own timeout
-    type (the httpx adapter raises ``TransportTimeoutError``) because the
-    core may not name an HTTP library.
-    """
-
-    async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]: ...
-
-    async def post_json(self, url: str, headers: dict, payload: dict, timeout_s: float) -> tuple[int, Any]: ...
-
-
 class ModelEndpointCache:
     """The window/model-id discovery, ported from ``core/model_cache.py``.
 
@@ -243,7 +232,7 @@ class ModelEndpointCache:
     the negative cache covers only the request-path window field).
     """
 
-    def __init__(self, endpoint: str, transport: TranslationTransport, probe_timeout_s: float, ttl_s: int):
+    def __init__(self, endpoint: str, transport: ModelTransport, probe_timeout_s: float, ttl_s: int):
         self._endpoint = endpoint
         self._transport = transport
         self._probe_timeout_s = probe_timeout_s
@@ -409,7 +398,7 @@ class TranslationClient:
         self,
         config: PreparationConfig,
         registry,
-        transport: TranslationTransport,
+        transport: ModelTransport,
         cache: ModelEndpointCache | None = None,
     ):
         self._config = config

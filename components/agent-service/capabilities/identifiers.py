@@ -28,7 +28,10 @@ import re
 
 from capabilities.contract import AuthorizationError, OperationName
 
-_FILE_ID_PATTERN = re.compile(r"[A-Za-z0-9_\-]+")
+# ONE safe-token charset for every opaque identifier the core guards:
+# letters, digits, underscore and hyphen. The file id, the repo id and the
+# corpus leg label are the SAME shape (the core does not know any platform's
+# own form — see the module docstring), so they share one pattern.
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_\-]+")
 _CONCEPT_ID_PATTERN = re.compile(r"[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*")
 
@@ -52,7 +55,7 @@ def validate_file_id(value: str, *, operation: OperationName) -> str:
     ``components/document-repository/src/utils/fileUtils.js``) and the
     ArangoDB ``_key`` is another, and neither is the core's business.
     """
-    return _guard(_FILE_ID_PATTERN, value, _FILE_ID_MAX_LEN, "file_id", operation=operation)
+    return _guard(_TOKEN_PATTERN, value, _FILE_ID_MAX_LEN, "file_id", operation=operation)
 
 
 def validate_repo_id(value: str, *, operation: OperationName) -> str:

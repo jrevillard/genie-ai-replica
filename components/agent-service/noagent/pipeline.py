@@ -70,7 +70,15 @@ from capabilities.contract import (
     SearchKnowledgeInput,
     SearchKnowledgeResult,
 )
-from capabilities.model import chat_auth_headers, chat_choice, chat_choice_content, chat_completions_url
+from capabilities.model import (
+    MODEL_CHARS_PER_TOKEN_ESTIMATE,
+    MODEL_INPUT_SAFETY_TOKENS,
+    MODEL_PROMPT_OFFSET_TOKENS,
+    chat_auth_headers,
+    chat_choice,
+    chat_choice_content,
+    chat_completions_url,
+)
 from capabilities.sources import ConceptSource, DocumentMetadataSource
 from preparation import PreparationConfig, QueryPreparer
 from preparation.registry import LanguageRegistry
@@ -92,13 +100,13 @@ PREPARATION_DEGRADED = "preparation_degraded"
 # The rank-decay confidence default (deployed CONFIDENCE_RANK_DECAY).
 DEFAULT_CONFIDENCE_RANK_DECAY = 0.5
 
-# The answer-translation budget's constants (deployed gpu-translate-backend:
-# the prompt-offset tokens, the safety margin, the refusal floor and the
-# need bound).
-_TRANSLATION_PROMPT_OFFSET_TOKENS = 20
-_TRANSLATION_INPUT_SAFETY_TOKENS = 128
+# The answer-translation budget's refusal floor (deployed
+# gpu-translate-backend). The three numbers that SIZE a prompt against the
+# endpoint's window are NOT declared here: the translation endpoint is a
+# chat endpoint like any other, and the port owns that estimate
+# (``capabilities.model``'s ``MODEL_*`` constants) — one home for the
+# heuristic, so it cannot be retuned in one place and not the other.
 _TRANSLATION_MIN_OUTPUT_BUDGET = 256
-_TRANSLATION_CHARS_PER_TOKEN = 4
 
 
 def _rank_weighted_confidence(scores: list[float], decay: float) -> float:
@@ -178,9 +186,9 @@ class AnswerTranslator:
             # inside the division it would contribute only 5. It stays out
             # of the need bound too: the scaffolding around the prompt
             # produces no output, so it does not multiply into the cap.
-            estimated_tokens = math.ceil(len(answer_prompt) / _TRANSLATION_CHARS_PER_TOKEN)
-            input_tokens = estimated_tokens + _TRANSLATION_PROMPT_OFFSET_TOKENS
-            room = window - input_tokens - _TRANSLATION_INPUT_SAFETY_TOKENS
+            estimated_tokens = math.ceil(len(answer_prompt) / MODEL_CHARS_PER_TOKEN_ESTIMATE)
+            input_tokens = estimated_tokens + MODEL_PROMPT_OFFSET_TOKENS
+            room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
             if room < _TRANSLATION_MIN_OUTPUT_BUDGET:
                 logger.warning(f"Answer translation refused: the prompt leaves {room} of {window} tokens.")
                 return text, "failed"

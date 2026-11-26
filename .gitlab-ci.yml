@@ -4020,6 +4020,15 @@ docs:validate:
   script:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
+    # The lookups the playbooks CALL, resolved for real. --syntax-check
+    # never evaluates a lookup (it only parses the YAML — proven: it
+    # passes with an empty collection path), so a lookup whose collection
+    # is missing from requirements.yml survived CI and died on the deploy
+    # host mid-run ("The lookup plugin 'ansible.builtin.cartesian' was
+    # not found" — it is only a REDIRECT to community.general.cartesian).
+    # The job's before_script installs requirements.yml, so running the
+    # lookup here proves that install actually delivered the plugin.
+    - ansible localhost -c local -m ansible.builtin.debug -a "msg={{ lookup('ansible.builtin.cartesian', ['a'], ['b']) }}"
     # The collapsed deploy-gpu.yml carries both vendors' plays. Render the
     # GPU-node compose template in BOTH shapes to prove the Jinja
     # conditionals resolve: every row in the template carries an inline

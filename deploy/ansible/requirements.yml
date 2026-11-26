@@ -2,3 +2,15 @@
 collections:
   - name: community.docker
     version: ">=4.0.0"
+  # community.general carries the `cartesian` lookup that
+  # roles/config_bootstrap uses to pair each Keycloak theme with each
+  # realm entrypoint. `ansible.builtin.cartesian` is only a REDIRECT to
+  # community.general.cartesian (ansible-core's runtime redirect table),
+  # so the collection must be installed on the controller: without it the
+  # lookup fails with "The lookup plugin 'ansible.builtin.cartesian' was
+  # not found" and the config_bootstrap role aborts the deploy.
+  # No upper bound: the collection's own requires_ansible metadata
+  # (>=2.19 for the 14.x line) makes galaxy resolve a version compatible
+  # with the controller's ansible-core.
+  - name: community.general
+    version: ">=4.0.0"

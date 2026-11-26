@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **The okf-scopes migration no longer wipes the profile of the accounts it grants** (!1100, seen live 2026-11-26: at every deploy the keycloak-config service re-granted the wildcard `okf_scopes` attribute through a PUT that carried ONLY the attributes map — and a Keycloak PUT replaces the payload, clearing the fields it omits. The realm's user profile marks `email`/`firstName`/`lastName` required for every user, so the wiped account landed on the "Update Account Information" form at every login under Keycloak 26.8). The migration now merges the scope into the FULL user representation with jq (the keycloak-config image installs jq) — attribute values with special characters survive byte-for-byte — and a failed grant warns and skips the user instead of aborting the migration loop.
 ## [3.1.1] - 2026-11-26
 
 **In one line: the Ansible deployment runs again — the `cartesian` lookup the `config_bootstrap` role needs is now declared, and the SSL directory check runs with the privileges that check requires.**

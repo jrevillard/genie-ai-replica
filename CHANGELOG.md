@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-11-26
+
+**In one line: the Ansible deployment runs again — the `cartesian` lookup the `config_bootstrap` role needs is now declared, and the SSL directory check runs with the privileges that check requires.**
+
+**No breaking change, but one manual step:** a controller that deployed before this release must install the newly declared Ansible collection (`ansible-galaxy collection install -r requirements.yml`) — without it the `config_bootstrap` role still aborts. The [upgrade guide](https://opensource.unicc.org/un/itu/genie-ai/-/blob/v3.1.1/docs/UPGRADE.md) carries the procedure.
+
+**The fix is in the deployment path, not in the application images:** the `v3.1.1` images carry the same service code as `v3.1.0` — what changes is the playbook the operator applies on the deploy host.
+
+### Fixed
+
+- **The `config_bootstrap` role no longer aborts on a controller without the `community.general` collection.** The role pairs each Keycloak theme with each realm entrypoint through the `cartesian` lookup, and `ansible.builtin.cartesian` is only a REDIRECT to `community.general.cartesian` in ansible-core's runtime table — so the collection has to be installed on the controller, and the requirements declared `community.docker` alone. Every controller without it failed the role mid-run with "The lookup plugin 'ansible.builtin.cartesian' was not found". The collection is now declared. (!1093)
+
+- **The SSL directory check no longer dies on the second deployment run.** The play stat'ed `secrets/ssl` as `ansible_user`, in a directory the same play had just chowned to `root:root` 0750 — the unprivileged stat died EACCES, and under `failed_when: false` registered a result WITHOUT a `stat` key, so the next task's `ssl_files.results[0].stat.exists` raised "object of type 'dict' has no attribute 'stat'". The directory's mode is set at the END of the play (`root:101` 0750), so the first run finds it still 0755 and passes: the failure is a second-run failure on every host. Both stats now run as root, like the normalization task that already does. (!1093)
+
+- **The CI validation now resolves the Ansible lookups the playbooks CALL, instead of only parsing them.** `--syntax-check` never evaluates a lookup — it passes with an empty collection path — which is why a lookup whose collection was missing from the requirements survived CI and died on the deploy host mid-run. The `docs:validate` job now installs the requirements and resolves the lookup for real, so the failure is caught before the deploy. (!1093)
+
 ## [3.1.0] - 2026-11-25
 
 **In one line: the OKF knowledge-base feature arrives — dark by default, a deployment enables it with `OKF_ENABLED=1` — Kubernetes becomes a deployment target alongside Compose and Swarm, the AMD ROCm / Strix Halo GPU path ships, and the security wave closes the front-matter RCE (CVE-2026-78847), the cryptography advisories (CVE-2026-69249 / -69248 / -69247), the nginx CVEs (CVE-2026-9256 and four more), the Keycloak Java runtime (CVE-2026-114938, "Java4Shell") and parse5 (CVE-2026-133245).**
@@ -1468,7 +1484,8 @@ Initial release for El Salvador agricultural AI assistant deployment.
 [R_1_0_0]: https://opensource.unicc.org/un/itu/genie-ai/-/tags/R_1_0_0
 [2.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/R_1_0_0...v2.0.0
 [2.0.1]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.0...v2.0.1
-[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.0...main
+[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.1...main
 [3.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.1.0...v3.0.0
 [3.1.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.0.0...v3.1.0
+[3.1.1]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v3.1.0...v3.1.1
 [2.1.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.1...v2.1.0

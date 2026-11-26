@@ -24,19 +24,50 @@ class TestLegacyFileId:
     def test_numeric_id_passes(self):
         assert validate_file_id("12345", operation=OP) == "12345"
 
-    def test_letters_refused(self):
-        with pytest.raises(AuthorizationError):
-            validate_file_id("abc123", operation=OP)
+    @pytest.mark.parametrize("bad", ["", " 1", "1 ", "1;2", "1`2", "1'2", "1.5", "١٢٣", "a/b", "a\\b", "é"])
+    def test_unsafe_characters_refused(self, bad):
+        """The guard refuses what is UNSAFE — not what is merely unusual.
 
-    @pytest.mark.parametrize("bad", ["", " 1", "1 ", "1;2", "1`2", "1'2", "-1", "1.5", "١٢٣"])
-    def test_non_digits_refused(self, bad):
+        A letter, a hyphen and an underscore are legal characters of an
+        opaque token; a space, a quote, a backtick and a slash are not. The
+        core refuses the unsafe ones and lets the platform refuse the ids
+        it does not know (ADR agentic-009): a guard that encodes a
+        platform's FORM refuses the corpus the day the platform changes it.
+        """
+
         with pytest.raises(AuthorizationError):
             validate_file_id(bad, operation=OP)
 
     def test_refusal_carries_the_outcome_code(self):
         with pytest.raises(AuthorizationError) as excinfo:
-            validate_file_id("abc", operation=OP)
+            validate_file_id("a b", operation=OP)
         assert excinfo.value.code is OutcomeCode.AUTHORIZATION_FAILURE
+
+    def test_the_document_repositorys_timestamped_id_passes(self):
+        """The id the document repository MINTS must be readable.
+
+        The document repository names every file ``<timestamp>_<uuid-prefix>``
+        (``components/document-repository/src/utils/fileUtils.js``:
+        ``${Date.now()}_${uuidv4().split('-')[0]}``) — the shape its own
+        batch API's validation exists to tell apart from an ArangoDB
+        ``_key`` (``fileController.js``: "semantic file_ids are timestamped
+        while ArangoDB _keys are bare integers").
+
+        A guard that accepts only bare digits therefore refuses EVERY file
+        the corpus actually holds: the model reads the id out of the search
+        hit, hands it to ``read_source``, and the call is refused with an
+        authorization failure before any resolution — the source can never
+        be read, on any document, ever.
+        """
+
+        file_id = "1795706154681_2f1d1fc5"
+
+        assert validate_file_id(file_id, operation=OP) == file_id
+
+    def test_an_arango_key_passes_too(self):
+        """The other shape the corpus holds: the bare ArangoDB ``_key``."""
+
+        assert validate_file_id("7200805215929729570", operation=OP) == "7200805215929729570"
 
 
 class TestRepoId:

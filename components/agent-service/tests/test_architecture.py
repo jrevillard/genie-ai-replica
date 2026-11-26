@@ -38,6 +38,8 @@ the PACKAGE it comes from — ``from urllib import request`` is the import of
 a synthetic package and checks that the same helpers report it.
 """
 
+import ast
+import tokenize
 from pathlib import Path
 from typing import NamedTuple
 
@@ -163,6 +165,45 @@ KNOWN_ADAPTER_IMPORTERS = {
     "app",  # app.py: the composition root builds the transport adapter
     "capabilities.search_knowledge",  # the capability builds its own adapters
 }
+
+# R4 — the platform vocabulary the core's TEXT carries.
+#
+# R1–R3 and L1/L2 police the IMPORTS: a core module may hold a platform's
+# NAME without importing a platform's MODULE, and the import rules stay
+# green. This rule reads the core's source instead — the text is where the
+# next leak hides (ADR agentic-009).
+#
+# The scan reads CODE, not prose: a comment or a docstring that NAMES a
+# platform (to explain it, to point at it) is documentation, not a
+# dependency. Only the code's own literals count.
+#
+# Each pattern is a platform's own vocabulary. A finding is
+# ``(module, pattern)``: the file that carries it, and the literal found.
+PLATFORM_VOCABULARY = {
+    # ArangoDB's collections (the corpus's own names).
+    "arango_collection": ("GRAPH_SOURCE", "GRAPH_ENTITY", "GRAPH_LINKS_TO"),
+    # ArangoDB's configuration prefix.
+    "arango_env": ("ARANGO_",),
+    # The document repository's own HTTP surface and its upload directory.
+    "docrepo_surface": ("/api/files", "uploaded_files"),
+    # An identifier turned into a display value — the core deriving a name
+    # from a token it was handed.
+    "id_derived_value": ('replace("_", " ")',),
+}
+
+# The leak set the core still carries. A fix removes one finding and shrinks
+# this list in the same commit; a NEW leak adds one and turns the test red.
+KNOWN_PLATFORM_VOCABULARY: set[tuple[str, str]] = {
+    # F5 — the core derives a display name from an identifier it was handed.
+    ("capabilities.citations", "id_derived_value"),
+}
+
+# The modules whose TEXT the rule reads: the core and the capability — the
+# modules that DECIDE. The ports (contract, identifiers, model, sources) are
+# excluded: a port names the vocabulary it expects from its connector, which
+# is the port's job (ADR agentic-009, "the counterparty's vocabulary stays
+# in the port").
+DECIDING_LAYERS = ("core", "capability")
 
 LAYERS = {
     "ports": PORTS,
@@ -423,6 +464,123 @@ def test_only_the_listed_modules_import_the_leaf_adapters(internal: EvaluableArc
 def test_the_telemetry_sdk_is_imported_by_the_tracing_module_only(with_libraries: EvaluableArchitecture) -> None:
     modules = [module for module in _modules(with_libraries, SERVICE.name) if module != TELEMETRY_FACADE]
     assert _io_violations(SERVICE.name, modules, with_libraries, (TELEMETRY_SDK,)) == set()
+
+
+def _docstring_lines(source: str) -> set[int]:
+    """The lines the module's, classes' and functions' docstrings occupy.
+
+    A docstring is documentation: it may NAME a platform to explain it. The
+    rule reads code, so the docstrings' lines are excluded from the scan.
+    """
+
+    lines: set[int] = set()
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return lines
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        body = getattr(node, "body", [])
+        if not body:
+            continue
+        first = body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+            lines.update(range(first.value.lineno, (first.value.end_lineno or first.value.lineno) + 1))
+    return lines
+
+
+def _code_text(path: Path) -> str:
+    """The module's CODE — its source, without the comments and the docstrings.
+
+    The scan reads the source itself, not a re-joined token stream: an
+    idiom like ``replace("_", " ")`` is spelled with spaces in the file,
+    and a token stream would spell it differently. ``tokenize`` finds the
+    comments (blanked in place) and the AST finds the docstrings (their
+    lines blanked), so the text that remains is the code.
+    """
+
+    source = path.read_text(encoding="utf-8")
+    lines = source.splitlines(keepends=True)
+    docstrings = _docstring_lines(source)
+    try:
+        tokens = list(tokenize.generate_tokens(iter(lines).__next__))
+    except (tokenize.TokenError, IndentationError):
+        return source
+    for token in tokens:
+        if token.type != tokenize.COMMENT:
+            continue
+        (row, column), (end_row, end_column) = token.start, token.end
+        for index in range(row - 1, end_row):
+            if index >= len(lines):
+                continue
+            line = lines[index]
+            start = column if index == row - 1 else 0
+            stop = end_column if index == end_row - 1 else len(line)
+            lines[index] = line[:start] + " " * max(0, stop - start) + line[stop:]
+    for number in docstrings:
+        if 0 < number <= len(lines):
+            lines[number - 1] = "\n"
+    return "".join(lines)
+
+
+def _platform_vocabulary_findings() -> set[tuple[str, str]]:
+    """The (module, pattern) pairs the deciding modules carry."""
+
+    findings: set[tuple[str, str]] = set()
+    deciding = _in_layers(
+        _leaf_modules(_modules(_graph(SERVICE, with_libraries=False), SERVICE.name)), DECIDING_LAYERS, SERVICE_LAYOUT
+    )
+    deciding = [module for module in deciding if module not in PORTS]
+    for module in deciding:
+        path = SERVICE / Path(*module.split(".")).with_suffix(".py")
+        if not path.exists():
+            continue
+        code = _code_text(path)
+        for name, patterns in PLATFORM_VOCABULARY.items():
+            for pattern in patterns:
+                if pattern in code:
+                    findings.add((module, name))
+    return findings
+
+
+def test_the_core_carries_no_platform_vocabulary() -> None:
+    """R4 — the core's TEXT names no platform (ADR agentic-009).
+
+    The import rules (R1–R3, L1, L2) police the direction of the
+    dependencies; this rule polices their CONTENT. A core module may hold
+    a platform's name without importing a platform's module, and the
+    import rules stay green — which is how the document-id form, the
+    Arango collection names and the id-derived display name reached the
+    core in the first place.
+    """
+
+    assert _platform_vocabulary_findings() == KNOWN_PLATFORM_VOCABULARY
+
+
+def test_the_identifier_guards_accept_any_safe_token() -> None:
+    """R5 — a guard encodes no platform's FORM (ADR agentic-009).
+
+    A guard's charset is the core's only knowledge of the shape an
+    identifier has where it was minted. The document repository mints
+    ``<timestamp>_<uuid-prefix>``; the ArangoDB ``_key`` is bare digits; a
+    guard that requires either refuses every identifier of the other, and
+    the refusal is an authorization failure — indistinguishable from a
+    permission refusal, on every document, silently.
+
+    The core's guard therefore accepts the GENERAL token shape and refuses
+    the unsafe characters. What an identifier looks like where it was
+    minted belongs to the platform that resolves it: it refuses what it
+    does not know.
+    """
+
+    from capabilities.contract import OperationName
+    from capabilities.identifiers import validate_file_id, validate_repo_id
+
+    general_tokens = ("a", "a-b_c", "1795706154681_2f1d1fc5", "12345", "X" * 60)
+    for token in general_tokens:
+        assert validate_file_id(token, operation=OperationName.READ_SOURCE) == token
+        assert validate_repo_id(token, operation=OperationName.READ_SOURCE) == token
 
 
 def test_leaf_adapters_access_only_the_ports(internal: EvaluableArchitecture) -> None:

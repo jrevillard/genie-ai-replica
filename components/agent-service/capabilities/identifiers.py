@@ -10,18 +10,25 @@ not use). The guard lives here, in the port.
 Every guard raises ``AuthorizationError``: the refusal happens before any
 resolution, so a malformed identifier and an unauthorized one are
 indistinguishable from the caller's side, and neither reveals whether
-anything exists. The patterns mirror the shapes the platforms themselves
-produce — the document repository's numeric file ids, okf-server's uuid
-repository ids and POSIX-path concept slugs, and the retriever's
-ArangoDB-safe graph names (#501: only characters ArangoDB itself accepts may
-reach a backticked AQL identifier).
+anything exists.
+
+**The patterns are the GENERAL token shape, not a platform's form** (ADR
+agentic-009). A guard's charset is the only place the core could know what
+an identifier looks like where it was minted — and the moment it knows, it
+is wrong the day the platform changes: a guard that accepted only the
+document repository's numeric ids refused every id the repository actually
+mints (``<timestamp>_<uuid-prefix>``), on every document, as an
+authorization failure indistinguishable from a permission refusal. What an
+identifier looks like belongs to the platform that resolves it; it refuses
+what it does not know. The core refuses what is UNSAFE — the characters
+that would change the meaning of the URL or the query it is bound to.
 """
 
 import re
 
 from capabilities.contract import AuthorizationError, OperationName
 
-_FILE_ID_PATTERN = re.compile(r"[0-9]+")
+_FILE_ID_PATTERN = re.compile(r"[A-Za-z0-9_\-]+")
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_\-]+")
 _CONCEPT_ID_PATTERN = re.compile(r"[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*")
 
@@ -38,7 +45,13 @@ def _guard(pattern: re.Pattern[str], value: str, max_len: int, what: str, *, ope
 
 
 def validate_file_id(value: str, *, operation: OperationName) -> str:
-    """A legacy file id: the document repository's numeric id."""
+    """A legacy file id: an opaque token the document repository resolves.
+
+    The core does not know its form — the repository mints one shape
+    (``<timestamp>_<uuid-prefix>``, see
+    ``components/document-repository/src/utils/fileUtils.js``) and the
+    ArangoDB ``_key`` is another, and neither is the core's business.
+    """
     return _guard(_FILE_ID_PATTERN, value, _FILE_ID_MAX_LEN, "file_id", operation=operation)
 
 

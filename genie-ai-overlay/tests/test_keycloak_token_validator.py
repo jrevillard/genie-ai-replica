@@ -350,3 +350,37 @@ async def test_validate_token_still_rejects_foreign_issuer(monkeypatch):
     ):
         v._jwks_keys = [jwk_dict]
         assert await v.validate_token(token) is None, "a foreign issuer must still be rejected"
+
+
+def test_empty_internal_url_env_behaves_like_unset(monkeypatch):
+    """The compose file passes KEYCLOAK_INTERNAL_URL as ${KEYCLOAK_INTERNAL_URL:-}
+    — present but EMPTY on deployments that do not define it. An empty value
+    must resolve to the in-network default exactly like an unset one: a
+    default-argument getenv kept the empty string and the JWKS URI lost its
+    protocol ("Request URL is missing an 'http://' or 'https://' protocol"
+    on every authenticated request). dataprep and okf-server already treat
+    the empty string as unset; this pins chatqna to the same contract."""
+    import importlib
+
+    from chatqna import keycloak_token_validator as v
+
+    # reload() re-executes the module: snapshot what the rest of the suite
+    # imported and put the module back under the ambient env before leaving,
+    # so tests collected after this one see the same module object state.
+    saved = v.KEYCLOAK_INTERNAL_URL
+    try:
+        monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "")
+        importlib.reload(v)
+        assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak:8080"
+
+        monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "http://keycloak-internal:8080")
+        importlib.reload(v)
+        assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak-internal:8080"
+
+        monkeypatch.delenv("KEYCLOAK_INTERNAL_URL", raising=False)
+        importlib.reload(v)
+        assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak:8080"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(v)
+        assert saved == v.KEYCLOAK_INTERNAL_URL

@@ -75,7 +75,33 @@ enough to not need a cancel AND honestly cancellable.
 8. Generation counter semantics unchanged (a newer fetch still supersedes by
    generation, independent of abort).
 
-## Acceptance (issue, measured live on the local build before merge — RULED)
+## Acceptance (AMENDED live on the local build, 2026-11-26 — David's ruling)
+
+The live run on a 6,352-concept repo measured the crawl's NETWORK leg at
+**1.1 s** for all 32 pages at windowed concurrency (page 1: 183 ms; 7 waves
+at 88–212 ms) — the sequential loop's ~18–35 s of round-trips is gone — and
+the first row painting at **357 ms** warm. The remainder of the wall clock
+(~52 s) is the UNVIRTUALIZED rail re-rendering every row per wave commit:
+the render half of the issue, which lives in the ConceptList component and
+is **#2189's scope**. Per David's ruling the ≤5 s wall-clock acceptance
+MOVES to #2189; this MR asserts and ships what it owns:
+
+- The crawl terminates; the rail holds every row; the wait panel clears.
+- Page-1 rows paint within ~0.5 s (e2e bound: 2.5 s including harness).
+- Cancel in the op-wait overlay actually stops the request stream (no new
+  wave dispatches after the click; in-flight pages aborted), the committed
+  rows stay, and no error is raised (e2e proves the stream dead over the
+  following 1.5 s).
+- Stale-guard + generation semantics preserved (round-11 / round-20 guards,
+  keep-last-known-list on error).
+- Blast radius audited: `conceptService.listForRepo` has exactly ONE
+  production caller (`fetchConcepts`); the web-crawler pipeline, RAGAS
+  generation, drains, ingestion, and topic-links are untouched by the diff.
+
+Original issue acceptance (for the record, superseded by the amendment
+above): 10k-repo open with no browser busy cursor and wall clock ≤ 5 s;
+rail shows page-1 rows within ~0.5 s; stale-guard + generation semantics
+preserved.
 
 - 10k-repo open: no browser busy cursor at any point; wall clock ≤ 5 s.
 - Rail shows page-1 rows within ~0.5 s.

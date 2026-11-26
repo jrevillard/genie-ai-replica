@@ -102,6 +102,35 @@ correction, or the correction is a guess about what "done" means.
 | Rename the counterparty's vocabulary in the ports (drop `repo_id`/`concept_id`) | **Rejected** | A port names what it expects; the vocabulary is not the leak. Renaming it would churn the contract without moving a boundary. |
 | Enforce the rule by review only (no ratchet) | **Rejected** | The five leaks were found by reading text, not by any rule; the next one will be too. A ratchet makes the class visible and the shrinkage measurable. |
 
+## The leak ledger
+
+Each leak, the rule that MEASURES it, and the commit that closes it. A leak
+without a rule is a leak that returns.
+
+| # | The leak | The rule that measures it | State |
+|---|---|---|---|
+| F1 | The **form** of a document id | **R5** — the identifier guards accept any safe token | closed (`9d50e6a80`) |
+| F2 | The **Arango adapter** imported by a core module | **R3** + **L2** — the capability leaves `KNOWN_ADAPTER_IMPORTERS` and reaches the corpus through the ports alone | closed (`a1c7e5c67`) |
+| F3 | The **charset of an Arango graph name** | **R6** — the core states no foreign system's acceptance rules | closed (`c68f856b4`) |
+| F4 | The **vocabulary of the OKF counterparty** | the port boundary itself — the core consumes the port's types and declares none of its own | verified, no change |
+| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | in flight |
+
+**R6 is generic.** It reads the core's text for the SHAPE of an acceptance
+claim — a subject and an acceptance verb, or a `<name>-safe` compound — and
+reports the subject when it is a NAME that is not one of the core's own
+concepts. No platform is named in the rule: `Redis`, `S3`, `okf-server`,
+`vLLM` and `TEI` are caught by the shape, and an ordinary word ("the
+datastore accepts") is not. The allow-list holds the core's vocabulary and
+never a platform's name.
+
+**F4 needed no code.** The counterparty's vocabulary stays in the port:
+`capabilities/contract.py` declares the OKF identity types
+(`OkfConceptProvenance`, `AuthorizedRepo.repo_id`) and `capabilities/sources.py`
+declares the OKF read, and the core consumes them from there — the executor
+imports the port's provenance type, the verification ledger reads the port's
+provenance fields. The core defines no identity model of its own, so there is
+nothing to move.
+
 ## Consequences
 
 - **Positive**: the core stops breaking when a platform changes its id format; the citation card shows

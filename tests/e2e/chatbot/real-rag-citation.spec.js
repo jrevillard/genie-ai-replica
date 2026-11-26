@@ -44,6 +44,17 @@ const FIXTURE_NAME = `${FIXTURE_SEED}-${RUN_ID}.md`;
 const FACT_TOKEN = 'QZK-7319';
 const QUESTION = 'What is the maintenance access code for the XR-7 controller?';
 
+// The corpus's TYPOGRAPHY is not the fact, and it is not stable: the served
+// passage carries a model-written document context, the answer goes through
+// a translation leg and a markdown round-trip, and any of them may render a
+// dash typographically (U+2011 NON-BREAKING HYPHEN where the corpus wrote
+// U+002D HYPHEN-MINUS). The FACT is what this spec asserts; the dash family
+// is the one difference that does not change it. Every other byte is
+// compared as it is, and the raw answer travels in the failure message so a
+// real difference stays visible.
+const TYPOGRAPHIC_DASHES = /[\u2010-\u2015\u2212]/g;
+const normalizeTypography = (text) => text.replace(TYPOGRAPHIC_DASHES, '-');
+
 // Real dataprep work (ClamAV, chunking, labeling, indexing) and a real RAG
 // answer (retrieval, reranking, LLM generation, translation) each wait on a
 // possibly loaded shared venue — both waits are bounded, and an expiry is
@@ -137,7 +148,10 @@ test.describe('Chatbot — a real answer cites its real source', () => {
       // The answer is grounded: the unique fact only the fixture carries
       // is IN the answer text.
       const botText = await getLastBotMessage(page);
-      expect(botText, 'the answer carries the fact only the fixture holds').toContain(FACT_TOKEN);
+      expect(
+        normalizeTypography(botText),
+        `the answer carries the fact only the fixture holds (raw answer: ${JSON.stringify(botText)})`
+      ).toContain(FACT_TOKEN);
 
       // And the citation: the metadata frame's source cards name the file
       // the chunks came from. The card set is handle-resolved; the filter

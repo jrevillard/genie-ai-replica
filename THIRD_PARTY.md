@@ -639,6 +639,22 @@ a test-only dependency; it never reaches a runtime image).
 
 ---
 
+### pytestarch
+**Component Type:** Architecture Test Framework
+**Version:** 5.1.1
+**Repository:** https://github.com/zyskarch/pytestarch
+**License:** Apache 2.0
+**License URL:** `docs/dependencies/agent-service-dependency-evidence.json`
+
+**Usage:** Enforces the dependency rules of the agent service
+(`components/agent-service/tests/test_architecture.py`): a core module
+imports no I/O library and nothing of another layer. A test-only dependency of
+the agent service - it never reaches a runtime image. Its one requirement,
+`networkx` (3.6.1, BSD-3-Clause), is pinned to the last line that accepts
+Python 3.11.
+
+---
+
 ### langdetect
 **Component Type:** Language Detection Library
 **Version:** 1.0.9 (Python — the pinned version of the agent service and the overlay); ^0.2.1 (npm — document-repository)

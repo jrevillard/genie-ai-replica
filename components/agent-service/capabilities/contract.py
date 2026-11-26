@@ -351,6 +351,16 @@ ResultOutcome = Literal[
 ]
 
 
+# The recorded English abstention text — the too-long case's answer text; who
+# translates it stays with the answer layer, as deployed. The search capability
+# logs it when it abstains; the no-agent pipeline answers with it.
+RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT = (
+    "I cannot reliably answer this query because the "
+    "retrieved documents exceed the reranker's input "
+    "limit. This indicates a data ingestion issue."
+)
+
+
 class SearchKnowledgeResult(BaseModel):
     """The `search_knowledge` result.
 

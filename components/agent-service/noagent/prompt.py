@@ -30,7 +30,7 @@ The assembly, as deployed:
 
 import logging
 
-from capabilities.search_knowledge import (
+from capabilities.contract import (
     RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT as RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT,
 )
 

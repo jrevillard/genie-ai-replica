@@ -47,6 +47,7 @@ from .adapters.env_config import ArangoConfig, EmbeddingConfig, HybridConfig, Mo
 from .adapters.tei_embedding import TeiEmbeddingAdapter
 from .adapters.tei_reranking import RerankerInputTooLongError, TeiRerankingAdapter
 from .contract import (
+    RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT,
     AuthorizationError,
     CallerContext,
     LegacyFileProvenance,
@@ -62,16 +63,6 @@ from .contract import (
 from .identifiers import validate_graph_name
 
 logger = logging.getLogger(__name__)
-
-# The recorded English abstention text — the too-long case's
-# answer text; who translates it stays with the answer layer, as deployed.
-# PUBLIC single owner: the no-agent pipeline answers with the same constant
-# it imports from here — one edit point moves the log surface and the answer.
-RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT = (
-    "I cannot reliably answer this query because the "
-    "retrieved documents exceed the reranker's input "
-    "limit. This indicates a data ingestion issue."
-)
 
 
 class SearchKnowledgeCapability:

@@ -37,9 +37,6 @@ from collections.abc import Awaitable, Callable
 
 from pydantic import ValidationError
 
-from capabilities.adapters.chunks import LegacyChunkAdapter
-from capabilities.adapters.docrepo import DocRepoAdapter
-from capabilities.adapters.okf import OkfAdapter
 from capabilities.contract import (
     AuthorizationError,
     CallerContext,
@@ -62,6 +59,7 @@ from capabilities.identifiers import (
     validate_file_id,
     validate_repo_id,
 )
+from capabilities.sources import ChunkReader, ConceptSource, DocumentMetadataSource
 
 _AUTHORIZE = OperationName.READ_SOURCE
 _SEARCH = OperationName.SEARCH_KNOWLEDGE
@@ -82,9 +80,9 @@ class AuthorizedExecutor:
         *,
         bearer: str | None,
         legacy_graph_name: str,
-        docrepo: DocRepoAdapter,
-        okf: OkfAdapter,
-        chunks: LegacyChunkAdapter,
+        docrepo: DocumentMetadataSource,
+        okf: ConceptSource,
+        chunks: ChunkReader,
         search_port,
     ) -> None:
         self._context = context

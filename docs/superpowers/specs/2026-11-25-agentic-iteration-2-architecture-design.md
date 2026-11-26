@@ -546,7 +546,7 @@ Tool errors use the contract's existing outcome codes (`AUTHORIZATION_FAILURE`, 
 | Package | Version | License | Default network behavior | Status |
 |---|---|---|---|---|
 | `mcp` | 2.3.0 | MIT | no telemetry exporter among its dependencies; it requires `opentelemetry-api>=1.28.0` where the tree pins `1.27.0`, and brings `httpx2`, `jsonschema`, `mcp-types`, `python-multipart`, `sse-starlette` and `cryptography` (through `pyjwt[crypto]`) | to adopt, client only; its adoption starts with an OpenTelemetry line bump and the audit of those packages (ADR agentic-005) |
-| `pytestarch` | 5.1.1 | Apache-2.0 | test only | to adopt, `requirements-test.txt` |
+| `pytestarch` | 5.1.1 | Apache-2.0 | test only | adopted, `requirements-test.txt`; its one requirement `networkx` is pinned to `3.6.1` (BSD-3-Clause) |
 | SearXNG | unmodified image | AGPL-3.0 | separate service, consumed over its HTTP API | decision recorded in ADR 0003 of the Server-Side Tools record; to re-record (§12) |
 
 No agent framework is adopted at runtime. A spike's dependencies stay out of the shipped image.

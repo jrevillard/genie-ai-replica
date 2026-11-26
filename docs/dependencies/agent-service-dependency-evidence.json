@@ -228,6 +228,19 @@
       }
     },
     {
+      "name": "networkx",
+      "version": "3.6.1",
+      "license": "BSD-3-Clause",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/networkx/3.6.1/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
       "name": "numpy",
       "version": "1.26.4",
       "license": "BSD-2-Clause",
@@ -466,6 +479,19 @@
       "version": "9.1.1",
       "license": "MIT",
       "license_source": "pypi:license_expression (https://pypi.org/pypi/pytest/9.1.1/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "pytestarch",
+      "version": "5.1.1",
+      "license": "Apache-2.0",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/pytestarch/5.1.1/json)",
       "verified": true,
       "status": "stable",
       "risk_acceptance": null,

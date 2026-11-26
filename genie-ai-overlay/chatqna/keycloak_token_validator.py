@@ -104,7 +104,10 @@ async def _fetch_jwks():
         if _jwks_keys and (now - _jwks_fetched_at) < _JWKS_CACHE_TTL:
             return _jwks_keys
 
-        jwks_uri = f"{KEYCLOAK_INTERNAL_URL}/realms/{KC_REALM}/protocol/openid-connect/certs"
+        # .rstrip('/'), like _expected_issuers: a deployment setting the var
+        # with a trailing slash must not double it into the JWKS path — the
+        # request would 404 and every cold-cache request would 503.
+        jwks_uri = f"{KEYCLOAK_INTERNAL_URL.rstrip('/')}/realms/{KC_REALM}/protocol/openid-connect/certs"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(jwks_uri)

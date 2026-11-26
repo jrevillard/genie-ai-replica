@@ -364,14 +364,23 @@ def test_empty_internal_url_env_behaves_like_unset(monkeypatch):
 
     from chatqna import keycloak_token_validator as v
 
-    monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "")
-    importlib.reload(v)
-    assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak:8080"
+    # reload() re-executes the module: snapshot what the rest of the suite
+    # imported and put the module back under the ambient env before leaving,
+    # so tests collected after this one see the same module object state.
+    saved = v.KEYCLOAK_INTERNAL_URL
+    try:
+        monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "")
+        importlib.reload(v)
+        assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak:8080"
 
-    monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "http://keycloak-internal:8080")
-    importlib.reload(v)
-    assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak-internal:8080"
+        monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "http://keycloak-internal:8080")
+        importlib.reload(v)
+        assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak-internal:8080"
 
-    monkeypatch.delenv("KEYCLOAK_INTERNAL_URL", raising=False)
-    importlib.reload(v)
-    assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak:8080"
+        monkeypatch.delenv("KEYCLOAK_INTERNAL_URL", raising=False)
+        importlib.reload(v)
+        assert v.KEYCLOAK_INTERNAL_URL == "http://keycloak:8080"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(v)
+        assert saved == v.KEYCLOAK_INTERNAL_URL

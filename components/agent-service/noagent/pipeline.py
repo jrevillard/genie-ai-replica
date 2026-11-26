@@ -66,13 +66,14 @@ from capabilities.contract import (
     SearchKnowledgeInput,
     SearchKnowledgeResult,
 )
+from capabilities.model import chat_auth_headers, chat_choice, chat_choice_content, chat_completions_url
 from preparation import PreparationConfig, QueryPreparer
 from preparation.registry import LanguageRegistry
 from preparation.translation import ModelEndpointCache
 
 from . import prompt as prompt_module
 from .config import NoAgentConfig
-from .generation import GenerationClient, TokenCounter, chat_choice, chat_choice_content
+from .generation import GenerationClient, TokenCounter
 from .lane import Lane
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ class AnswerTranslator:
             "messages": [{"role": "user", "content": answer_prompt}],
             "temperature": 0.3,
         }
-        headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
+        headers = chat_auth_headers(self._config.bearer)
         if window:
             # The offset mirrors the deployed gpu-translate-backend and is
             # added AFTER the estimate: offset tokens, not characters —
@@ -181,7 +182,7 @@ class AnswerTranslator:
             payload["max_tokens"] = min(room, 4 * estimated_tokens + 256)
         try:
             status, body = await self._transport.post_json(
-                f"{self._config.translation_endpoint}/v1/chat/completions",
+                chat_completions_url(self._config.translation_endpoint),
                 headers,
                 payload,
                 self._config.translation_timeout_seconds,

@@ -184,17 +184,4 @@ def _fail(inputs: RunInputs, outcome: str, message: str) -> RunResult:
     code = outcome if outcome in _CORE_OUTCOMES else OUTCOME_ERROR
     truncated = message[:MESSAGE_TRUNCATION]
     _emit_terminal(inputs, EventKind.RUN_ERROR, {"code": code, "message": truncated})
-    monitor = inputs.monitor
-    return RunResult(
-        outcome=code,
-        final_text=None,
-        steps=monitor.steps,
-        model_calls=monitor.model_calls,
-        aux_model_calls=monitor.aux_model_calls,
-        tool_calls=monitor.tool_calls,
-        evidence_bytes=monitor.evidence_bytes,
-        wall_clock_seconds=monitor.elapsed_seconds,
-        prompt_tokens=monitor.prompt_tokens,
-        completion_tokens=monitor.completion_tokens,
-        error=truncated,
-    )
+    return RunResult.from_monitor(inputs.monitor, code, final_text=None, error=truncated)

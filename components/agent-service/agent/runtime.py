@@ -37,6 +37,8 @@ from .budget import RunBudgetMonitor
 from .cancellation import CancellationToken
 from .dispatcher import ToolDispatcher
 from .events import EventEmitter
+from .registry import ToolRegistry
+from .verification import VerificationPipeline
 
 # The outcome vocabulary of a run's evidence. ``cancelled`` is never
 # RETURNED by a runtime — the CancelledError propagates untouched and the
@@ -73,6 +75,37 @@ class RunResult:
     prompt_tokens: int | None
     completion_tokens: int | None
     error: str | None = None
+
+    @classmethod
+    def from_monitor(
+        cls,
+        monitor: RunBudgetMonitor,
+        outcome: str,
+        *,
+        final_text: str | None = None,
+        error: str | None = None,
+    ) -> "RunResult":
+        """The record built from the run's budget monitor.
+
+        One builder for every terminal: the loop's own ending and the
+        core's failure path read the SAME counters from the SAME source,
+        so the two can never drift into reporting different usage for one
+        run.
+        """
+
+        return cls(
+            outcome=outcome,
+            final_text=final_text,
+            steps=monitor.steps,
+            model_calls=monitor.model_calls,
+            aux_model_calls=monitor.aux_model_calls,
+            tool_calls=monitor.tool_calls,
+            evidence_bytes=monitor.evidence_bytes,
+            wall_clock_seconds=monitor.elapsed_seconds,
+            prompt_tokens=monitor.prompt_tokens,
+            completion_tokens=monitor.completion_tokens,
+            error=error,
+        )
 
 
 class BoundedModelClient:
@@ -117,6 +150,40 @@ class RunInputs:
     monitor: RunBudgetMonitor
     token: CancellationToken
     emitter: EventEmitter
+
+
+def build_run_inputs(
+    *,
+    question: str,
+    instruction: str,
+    registry: ToolRegistry,
+    monitor: RunBudgetMonitor,
+    token: CancellationToken,
+    emitter: EventEmitter,
+    model_client: LoopModelClient,
+    verifier: VerificationPipeline | None = None,
+) -> RunInputs:
+    """The run's inputs, assembled from the parts every caller holds.
+
+    One wiring for the whole seam: the tool dispatcher, the bounded model
+    client and the tool definitions are the core's, and a caller that
+    assembled them by hand had four ways to get the run's machinery wrong
+    (a dispatcher without the verifier, a client without the bound, the
+    definitions of another registry). The callers that differ — the
+    question, the instruction, the run's own emitter and monitor — stay
+    theirs.
+    """
+
+    return RunInputs(
+        question=question,
+        instruction=instruction,
+        tools=registry.definitions(),
+        model=BoundedModelClient(model_client, monitor),
+        dispatcher=ToolDispatcher(registry=registry, monitor=monitor, token=token, emitter=emitter, verifier=verifier),
+        monitor=monitor,
+        token=token,
+        emitter=emitter,
+    )
 
 
 @runtime_checkable

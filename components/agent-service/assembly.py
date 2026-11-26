@@ -87,14 +87,17 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     """
     source = os.environ if env is None else env
     docrepo_url = str(source.get("AGENT_DOCREPO_URL", ""))
-    okf_enabled = str(source.get("OKF_ENABLED", "0")).strip() == "1"
     okf_url = str(source.get("AGENT_OKF_URL", ""))
     if not docrepo_url:
         raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
+
+    # The posture is read ONCE, from the config that also carries the
+    # retrieval knobs — the assembly and the retrieval must not read the
+    # flag twice and disagree about it.
+    arango_config = ArangoConfig.load(env)
+    okf_enabled = arango_config.okf_identity_enabled
     if okf_enabled and not okf_url:
         raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
-    arango_config = ArangoConfig.load(env)
-    search = build_search_capability(env)
 
     # The ArangoDB driver stays a call-time import: it is the one heavy
     # dependency only a live assembly needs, and keeping it off the module
@@ -104,12 +107,17 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
 
     client = arango.ArangoClient(hosts=arango_config.url)
 
-    def db_factory():
+    def db_factory(_graph_name: str = ""):
+        # One factory for the whole assembly: the search capability names
+        # the graph it searches, the chunk adapter does not — the handle is
+        # the same database either way.
         return client.db(
             arango_config.database,
             username=arango_config.username,
             password=arango_config.password,
         )
+
+    search = build_search_capability(env, db_factory=db_factory, arango_config=arango_config)
 
     return StatelessAdapters(
         docrepo=DocRepoAdapter(docrepo_url),
@@ -120,18 +128,17 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     )
 
 
-def build_search_capability(env=None):
+def build_search_capability(env=None, db_factory=None, arango_config=None):
     """The search capability's wiring: the retrieval driver, the embedding
     and reranking endpoints, and the graph's database.
 
     Composition, not capability: the capability names WHAT it searches, the
     host names WHAT it searches with.
-    """
-    # The driver import lives here, not at module import, so the port
-    # surface stays import-light for the tests that fake the adapters.
-    import arango
 
-    arango_config = ArangoConfig.load(env)
+    ``db_factory`` and ``arango_config`` are the assembly's, when it has
+    them: one client and one config for the whole port. Standalone (the
+    tests wire the capability on its own) they are built here.
+    """
     hybrid_config = HybridConfig.load(env)
     reranking_config = RerankingConfig.load(env)
     embedding_config = EmbeddingConfig.load(env)
@@ -140,14 +147,20 @@ def build_search_capability(env=None):
         raise ValueError("TEI_EMBEDDING_ENDPOINT must be set: the port has no default embedding endpoint")
     if not endpoints.tei_reranking_endpoint:
         raise ValueError("TEI_RERANKING_ENDPOINT must be set: the port has no default reranker endpoint")
-    client = arango.ArangoClient(hosts=arango_config.url)
+    if db_factory is None or arango_config is None:
+        # The driver import lives here, not at module import, so the port
+        # surface stays import-light for the tests that fake the adapters.
+        import arango
 
-    def db_factory(_graph_name: str):
-        return client.db(
-            arango_config.database,
-            username=arango_config.username,
-            password=arango_config.password,
-        )
+        arango_config = ArangoConfig.load(env)
+        client = arango.ArangoClient(hosts=arango_config.url)
+
+        def db_factory(_graph_name: str):
+            return client.db(
+                arango_config.database,
+                username=arango_config.username,
+                password=arango_config.password,
+            )
 
     # The embedding call carries ITS OWN budget, under the knob names the
     # deployed embed clients read — not the reranker's.

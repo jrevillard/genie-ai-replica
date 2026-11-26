@@ -63,11 +63,15 @@ from agent.registry import ToolDefinition, ToolRegistry
 from agent.runtime import BoundedModelClient, RunInputs
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
-from capabilities.model import VllmModelConfig
+from capabilities.model import (
+    RECORDED_SAMPLING_PARAMS,
+    VllmModelConfig,
+    chat_choice,
+    chat_choice_content,
+    coerce_sane_int,
+)
 from measurement.probe import PROBE_RUN_BUDGET
 from noagent.config import NoAgentConfig
-from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
-from preparation.translation import coerce_sane_int
 
 logger = logging.getLogger(__name__)
 
@@ -1014,12 +1018,11 @@ async def _consume_stream_events(
             state.events += 1
             if first_delta is not None:
                 first_delta.set()
-            choices = event.get("choices") or []
-            choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+            _choice, finish_reason = chat_choice(event)
             # Only the finish chunk counts as a DELIVERED completion: a
             # mid-stream tool-call delta is work in flight, exactly what the
             # demo cancels.
-            if choice.get("finish_reason"):
+            if finish_reason:
                 state.completion_seen = True
             if park is not None and state.events == 1:
                 # Park after the first delta: the read stays OPEN (the

@@ -39,7 +39,7 @@ import time
 from contextlib import suppress
 from typing import Any, Protocol
 
-from capabilities.model import MAX_SANE_TOKENS, coerce_int, coerce_sane_int
+from capabilities.model import MAX_SANE_TOKENS, chat_auth_headers, coerce_int, coerce_sane_int
 
 from .config import NEGATIVE_CACHE_SECONDS, PreparationConfig
 
@@ -257,7 +257,7 @@ class ModelEndpointCache:
     def _probe_headers(config: PreparationConfig) -> dict:
         # The probe authenticates like every other direct model-endpoint call
         # (deployed endpoint_auth_headers): the VLLM_API_KEY bearer when set.
-        return _auth_headers(config.probe_bearer)
+        return chat_auth_headers(config.probe_bearer)
 
     async def _probe(self, config: PreparationConfig) -> bool:
         """One ``/v1/models`` probe; True when a usable entry came back."""
@@ -373,13 +373,6 @@ def _completion_truncated(choice: dict) -> bool:
     return choice.get("finish_reason") == "length"
 
 
-def _auth_headers(bearer: str | None) -> dict:
-    """The Authorization headers one direct model-endpoint call carries
-    (deployed: same server, same auth — the bearer per call, never on a
-    session). No key, no header."""
-    return {"Authorization": f"Bearer {bearer}"} if bearer else {}
-
-
 def _is_code_shaped(code: str) -> bool:
     """Whether a lower-case code has the shape a prompt may carry."""
     return bool(_LANGUAGE_CODE_PATTERN.match(code))
@@ -478,7 +471,7 @@ class TranslationClient:
         if self._count_unavailable:
             return None
         api_key = self._config.bearer or ""
-        headers = _auth_headers(api_key)
+        headers = chat_auth_headers(api_key)
         url = f"{self._config.translation_endpoint}/tokenize"
         try:
             status, payload = await self._transport.post_json(
@@ -674,7 +667,7 @@ class TranslationClient:
         window = await self.translation_window()
         payload["max_tokens"] = await self.completion_cap(prompt, count_body, window)
         url = f"{self._config.translation_endpoint}{path}"
-        headers = _auth_headers(self._config.bearer)
+        headers = chat_auth_headers(self._config.bearer)
         try:
             status, body = await self._transport.post_json(url, headers, payload, self._config.service_timeout_seconds)
             if status >= 400:

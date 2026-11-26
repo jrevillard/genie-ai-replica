@@ -30,9 +30,11 @@ import logging
 import time
 
 from capabilities.model import (
-    RECORDED_SAMPLING_PARAMS,
+    chat_auth_headers,
     chat_choice,
     chat_choice_content,
+    chat_completions_url,
+    chat_payload,
     resolve_window_tokens,
 )
 from preparation.translation import (
@@ -65,14 +67,13 @@ def generation_payload(system_prompt: str, user_content: str, model_id: str | No
     guard still reserves the deployed 3896-token answer budget against the
     window when planning history).
     """
-    payload = {
-        "model": model_id,
-        "messages": [
+    payload = chat_payload(
+        model_id,
+        [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        **RECORDED_SAMPLING_PARAMS,
-    }
+    )
     if answer_tokens:
         payload["max_tokens"] = answer_tokens
     return payload
@@ -136,8 +137,8 @@ class GenerationClient:
         """
         model_id = await self.model_id()
         payload = generation_payload(system_prompt, user_content, model_id, self._config.answer_tokens or None)
-        url = f"{self._config.generation_endpoint}/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
+        url = chat_completions_url(self._config.generation_endpoint)
+        headers = chat_auth_headers(self._config.bearer)
         started = time.monotonic()
         try:
             status, body = await self._transport.post_json(url, headers, payload, self._config.llm_timeout_seconds)

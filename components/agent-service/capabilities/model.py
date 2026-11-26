@@ -47,6 +47,40 @@ def chat_choice_content(choice: dict):
     return (choice.get("message") or {}).get("content")
 
 
+def chat_completions_url(endpoint: str) -> str:
+    """The chat/completions URL of an OpenAI-compatible endpoint.
+
+    One home for the URL shape: the generation client, the answer
+    translator and the agentic model client all address the same
+    endpoint, and a change to the path must not leave one of them
+    pointing elsewhere. The endpoint is concatenated verbatim — the
+    recorded convention, byte for byte.
+    """
+    return f"{endpoint}/v1/chat/completions"
+
+
+def chat_auth_headers(bearer: str | None) -> dict:
+    """The Authorization headers one direct model-endpoint call carries.
+
+    The bearer per call, never on a session (deployed: same server, same
+    auth). No key, no header.
+    """
+    return {"Authorization": f"Bearer {bearer}"} if bearer else {}
+
+
+def chat_payload(model_id: str | None, messages: list[dict], **extra) -> dict:
+    """The chat/completions request body: the model, the messages and the
+    recorded sampling params.
+
+    One home for the recorded request shape — every consumer of the
+    OpenAI-compatible endpoint builds it here, so the recorded convention
+    cannot leave one of them measuring a different request than the others.
+    ``extra`` carries the per-consumer fields (the toolset, the answer
+    bound).
+    """
+    return {"model": model_id, "messages": messages, **RECORDED_SAMPLING_PARAMS, **extra}
+
+
 @dataclass(frozen=True)
 class ToolCallRequest:
     """One tool call the model asked for: its wire id, name, arguments."""

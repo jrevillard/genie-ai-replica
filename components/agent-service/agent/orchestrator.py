@@ -59,7 +59,6 @@ from preparation.translation import ModelEndpointCache, TranslationClient
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
-from .dispatcher import ToolDispatcher
 from .events import MESSAGE_TRUNCATION, EventEmitter, EventKind, EventSink, run_started_payload
 from .governance import governed_run
 from .loop import AgentLoop
@@ -67,10 +66,9 @@ from .prompt import PRODUCTION_SYSTEM_PROMPT
 from .runtime import (
     OUTCOME_CANCELLED,
     OUTCOME_ERROR,
-    BoundedModelClient,
-    RunInputs,
     RunResult,
     RuntimeDriver,
+    build_run_inputs,
 )
 from .toolset import document_toolset
 from .verification import (
@@ -462,18 +460,15 @@ class RequestOrchestrator:
             )
             # The dispatcher is the core's tool dispatch: the runtime reaches
             # the corpus through it and through nothing else.
-            dispatcher = ToolDispatcher(
-                registry=registry, monitor=monitor, token=token, emitter=emitter, verifier=verifier
-            )
-            inputs = RunInputs(
+            inputs = build_run_inputs(
                 question=request.question,
                 instruction=self._config.system_prompt,
-                tools=registry.definitions(),
-                model=BoundedModelClient(self._model_client, monitor),
-                dispatcher=dispatcher,
+                registry=registry,
                 monitor=monitor,
                 token=token,
                 emitter=emitter,
+                model_client=self._model_client,
+                verifier=verifier,
             )
             # The core's governed run: the handshake, the runtime, the
             # delivered text, the verdict and the terminal. The runtime

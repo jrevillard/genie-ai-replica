@@ -23,12 +23,14 @@ from capabilities.model import (
     MODEL_SOURCE_DISCOVERED,
     MODEL_SOURCE_OVERRIDE,
     MODEL_SOURCE_UNRESOLVED,
-    RECORDED_SAMPLING_PARAMS,
     ModelTurn,
     ToolCallRequest,
     VllmModelConfig,
+    chat_auth_headers,
     chat_choice,
     chat_choice_content,
+    chat_completions_url,
+    chat_payload,
     coerce_sane_int,
     resolve_window_tokens,
 )
@@ -130,19 +132,13 @@ class VllmModelClient:
         omits the field and fails honestly on its own.
         """
         model_id = await self._resolve_model_id()
-        payload = {
-            "model": model_id,
-            "messages": messages,
-            **RECORDED_SAMPLING_PARAMS,
-        }
-        if tool_definitions:
-            # Tool-shaped only when there are tools to declare: an empty
-            # `tools: []` is not portable across OpenAI-compatible
-            # endpoints (several validators reject it with 400), and the
-            # aux callers (the grounding judge) legitimately speak without
-            # a toolset.
-            payload["tools"] = list(tool_definitions)
-            payload["tool_choice"] = "auto"
+        tools = {"tools": list(tool_definitions), "tool_choice": "auto"} if tool_definitions else {}
+        # Tool-shaped only when there are tools to declare: an empty
+        # `tools: []` is not portable across OpenAI-compatible
+        # endpoints (several validators reject it with 400), and the
+        # aux callers (the grounding judge) legitimately speak without
+        # a toolset.
+        payload = chat_payload(model_id, messages, **tools)
         if max_output_tokens is not None:
             window = await self._window_tokens()
             # The offset is added AFTER the estimate: the +20 prompt-offset
@@ -157,8 +153,8 @@ class VllmModelClient:
             room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
             if room > 0:
                 payload["max_tokens"] = min(max_output_tokens, room)
-        url = f"{self._config.generation_endpoint}/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
+        url = chat_completions_url(self._config.generation_endpoint)
+        headers = chat_auth_headers(self._config.bearer)
         try:
             status, body = await self._transport.post_json(url, headers, payload, self._config.llm_timeout_seconds)
         except Exception as e:  # noqa: BLE001 — every transport failure is transient

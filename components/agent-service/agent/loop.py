@@ -162,20 +162,7 @@ class AgentLoop:
     ) -> RunResult:
         """The terminal record every completed run returns: the run's monitor
         counts, the accumulated usage, and the outcome the caller asked for."""
-        monitor = inputs.monitor
-        return RunResult(
-            outcome=outcome,
-            final_text=final_text,
-            steps=monitor.steps,
-            model_calls=monitor.model_calls,
-            aux_model_calls=monitor.aux_model_calls,
-            tool_calls=monitor.tool_calls,
-            evidence_bytes=monitor.evidence_bytes,
-            wall_clock_seconds=monitor.elapsed_seconds,
-            prompt_tokens=monitor.prompt_tokens,
-            completion_tokens=monitor.completion_tokens,
-            error=error,
-        )
+        return RunResult.from_monitor(inputs.monitor, outcome, final_text=final_text, error=error)
 
     def _failed(self, outcome: str, message: str, inputs: RunInputs) -> RunResult:
         """The runtime's own protocol failure — reported, never dressed up as

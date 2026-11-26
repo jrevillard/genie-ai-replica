@@ -832,9 +832,35 @@ async function countByIndexStatus(repo_id, index_status) {
  * manifest which exists only post-settle and goes stale between edits.
  * Dangling/cross-repo targets are returned as-is; the view filters them
  * against the node set (same rule as the manifest path). */
-async function getRepoLinks(repo_id) {
+/**
+ * The editor-graph projection (GET /:repo_id/links).
+ *
+ * #2190 (2026-11-26, measured): the full edge list was 1,655,486 bytes on a
+ * dense repo — Kong spooled it to a temp file per fetch. Slimming modes:
+ *   { summary: true }        — counts only; no edges leave the server.
+ *   { limit, offset }        — paginate the edges (link_count carries the
+ *                              FULL count so a paged consumer knows the size).
+ * Default = the full graph, byte-identical shape to before.
+ * ETag: no code — Express's default weak-ETag 304s the deterministic body
+ * (the same mechanism the measured concepts-route 304s ride).
+ * @param {string} repo_id
+ * @param {{summary?: boolean, limit?: number, offset?: number}} [opts]
+ */
+async function getRepoLinks(repo_id, { summary = false, limit, offset } = {}) {
   if (!repo_id) return { repo_id, links: [], concept_count: 0 };
   const db = await getDb();
+  if (summary) {
+    // Counts only — the edges never leave the server (#2190).
+    const agg = await (
+      await db.query(
+        'LET rows = (FOR m IN okf_concepts_meta FILTER m.repo_id == @rid RETURN LENGTH(m.links || [])) ' +
+          'RETURN { concept_count: LENGTH(rows), link_count: SUM(rows) }',
+        { rid: repo_id }
+      )
+    ).all();
+    const a = agg[0] || { concept_count: 0, link_count: 0 };
+    return { repo_id, concept_count: a.concept_count, link_count: a.link_count };
+  }
   const rows = await (
     await db.query(
       'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid SORT m.concept_id RETURN KEEP(m, ["concept_id","links"])',
@@ -855,7 +881,11 @@ async function getRepoLinks(repo_id) {
       });
     }
   }
-  return { repo_id, links, concept_count: rows.length };
+  const total = links.length;
+  let page = links;
+  if (offset !== undefined) page = page.slice(Math.max(0, offset));
+  if (limit !== undefined) page = page.slice(0, Math.max(0, limit));
+  return { repo_id, links: page, concept_count: rows.length, link_count: total };
 }
 
 /** Build the bundle manifest doc (Story: multi-domain discovery + author

@@ -1013,11 +1013,22 @@ async function getRepoManifest(req, res, next) {
 async function getRepoLinks(req, res, next) {
   try {
     const { repo_id } = req.params;
+    const { summary, limit, offset } = req.query;
     // getById pre-gate + CAP-2 restricted fence (404 foreign AND fenced —
     // the graph projection exposes the repo's structure).
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
     await assertRepoReadableByCaller(req, repoDoc);
-    res.status(200).json(await conceptMetaService.getRepoLinks(repo_id));
+    // #2190 (2026-11-26, measured): the full edge list was 1,655,486 bytes —
+    // a Kong temp-file spool per graph mount. summary=1 asks for counts
+    // only; limit/offset paginate the edges. Default = the full graph
+    // (RepoGraphView behavior unchanged).
+    res.status(200).json(
+      await conceptMetaService.getRepoLinks(repo_id, {
+        summary: summary === '1' || summary === 'true',
+        limit: limit === undefined ? undefined : parseInt(limit, 10),
+        offset: offset === undefined ? undefined : parseInt(offset, 10)
+      })
+    );
   } catch (err) {
     next(err);
   }

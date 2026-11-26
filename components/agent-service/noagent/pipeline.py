@@ -61,7 +61,6 @@ from capabilities.citations import (
     SourceRecords,
     resolve_source_records,
     source_document_envelope,
-    source_is_surfaceed,
 )
 from capabilities.contract import (
     CallerContext,
@@ -475,7 +474,7 @@ class NoAgentPipeline:
         # cited and contributes no score (the D1 rule). One rule, in
         # the citations module — the projection and the aggregate cannot
         # disagree about it.
-        surfaced = tuple(hit for hit in hits if source_is_surfaceed(hit.provenance, source_records))
+        surfaced = tuple(hit for hit in hits if source_records.record_for(hit.provenance) is not None)
         calibrate = self._score_calibrator
         envelope = source_document_envelope(surfaced, calibrate, records=source_records)
         # The confidence aggregate runs over the SURFACED hits — duplicates

@@ -358,17 +358,20 @@ class FakeMetadataSource:
 
     The records carry the document repository's own fields: the document's
     name, its labels, its author and the URL of a crawled page. A file id
-    the fake does not know does NOT resolve — which is what makes the D1
-    rule observable (a source without a resolved record is not surfaced).
+    listed in ``unresolved`` does NOT resolve — which is what makes the D1
+    rule observable (a source without a resolved record is not surfaced). A
+    file id the fake was given no record for resolves with a SYNTHESISED
+    one, so a suite that does not care about the record's content still
+    gets a resolved source; a suite that does care passes the records.
     """
 
     def __init__(self, records: dict | None = None, unresolved: tuple = ()):
         self.records = records if records is not None else {}
         self.unresolved = set(unresolved)
-        self.requested: list[str] = []
+        self.requested: list[tuple[str, str | None]] = []
 
     async def fetch_metadata(self, file_id: str, bearer: str | None):
-        self.requested.append(file_id)
+        self.requested.append((file_id, bearer))
         if file_id in self.unresolved:
             return None
         return self.records.get(file_id, {"file_name": f"{file_id} resolved.md", "labels": []})
@@ -384,21 +387,22 @@ class FakeConceptSource:
 
     The cards carry the OKF server's own fields: the concept's TITLE (its
     name — the value the citation card carries), its labels and its
-    identity. A concept the fake does not know does NOT resolve, which is
-    what makes the D1 rule observable on the OKF branch too: a concept
-    whose card did not resolve is not surfaced.
+    identity. A concept the fake was given no card for does NOT resolve —
+    the port's own contract (``fetch_concept`` answers ``None`` when the
+    concept does not resolve), and what makes the D1 rule observable on the
+    OKF branch too: a concept whose card did not resolve is not surfaced.
     """
 
     def __init__(self, cards: dict | None = None, unresolved: tuple = ()):
         self.cards = cards if cards is not None else {}
         self.unresolved = set(unresolved)
-        self.requested: list[tuple[str, str]] = []
+        self.requested: list[tuple[str, str, str | None]] = []
 
     async def fetch_concept(self, repo_id: str, concept_id: str, bearer: str | None):
-        self.requested.append((repo_id, concept_id))
+        self.requested.append((repo_id, concept_id, bearer))
         if (repo_id, concept_id) in self.unresolved:
             return None
-        return self.cards.get((repo_id, concept_id), {"title": f"{concept_id} resolved", "labels": []})
+        return self.cards.get((repo_id, concept_id))
 
 
 class AgentFakePort:

@@ -17,6 +17,8 @@ the identical shape; the dedup keeps the first served source.
 
 import asyncio
 
+from conftest import FakeConceptSource, FakeMetadataSource
+
 import noagent.pipeline as noagent_pipeline
 from capabilities.citations import (
     SourceRecords,
@@ -64,30 +66,6 @@ def _okf_hit(concept_id="c-1", repo_id="r-1", bundle_version=3, score=0.8):
         text="the concept passage",
         score=score,
     )
-
-
-class FakeDocumentSource:
-    """The document repository's port, over a fixed record set."""
-
-    def __init__(self, records=None):
-        self.records = records or {}
-        self.requested = []
-
-    async def fetch_metadata(self, file_id, bearer):
-        self.requested.append((file_id, bearer))
-        return self.records.get(file_id)
-
-
-class FakeConceptSource:
-    """The OKF server's port, over a fixed card set."""
-
-    def __init__(self, cards=None):
-        self.cards = cards or {}
-        self.requested = []
-
-    async def fetch_concept(self, repo_id, concept_id, bearer):
-        self.requested.append((repo_id, concept_id, bearer))
-        return self.cards.get((repo_id, concept_id))
 
 
 # ---------------------------------------------------------------------
@@ -191,7 +169,7 @@ def test_a_concept_without_a_repository_address_cannot_resolve():
     records = asyncio.run(
         resolve_source_records(
             [OkfConceptProvenance(concept_id="c-1", repo_id="", bundle_version=None)],
-            document_source=FakeDocumentSource(),
+            document_source=FakeMetadataSource(unresolved=("f-1",)),
             concept_source=concepts,
             bearer=None,
         )
@@ -211,7 +189,7 @@ def test_each_branch_resolves_through_its_own_port():
     because the OKF server's fence decides on that token (the repository's
     fence and the publication gate live on the server's side; no
     authorization rule changes here)."""
-    documents = FakeDocumentSource({"f-1": _METADATA})
+    documents = FakeMetadataSource({"f-1": _METADATA})
     concepts = FakeConceptSource({("r-1", "c-1"): _CARD})
 
     records = asyncio.run(
@@ -243,13 +221,47 @@ def test_a_platform_that_answers_nothing_surfaces_nothing():
                 LegacyFileProvenance(file_id="f-1"),
                 OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3),
             ],
-            document_source=FakeDocumentSource(),
+            document_source=FakeMetadataSource(unresolved=("f-1",)),
             concept_source=FakeConceptSource(),
             bearer=None,
         )
     )
     assert records.record_for(LegacyFileProvenance(file_id="f-1")) is None
     assert records.record_for(OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)) is None
+
+
+def test_the_governed_lane_s_shapes_resolve_through_the_same_ports():
+    """The governed path carries its provenances as DICTS (the ledger's
+    shape); the no-agent lane carries the contract's objects. Both shapes
+    must reach the SAME platform — the dict is not a second vocabulary, it
+    is the same identity in another shape.
+
+    A resolver that read the dict shape wrong would send a governed concept
+    to the document repository (which 404s it by design) or read the wrong
+    key, and every governed citation would silently disappear.
+    """
+    documents = FakeMetadataSource({"f-1": _METADATA})
+    concepts = FakeConceptSource({("r-1", "c-1"): _CARD})
+
+    records = asyncio.run(
+        resolve_source_records(
+            [
+                {"file_id": "f-1"},
+                {"source": "okf-concept", "concept_id": "c-1", "repo_id": "r-1", "bundle_version": 3},
+            ],
+            document_source=documents,
+            concept_source=concepts,
+            bearer="the-caller-token",
+        )
+    )
+
+    assert documents.requested == [("f-1", "the-caller-token")]
+    assert concepts.requested == [("r-1", "c-1", "the-caller-token")]
+    assert records.record_for({"file_id": "f-1"}) == _METADATA
+    assert (
+        records.record_for({"source": "okf-concept", "concept_id": "c-1", "repo_id": "r-1", "bundle_version": 3})
+        == _CARD
+    )
 
 
 def test_a_card_without_a_name_is_not_a_resolved_name():
@@ -259,7 +271,7 @@ def test_a_card_without_a_name_is_not_a_resolved_name():
     records = asyncio.run(
         resolve_source_records(
             [OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)],
-            document_source=FakeDocumentSource(),
+            document_source=FakeMetadataSource(unresolved=("f-1",)),
             concept_source=FakeConceptSource({("r-1", "c-1"): {"repo_id": "r-1", "concept_id": "c-1"}}),
             bearer=None,
         )

@@ -37,8 +37,10 @@ confidence poison") — the deployed rule, kept here: a deleted document, a
 document repository that is down, a concept the repository's fence refuses,
 must not become a citation card. The rule is SYMMETRIC: each branch asks its
 own platform, and an unresolved name is as fatal as an unresolved identity.
-:func:`source_is_surfaceed` is the ONE place that rule lives, so the
-projection and the aggregate can never disagree about it.
+:meth:`SourceRecords.record_for` is the ONE place that rule lives — it
+returns the record a source's own platform resolved, and ``None`` when it
+resolved none — so the projection and the aggregate can never disagree about
+it.
 """
 
 import asyncio
@@ -90,9 +92,10 @@ class SourceRecords:
 def _is_concept(provenance) -> bool:
     """Is this provenance an OKF concept's?
 
-    The marker is the port's own vocabulary (``repo_id``/``concept_id``), the
-    counterparty's data model — naming it in a PORT is the port's job, and
-    the core never learns a platform's identifier FORM.
+    The marker is the port's own vocabulary (``source``/``repo_id``/
+    ``concept_id``), the counterparty's data model — naming it in a PORT is
+    the port's job: the core CONSUMES the port's shape, it does not invent
+    one, and it never learns a platform's identifier FORM.
     """
 
     if isinstance(provenance, dict):
@@ -114,18 +117,6 @@ def _legacy_file_id(provenance) -> str | None:
     if isinstance(provenance, dict):
         return provenance.get("file_id")
     return getattr(provenance, "file_id", None)
-
-
-def source_is_surfaceed(provenance, records: SourceRecords) -> bool:
-    """Can this source be surfaced?
-
-    A source is surfaced when ITS OWN platform resolved its record: the
-    document repository for a legacy document, the OKF server for a concept.
-    A source that did not resolve is NOT surfaced and contributes no score
-    to the aggregate either — the D1 rule, one rule for both branches.
-    """
-
-    return records.record_for(provenance) is not None
 
 
 async def resolve_source_records(

@@ -518,6 +518,7 @@ def test_the_authorized_repos_normalization_binds_the_caller_context_shape():
     pipeline, _ = _pipeline(
         judge_turns=(ModelTurn(content='{"verdict": "grounded"}'),),
         authorized_repos=(AuthorizedRepo(repo_id="r-1", graph_name="G"),),
+        concept_source=FakeConceptSource({("r-1", "c-1"): {"title": "Hangar Access Notes", "labels": []}}),
     )
     pipeline.record_tool_result("search_knowledge", _search_payload([OKF_HIT]))
     verdict = asyncio.run(pipeline.finalize("the answer"))
@@ -525,6 +526,10 @@ def test_the_authorized_repos_normalization_binds_the_caller_context_shape():
     assert verdict.status == VERDICT_GROUNDED
     assert verdict.payload()["invalid_citations"] == []
     assert verdict.payload()["citations"][0]["provenance"]["concept_id"] == "c-1"
+    # The CITATION CARD carries the concept's own name, read from the card
+    # the OKF server served — the governed path asks its own platform, like
+    # the no-agent lane does (ADR agentic-009, F5).
+    assert verdict.payload()["source_documents"][0]["document_name"] == "Hangar Access Notes"
 
 
 def test_a_mixed_ledger_ungrounds_mechanically_and_keeps_the_valid_entry():

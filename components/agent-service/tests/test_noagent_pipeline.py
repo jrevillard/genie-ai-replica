@@ -304,7 +304,7 @@ def test_a_concept_is_cited_with_the_name_the_okf_server_served():
     [entry] = result.source_documents
     assert entry["document_name"] == "Hangar Access Notes"
     assert entry["source"] == "okf-concept"
-    assert concepts.requested == [("repo-1", "c1")]
+    assert concepts.requested == [("repo-1", "c1", None)]
 
 
 def test_prepared_translated_row_is_the_identical_flow():
@@ -871,4 +871,4 @@ def test_the_factory_assembles_a_pipeline_that_resolves_its_documents():
     assert [entry["categoryLabels"] for entry in result.source_documents] == [["manual"], []]
     # And the resolution went through that resolver: it was asked for every
     # legacy id the retrieval returned.
-    assert source.requested == ["f1", "f2"]
+    assert source.requested == [("f1", None), ("f2", None)]

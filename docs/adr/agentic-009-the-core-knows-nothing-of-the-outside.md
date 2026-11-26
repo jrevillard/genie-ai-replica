@@ -131,6 +131,14 @@ concepts. No platform is named in the rule: `Redis`, `S3`, `okf-server`,
 datastore accepts") is not. The allow-list holds the core's vocabulary and
 never a platform's name.
 
+**R4 is a floor, not the proof.** Its rule reads ONE spelling of an
+id-derived value (`replace("_", " ")`) — it catches the shape this codebase
+used, not every spelling a future change could invent. The property itself
+is carried by the BEHAVIOURAL assertions (the citation card carries the
+source's own name, on either branch), and those are where F5's closure is
+proven; the ratchet's empty known-leak set says the core carries no id-derived
+value **in the shape the rule reads**.
+
 **F4 needed no code.** The counterparty's vocabulary stays in the port:
 `capabilities/contract.py` declares the OKF identity types
 (`OkfConceptProvenance`, `AuthorizedRepo.repo_id`) and `capabilities/sources.py`
@@ -141,7 +149,7 @@ nothing to move.
 
 ## A recorded divergence from the deployed path — the OKF concept
 
-Two deltas, one decision: the agentic path resolves an OKF concept's name
+Three deltas, one decision: the agentic path resolves an OKF concept's name
 through the OKF server, and it resolves a concept's IDENTITY through the
 CAP-1 join. The deployed path does neither.
 
@@ -162,6 +170,17 @@ join resolved a `repo_id`. A chunk whose join degraded (`cap1_degraded`) is
 therefore carried as a LEGACY provenance, the document repository 404s its id
 by design, the D1 rule drops it — it is neither cited nor scored, and a corpus
 of only such chunks reports `is_grounded: false`.
+
+**What differs — the availability of the name.** The deployed path never
+READS a concept's name, so an okf-server outage costs it nothing: it surfaces
+the concept (with its id as the label) and counts its score. The agentic path
+reads the card, so the D1 rule now applies to a NETWORK READ: a server that is
+down, a repository the fence refuses, a card that carries no title — the
+concept is unresolved, and an unresolved concept is neither cited nor scored.
+The same corpus can therefore report `is_grounded: true` on the deployed path
+and `is_grounded: false` on the agentic path, when the okf-server is
+unreachable. That is the price of never deriving a name from a token: a name
+that cannot be fetched is not a name.
 
 **Why the divergence stands here.** The deployed path's gate IS the
 counterparty's vocabulary — the `OKF_` prefix is the OKF pillar's naming, and

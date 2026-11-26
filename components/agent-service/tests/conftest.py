@@ -275,7 +275,9 @@ class LoopRunner:
         )
 
 
-def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=None, execution_versions=None):
+def _governed_loop(
+    model, port, judge_model=None, authorized_repos=(), budget=None, execution_versions=None, runtime=None
+):
     """The governed answer path over fakes — one home for the suites that
     drive the loop WITH the verification pipeline wired (the orchestrator's
     own wiring shape): loop + verifier + monitor over ``document_toolset``,
@@ -284,8 +286,11 @@ def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=No
     ``judge_model`` (a ``LoopModelClient`` double) defaults to the scripted
     strict grounded reply; ``authorized_repos`` passes through to the
     pipeline (the caller's repo set); ``execution_versions`` rides the loop
-    (the run-start handshake, ``None`` keeps the probe shape). Returns ``(loop, collector, monitor,
-    verifier)`` — the collector carries every seam event, the monitor the
+    (the run-start handshake, ``None`` keeps the probe shape); ``runtime``
+    replaces the default runtime (the seam's plug-in point — a suite that
+    drives the core's guarantees against a runtime of its own). Returns
+    ``(runner, collector, monitor, verifier)`` — the runner drives the
+    governed run, the collector carries every seam event, the monitor the
     run's counts, the verifier its ledger for finding assertions.
     """
     collector: list = []
@@ -302,7 +307,7 @@ def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=No
     token = CancellationToken()
     emitter = EventEmitter(run_id="run-1", sink=collector.append)
     runner = LoopRunner(
-        AgentLoop(),
+        runtime if runtime is not None else AgentLoop(),
         model=model,
         registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,

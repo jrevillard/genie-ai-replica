@@ -35,8 +35,9 @@ from agent.orchestrator import (
     RequestOrchestrator,
 )
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
-from agent.runtime import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR
+from agent.runtime import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR, RunResult
 from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
+from agent.version_record import RUNTIME_UNRESOLVED
 from capabilities.contract import CallerContext, OperationBudget
 from capabilities.model import ModelTurn
 from lane import AdmissionLane
@@ -452,3 +453,124 @@ def test_a_port_factory_failure_answers_the_honest_terminal(tmp_path):
     assert [event.kind.value for event in events] == ["run_started", "run_error"]
     assert events[-1].payload["code"] == OUTCOME_ERROR
     assert record.as_dict()["steps"] == 0  # nothing ran; the record is the honest zero
+
+
+# ---------------------------------------------------------------------
+# The runtime plug-in point
+# ---------------------------------------------------------------------
+
+
+class _CustomRuntime:
+    """A runtime of the suite's own, over the seam's port."""
+
+    runtime_id = "custom-runtime-under-test"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def run(self, inputs):
+        self.calls += 1
+        return RunResult(
+            outcome=OUTCOME_ANSWERED,
+            final_text="the custom runtime's answer",
+            steps=1,
+            model_calls=1,
+            aux_model_calls=0,
+            tool_calls=0,
+            evidence_bytes=0,
+            wall_clock_seconds=0.01,
+            prompt_tokens=10,
+            completion_tokens=5,
+        )
+
+
+def test_a_runtime_factory_failure_answers_the_honest_terminal(tmp_path):
+    """A wiring defect is a build failure like any other.
+
+    The runtime factory raised before the run started: the caller gets the
+    honest terminal — the run_error event and the "error" usage record —
+    and never an exception past a stream that already started (which would
+    truncate it and leave the run with no outcome at all).
+    """
+    events: list[AgentEvent] = []
+
+    def broken_factory():
+        raise RuntimeError("the runtime factory is not wired")
+
+    orchestrator = RequestOrchestrator(
+        config=orchestrator_config(),
+        lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
+        model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
+        port_factory=lambda context, bearer: fake_port(),
+        runtime_factory=broken_factory,
+    )
+
+    record = asyncio.run(orchestrator.run(_request(), sink=events.append))
+
+    assert record.outcome == OUTCOME_ERROR
+    assert "the runtime factory is not wired" in record.error
+    assert [event.kind.value for event in events] == ["run_started", "run_error"]
+    # The start event carries a record of the usual shape — the degraded
+    # one: a record's shape never varies, not even for a run that never
+    # started.
+    start_payload = events[0].payload
+    assert start_payload["execution_versions"]["runtime"]["id"] == RUNTIME_UNRESOLVED
+    assert set(start_payload["execution_versions"]) == {
+        "implementation",
+        "model",
+        "prompt",
+        "configuration",
+        "runtime",
+    }
+
+
+def test_a_runtime_that_does_not_satisfy_the_port_is_refused_with_the_honest_terminal(tmp_path):
+    """The port is ENFORCED, not just declared.
+
+    A runtime without the port's members is refused before it is driven:
+    the refusal reaches the caller as the honest terminal, not as an
+    AttributeError from the middle of a run.
+    """
+    events: list[AgentEvent] = []
+
+    class _NotARuntime:
+        async def run(self, inputs):  # no runtime_id — not the port
+            raise AssertionError("it must never be driven")
+
+    orchestrator = RequestOrchestrator(
+        config=orchestrator_config(),
+        lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
+        model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
+        port_factory=lambda context, bearer: fake_port(),
+        runtime_factory=lambda: _NotARuntime(),
+    )
+
+    record = asyncio.run(orchestrator.run(_request(), sink=events.append))
+
+    assert record.outcome == OUTCOME_ERROR
+    assert "does not satisfy the runtime port" in record.error
+    assert [event.kind.value for event in events] == ["run_started", "run_error"]
+
+
+def test_a_custom_runtime_is_driven_and_named_in_the_execution_version_record(tmp_path):
+    """The seam's plug-in point: a second runtime inherits the whole seam.
+
+    The custom runtime is driven by the core (it sees the run's inputs),
+    and its id rides the execution-version record — so a run is
+    attributable to the runtime that served it.
+    """
+    events: list[AgentEvent] = []
+    runtime = _CustomRuntime()
+    orchestrator = RequestOrchestrator(
+        config=orchestrator_config(),
+        lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
+        model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
+        port_factory=lambda context, bearer: fake_port(),
+        runtime_factory=lambda: runtime,
+    )
+
+    record = asyncio.run(orchestrator.run(_request(), sink=events.append))
+
+    assert runtime.calls == 1
+    assert record.outcome == OUTCOME_ANSWERED
+    assert events[0].payload["execution_versions"]["runtime"]["id"] == "custom-runtime-under-test"

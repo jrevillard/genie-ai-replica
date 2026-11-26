@@ -82,6 +82,7 @@ from .verification import (
 )
 from .version_record import (
     MODEL_SOURCE_UNRESOLVED,
+    RUNTIME_UNRESOLVED,
     build_execution_version_record,
     degraded_execution_version_record,
 )
@@ -422,21 +423,28 @@ class RequestOrchestrator:
                 run_id, outcome, monitor, error=error, request=request, preparation_statuses=preparation_statuses
             )
 
-        # The runtime is wired BEFORE the run starts: the record names it,
-        # and the record rides the run-start handshake. A factory that
-        # raises is a wiring defect, and it raises HERE — before any
-        # stream byte and before any handshake — so a run that never
-        # started can never carry a record-less start event.
-        runtime = self._runtime_factory()
-        execution_versions = await self._execution_versions(runtime.runtime_id)
         try:
+            # The runtime is wired INSIDE the try, with the per-request
+            # assembly: the record names the runtime, and the record rides
+            # the run-start handshake. A wiring defect (a factory that
+            # raises, a runtime that does not satisfy the port) is a build
+            # failure like any other and must reach the caller as the
+            # honest terminal — the RUN_ERROR event and the "error" usage
+            # record — never as an exception past the stream that already
+            # started.
+            runtime = self._runtime_factory()
+            if not isinstance(runtime, RuntimeDriver):
+                raise TypeError(
+                    f"the runtime factory returned {type(runtime).__name__}, "
+                    "which does not satisfy the runtime port (runtime_id, run)"
+                )
+            execution_versions = await self._execution_versions(runtime.runtime_id)
             # The per-request assembly is INSIDE the try: a build failure
             # (a port-factory refusal, a registry defect) must reach the
             # caller as the honest terminal — the RUN_ERROR event and the
             # "error" usage record — never as an exception past the stream
-            # that already started. The loop's own failures never get here:
-            # the loop catches its Exceptions internally and returns them
-            # as its result.
+            # that already started. The runtime's own failures never get
+            # here: the core catches them and returns them as its result.
             preparer = self._preparer_factory(monitor, request.language) if self._preparer_factory is not None else None
             registry = document_toolset(
                 self._port_factory(request.context, request.bearer),
@@ -482,11 +490,14 @@ class RequestOrchestrator:
         except Exception as failed:  # noqa: BLE001 — a pre-loop build failure still gets its terminal
             message = f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}"
             logger.warning("agent run failed before its first dispatch: %s", message)
-            # The loop announces run_started when it enters; a build failure
-            # happens after the run began, and every stream must begin with
-            # run_started — so the failure path announces it here, carrying
-            # the SAME execution-version record the loop path carries.
-            emitter.emit(EventKind.RUN_STARTED, run_started_payload(request.question, execution_versions))
+            # The CORE announces run_started when it drives the runtime; a
+            # build failure happens before that, and every stream must begin
+            # with run_started — so the failure path announces it here,
+            # carrying the execution-version record (the DEGRADED one when
+            # the wiring failed before the record could be built: a record's
+            # shape never varies).
+            record_or_degraded = execution_versions or degraded_execution_version_record(message, RUNTIME_UNRESOLVED)
+            emitter.emit(EventKind.RUN_STARTED, run_started_payload(request.question, record_or_degraded))
             emitter.emit(EventKind.RUN_ERROR, {"code": OUTCOME_ERROR, "message": message})
             return record(OUTCOME_ERROR, error=message)
         return record(result.outcome, error=result.error)

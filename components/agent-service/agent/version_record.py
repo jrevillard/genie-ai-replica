@@ -37,6 +37,10 @@ from capabilities.model import MODEL_SOURCE_UNRESOLVED
 from .prompt import PRODUCTION_SYSTEM_PROMPT
 
 IMPLEMENTATION_VERSION = "0.1.0"
+# The runtime axis of a record whose runtime never started: the wiring
+# failed before a runtime id existed, so the axis says so rather than
+# carrying an empty string.
+RUNTIME_UNRESOLVED = "unresolved"
 """The agent-service implementation version — the single source, imported by
 ``app.py``'s FastAPI ``version`` and stamped on every record."""
 

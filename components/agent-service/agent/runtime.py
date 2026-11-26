@@ -29,7 +29,7 @@ site must honour.
 """
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from capabilities.model import LoopModelClient, ModelTurn
 
@@ -119,11 +119,16 @@ class RunInputs:
     emitter: EventEmitter
 
 
+@runtime_checkable
 class RuntimeDriver(Protocol):
     """The seam's driver contract.
 
     ``runtime_id`` names the implementation — it rides the execution
     version record, so a run is attributable to the runtime that served it.
+
+    Runtime-checkable, so the core can ASK whether a runtime satisfies the
+    port before it drives it (a runtime that does not is refused with the
+    honest terminal, not an ``AttributeError`` from the middle of a run).
     """
 
     runtime_id: str

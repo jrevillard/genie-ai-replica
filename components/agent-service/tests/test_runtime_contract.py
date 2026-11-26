@@ -320,6 +320,18 @@ def _c2_holds(runtime) -> bool:
     return True
 
 
+# The budget's own refusal names the dimension that stopped the run; the
+# knob names the bound the deployment sets. The two are mapped here — the
+# check compares the refusal with the knob under test.
+_DIMENSION_NAMES = {
+    "max_steps": "steps",
+    "max_model_calls": "model_calls",
+    "max_tool_calls": "tool_calls",
+    "max_total_tokens": "tokens",
+    "max_evidence_bytes": "evidence_volume",
+}
+
+
 def _c2_bounds(runtime, dimension: str) -> bool:
     """One dimension, one scenario: the model asks for two tools, so every
     dimension has a second chance to bite."""
@@ -336,35 +348,42 @@ def _c2_bounds(runtime, dimension: str) -> bool:
     monitor = RunBudgetMonitor(_budget(**{dimension: 1}))
     token = CancellationToken()
     emitter = EventEmitter(run_id="run-1")
+    refused_by = None
     try:
         result = asyncio.run(
             runtime.run(_inputs(model=model, registry=registry, monitor=monitor, token=token, emitter=emitter))
         )
         outcome = result.outcome
         final_text = result.final_text
-    except BudgetExhausted:
+    except BudgetExhausted as exhausted:
         outcome = OUTCOME_BUDGET_EXHAUSTED
         final_text = None
+        refused_by = exhausted.dimension
     except Exception:  # noqa: BLE001 — any other failure is not a bounded run
         outcome = "failed"
         final_text = None
     if outcome != OUTCOME_BUDGET_EXHAUSTED or final_text is not None:
         return False
     # Every model call the runtime made is counted — no call hides from the
-    # record.
-    if monitor.model_calls + monitor.aux_model_calls != len(model.requests):
+    # record. The aux calls ride the SAME counter (one budget for every
+    # call that reaches the model), so the counter alone is the count.
+    if monitor.model_calls != len(model.requests):
         return False
-    # The dimension's own consumption never went past its bound: the check
-    # precedes the spend, so the run stopped AT the bound. The cumulative
-    # dimensions (tokens, evidence) are counted by what they refused to
-    # spend: the model call and the dispatch that never happened.
+    # The dimension under test is the one that BOUNDED the run: the refusal
+    # names it. A run that stopped on another dimension proves nothing
+    # about this one.
+    if refused_by != _DIMENSION_NAMES[dimension]:
+        return False
+    # The counters the dimension owns never went past its bound: the check
+    # precedes the spend, so the counter is at most the bound. The
+    # cumulative dimensions (tokens, evidence) have no counter to compare —
+    # the refusal above IS their proof: the spend that overshot the bound
+    # is the last one, and the check refused the one after it.
     return {
         "max_steps": monitor.steps,
         "max_model_calls": monitor.model_calls,
         "max_tool_calls": monitor.tool_calls,
-        "max_total_tokens": len(model.requests),
-        "max_evidence_bytes": monitor.tool_calls,
-    }[dimension] <= 1
+    }.get(dimension, 0) <= 1
 
 
 @pytest.mark.parametrize("runtime_id", sorted(RUNTIMES))

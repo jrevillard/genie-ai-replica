@@ -143,11 +143,12 @@ class EventEmitter:
     def emit(self, kind: EventKind, payload: dict | None = None, *, call_id: str | None = None) -> AgentEvent:
         """Stamp one event and hand it to the sink.
 
-        RUN_STARTED is a once-per-run handshake: the loop announces it when
-        it enters and the orchestrator's build-failure path announces it too,
-        so a plumbing raise that escapes the loop's own handler would make
-        the orchestrator re-announce — and the BFF's captureRunStart would
-        overwrite the real started_at with the duplicate's fresh one. The
+        RUN_STARTED is a once-per-run handshake: the CORE announces it when
+        it drives the runtime, and the orchestrator's build-failure path
+        announces it too, so a plumbing raise that escapes the core's own
+        handler would make the orchestrator re-announce — and the BFF's
+        captureRunStart would overwrite the real started_at with the
+        duplicate's fresh one. The
         second announcement is dropped; the first is what the sink carries
         (and what this method returns).
         """

@@ -48,15 +48,12 @@ system + user, assistant tool-call turns, role-``tool`` results.
 """
 
 import json
-import logging
 
 import tracing
 from capabilities.model import ModelTurn
 
 from .cancellation import run_cancellable
 from .runtime import OUTCOME_ANSWERED, OUTCOME_ERROR, RunInputs, RunResult
-
-logger = logging.getLogger(__name__)
 
 
 class AgentLoop:

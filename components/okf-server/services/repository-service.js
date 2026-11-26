@@ -180,6 +180,18 @@ function toSummary(doc) {
   for (const k of SUMMARY_FIELDS) {
     if (doc[k] !== undefined) out[k] = doc[k];
   }
+  if (out.head) {
+    // #2191 (live-measured on the first deploy): `head` carried the whole
+    // computed head — per_field alone is ~143 KB and the embedding vector
+    // ~19 KB per repo, i.e. the whale inside the whale. NOTHING in the
+    // store-fed surfaces reads them from a LIST row: the three head.vector
+    // call sites test TRUTHINESS only ('missing' gates). The summary keeps
+    // every scalar and replaces the vector with its LENGTH — truthy ⟺ a
+    // vector exists, and the number carries the dim.
+    const { vector, ...headRest } = out.head;
+    out.head = { ...headRest, vector: Array.isArray(vector) ? vector.length : vector ? 1 : 0 };
+    delete out.head.per_field; // the ~143 KB per-field map no list consumer reads
+  }
   return out;
 }
 

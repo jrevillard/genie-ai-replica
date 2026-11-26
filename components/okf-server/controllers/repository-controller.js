@@ -4,6 +4,7 @@
 // snake_case response → next(err) on failure. No business logic.
 
 const repoService = require('../services/repository-service');
+const sendConditional = require('../lib/conditional-get'); // #2191 — explicit 304 on matched If-None-Match
 const { RepoError } = repoService;
 const accessControlService = require('../services/access-control-service');
 const conceptMetaService = require('../services/concept-meta-service');
@@ -405,7 +406,11 @@ async function listRepos(req, res, next) {
       // card, not the corpus; the full document stays behind GET /:id.
       projection: 'summary'
     });
-    res.status(200).json(result);
+    // Explicit conditional GET (#2191): express's built-in freshness check
+    // does not fire in this service (measured: matched If-None-Match answered
+    // 200 on every route), and the dashboard's poll MUST 304 — the whole
+    // point of the ETag.
+    sendConditional(req, res, result);
   } catch (err) {
     next(err);
   }

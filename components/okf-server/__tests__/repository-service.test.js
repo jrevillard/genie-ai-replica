@@ -1101,3 +1101,49 @@ describe('cloneRepository response concept_count (David 2026-09-30)', () => {
     expect(clone.concept_count).toBe(2);
   });
 });
+
+describe('summary head sub-projection + explicit conditional GET (#2191 live round)', () => {
+  beforeEach(() => db._reset());
+
+  test('summary head carries scalars + vector LENGTH — per_field and the raw vector never ship', async () => {
+    db.query.mockImplementation(async (query) => {
+      if (String(query || '').includes('COLLECT repo_id')) return { all: async () => [{ repo_id: 'r1', n: 3 }] };
+      return {
+        all: async () => [
+          {
+            repo_id: 'r1',
+            name: 'N',
+            domain: 'd',
+            created_at: 't',
+            head: {
+              version: 'v2',
+              computed_at: 'ct',
+              dim: 768,
+              vector: [0.1, 0.2, 0.3],
+              per_field: { title: [0.1, 0.2] }
+            },
+            _key: 'r1'
+          }
+        ]
+      };
+    });
+    const result = await repoService.list({ projection: 'summary' });
+    const h = result.items[0].head;
+    expect(h.version).toBe('v2');
+    expect(h.computed_at).toBe('ct');
+    expect(h.dim).toBe(768);
+    expect(h.vector).toBe(3); // length — truthy ⟺ a vector exists
+    expect(h).not.toHaveProperty('per_field');
+    expect(JSON.stringify(result.items[0]).length).toBeLessThan(2000);
+  });
+
+  test('a head without a vector reads falsy through the summary', async () => {
+    db.query.mockResolvedValue({
+      all: async () => [{ repo_id: 'r2', name: 'N', domain: 'd', created_at: 't', head: { version: 'v1' }, _key: 'r2' }]
+    });
+    const result = await repoService.list({ projection: 'summary' });
+    const h = result.items[0].head;
+    expect(h.version).toBe('v1');
+    expect(!h.vector).toBe(true); // the 'missing' gate stays honest
+  });
+});

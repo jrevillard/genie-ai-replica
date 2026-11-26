@@ -255,7 +255,7 @@ class NoAgentPipeline:
 
     @classmethod
     def create(
-        cls, config: NoAgentConfig, capability, budget: OperationBudget, transport, lane, env=None
+        cls, config: NoAgentConfig, capability, budget: OperationBudget, transport, lane, env=None, *, metadata_source
     ) -> "NoAgentPipeline":
         """Assemble the wiring the caller supplies: the preparer over the
         same env, the generation client (whose transport the counter
@@ -267,9 +267,12 @@ class NoAgentPipeline:
         translator owns its registry instance (the same file, its own
         read-once cache) — the preparer's is private to the preparer.
 
-        The transport and the lane are REQUIRED: the core composes
-        nothing, so the caller supplies both. A missing one fails here,
-        where the wiring is, and not at the first call that needs it."""
+        The transport, the lane and the document resolver are REQUIRED:
+        the core composes nothing, so the caller supplies all three. A
+        missing one fails here, where the wiring is, and not at the first
+        call that needs it — and a missing resolver would empty every
+        citation card instead (the D1 rule drops a source whose metadata
+        does not resolve)."""
         preparer = QueryPreparer.create(transport, env)
         generation = GenerationClient.create(config, transport=transport)
         counter = TokenCounter(config, generation.model_id, generation.transport)
@@ -278,7 +281,16 @@ class NoAgentPipeline:
             registry = LanguageRegistry(PreparationConfig.load(env).registry_path)
             translator = AnswerTranslator(config, registry, transport=transport)
         return cls(
-            config, preparer, capability, lane, generation, counter, budget, translator, capability.score_calibrator
+            config,
+            preparer,
+            capability,
+            lane,
+            generation,
+            counter,
+            budget,
+            translator,
+            capability.score_calibrator,
+            metadata_source=metadata_source,
         )
 
     async def run(

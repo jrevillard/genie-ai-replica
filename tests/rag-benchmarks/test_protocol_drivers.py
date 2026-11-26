@@ -1584,6 +1584,9 @@ def test_the_config_b_driver_assembles_the_pipeline_it_ships(monkeypatch):
     monkeypatch.setenv("VLLM_LLM_MODEL_ID", "served-model")
     monkeypatch.setenv("TEI_EMBEDDING_ENDPOINT", "https://tei.invalid/embed")
     monkeypatch.setenv("TEI_RERANKING_ENDPOINT", "https://tei.invalid")
+    # The documents' names: the driver resolves them through the document
+    # repository's port, the way the governed path does.
+    monkeypatch.setenv("AGENT_DOCREPO_URL", "http://docrepo.invalid")
     monkeypatch.setenv("ARANGO_URL", "http://localhost:8529")
     monkeypatch.setenv("ARANGO_DB", "_system")
     monkeypatch.setenv(

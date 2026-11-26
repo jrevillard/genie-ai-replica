@@ -111,6 +111,22 @@ class _PillarNotDeployed:
         )
 
 
+def build_metadata_source(env=None) -> DocRepoAdapter:
+    """The document repository's port: the adapter that resolves a legacy
+    file id to the document's own record (its name, its labels).
+
+    The callers that need the documents' names and nothing else — the
+    config-B assembly, which cites documents but serves no legacy read of
+    its own — build it HERE, so the base URL and the guard that refuses a
+    missing one live in ONE place.
+    """
+    source = os.environ if env is None else env
+    docrepo_url = str(source.get("AGENT_DOCREPO_URL", ""))
+    if not docrepo_url:
+        raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
+    return DocRepoAdapter(docrepo_url)
+
+
 def build_stateless_adapters(env=None) -> StatelessAdapters:
     """Assemble the stateless adapters from the environment.
 
@@ -126,10 +142,8 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     honest reason, and the retrieval does not attempt the OKF identity join.
     """
     source = os.environ if env is None else env
-    docrepo_url = str(source.get("AGENT_DOCREPO_URL", ""))
     okf_url = str(source.get("AGENT_OKF_URL", ""))
-    if not docrepo_url:
-        raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
+    docrepo = build_metadata_source(source)
 
     # The posture is read ONCE, from the config that also carries the
     # retrieval knobs — the assembly and the retrieval must not read the
@@ -160,7 +174,7 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     search = build_search_capability(env, db_factory=db_factory, arango_config=arango_config)
 
     return StatelessAdapters(
-        docrepo=DocRepoAdapter(docrepo_url),
+        docrepo=docrepo,
         okf=OkfAdapter(okf_url) if okf_enabled else _PillarNotDeployed(),
         chunks=LegacyChunkAdapter(db_factory),
         search_port=search,

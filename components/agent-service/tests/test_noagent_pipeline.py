@@ -49,6 +49,9 @@ from preparation.registry import LanguageRegistry
 
 BUDGET = OperationBudget(timeout_ms=5000, max_results=5, max_result_bytes=1_000_000)
 
+# The model endpoint the factory's own clients are pointed at.
+ENDPOINT = "http://llm.invalid"
+
 
 def _context(labels=("L1",)):
     return CallerContext(user_id="u1", authorized_graph_names=("GRAPH",), requested_labels=tuple(labels))
@@ -56,6 +59,10 @@ def _context(labels=("L1",)):
 
 class FakeCapability:
     """The port double: records the calls, carries the configured outcome."""
+
+    # The capability's public calibration surface (the factory reads it):
+    # the double carries the same shape — no calibration here.
+    score_calibrator = None
 
     def __init__(self, result=None, error=None, sink_reason=None):
         self.result = result
@@ -727,3 +734,60 @@ def test_score_calibrator_applies_at_confidence_time_only():
     assert result.metadata["retrieval_confidence_score"] == pytest.approx(expected, abs=0.01)
     # The hits themselves were never touched: calibration is confidence-time.
     assert capability.result.hits[0].score == 0.9
+
+
+# ---------------------------------------------------------------------
+# The config-B assembly entry
+# ---------------------------------------------------------------------
+
+
+def test_the_factory_assembles_a_pipeline_that_resolves_its_documents():
+    """``create`` is the config-B assembly entry: the pipeline it returns
+    must carry the caller's document resolver.
+
+    A factory that drops one of the parts it assembles fails at the FIRST
+    request, far from the wiring that forgot it — the docstring's own
+    contract. The document resolver is one of those parts: without it every
+    citation card is EMPTY (the D1 rule drops a source whose metadata does
+    not resolve), and the answer silently loses its sources.
+
+    The run is the real one — the factory's own preparer, generation client
+    and counter over the transport seam, the capability double, the REAL
+    lane — so the card that comes out is the one the caller would read.
+    """
+    source = FakeMetadataSource(
+        {
+            "f1": {"file_name": "The Manual.md", "labels": ["manual"]},
+            "f2": {"file_name": "The Second Note.md", "labels": []},
+        }
+    )
+    transport = PreparationFakeTransport(
+        {
+            f"{ENDPOINT}/v1/models": (200, {"data": [{"id": "served-model", "max_model_len": 8192}]}),
+            f"{ENDPOINT}/v1/chat/completions": (
+                200,
+                {"choices": [{"message": {"content": "The answer."}, "finish_reason": "stop"}]},
+            ),
+            f"{ENDPOINT}/tokenize": (200, {"count": 12}),
+        }
+    )
+    env = {"VLLM_LLM_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_ENDPOINT": ENDPOINT}
+    pipeline = NoAgentPipeline.create(
+        NoAgentConfig.load(env=env),
+        FakeCapability(result=_search_result()),
+        BUDGET,
+        transport,
+        _default_lane(),
+        env,
+        metadata_source=source,
+    )
+
+    result = asyncio.run(pipeline.run([{"role": "user", "content": "How does Geneva manage transport?"}], _context()))
+
+    # The card carries the DOCUMENT's name — the record the SUPPLIED
+    # resolver returned, not a default and not the id.
+    assert [entry["document_name"] for entry in result.source_documents] == ["The Manual.md", "The Second Note.md"]
+    assert [entry["categoryLabels"] for entry in result.source_documents] == [["manual"], []]
+    # And the resolution went through that resolver: it was asked for every
+    # legacy id the retrieval returned.
+    assert source.requested == ["f1", "f2"]

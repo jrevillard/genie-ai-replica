@@ -216,12 +216,13 @@ def build_pipeline():
     pipeline, whose own authorized-set check refuses an empty set and
     validates graph names).
 
-    The core composes nothing: the transport, the lane and the capability
-    are supplied here, the way the composition root supplies them.
+    The core composes nothing: the transport, the lane, the capability and
+    the document resolver are supplied here, the way the composition root
+    supplies them.
     """
     sys.path.insert(0, AGENT_SERVICE_HOME)
     from agent.orchestrator import OrchestratorConfig
-    from assembly import build_search_capability
+    from assembly import build_metadata_source, build_search_capability
     from capabilities.adapters.httpx import HttpxTransport
     from lane import AdmissionLane
     from noagent.config import NoAgentConfig
@@ -234,9 +235,16 @@ def build_pipeline():
     budget = orchestrator_config.operation_budget
     transport = HttpxTransport(noagent_config.tls_verify)
     lane = AdmissionLane.from_config(noagent_config)
+    metadata_source = build_metadata_source(env)
 
     pipeline = NoAgentPipeline.create(
-        noagent_config, capability, budget, transport, lane, env
+        noagent_config,
+        capability,
+        budget,
+        transport,
+        lane,
+        env,
+        metadata_source=metadata_source,
     )
     generation = getattr(pipeline, "_generation", None)
     model_id = resolve_model_id(generation)

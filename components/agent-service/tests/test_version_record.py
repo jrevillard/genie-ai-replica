@@ -20,7 +20,6 @@ from conftest import (
 
 from agent.events import AgentEvent
 from agent.orchestrator import AgentRunRequest, RequestOrchestrator
-from agent.probe import ProbeConfig, ProbeModelClient, ProbeTransientError
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.version_record import (
     IMPLEMENTATION_VERSION,
@@ -31,8 +30,10 @@ from agent.version_record import (
     configuration_values,
     short_sha256,
 )
+from capabilities.adapters.vllm import VllmModelClient, VllmTransientError
 from capabilities.model import ModelTurn
 from lane import AdmissionLane
+from noagent.config import NoAgentConfig
 
 # ---------------------------------------------------------------------
 # The builder: fields, hash stability, the no-secrets invariant
@@ -125,10 +126,10 @@ def test_no_note_rides_when_the_resolution_was_clean():
 # ---------------------------------------------------------------------
 
 
-def _probe_client(env_overrides=None, transport=None) -> ProbeModelClient:
+def _probe_client(env_overrides=None, transport=None) -> VllmModelClient:
     values = {"VLLM_LLM_ENDPOINT": "http://endpoint.invalid", "VLLM_LLM_MODEL_ID": ""}
-    config = ProbeConfig.load(env={**values, **(env_overrides or {})})
-    return ProbeModelClient(config, transport=transport)
+    config = NoAgentConfig.load(env={**values, **(env_overrides or {})}).model_config()
+    return VllmModelClient(config, transport=transport)
 
 
 def test_the_override_identity_skips_the_probe():
@@ -140,7 +141,7 @@ def test_the_override_identity_skips_the_probe():
 def test_a_discovery_failure_degrades_to_the_unresolved_identity():
     class _BrokenTransport:
         def get_json(self, url, bearer, timeout_s):
-            raise ProbeTransientError("the model discovery failed: transport down")
+            raise VllmTransientError("the model discovery failed: transport down")
 
     client = _probe_client(transport=_BrokenTransport())
     model_id, source, note = asyncio.run(client.model_identity())

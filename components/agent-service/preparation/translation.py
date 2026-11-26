@@ -34,11 +34,12 @@ timeout, TLS-verify knob).
 """
 
 import logging
-import math
 import re
 import time
 from contextlib import suppress
 from typing import Any, Protocol
+
+from capabilities.model import MAX_SANE_TOKENS, coerce_int, coerce_sane_int
 
 from .config import NEGATIVE_CACHE_SECONDS, PreparationConfig
 
@@ -48,7 +49,6 @@ logger = logging.getLogger(__name__)
 # MAX_SANE_MODEL_WINDOW_TOKENS): the largest real models sit two orders of
 # magnitude below this; anything bigger is a broken proxy value that would
 # silently disable every truncation guard.
-MAX_SANE_TOKENS = 10_000_000
 
 # The shape a language code has to have before it is written into a prompt
 # (deployed _LANGUAGE_CODE_PATTERN). A code that does not look like a code is
@@ -99,47 +99,6 @@ class _ResponseStatusError(Exception):
     def __init__(self, status: int, body):
         self.status = status
         super().__init__(f"the translation endpoint answered {status}: {body}")
-
-
-def coerce_int(value) -> int | None:
-    """Coerce a JSON scalar to ``int``: bools rejected, digit strings accepted.
-
-    Shared stance for every numeric field read out of a model-server payload
-    (context windows, tokenize counts): proxies serialize numbers as digit
-    strings, and a boolean is never a count.
-
-    A digit string is a plain run of ASCII decimal digits. The ``int()``
-    builtin is looser — it also accepts PEP 515 underscore separators
-    (``"1_0"`` becomes 10), a leading sign (``"+5"``) and non-ASCII decimal
-    digits (``"١٢٣"`` becomes 123) — and a mangled count silently
-    miscounts the served tokens.
-    """
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        # 12.0 is a serialization of 12; 12.5 is garbage.
-        return int(value) if math.isfinite(value) and int(value) == value else None
-    if isinstance(value, str):
-        text = value.strip()
-        return int(text) if text.isascii() and text.isdecimal() else None
-    return None
-
-
-def coerce_sane_int(value) -> int | None:
-    """Coerce a JSON scalar to an int inside the sane token bound, or None.
-
-    The one home for the coercion-then-bound predicate every numeric field
-    read out of a model-server payload applies (served context windows,
-    usage counts): the coercion is :func:`coerce_int`, and a value past
-    ``MAX_SANE_TOKENS`` (or not positive) is dropped — an absurd value
-    would silently disable the overflow guard it feeds.
-    """
-    coerced = coerce_int(value)
-    if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
-        return coerced
-    return None
 
 
 # Token-budget markers in vLLM/OpenAI error bodies (ported from the dataprep

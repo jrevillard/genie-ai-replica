@@ -29,6 +29,7 @@ import math
 import os
 from dataclasses import dataclass
 
+from capabilities.model import VllmModelConfig
 from preparation.config import _env_float, _env_int
 
 logger = logging.getLogger(__name__)
@@ -213,4 +214,22 @@ class NoAgentConfig:
             lane_slots=max(1, slots),
             lane_lock_path=str(source.get("AGENT_LANE_LOCK_PATH", "/tmp/agent-service-lane.lock")),
             confidence_rank_decay=_env_float(source, "CONFIDENCE_RANK_DECAY", 0.5),
+        )
+
+    def model_config(self) -> VllmModelConfig:
+        """The model's knobs, in the port's shape — the adapter's config.
+
+        The deployed knob surface is read here, once; the adapter that
+        consumes the knobs takes the port's shape.
+        """
+        return VllmModelConfig(
+            generation_endpoint=self.generation_endpoint,
+            model_id_override=self.model_id_override,
+            bearer=self.bearer,
+            discovery_bearer=self.probe_bearer,
+            tls_verify=self.tls_verify,
+            llm_timeout_seconds=self.llm_timeout_seconds,
+            discovery_timeout_seconds=self.probe_timeout_seconds,
+            window_override_tokens=self.window_override_tokens,
+            fallback_window_tokens=self.fallback_window_tokens,
         )

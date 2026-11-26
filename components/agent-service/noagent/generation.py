@@ -51,10 +51,12 @@ class GenerationTransientError(RuntimeError):
     """
 
 
-RECORDED_SAMPLING_PARAMS = {"temperature": 0.01, "top_p": 0.95, "frequency_penalty": 0.0, "stream": False}
-"""The recorded request-level sampling params, shared by every chat/completions
-consumer in the component — one home, so a change to the deployed convention
-cannot leave one consumer measuring a different request than the others."""
+from capabilities.model import (  # noqa: E402
+    RECORDED_SAMPLING_PARAMS,
+    chat_choice,
+    chat_choice_content,
+    resolve_window_tokens,
+)
 
 
 def generation_payload(system_prompt: str, user_content: str, model_id: str | None, answer_tokens: int | None) -> dict:
@@ -76,36 +78,6 @@ def generation_payload(system_prompt: str, user_content: str, model_id: str | No
     if answer_tokens:
         payload["max_tokens"] = answer_tokens
     return payload
-
-
-def chat_choice(body: dict) -> tuple[dict | None, str | None]:
-    """The first choice and its finish reason out of an OpenAI-shaped chat
-    response — the ONE shape reader for every chat/completions consumer in
-    the no-agent package (the generation client and the answer translator;
-    each maps the outcome to its own failure style)."""
-    choices = body.get("choices") or []
-    choice = choices[0] if choices and isinstance(choices[0], dict) else None
-    return choice, (choice or {}).get("finish_reason")
-
-
-def chat_choice_content(choice: dict):
-    """The message content of one choice (None when the shape carries none)."""
-    return (choice.get("message") or {}).get("content")
-
-
-def resolve_window_tokens(config, detected: int | None) -> int:
-    """The usable context window in tokens, in the deployed three tiers: an
-    explicit consumer-side cap (``AGENT_WINDOW_OVERRIDE_TOKENS``), then the
-    probed ``max_model_len``, then the configured fallback
-    (``MAX_MODEL_LEN_TEXTGEN``). Pure — the caller supplies the probed
-    value (the ``ModelEndpointCache`` here, the probe client's own single
-    discovery in ``agent.probe``) so both consumers share one tier home.
-    """
-    if config.window_override_tokens > 0:
-        return config.window_override_tokens
-    if detected:
-        return detected
-    return config.fallback_window_tokens
 
 
 class GenerationClient:

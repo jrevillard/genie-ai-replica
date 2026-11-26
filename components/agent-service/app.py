@@ -43,9 +43,10 @@ from agent.orchestrator import (
     RequestOrchestrator,
     build_preparer_factory,
 )
-from agent.probe import ProbeConfig, ProbeModelClient, build_stateless_adapters
+from agent.probe import ProbeConfig, build_stateless_adapters
 from agent.version_record import IMPLEMENTATION_VERSION
 from capabilities.adapters.httpx import HttpxTransport
+from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import CallerContext
 from lane import AdmissionLane
 from noagent.config import NoAgentConfig
@@ -118,9 +119,10 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     orchestrator_config = OrchestratorConfig.load(env)
     noagent = NoAgentConfig.load(env)
     probe_config = ProbeConfig.load(env)
+    model_config = noagent.model_config()
     adapters = build_stateless_adapters(probe_config, env)
-    transport = HttpxTransport(probe_config.tls_verify)
-    model_client = ProbeModelClient(probe_config, transport)
+    transport = HttpxTransport(model_config.tls_verify)
+    model_client = VllmModelClient(model_config, transport)
     lane = AdmissionLane.from_config(noagent)
     # The preparation wiring (the preparation module): one per-run
     # preparer over the run's budget monitor; the discovery caches are

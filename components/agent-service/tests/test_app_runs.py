@@ -289,7 +289,7 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
     )
     monkeypatch.setattr(
         app_module,
-        "ProbeModelClient",
+        "VllmModelClient",
         lambda config, transport=None: ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "grounded"}')),
     )
     monkeypatch.setattr(app_module, "_RUNTIME", None)

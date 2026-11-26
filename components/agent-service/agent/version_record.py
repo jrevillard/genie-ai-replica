@@ -43,9 +43,12 @@ its hash alone."""
 
 PROMPT_OVERRIDE_VERSION = "override"
 
-MODEL_SOURCE_OVERRIDE = "override"
-MODEL_SOURCE_DISCOVERED = "discovered"
-MODEL_SOURCE_UNRESOLVED = "unresolved"
+# The model identity's vocabulary lives in the port (the client that
+# discovers the model id is an adapter, and an adapter may not import the
+# core); the values are the recorded ones.
+from capabilities.model import (  # noqa: E402
+    MODEL_SOURCE_UNRESOLVED,
+)
 
 _FINGERPRINT_LENGTH = 12
 

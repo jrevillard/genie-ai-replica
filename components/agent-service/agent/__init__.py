@@ -37,8 +37,6 @@ from .probe import (
     TOOLSET,
     ProbeConfig,
     ProbeEvidence,
-    ProbeModelClient,
-    ProbeTransientError,
     run_probe,
 )
 from .prompt import PRODUCTION_SYSTEM_PROMPT
@@ -67,8 +65,6 @@ __all__ = [
     "ModelTurn",
     "ProbeConfig",
     "ProbeEvidence",
-    "ProbeModelClient",
-    "ProbeTransientError",
     "RunBudget",
     "RunBudgetMonitor",
     "RunResult",

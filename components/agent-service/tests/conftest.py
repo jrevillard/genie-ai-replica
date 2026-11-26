@@ -23,12 +23,14 @@ from agent.cancellation import CancellationToken
 from agent.events import EventEmitter
 from agent.loop import AgentLoop
 from agent.orchestrator import OrchestratorConfig
-from agent.probe import PROBE_OPERATION_BUDGET, ProbeConfig
+from agent.probe import PROBE_OPERATION_BUDGET
 from agent.toolset import document_toolset
 from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
+from capabilities.adapters.vllm import VllmModelConfig
 from capabilities.contract import CallerContext, OperationBudget, ReadSourceResult, SearchKnowledgeResult
 from capabilities.model import ModelTurn, ToolCallRequest
+from noagent.config import NoAgentConfig
 
 
 class FakeTransport:
@@ -197,13 +199,13 @@ ENDPOINT = "http://llm.invalid"
 """The fake model endpoint the model-consuming suites point at."""
 
 
-def verifier_config(**overrides) -> "ProbeConfig":
-    """The probe/verification model config over ``ENDPOINT``: the served
+def verifier_config(**overrides) -> "VllmModelConfig":
+    """The verification model config over ``ENDPOINT``: the served
     model id by default, the caller's env overrides on top. One home for
     the probe and verification suites (the config builders were verbatim
     copies before this promotion)."""
     values = {"VLLM_LLM_ENDPOINT": ENDPOINT, "VLLM_LLM_MODEL_ID": "served-model"}
-    return ProbeConfig.load(env={**values, **overrides})
+    return NoAgentConfig.load(env={**values, **overrides}).model_config()
 
 
 GOVERNED_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))

@@ -54,6 +54,9 @@ from typing import Any, Protocol
 import httpx
 
 from capabilities.adapters.httpx import HttpxTransport
+from capabilities.adapters.vllm import VllmModelClient
+from capabilities.model import VllmModelConfig
+from noagent.config import NoAgentConfig
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
 from preparation.translation import coerce_sane_int
 
@@ -61,7 +64,7 @@ from .budget import RunBudgetMonitor
 from .cancellation import CancellationToken
 from .events import EventEmitter, EventKind
 from .loop import AgentLoop
-from .probe import PROBE_RUN_BUDGET, ProbeConfig, ProbeModelClient
+from .probe import PROBE_RUN_BUDGET
 from .registry import ToolDefinition, ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -723,19 +726,19 @@ class HttpxSseStream:
             self._closed = True
 
 
-def chat_completion_url(config: ProbeConfig) -> str:
+def chat_completion_url(config: VllmModelConfig) -> str:
     return f"{config.generation_endpoint}/v1/chat/completions"
 
 
-def _auth_headers(config: ProbeConfig) -> dict:
+def _auth_headers(config: VllmModelConfig) -> dict:
     return {"Authorization": f"Bearer {config.bearer}"} if config.bearer else {}
 
 
-def _discovery_headers(config: ProbeConfig) -> dict:
-    """The discovery credential: the probe client's rule (``probe_bearer``),
+def _discovery_headers(config: VllmModelConfig) -> dict:
+    """The discovery credential: the probe client's rule (``discovery_bearer``),
     so the harness's discovery measures the same auth path the probe's
     ``/v1/models`` probe uses — not the generation bearer."""
-    return {"Authorization": f"Bearer {config.probe_bearer}"} if config.probe_bearer else {}
+    return {"Authorization": f"Bearer {config.discovery_bearer}"} if config.discovery_bearer else {}
 
 
 def _matrix_payload(mode: str, strictness: str, *, streaming: bool, model_id: str) -> dict:
@@ -766,7 +769,7 @@ def _matrix_payload(mode: str, strictness: str, *, streaming: bool, model_id: st
 # ---------------------------------------------------------------------------
 
 
-def _sse_factory(config: ProbeConfig):
+def _sse_factory(config: VllmModelConfig):
     """The live SSE stream builder: one open stream per streaming cell."""
 
     def build(payload: dict) -> SseStream:
@@ -782,7 +785,7 @@ def _sse_factory(config: ProbeConfig):
 
 
 async def run_cell(
-    config: ProbeConfig,
+    config: VllmModelConfig,
     transport,
     model_id: str,
     mode: str,
@@ -808,7 +811,7 @@ async def run_cell(
     return _record_cell(mode, strictness, streaming, observation, latency_ms, error)
 
 
-async def _run_nonstreaming_cell(config: ProbeConfig, transport, payload: dict) -> ToolCallObservation:
+async def _run_nonstreaming_cell(config: VllmModelConfig, transport, payload: dict) -> ToolCallObservation:
     status, body = await transport.post_json(
         chat_completion_url(config), _auth_headers(config), payload, config.llm_timeout_seconds
     )
@@ -879,7 +882,7 @@ def _record_cell(
     )
 
 
-async def read_endpoint_identity(config: ProbeConfig, transport, venue: str = "") -> EndpointIdentity:
+async def read_endpoint_identity(config: VllmModelConfig, transport, venue: str = "") -> EndpointIdentity:
     """The deployed combination, read from the endpoint itself.
 
     The version endpoint is probed and recorded verbatim — whatever it
@@ -893,7 +896,7 @@ async def read_endpoint_identity(config: ProbeConfig, transport, venue: str = ""
     version_note: str | None = None
     url = f"{config.generation_endpoint}/version"
     try:
-        status, body = await transport.get_json(url, _discovery_headers(config), config.probe_timeout_seconds)
+        status, body = await transport.get_json(url, _discovery_headers(config), config.discovery_timeout_seconds)
         if status < 400:
             version_raw = json.dumps(body)[:_ERROR_PREVIEW_CHARS]
         else:
@@ -912,13 +915,13 @@ async def read_endpoint_identity(config: ProbeConfig, transport, venue: str = ""
     )
 
 
-async def _discover_model(config: ProbeConfig, transport) -> tuple[str | None, int | None]:
+async def _discover_model(config: VllmModelConfig, transport) -> tuple[str | None, int | None]:
     """The model id and window the endpoint serves (the probe's discovery)."""
     if config.model_id_override:
         return config.model_id_override, None
     url = f"{config.generation_endpoint}/v1/models"
     try:
-        status, body = await transport.get_json(url, _discovery_headers(config), config.probe_timeout_seconds)
+        status, body = await transport.get_json(url, _discovery_headers(config), config.discovery_timeout_seconds)
     except Exception as failed:  # noqa: BLE001
         raise VerificationTransientError(f"the model discovery failed: {_error_preview(failed)}") from failed
     if status >= 400:
@@ -942,7 +945,7 @@ async def _discover_model(config: ProbeConfig, transport) -> tuple[str | None, i
 
 
 async def run_matrix(
-    config: ProbeConfig, transport, model_id: str, sse_factory=None
+    config: VllmModelConfig, transport, model_id: str, sse_factory=None
 ) -> tuple[list[CellRecord], dict[str, float], dict[str, str]]:
     """Every cell of the matrix, serially, in a stable order.
 
@@ -1043,7 +1046,7 @@ async def _consume_stream_events(
 
 
 async def demo_streaming_cancel(
-    config: ProbeConfig,
+    config: VllmModelConfig,
     model_id: str,
     sse_factory=None,
     *,
@@ -1166,7 +1169,7 @@ _CLOCK_TOOL = ToolDefinition(
 )
 
 
-async def demo_loop_cancel(config: ProbeConfig, transport, model_id: str | None = None) -> LoopCancelObservation:
+async def demo_loop_cancel(config: VllmModelConfig, transport, model_id: str | None = None) -> LoopCancelObservation:
     """Cancel an ``AgentLoop`` run during a live model call, record what happened.
 
     The loop drives the live endpoint through the probe's model client (the
@@ -1189,7 +1192,7 @@ async def demo_loop_cancel(config: ProbeConfig, transport, model_id: str | None 
     registry.register(_CLOCK_TOOL, _read_clock_executor)
     loop = AgentLoop(
         model=_CancelDuringModelCall(
-            ProbeModelClient(config, transport=_DispatchRecordingTransport(transport, recorder)), token, recorder
+            VllmModelClient(config, transport=_DispatchRecordingTransport(transport, recorder)), token, recorder
         ),
         registry=registry,
         monitor=_demo_monitor(),
@@ -1248,7 +1251,7 @@ async def _read_clock_executor(arguments: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def run_plain_control(config: ProbeConfig, transport, model_id: str) -> PlainControlObservation:
+async def run_plain_control(config: VllmModelConfig, transport, model_id: str) -> PlainControlObservation:
     """One plain (no tools, non-streaming) completion — the wire control.
 
     The record proves the harness reads a normal completion on the same
@@ -1282,7 +1285,7 @@ async def run_plain_control(config: ProbeConfig, transport, model_id: str) -> Pl
 
 
 async def run_verification(
-    config: ProbeConfig, transport=None, sse_factory=None, venue: str = ""
+    config: VllmModelConfig, transport=None, sse_factory=None, venue: str = ""
 ) -> VerificationEvidence:
     """One verification pass: identity, matrix, cancellation demos, control — the full record."""
     transport = transport if transport is not None else HttpxTransport(config.tls_verify)
@@ -1387,7 +1390,7 @@ def _main() -> int:
     acceptance semantics passed (:func:`acceptance_verdict`).
     """
     logging.basicConfig(level="WARNING", format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    config = ProbeConfig.load()
+    config = NoAgentConfig.load().model_config()
     venue = str(os.environ.get("AGENT_VERIFICATION_VENUE", ""))
     try:
         evidence = asyncio.run(run_verification(config, venue=venue))

@@ -47,13 +47,13 @@ from agent.probe import (
     RUNTIME_ID,
     TOOLSET,
     ProbeConfig,
-    ProbeModelClient,
-    ProbeTransientError,
     build_port,
     document_toolset,
     run_probe,
 )
+from capabilities.adapters.vllm import VllmModelClient, VllmTransientError
 from capabilities.contract import CallerContext, QueryPreparationStatus
+from noagent.config import NoAgentConfig
 from preparation.translation import MAX_SANE_TOKENS
 
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
@@ -219,22 +219,22 @@ def test_the_generation_bearer_falls_back_to_the_gpu_node_key():
     # The canonical venue carries only VLLM_API_KEY (the GPU key): the
     # in-process probe inherits the operator's shell, not a compose
     # mapping, so without the fallback the first generation call 401s.
-    config = ProbeConfig.load(env={"VLLM_API_KEY": "gpu-key"})
+    config = NoAgentConfig.load(env={"VLLM_API_KEY": "gpu-key"}).model_config()
     assert config.bearer == "gpu-key"
 
 
 def test_the_recorded_bearer_wins_when_both_keys_are_set():
-    config = ProbeConfig.load(env={"OPENAI_API_KEY": "recorded", "VLLM_API_KEY": "gpu"})
+    config = NoAgentConfig.load(env={"OPENAI_API_KEY": "recorded", "VLLM_API_KEY": "gpu"}).model_config()
     assert config.bearer == "recorded"
-    assert config.probe_bearer == "gpu"
+    assert config.discovery_bearer == "gpu"
 
 
 @pytest.mark.parametrize("knob,default", [("MODEL_LLM_TIMEOUT_SECONDS", 180.0), ("MODEL_PROBE_TIMEOUT_SECONDS", 10.0)])
 def test_a_set_to_empty_timeout_knob_falls_back_to_its_default(knob, default):
     # The recorded convention (the tolerant _env_float read): an
     # empty value is unset, never a startup crash.
-    config = ProbeConfig.load(env={knob: ""})
-    field = "llm_timeout_seconds" if knob == "MODEL_LLM_TIMEOUT_SECONDS" else "probe_timeout_seconds"
+    config = NoAgentConfig.load(env={knob: ""}).model_config()
+    field = "llm_timeout_seconds" if knob == "MODEL_LLM_TIMEOUT_SECONDS" else "discovery_timeout_seconds"
     assert getattr(config, field) == default
 
 
@@ -273,7 +273,7 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
             ),
         )
     )
-    client = ProbeModelClient(verifier_config(), transport=transport)
+    client = VllmModelClient(verifier_config(), transport=transport)
     turn = asyncio.run(
         client.complete([{"role": "user", "content": "q"}], ({"type": "function"},), max_output_tokens=None)
     )
@@ -313,7 +313,7 @@ def test_complete_accepts_the_numeric_forms_proxies_serve_for_usage(served, expe
     # this table pins each accepted and each rejected shape through the
     # real complete() path.
     transport = _transport((200, _chat_body(content="a", usage=served)))
-    client = ProbeModelClient(verifier_config(), transport=transport)
+    client = VllmModelClient(verifier_config(), transport=transport)
     turn = asyncio.run(client.complete([{"role": "user", "content": "q"}], (), max_output_tokens=None))
 
     assert (turn.prompt_tokens, turn.completion_tokens) == expected
@@ -326,7 +326,7 @@ def test_complete_omits_the_tool_fields_when_no_tools_are_declared():
     sent empty, or every judged verdict on such an endpoint degrades to
     unverified."""
     transport = _transport((200, _chat_body(content='{"verdict": "grounded"}')))
-    client = ProbeModelClient(verifier_config(), transport=transport)
+    client = VllmModelClient(verifier_config(), transport=transport)
     turn = asyncio.run(client.complete([{"role": "user", "content": "q"}], (), max_output_tokens=None))
 
     assert turn.content == '{"verdict": "grounded"}'
@@ -341,7 +341,7 @@ def test_complete_carries_the_output_bound_when_the_window_has_room():
     # via the model-id override — minus 128 safety and the tiny prompt
     # estimate), so the bound rides verbatim.
     transport = _transport((200, _chat_body(content="a")))
-    client = ProbeModelClient(verifier_config(), transport=transport)
+    client = VllmModelClient(verifier_config(), transport=transport)
     asyncio.run(client.complete([], (), max_output_tokens=1234))
     assert transport.calls[-1]["payload"]["max_tokens"] == 1234
 
@@ -353,7 +353,7 @@ def test_complete_caps_the_bound_to_the_window_room():
     # room (window − prompt estimate − 128 safety).
     transport = _transport((200, _chat_body(content="a")))
     config = verifier_config(AGENT_WINDOW_OVERRIDE_TOKENS="1000")
-    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
+    asyncio.run(VllmModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
     payload = transport.calls[-1]["payload"]
     # The offset lands OUTSIDE the chars-per-token division: "[]" is 2 chars
     # = ceil(2/4) = 1 estimated token, + 20 offset tokens = 21, room 851.
@@ -367,7 +367,7 @@ def test_complete_omits_the_bound_when_the_prompt_leaves_no_room():
     # overflow); no max_tokens is invented for a call that cannot run.
     transport = _transport((200, _chat_body(content="a")))
     config = verifier_config(AGENT_WINDOW_OVERRIDE_TOKENS="100")
-    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
+    asyncio.run(VllmModelClient(config, transport=transport).complete([], (), max_output_tokens=5000))
     assert "max_tokens" not in transport.calls[-1]["payload"]
 
 
@@ -379,7 +379,7 @@ def test_the_declared_tools_count_against_the_window_room():
     transport = _transport((200, _chat_body(content="a")))
     config = verifier_config(AGENT_WINDOW_OVERRIDE_TOKENS="1000")
     tools = ({"type": "function", "function": {"name": "search_knowledge", "description": "x" * 400}},)
-    asyncio.run(ProbeModelClient(config, transport=transport).complete([], tools, max_output_tokens=5000))
+    asyncio.run(VllmModelClient(config, transport=transport).complete([], tools, max_output_tokens=5000))
     payload = transport.calls[-1]["payload"]
     request_chars = len("[]") + len(json.dumps(list(tools)))
     expected_room = 1000 - (math.ceil(request_chars / 4) + 20) - 128
@@ -393,14 +393,14 @@ def test_a_toolset_that_fills_the_window_omits_the_bound():
     transport = _transport((200, _chat_body(content="a")))
     config = verifier_config(AGENT_WINDOW_OVERRIDE_TOKENS="200")
     tools = ({"type": "function", "function": {"name": "search_knowledge", "description": "x" * 2000}},)
-    asyncio.run(ProbeModelClient(config, transport=transport).complete([], tools, max_output_tokens=5000))
+    asyncio.run(VllmModelClient(config, transport=transport).complete([], tools, max_output_tokens=5000))
     assert "max_tokens" not in transport.calls[-1]["payload"]
 
 
 def test_complete_carries_the_bearer_when_configured():
     transport = _transport((200, _chat_body(content="a")))
     config = verifier_config(OPENAI_API_KEY="sk-data")
-    asyncio.run(ProbeModelClient(config, transport=transport).complete([], (), max_output_tokens=None))
+    asyncio.run(VllmModelClient(config, transport=transport).complete([], (), max_output_tokens=None))
     assert transport.calls[-1]["headers"] == {"Authorization": "Bearer sk-data"}
 
 
@@ -423,7 +423,7 @@ def test_the_discovered_window_accepts_the_numeric_forms_proxies_serve(served, h
     # value falls back to the configured 65536 tier, where the allowance
     # rides verbatim.
     transport = _transport((200, _chat_body(content="a")), model_entry=preparation_model_entry(max_model_len=served))
-    client = ProbeModelClient(verifier_config(VLLM_LLM_MODEL_ID=""), transport=transport)
+    client = VllmModelClient(verifier_config(VLLM_LLM_MODEL_ID=""), transport=transport)
     asyncio.run(client.complete([], (), max_output_tokens=50_000))
     payload = transport.calls[-1]["payload"]
     if honored:
@@ -434,7 +434,7 @@ def test_the_discovered_window_accepts_the_numeric_forms_proxies_serve(served, h
 
 def test_the_model_id_override_means_no_discovery_probe():
     transport = _transport((200, _chat_body(content="a")))
-    asyncio.run(ProbeModelClient(verifier_config(), transport=transport).complete([], (), max_output_tokens=None))
+    asyncio.run(VllmModelClient(verifier_config(), transport=transport).complete([], (), max_output_tokens=None))
     assert [call["url"] for call in transport.calls] == [f"{ENDPOINT}/v1/chat/completions"]
 
 
@@ -442,7 +442,7 @@ def test_the_model_id_is_discovered_when_no_override_is_set():
     transport = _transport(
         (200, _chat_body(content="a")), model_entry=preparation_model_entry(model_id="discovered-model")
     )
-    client = ProbeModelClient(verifier_config(VLLM_LLM_MODEL_ID=""), transport=transport)
+    client = VllmModelClient(verifier_config(VLLM_LLM_MODEL_ID=""), transport=transport)
     asyncio.run(client.complete([], (), max_output_tokens=None))
     assert [call["url"] for call in transport.calls] == [f"{ENDPOINT}/v1/models", f"{ENDPOINT}/v1/chat/completions"]
     assert transport.calls[-1]["payload"]["model"] == "discovered-model"
@@ -450,19 +450,19 @@ def test_the_model_id_is_discovered_when_no_override_is_set():
 
 def test_every_failure_shape_is_the_typed_transient():
     config = verifier_config()
-    with pytest.raises(ProbeTransientError, match="answered 500"):
+    with pytest.raises(VllmTransientError, match="answered 500"):
         asyncio.run(
-            ProbeModelClient(config, transport=_transport((500, "boom"))).complete([], (), max_output_tokens=None)
+            VllmModelClient(config, transport=_transport((500, "boom"))).complete([], (), max_output_tokens=None)
         )
-    with pytest.raises(ProbeTransientError, match="no choice"):
+    with pytest.raises(VllmTransientError, match="no choice"):
         asyncio.run(
-            ProbeModelClient(config, transport=_transport((200, {"choices": []}))).complete(
+            VllmModelClient(config, transport=_transport((200, {"choices": []}))).complete(
                 [], (), max_output_tokens=None
             )
         )
-    with pytest.raises(ProbeTransientError, match="not valid JSON"):
+    with pytest.raises(VllmTransientError, match="not valid JSON"):
         asyncio.run(
-            ProbeModelClient(
+            VllmModelClient(
                 config,
                 transport=_transport(
                     (
@@ -476,9 +476,9 @@ def test_every_failure_shape_is_the_typed_transient():
                 ),
             ).complete([], (), max_output_tokens=None)
         )
-    with pytest.raises(ProbeTransientError, match="discovery failed"):
+    with pytest.raises(VllmTransientError, match="discovery failed"):
         asyncio.run(
-            ProbeModelClient(
+            VllmModelClient(
                 verifier_config(VLLM_LLM_MODEL_ID=""), transport=PreparationFakeTransport(error=OSError("down"))
             ).complete([], (), max_output_tokens=None)
         )
@@ -493,8 +493,8 @@ def test_a_non_object_tool_arguments_payload_is_refused():
             ),
         )
     )
-    with pytest.raises(ProbeTransientError, match="not a JSON object"):
-        asyncio.run(ProbeModelClient(verifier_config(), transport=transport).complete([], (), max_output_tokens=None))
+    with pytest.raises(VllmTransientError, match="not a JSON object"):
+        asyncio.run(VllmModelClient(verifier_config(), transport=transport).complete([], (), max_output_tokens=None))
 
 
 def test_a_tool_call_without_an_id_is_a_response_shape_defect():
@@ -510,8 +510,8 @@ def test_a_tool_call_without_an_id_is_a_response_shape_defect():
             ),
         )
     )
-    with pytest.raises(ProbeTransientError, match="carries no id"):
-        asyncio.run(ProbeModelClient(verifier_config(), transport=transport).complete([], (), max_output_tokens=None))
+    with pytest.raises(VllmTransientError, match="carries no id"):
+        asyncio.run(VllmModelClient(verifier_config(), transport=transport).complete([], (), max_output_tokens=None))
 
 
 # ---------------------------------------------------------------------

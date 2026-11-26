@@ -86,7 +86,7 @@ SERVICE_LAYOUT = Layout(
 # the only one allowed to import the telemetry SDK.
 TELEMETRY_FACADE = "tracing"
 # What the core and the adapters exchange.
-PORTS = ("capabilities.contract", "capabilities.identifiers", "capabilities.sources")
+PORTS = ("capabilities.contract", "capabilities.identifiers", "capabilities.model", "capabilities.sources")
 # The import names a core module never imports. The list names PACKAGES, so
 # ``from urllib import request`` is caught as the import of ``urllib``.
 IO_LIBRARIES = (

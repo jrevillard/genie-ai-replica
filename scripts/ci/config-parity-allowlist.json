@@ -66,7 +66,12 @@
           "via": "envFrom"
         }
       },
-      "composeOnly": {}
+      "composeOnly": {
+        "AGRI_SOURCES_ENABLED": "the El Salvador agricultural-data tier's source-adapter switch (comma list of enabled adapters): the chart has no agri tier at all — the adapters, their upstream APIs and their Redis/Arango caches are a Compose-only deployment, so the variable has no counterpart to configure on the Kubernetes surface. Its default (every registered adapter) is what the chart's backend would run anyway.",
+        "AGRI_REDIS_URL": "the address of the agricultural tier's dedicated Redis cache: the chart runs no agri service, so there is no in-cluster Redis to point at (the backend falls back to its own Redis when the variable is unset — the same fallback the chart's backend uses).",
+        "AGRI_VERBOSE": "the agricultural tier's verbose pipeline tracing: a Compose-only observability knob (the chart's backend carries no agri pipeline to trace), and unset means quiet — the same behaviour the chart's backend has.",
+        "AGRI_PREFETCH_ON_START": "the agricultural tier's prefetch-on-start switch (the adapters warm their caches at boot): the chart runs no agri service, so there is no prefetch to schedule; the backend's own startup is unaffected by it."
+      }
     },
     "documentRepository": {
       "compose": "document-repository",

@@ -4522,14 +4522,15 @@ test:rag-benchmarks:
   stage: test
   interruptible: true
   before_script:
-    # pydantic + requests + httpx: the import closure the config-B driver
-    # consumption test needs — importing capabilities.contract executes
-    # capabilities/__init__, which pulls .contract (pydantic) and .executor →
-    # adapters .chunks/.docrepo/.okf → adapters/http (requests); the assembly
-    # the driver consumes reaches adapters/tei_embedding (httpx). The search
-    # capability's numpy/kneed live only in the in-container driver assembly,
-    # never in CI.
-    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests pyyaml httpx==0.28.1
+    # The config-B driver consumption test assembles the agent-service's
+    # pipeline IN-PROCESS: it imports the service's assembly, and with it
+    # the service's runtime closure (the telemetry facade → opentelemetry,
+    # the preparation module's detector → langdetect, the TEI adapters →
+    # httpx/numpy/kneed). The service's own requirements file IS that
+    # closure, pinned and audited — the lane installs it rather than
+    # copying a subset of it, which would drift the day the service grows
+    # a dependency.
+    - pip install --cache-dir .cache/pip pytest openpyxl pyyaml -r components/agent-service/requirements.txt
   cache:
     - key: test-rag-benchmarks
       paths:

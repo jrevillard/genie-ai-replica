@@ -69,11 +69,13 @@ platform to exist is fetched from that platform, never derived from an identifie
 4. **The counterparty's vocabulary stays in the port.** A port may name the shape it expects from its
    connector. What the core may not do is carry a *concrete connector* or a *minted identifier's form*.
 5. **The rule is enforced by a ratchet, and it is measured before it is shrunk.** The architecture
-   test grows a rule that reads the core's **text** for the platform literals named above (the
-   collection names, the `ARANGO_` prefix, the doc-repo's API path, the id-derived name, the
-   counterparty's vocabulary outside the ports) and asserts the set of findings equals a listed
-   ratchet. Every fix removes one finding and shrinks the list in the same commit. A **new** leak
-   turns the test red immediately — the ratchet is a floor as well as a ceiling.
+   test reads the core's **text** — not its imports — and grows one rule per SHAPE of leak, each
+   naming a ratchet of known findings: **R4** (a deciding module carries a platform's vocabulary),
+   **R5** (an identifier guard encodes a platform's form), **R6** (the core states a foreign
+   system's acceptance rules). Every fix removes one finding and shrinks the list in the same
+   commit. A **new** leak turns the test red immediately — the ratchet is a floor as well as a
+   ceiling. The rules read SHAPES, not a list of literals: a rule that named the platforms would
+   only catch the platforms it already knows (see the leak ledger's note on R6).
 
 ### Why the ratchet comes first
 
@@ -86,7 +88,7 @@ correction, or the correction is a guess about what "done" means.
 
 | Phase | Action | Expected |
 |---|---|---|
-| Measure | The architecture test runs on the tree as it stands | The ratchet names every leak the core's text carries (F1–F5), each with its file and the literal found |
+| Measure | The architecture test runs on the tree as it stands | The ratchets name every leak the core's text carries (F1–F5), each with its file and the finding |
 | Fix F1 | A document id in the doc-repo's own form reaches `read_source` | The guard accepts the token; the adapter validates the platform's form; `read_source` resolves the document |
 | Fix F2 | The capability no longer builds its own connector | `capabilities.search_knowledge` leaves `KNOWN_ADAPTER_IMPORTERS`; the host injects the connector the capability drives |
 | Fix F3 | A deployment misconfigures its corpus leg | The refusal names the deployment's configuration, not a database's charset; the core never sees the charset |

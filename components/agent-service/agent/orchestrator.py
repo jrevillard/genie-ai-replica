@@ -410,7 +410,7 @@ class RequestOrchestrator:
         # record is on the START event, not the terminal one). The build is
         # fail-soft by contract: an unresolvable model id degrades to the
         # unresolved entry and the run proceeds (the I/O matrix row).
-        execution_versions = await self._execution_versions()
+        execution_versions: dict | None = None
         # The preparation statuses land here, through the toolset's callback:
         # the FIRST one is the initial query's — the record carries it.
         preparation_statuses: list[str] = []
@@ -423,6 +423,10 @@ class RequestOrchestrator:
             )
 
         try:
+            # The runtime comes FIRST: the record names it, and the record
+            # rides the run-start handshake.
+            runtime = self._runtime_factory()
+            execution_versions = await self._execution_versions(runtime.runtime_id)
             # The per-request assembly is INSIDE the try: a build failure
             # (a port-factory refusal, a registry defect) must reach the
             # caller as the honest terminal — the RUN_ERROR event and the
@@ -450,7 +454,6 @@ class RequestOrchestrator:
             dispatcher = ToolDispatcher(
                 registry=registry, monitor=monitor, token=token, emitter=emitter, verifier=verifier
             )
-            runtime = self._runtime_factory()
             inputs = RunInputs(
                 question=request.question,
                 instruction=self._config.system_prompt,
@@ -485,7 +488,7 @@ class RequestOrchestrator:
             return record(OUTCOME_ERROR, error=message)
         return record(result.outcome, error=result.error)
 
-    async def _execution_versions(self) -> dict:
+    async def _execution_versions(self, runtime_id: str) -> dict:
         """The record, fail-soft end to end: an unresolvable model id
         (the endpoint unreachable at assembly) degrades to the unresolved
         entry with a truncated note and the run proceeds — the record build
@@ -493,14 +496,20 @@ class RequestOrchestrator:
         model_id, model_source, model_note = await self._model_identity()
         try:
             return build_execution_version_record(
-                config=self._config, model_id=model_id, model_source=model_source, model_note=model_note
+                config=self._config,
+                runtime_id=runtime_id,
+                model_id=model_id,
+                model_source=model_source,
+                model_note=model_note,
             )
         except Exception as failed:  # noqa: BLE001 — fail-soft by contract
             # The TOTAL fallback (degraded_execution_version_record): a valid
             # record of the usual shape minted WITHOUT touching the config —
             # re-running the config-derived hashing that just failed would
             # not be fail-soft.
-            return degraded_execution_version_record(f"record build degraded: {type(failed).__name__}: {failed}")
+            return degraded_execution_version_record(
+                f"record build degraded: {type(failed).__name__}: {failed}", runtime_id
+            )
 
     async def _model_identity(self) -> tuple[str | None, str, str | None]:
         """The model axis, through the client's fail-soft resolver when it

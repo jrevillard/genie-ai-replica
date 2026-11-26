@@ -40,17 +40,23 @@ from noagent.config import NoAgentConfig
 # ---------------------------------------------------------------------
 
 
+RUNTIME_ID = "custom-loop"
+
+
 def _record_for(config=None, **overrides):
-    return build_execution_version_record(config=config or orchestrator_config(), **overrides)
+    return build_execution_version_record(config=config or orchestrator_config(), runtime_id=RUNTIME_ID, **overrides)
 
 
-def test_the_record_carries_the_four_version_axes():
+def test_the_record_carries_the_five_version_axes():
     record = _record_for(model_id="m-1", model_source="discovered")
-    assert set(record) == {"implementation", "model", "prompt", "configuration"}
+    assert set(record) == {"implementation", "model", "prompt", "configuration", "runtime"}
     assert record["implementation"] == {"version": IMPLEMENTATION_VERSION}
     assert record["model"] == {"id": "m-1", "source": "discovered"}
     assert set(record["prompt"]) == {"version", "sha256"}
     assert set(record["configuration"]) == {"sha256", "values"}
+    # The runtime that drove the run is an axis of its own: a run is
+    # attributable to the runtime that served it, like to the model it called.
+    assert record["runtime"] == {"id": RUNTIME_ID}
 
 
 def test_the_prompt_axis_is_the_hash_of_the_effective_prompt():

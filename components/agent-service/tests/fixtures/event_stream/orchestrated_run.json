@@ -33,6 +33,9 @@
         "prompt": {
           "sha256": "d7ed66b8bcaf",
           "version": "override"
+        },
+        "runtime": {
+          "id": "custom-loop"
         }
       },
       "question": "How are complaints handled?"

@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """The execution-version record — what the run-start handshake carries.
 
-One run is attributable to four versions: the IMPLEMENTATION that served it,
-the MODEL it called, the PROMPT it was governed by and the CONFIGURATION it
-was bounded by. :func:`build_execution_version_record` assembles that record
+One run is attributable to five versions: the IMPLEMENTATION that served it,
+the MODEL it called, the PROMPT it was governed by, the CONFIGURATION it
+was bounded by and the RUNTIME that drove it. :func:`build_execution_version_record` assembles that record
 from an :class:`~agent.orchestrator.OrchestratorConfig` and the resolved
 model identity; the orchestrator emits it on the ``run_started`` seam event
 and the BFF persists it into the ``queries`` doc AT START — so a
@@ -90,22 +90,27 @@ def configuration_fingerprint(values: dict) -> str:
     return short_sha256(canonical)
 
 
-def degraded_execution_version_record(note: str) -> dict:
+def degraded_execution_version_record(note: str, runtime_id: str) -> dict:
     """The total fallback: a VALID record of the usual shape, minted without
     touching the config (no hashing, no attribute reads) — the shape a run
     can always carry, even when the normal build path threw. The note rides
-    the model axis (clamped like any other)."""
+    the model axis (clamped like any other).
+
+    The runtime axis rides it too: a record whose shape varies with its
+    failure mode is a worse contract than one whose shape never varies."""
     return {
         "implementation": {"version": IMPLEMENTATION_VERSION},
         "model": {"id": None, "source": MODEL_SOURCE_UNRESOLVED, "note": str(note)[:_NOTE_LIMIT]},
         "prompt": {"version": "unknown", "sha256": "unknown"},
         "configuration": {"sha256": "unknown", "values": {}},
+        "runtime": {"id": runtime_id},
     }
 
 
 def build_execution_version_record(
     *,
     config,
+    runtime_id: str,
     model_id: str | None = None,
     model_source: str = MODEL_SOURCE_UNRESOLVED,
     model_note: str | None = None,
@@ -118,7 +123,10 @@ def build_execution_version_record(
     identified by the hash of the EFFECTIVE text). ``model_id`` /
     ``model_source`` / ``model_note`` carry the resolved model identity (see
     ``capabilities.adapters.vllm.VllmModelClient.model_identity`` — override, discovery,
-    or the fail-soft unresolved entry the I/O matrix requires).
+    or the fail-soft unresolved entry the I/O matrix requires). ``runtime_id``
+    names the runtime that served the run — the fifth axis: a run is
+    attributable to the runtime that drove it, exactly as it is attributable
+    to the model it called.
     """
     effective_prompt = config.system_prompt
     prompt_version = PROMPT_VERSION if effective_prompt == PRODUCTION_SYSTEM_PROMPT else PROMPT_OVERRIDE_VERSION
@@ -131,4 +139,5 @@ def build_execution_version_record(
         "model": model,
         "prompt": {"version": prompt_version, "sha256": short_sha256(effective_prompt)},
         "configuration": {"sha256": configuration_fingerprint(values), "values": values},
+        "runtime": {"id": runtime_id},
     }

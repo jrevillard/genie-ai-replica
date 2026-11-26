@@ -95,8 +95,23 @@ while [ $attempt -lt $MAX_RETRIES ]; do
           else
             NEW_ATTRS='{"okf_scopes":["okf:*:*:admin"]}'
           fi
+          # PUT the FULL user representation with the scope merged into its
+          # attributes. An attributes-only PUT REPLACES the payload, and the
+          # profile fields it omits (email, firstName, lastName) are CLEARED —
+          # verified live on a scratch user: attributes-only wiped the
+          # profile, full-JSON preserved it. The realm's user profile marks
+          # those fields required for role "user", so a wiped profile forced
+          # "Update Account Information" on every login (seen on genie-admin
+          # after the realm import re-armed the grant at a deploy).
+          if printf '%s' "$USER_JSON" | grep -q '"attributes"'; then
+            PAYLOAD=$(printf '%s' "$USER_JSON" |
+              sed "s/\"attributes\"[[:space:]]*:[[:space:]]*{[^}]*}/\"attributes\":${NEW_ATTRS}/")
+          else
+            PAYLOAD=$(printf '%s' "$USER_JSON" |
+              sed "s/}$/,\"attributes\":${NEW_ATTRS}}/")
+          fi
           curl -s -f -X PUT -H "$KAH" -H 'Content-Type: application/json' \
-            -d "{\"attributes\":${NEW_ATTRS}}" \
+            -d "$PAYLOAD" \
             "${KC_BASE}/admin/realms/${KC_REALM_NAME}/users/${USER_ID}" >/dev/null && \
             echo "Granted okf wildcard scope to user ${USER_ID}."
         }

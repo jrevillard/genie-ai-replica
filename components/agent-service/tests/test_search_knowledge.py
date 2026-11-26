@@ -144,6 +144,13 @@ def _split_db(rows_file_id, rows_identity):
 
 
 def make_capability(embedding=None, reranking=None, rows=None):
+    """A search capability over the fake seams.
+
+    The deployment posture is the pillar DEPLOYED (``OKF_ENABLED=1``):
+    the tests below exercise the CAP-1 identity join, which only happens on a
+    deployment that runs the OKF pillar. The pillar-off posture has its own
+    tests, in the OKF pillar's posture section.
+    """
     rows = rows or []
     embedding = embedding or FakeEmbedding()
     reranking = reranking or FakeReranking(outcome=RerankOutcome(selection=()))
@@ -152,7 +159,13 @@ def make_capability(embedding=None, reranking=None, rows=None):
         embedding,
         reranking,
         db_factory,
-        ArangoConfig.load({"ARANGO_GRAPH_NAME": "GRAPH", "ARANGO_DB": "_system"}),
+        ArangoConfig.load(
+            {
+                "ARANGO_GRAPH_NAME": "GRAPH",
+                "ARANGO_DB": "_system",
+                "OKF_ENABLED": "1",
+            }
+        ),
         HybridConfig.load({}),
     )
     return capability, embedding, reranking, db_factory
@@ -523,6 +536,102 @@ def test_bm25_failure_with_hits_is_degraded_availability(monkeypatch):
     capability = _capability_with_degraded_adapter(monkeypatch, "bm25_degraded")
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     assert result.outcome == OutcomeCode.DEGRADED_AVAILABILITY
+    assert len(result.hits) == 1
+
+
+# ---------------------------------------------------------------------
+# The OKF pillar's posture
+# ---------------------------------------------------------------------
+
+
+class _MissingCollectionError(Exception):
+    """ArangoDB's "collection or view not found", as python-arango reports it."""
+
+    error_code = 1203
+
+    def __init__(self) -> None:
+        super().__init__("[HTTP 404][ERR 1203] collection or view not found: okf_concepts_meta")
+
+
+class _MissingOkfCollectionDbFactory(FakeDbFactory):
+    """A db whose CAP-1 identity join hits the absent OKF collection."""
+
+    def __call__(self, graph_name):
+        self.graphs.append(graph_name)
+        rows = self.rows
+
+        class Aql:
+            def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+                if "okf_concepts_meta" in query:
+
+                    class Failing:
+                        def __iter__(self):
+                            raise _MissingCollectionError()
+
+                    return Failing()
+
+                class C:
+                    def __iter__(self):
+                        return iter(rows)
+
+                return C()
+
+        class Db:
+            aql = Aql()
+
+            def views(self):
+                return [{"name": "GRAPH_BM25_VIEW"}]
+
+        return Db()
+
+
+def _capability_with_okf_posture(enabled: bool, db_factory):
+    """A search capability whose deployment declares the OKF pillar's posture."""
+
+    selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
+    arango_config = ArangoConfig.load(
+        {
+            "ARANGO_GRAPH_NAME": "GRAPH",
+            "ARANGO_DB": "_system",
+            "OKF_ENABLED": "1" if enabled else "0",
+        }
+    )
+    return SearchKnowledgeCapability(
+        FakeEmbedding(),
+        FakeReranking(outcome=RerankOutcome(selection=selection)),
+        db_factory,
+        arango_config,
+        HybridConfig.load({}),
+    )
+
+
+def test_the_agentic_rag_works_on_a_deployment_without_the_okf_pillar():
+    """The pillar is off: the retrieval is NOT degraded.
+
+    The identity join is not attempted (the pillar's collection is not there),
+    so the hits are served and the outcome is a normal success — the
+    abstention a degraded retrieval produces never happens.
+    """
+
+    rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"}]
+    capability = _capability_with_okf_posture(False, FakeDbFactory(rows=rows))
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    assert result.outcome == OutcomeCode.SUCCESS
+    assert len(result.hits) == 1
+
+
+def test_a_missing_okf_collection_does_not_degrade_the_retrieval():
+    """The recorded contract's "collection-level tolerated absence".
+
+    The pillar is deployed (the join is attempted) and the collection is not
+    there: the chunks are served unattributed and the leg is not broken, so
+    the retrieval keeps its normal outcome.
+    """
+
+    rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"}]
+    capability = _capability_with_okf_posture(True, _MissingOkfCollectionDbFactory(rows=rows))
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    assert result.outcome == OutcomeCode.SUCCESS
     assert len(result.hits) == 1
 
 

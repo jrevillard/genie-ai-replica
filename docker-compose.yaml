@@ -1553,6 +1553,14 @@ services:
       # below, with the spellings and the defaults the OPEA services
       # read — one .env line moves both worlds.
       - AGENT_DOCREPO_URL=${AGENT_DOCREPO_URL:-}
+      # The OKF pillar's posture — the deployment's OWN flag, the same
+      # variable the backend, the frontend and the OKF tier read: 0 (the
+      # default) = the pillar is not deployed, so the agent does not look for
+      # the OKF control plane at all (the CAP-1 identity join is not
+      # attempted and the okf-server URL is not required); 1 = the pillar
+      # runs, the join is part of the retrieval and AGENT_OKF_URL is
+      # required.
+      - OKF_ENABLED=${OKF_ENABLED:-0}
       - AGENT_OKF_URL=${AGENT_OKF_URL:-}
       # The shared corpus/model endpoints the run surface's assembly reads
       # at request time — the SAME knobs the OPEA services read, mapped

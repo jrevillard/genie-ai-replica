@@ -23,9 +23,10 @@ from capabilities.adapters.env_config import (
 from capabilities.adapters.okf import OkfAdapter
 from capabilities.adapters.tei_embedding import TeiEmbeddingAdapter
 from capabilities.adapters.tei_reranking import TeiRerankingAdapter
-from capabilities.contract import CallerContext, DocumentCapabilityPort
+from capabilities.contract import CallerContext, DocumentCapabilityPort, OperationName, TransientError
 from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
+from capabilities.sources import ConceptSource
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,7 @@ class StatelessAdapters:
     (the executor that binds a caller context to them is per request)."""
 
     docrepo: DocRepoAdapter
-    okf: OkfAdapter
+    okf: ConceptSource
     chunks: LegacyChunkAdapter
     search_port: DocumentCapabilityPort
     legacy_graph_name: str
@@ -55,6 +56,21 @@ class StatelessAdapters:
         )
 
 
+class _PillarNotDeployed:
+    """The OKF concept read on a deployment that does not run the pillar.
+
+    The pillar's control plane is absent, so no concept can resolve: the
+    read refuses with the honest reason instead of dialling a base URL that
+    was never configured.
+    """
+
+    async def fetch_concept(self, repo_id: str, concept_id: str, bearer: str | None) -> dict | None:
+        raise TransientError(
+            "the OKF pillar is not deployed (OKF_ENABLED=0): no concept can resolve",
+            operation=OperationName.READ_SOURCE,
+        )
+
+
 def build_stateless_adapters(env=None) -> StatelessAdapters:
     """Assemble the stateless adapters from the environment.
 
@@ -62,13 +78,20 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     boot error); doc-repo and okf-server need their base URLs. Shared by
     the probe and the run surface — one port assembly, so a governed run
     reads the same corpus the probe measures.
+
+    The OKF pillar's posture is the deployment's own ``OKF_ENABLED`` — the
+    same variable the backend, the frontend and the OKF tier read. When the
+    pillar is NOT deployed, the okf-server base URL is not required — the
+    assembly runs in the legacy posture, the concept read refuses with the
+    honest reason, and the retrieval does not attempt the OKF identity join.
     """
     source = os.environ if env is None else env
     docrepo_url = str(source.get("AGENT_DOCREPO_URL", ""))
+    okf_enabled = str(source.get("OKF_ENABLED", "0")).strip() == "1"
     okf_url = str(source.get("AGENT_OKF_URL", ""))
     if not docrepo_url:
         raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
-    if not okf_url:
+    if okf_enabled and not okf_url:
         raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
     arango_config = ArangoConfig.load(env)
     search = build_search_capability(env)
@@ -90,7 +113,7 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
 
     return StatelessAdapters(
         docrepo=DocRepoAdapter(docrepo_url),
-        okf=OkfAdapter(okf_url),
+        okf=OkfAdapter(okf_url) if okf_enabled else _PillarNotDeployed(),
         chunks=LegacyChunkAdapter(db_factory),
         search_port=search,
         legacy_graph_name=arango_config.graph_name,

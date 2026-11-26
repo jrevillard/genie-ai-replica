@@ -524,6 +524,10 @@ def _live_env(**overrides):
         "TEI_RERANKING_ENDPOINT": "http://rerank.invalid",
         "ARANGO_URL": "http://arango.invalid:8529",
         "AGENT_DOCREPO_URL": "http://docrepo.invalid",
+        # The pillar is deployed in this env: the okf-server base URL is
+        # then required (the fail-closed read), and the CAP-1 identity join
+        # is part of the retrieval.
+        "OKF_ENABLED": "1",
         "AGENT_OKF_URL": "http://okf.invalid",
         "AGENT_AUTHORIZED_GRAPHS": "GRAPH",
     }
@@ -560,3 +564,17 @@ def test_build_port_refuses_a_missing_knob_by_name(knob):
     del env[knob]
     with pytest.raises(ValueError, match=knob):
         build_port(ProbeConfig.load(env=env), env=env)
+
+
+def test_build_port_assembles_without_the_okf_pillar():
+    """A deployment that does NOT run the OKF pillar needs no okf-server URL.
+
+    The pillar's posture is the deployment's own (``OKF_ENABLED``); when
+    it is off, the okf-server base URL is not a knob the operator must name —
+    the assembly runs in the legacy posture instead of refusing to start.
+    """
+
+    env = _live_env(OKF_ENABLED="0")
+    del env["AGENT_OKF_URL"]
+    port, _context = build_port(ProbeConfig.load(env=env), env=env)
+    assert hasattr(port, "read_source")

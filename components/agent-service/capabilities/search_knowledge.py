@@ -23,8 +23,12 @@ The recorded pipeline, as executed here:
    ``reranker_input_too_long``) is an ``insufficient_evidence`` ANSWER with
    its recorded reason kept distinct on the log surface
    (``abstained.reason``), never silently merged; a partial dependency
-   degradation (BM25 leg failed, CAP-1 join failed) with hits is a
-   ``degraded_availability`` answer; transport and protocol failures raise
+   degradation (BM25 leg failed, CAP-1 join failed on a deployment that RUNS
+   the OKF pillar) with hits is a ``degraded_availability`` answer; the
+   CAP-1 join's collection-level absence — the OKF pillar is not deployed,
+   so ``okf_concepts_meta`` does not exist — is the recorded "tolerated
+   absence", NOT a degradation: the chunks are served unattributed and the
+   answer stands; transport and protocol failures raise
    ``TransientError`` — there is no fallback to the retrieval order.
 
 The operation never calls vLLM and never prepares a query: preparation is

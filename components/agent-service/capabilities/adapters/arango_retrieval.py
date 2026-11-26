@@ -33,6 +33,12 @@ Ports the recorded retrieval stages of the query path:
   ``(graph_name, concept_id = chunk file_id)``; an absent identity document
   leaves the chunk unattributed with no warning; a failing join skips the
   whole enrichment with an ERROR log and never breaks the leg.
+  The join is an OKF-pillar ENRICHMENT: on a deployment that does not run
+  the pillar (``okf.enabled=false`` — the laptop, the compose default) the
+  collection is not there at all, which the recorded contract calls the
+  "collection-level tolerated absence" (V02 §4.7 and its live observation).
+  That absence is NOT a degradation: the chunks are served unattributed and
+  the retrieval keeps its normal outcome. Every OTHER join failure is one.
 
 Graph traversal, multi-graph fan-out and the routing gate are recorded in
 the recorded traversal/fan-out/routing stages are NOT part of this port (the frozen enumeration
@@ -51,6 +57,23 @@ ARANGO_TEXT_FIELD = "text"
 ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
 OKF_CONCEPTS_META_COLLECTION = "okf_concepts_meta"
+# ArangoDB's "collection or view not found" (ERROR_ARANGO_DATA_SOURCE_NOT_FOUND).
+ARANGO_ERROR_DATA_SOURCE_NOT_FOUND = 1203
+
+
+def _is_missing_okf_collection(error) -> bool:
+    """Is this failure the "the OKF control-plane collection is not there" one?
+
+    A deployment that does not run the OKF pillar (``okf.enabled=false``)
+    has no ``okf_concepts_meta`` collection: the recorded contract calls that
+    the *collection-level tolerated absence* — the identity join has nothing
+    to join, the chunks are served unattributed and the leg is NOT broken.
+    Every OTHER join failure is a real degradation.
+    """
+
+    if getattr(error, "error_code", None) != ARANGO_ERROR_DATA_SOURCE_NOT_FOUND:
+        return False
+    return OKF_CONCEPTS_META_COLLECTION in str(error)
 
 
 def _materialized_rows(db, aql, bind_vars) -> list:
@@ -448,6 +471,12 @@ class ArangoRetrievalAdapter:
         document leaves the chunk unattributed with no warning, and a failing
         join (collection absent, transient DB error) skips the whole
         enrichment with an ERROR log — the leg is never broken.
+
+        The CAP-1 join is ATTEMPTED only when the deployment runs the OKF
+        pillar (``OKF_ENABLED=1``): on a deployment that does not, the
+        collection is not there, so the lookup would fail on every query for
+        a join that can never resolve. The chunks are then served unattributed
+        and the retrieval keeps its normal outcome.
         """
         chunk_ids = [r["doc"].key for r in results if r["doc"].key]
         if not chunk_ids:
@@ -470,6 +499,13 @@ class ArangoRetrievalAdapter:
             # a failed retrieval (the caller maps it onto a transient failure).
             logger.error(f"file_id enrichment failed: {e}")
             raise
+        if not self._config.okf_identity_enabled:
+            # The OKF pillar is NOT deployed in this deployment: the identity
+            # join has nothing to join, so it is not attempted at all — no
+            # query, no ERROR log, no degradation. The chunks are served
+            # unattributed, exactly as the recorded contract describes for an
+            # absent identity document.
+            return
         try:
             identity_aql = f"""
                 FOR doc IN `{self.collection_name}`
@@ -497,4 +533,12 @@ class ArangoRetrievalAdapter:
                     r["doc"].bundle_version = ident["bundle_version"]
         except Exception as e:
             logger.error(f"OKF identity enrichment failed (chunk identity left as-is): {e}")
+            if _is_missing_okf_collection(e):
+                # The OKF pillar is NOT deployed (its control-plane collections
+                # do not exist): the identity join has nothing to join. The
+                # recorded contract's "collection-level tolerated absence" —
+                # the chunks are served unattributed and the retrieval keeps
+                # its normal outcome. A deployment that RUNS the pillar keeps
+                # the degradation for every OTHER join failure.
+                return
             self.cap1_degraded = True

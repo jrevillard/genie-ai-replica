@@ -50,7 +50,7 @@ only the deadline the caller communicated.
 |---|---|---|
 | 429 | `{"error": "admission_refused", "message": …}` + `Retry-After: 1` | every admission-lane slot is held |
 | 503 | `{"error": "budget_configuration_missing", "message": …, "missing_knobs": [...]}` | a required budget knob is missing or unusable — the refusal names EVERY knob |
-| 503 | `{"error": "run_surface_unconfigured", "message": …}` | the port assembly's own fail-closed read refused (a missing doc-repo / okf-server / TEI URL) |
+| 503 | `{"error": "run_surface_unconfigured", "message": …}` | the port assembly's own fail-closed read refused (a missing doc-repo / TEI URL, or the okf-server URL on a deployment that RUNS the OKF pillar) |
 
 The admission claim is taken BEFORE the response starts: a saturated lane
 answers 429 with no stream byte written (`app.py`, `runs`).

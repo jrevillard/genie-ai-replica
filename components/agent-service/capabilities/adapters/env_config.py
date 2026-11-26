@@ -58,6 +58,7 @@ class ArangoConfig:
     score_threshold: float
     num_centroids: int
     filter_strategy: str
+    okf_identity_enabled: bool
 
     @classmethod
     def load(cls, env=None) -> "ArangoConfig":
@@ -106,6 +107,20 @@ class ArangoConfig:
             score_threshold=float(source.get("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1)),
             num_centroids=int(source.get("RETRIEVER_ARANGO_NUM_CENTROIDS", 1)),
             filter_strategy=filter_strategy,
+            # The ONE knob here that is NOT a recorded knob: the deployment's
+            # OKF posture. The CAP-1 identity join reads the OKF control
+            # plane's collection (``okf_concepts_meta``), so it only makes
+            # sense on a deployment that RUNS that pillar — and a deployment
+            # that does not run it must not pay for the lookup at all (the
+            # operator's ruling, 2026-11-26: with the feature off, the
+            # agentic RAG works and the retrieval is NOT degraded).
+            #
+            # It is the deployment's OWN flag — ``OKF_ENABLED``, the same
+            # variable the backend, the frontend and the OKF tier read — not
+            # a second one. OFF (the default) = the pillar is not deployed:
+            # the identity join is not attempted, the chunks are served
+            # unattributed and the retrieval keeps its normal outcome.
+            okf_identity_enabled=str(source.get("OKF_ENABLED", "0")).strip() == "1",
         )
 
 

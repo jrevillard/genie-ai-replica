@@ -404,7 +404,12 @@ def _enrichment_adapter():
         {"key": "c2", "file_id": None},
     ]
     rows_identity = [{"key": "c1", "repo_id": "repo-1", "bundle_version": 3}]
-    adapter = make_adapter({"file_id: doc.file_id": rows_file_id, "okf_concepts_meta": rows_identity})
+    # The OKF pillar is deployed in this deployment: the CAP-1 identity join
+    # is part of the retrieval.
+    adapter = make_adapter(
+        {"file_id: doc.file_id": rows_file_id, "okf_concepts_meta": rows_identity},
+        config_env={"OKF_ENABLED": "1"},
+    )
     return adapter
 
 
@@ -448,7 +453,8 @@ def test_cap1_join_failure_skips_enrichment_and_flags_degradation():
         {
             "file_id: doc.file_id": rows_file_id,
             "okf_concepts_meta": RuntimeErrorTriggered(),
-        }
+        },
+        config_env={"OKF_ENABLED": "1"},
     )
     results = [{"doc": _chunk("c1", "a"), "score": 0.9}]
     run(adapter.enrich(results))
@@ -456,11 +462,68 @@ def test_cap1_join_failure_skips_enrichment_and_flags_degradation():
     assert adapter.cap1_degraded is True
 
 
+def test_cap1_join_is_not_attempted_when_the_okf_pillar_is_not_deployed():
+    """A deployment that does NOT run the OKF pillar pays for no lookup.
+
+    The identity join reads the pillar's control-plane collection, which is
+    not there — so the join is not attempted at all: no query, no error, no
+    degradation. The chunks are served unattributed (the recorded behaviour
+    for an absent identity document) and the retrieval keeps its outcome.
+    """
+
+    rows_file_id = [{"key": "c1", "file_id": "f1"}]
+    adapter = make_adapter({"file_id: doc.file_id": rows_file_id})
+    results = [{"doc": _chunk("c1", "a"), "score": 0.9}]
+    run(adapter.enrich(results))
+    assert [aql for aql, _ in adapter.executed if "okf_concepts_meta" in aql] == []
+    assert results[0]["doc"].file_ids == ["f1"]
+    assert results[0]["doc"].repo_id is None
+    assert adapter.cap1_degraded is False
+
+
+def test_cap1_join_over_a_missing_collection_is_tolerated_not_degraded():
+    """The recorded contract's "collection-level tolerated absence".
+
+    The join is attempted (the pillar is deployed) and the collection is not
+    there: the chunks are served unattributed and the leg is NOT broken — the
+    retrieval keeps its normal outcome.
+    """
+
+    rows_file_id = [{"key": "c1", "file_id": "f1"}]
+    adapter = make_adapter(
+        {
+            "file_id: doc.file_id": rows_file_id,
+            "okf_concepts_meta": MissingCollectionTriggered(),
+        },
+        config_env={"OKF_ENABLED": "1"},
+    )
+    results = [{"doc": _chunk("c1", "a"), "score": 0.9}]
+    run(adapter.enrich(results))
+    assert results[0]["doc"].repo_id is None
+    assert adapter.cap1_degraded is False
+
+
 class RuntimeErrorTriggered:
     """A row-map entry that raises when its query runs."""
 
     def __iter__(self):
         raise RuntimeError("collection missing")
+
+
+class MissingCollectionError(Exception):
+    """ArangoDB's "collection or view not found", as python-arango reports it."""
+
+    error_code = 1203
+
+    def __init__(self) -> None:
+        super().__init__("[HTTP 404][ERR 1203] collection or view not found: okf_concepts_meta")
+
+
+class MissingCollectionTriggered:
+    """A row-map entry that raises the collection-not-found failure."""
+
+    def __iter__(self):
+        raise MissingCollectionError()
 
 
 def test_cap1_join_is_the_recorded_graph_scoped_concept_join():

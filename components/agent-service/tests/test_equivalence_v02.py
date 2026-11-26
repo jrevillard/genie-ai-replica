@@ -172,6 +172,11 @@ def make_adapter(rows_per_query=None, env_overrides=None):
             created.append(name)
 
     env = {**recorded_env(), **(env_overrides or {})}
+    # The recorded venue ATTEMPTED the CAP-1 identity join and tolerated its
+    # absence (V02 §4.7 and §7: the venue runs no okf-server, the join fails
+    # as a whole and the chunks are served unattributed). The suite replays
+    # that recorded AQL, so the identity join is declared ON here.
+    env.setdefault("OKF_ENABLED", "1")
     adapter = ArangoRetrievalAdapter(FakeDb(), ArangoConfig.load(env), HybridConfig.load(env))
     adapter.executed = executed
     return adapter
@@ -444,6 +449,37 @@ def test_cap1_identity_join_is_graph_scoped_and_tolerates_absence():
     asyncio.run(adapter_absent.enrich(results_absent))
     assert results_absent[0]["doc"].repo_id is None
     assert results_absent[0]["doc"].bundle_version is None
+
+
+def test_the_identity_join_is_not_attempted_on_a_deployment_without_the_okf_pillar():
+    """The ONE divergence from the recorded venue's AQL — and it is declared.
+
+    The recorded venue attempted the CAP-1 identity join and tolerated its
+    absence (V02 §7). A deployment that KNOWS the OKF pillar is not deployed
+    does not pay for the lookup at all: the join is not attempted, so the
+    query never runs, and the retrieval is never degraded for a join that
+    could not resolve (the operator's ruling, 2026-11-26).
+    """
+
+    rows_file_id = [{"key": "c1", "file_id": "f1"}]
+    adapter = make_adapter(
+        {"file_id: doc.file_id": rows_file_id},
+        env_overrides={"OKF_ENABLED": "0"},
+    )
+
+    class Chunk:
+        repo_id = None
+        bundle_version = None
+
+        def __init__(self, key):
+            self.key = key
+
+    results = [{"doc": Chunk("c1"), "score": 0.9}]
+    asyncio.run(adapter.enrich(results))
+    assert [aql for aql, _ in adapter.executed if "okf_concepts_meta" in aql] == []
+    # The file_id leg — the chunk's own identity — still runs.
+    assert results[0]["doc"].file_ids == ["f1"]
+    assert adapter.cap1_degraded is False
 
 
 def test_provenance_attach_ported_layer_carries_the_contract_identity():

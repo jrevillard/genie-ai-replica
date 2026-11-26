@@ -29,6 +29,7 @@ import httpx
 import numpy as np
 from kneed import KneeLocator
 
+from ..model import chat_auth_headers
 from ..retrieval import RerankerInputTooLongError, RerankOutcome, ScoredCandidate
 from .env_config import AdaptiveConfig, RerankingConfig
 
@@ -203,7 +204,7 @@ class TeiRerankingAdapter:
             response = await client.post(
                 f"{self._endpoint}/rerank",
                 json={"query": query, "texts": texts, "truncate": False},
-                headers={"Authorization": f"Bearer {self._bearer}"} if self._bearer else {},
+                headers=chat_auth_headers(self._bearer),
             )
         # The body is parsed WHEN POSSIBLE, and the status decides first: a
         # non-JSON error body (a proxy HTML page, a plain-text 502) must

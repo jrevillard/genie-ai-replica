@@ -13,6 +13,7 @@ import logging
 
 import httpx
 
+from ..model import chat_auth_headers
 from ..retrieval import EmbeddedQuery
 from .query_instruction import get_query_instruction, resolve_embed_model
 
@@ -73,7 +74,7 @@ class TeiEmbeddingAdapter:
 
     async def _request_embedding(self, prefixed_text: str) -> list[float]:
         body = {"inputs": [prefixed_text]}
-        headers = {"Authorization": f"Bearer {self._bearer}"} if self._bearer else {}
+        headers = chat_auth_headers(self._bearer)
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(self._total_timeout, connect=self._connect_timeout),
             transport=self._transport,

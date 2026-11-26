@@ -151,7 +151,7 @@ def build_metadata_source(env=None) -> DocRepoAdapter:
     return DocRepoAdapter(docrepo_url)
 
 
-def build_concept_source(env=None, *, okf_enabled: bool | None = None) -> ConceptSource:
+def build_concept_source(env=None, *, okf_enabled: bool) -> ConceptSource:
     """The OKF server's port: the adapter that resolves a concept's card
     (its name, its labels).
 
@@ -161,14 +161,13 @@ def build_concept_source(env=None, *, okf_enabled: bool | None = None) -> Concep
     pillar is NOT deployed, no concept can resolve: the read refuses with the
     honest reason instead of dialling a base URL that was never configured.
 
-    ``okf_enabled`` is passed by the caller that already read the posture
-    (the assembly reads it ONCE, from the config that also carries the
-    retrieval knobs — the assembly and the retrieval must not read the flag
-    twice and disagree about it).
+    ``okf_enabled`` is REQUIRED and passed by the caller that already read
+    the posture (the assembly reads it ONCE, from the config that also
+    carries the retrieval knobs — the assembly and the retrieval must not
+    read the flag twice and disagree about it). There is no fallback that
+    reads it here: a second reader is a second answer.
     """
     source = os.environ if env is None else env
-    if okf_enabled is None:
-        okf_enabled = ArangoConfig.load(env).okf_identity_enabled
     if not okf_enabled:
         return _PillarNotDeployed()
     okf_url = str(source.get("AGENT_OKF_URL", ""))
@@ -205,7 +204,9 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     # import path keeps importing the seam (loop/budget/events consumers)
     # free of it.
     db_factory = _arango_db_factory(arango_config)
-    search = build_search_capability(env, db_factory=db_factory, arango_config=arango_config)
+    # The RESOLVED environment, not the raw argument: inside one assembly
+    # the ``env`` argument means one thing — the mapping the adapters read.
+    search = build_search_capability(source, db_factory=db_factory, arango_config=arango_config)
 
     return StatelessAdapters(
         docrepo=docrepo,

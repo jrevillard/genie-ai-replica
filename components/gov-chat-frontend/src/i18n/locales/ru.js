@@ -3618,6 +3618,17 @@ export default {
         colContent: 'Содержимое фрагмента'
       }
     },
+    opwait: {
+      title: 'Работаем…',
+      cancel: 'Отмена',
+      ops: {
+        conceptList: 'Загрузка концептов',
+        reposList: 'Загрузка репозиториев',
+        links: 'Загрузка ссылок',
+        ragas: 'Генерация бенчмарка',
+        topicLinkStart: 'Запуск связывания тем'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept} из {requested} вопросов привязаны к корпусу — {discarded} не удалось связать с оцениваемым корпусом (повторов: {rounds})'

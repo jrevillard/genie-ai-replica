@@ -3554,6 +3554,17 @@ export default {
         colContent: 'Chunk content'
       }
     },
+    opwait: {
+      title: 'A ka kɛ…',
+      cancel: 'A bula',
+      ops: {
+        conceptList: 'A ka conceptoolu looti...',
+        reposList: 'A ka repositoriw looti...',
+        links: 'A ka linkolu looti...',
+        ragas: 'A ka benchmark daa...',
+        topicLinkStart: 'A ka maw linkoo daa...'
+      }
+    },
     ragas: {
       grounding: {
         note: 'jumee {kept} ka {requested} la khaka di taba — {discarded} ma se ka ke ji bo corpus min be ti taba ({rounds} roundw kura)'

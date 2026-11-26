@@ -3490,6 +3490,17 @@ export default {
         colContent: '块内容'
       }
     },
+    opwait: {
+      title: '处理中…',
+      cancel: '取消',
+      ops: {
+        conceptList: '正在加载概念',
+        reposList: '正在加载仓库',
+        links: '正在加载链接',
+        ragas: '正在生成基准测试',
+        topicLinkStart: '正在启动主题关联'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept}/{requested} 个问题已锚定语料 — {discarded} 个无法关联到被评测语料（重问 {rounds} 轮）'

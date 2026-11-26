@@ -3593,6 +3593,17 @@ export default {
         colContent: 'চাঙ্কের বিষয়বস্তু'
       }
     },
+    opwait: {
+      title: 'কাজ চলছে…',
+      cancel: 'বাতিল করুন',
+      ops: {
+        conceptList: 'ধারণাগুলি লোড হচ্ছে',
+        reposList: 'রিপোজিটরিগুলি লোড হচ্ছে',
+        links: 'লিঙ্কগুলি লোড হচ্ছে',
+        ragas: 'বেঞ্চমার্ক তৈরি হচ্ছে',
+        topicLinkStart: 'টপিক লিঙ্কিং শুরু হচ্ছে'
+      }
+    },
     ragas: {
       grounding: {
         note: '{requested}-এর মধ্যে {kept}টি প্রশ্ন গ্রাউন্ডেড — {discarded}টি মূল্যায়িত কর্পাসের সাথে যুক্ত করা যায়নি (পুনঃঅনুরোধ {rounds} রাউন্ড)'

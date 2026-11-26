@@ -593,13 +593,22 @@ const actions = {
   },
 
   async fetchRepos({ commit }, { stage = 'all' } = {}) {
+    // #2195 — the 5.2 MB list load (pre-projection, see #2191) registers so
+    // the dashboard's first paint shows app-level wait state, not the
+    // browser's native busy cursor.
+    const wait = require('@/services/operationWaitService').default.begin('repos-list', {
+      label: 'Loading repositories',
+      labelKey: 'okf.opwait.ops.reposList'
+    });
     try {
       const repos = await repoOkfService.list({ stage });
       repos.forEach((r) => commit('upsertRepo', r));
       commit('setReposByStage', laneFor(repos));
+      wait.complete();
       return { ok: true, repos };
     } catch (err) {
       commit('setError', err.message || 'fetchRepos failed');
+      wait.fail(err.message || 'fetchRepos failed');
       return { ok: false, code: 'FETCH_FAILED', message: err.message };
     }
   },
@@ -913,6 +922,13 @@ const actions = {
     commit('setConceptsLoading', true);
     commit('setConceptsLoadProgress', null);
     const stale = () => myGen !== fetchGeneration || (state.editor.repoId && state.editor.repoId !== repoId);
+    // #2195 — the whole paging crawl registers as ONE operation-wait entry
+    // (the overlay renders off this data path — the 10k-row commits are the
+    // very main-thread pressure that used to eat the progress bar).
+    const wait = require('@/services/operationWaitService').default.begin('concept-list-fetch', {
+      label: 'Loading concepts',
+      labelKey: 'okf.opwait.ops.conceptList'
+    });
     try {
       const first = await conceptService.listForRepo(repoId, { limit: PAGE, offset: 0 });
       // STALE GUARD BEFORE THE FIRST COMMIT (round 20): the repo could have
@@ -924,11 +940,13 @@ const actions = {
           commit('setConceptsLoading', false);
           commit('setConceptsLoadProgress', null);
         }
+        wait.complete();
         return { ok: true, concepts: [], stale: true };
       }
       // Legacy contract: a plain array (mocked tests / older servers) — one commit.
       if (Array.isArray(first)) {
         commit('setConcepts', { repoId, concepts: first });
+        wait.complete();
         return { ok: true, concepts: first };
       }
       const total = (first && first.total) || 0;
@@ -936,6 +954,7 @@ const actions = {
       commit('setConcepts', { repoId, concepts: acc });
       const multiPage = total > PAGE;
       if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
+      wait.setProgress(acc.length, total);
       while (acc.length < total) {
         // Pages are SEQUENTIAL by design — each offset needs the previous count.
         const page = await conceptService.listForRepo(repoId, { limit: PAGE, offset: acc.length });
@@ -950,12 +969,14 @@ const actions = {
             commit('setConceptsLoading', false);
             commit('setConceptsLoadProgress', null);
           }
+          wait.complete();
           return { ok: true, concepts: acc, stale: true };
         }
         const rows = page && Array.isArray(page.concepts) ? page.concepts : Array.isArray(page) ? page : [];
         acc = acc.concat(rows);
         commit('setConcepts', { repoId, concepts: acc });
         if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
+        wait.setProgress(acc.length, total);
       }
       // TAIL GUARD (round 20b, #80862): the natural-completion arm needs the
       // same predicate as the in-loop guard — a fetch superseded while its
@@ -970,9 +991,11 @@ const actions = {
           commit('setConceptsLoading', false);
           commit('setConceptsLoadProgress', null);
         }
+        wait.complete();
         return { ok: true, concepts: acc, stale: true };
       }
       commit('setConceptsLoadProgress', null);
+      wait.complete();
       return { ok: true, concepts: acc };
     } catch (err) {
       commit('setError', err.message || 'fetchConcepts failed');
@@ -983,6 +1006,7 @@ const actions = {
       // click anyway. Empty the list only when none was ever loaded here.
       if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
       commit('setConceptsLoadProgress', null);
+      wait.fail(err.message || 'fetchConcepts failed');
       return { ok: false, code: 'FETCH_FAILED', message: err.message };
     } finally {
       if (!stale()) commit('setConceptsLoading', false);
@@ -1316,10 +1340,18 @@ const actions = {
   /** Start a whole-corpus topic-link run (Story 1-8g-p) — the same generic
    * pass the wizard runs at import time. Detached server-side. */
   async startTopicLinks(_ctx, { repoId, dryRun } = {}) {
+    // #2195 — the START round-trip registers (the 1-3 h run itself is
+    // watched by its own progress poll; this covers the silent submit).
+    const wait = require('@/services/operationWaitService').default.begin('topic-link-start', {
+      label: 'Starting topic linking',
+      labelKey: 'okf.opwait.ops.topicLinkStart'
+    });
     try {
       const result = await repoOkfService.startTopicLinks(repoId, dryRun);
+      wait.complete();
       return { ok: true, result };
     } catch (err) {
+      wait.fail(err.message);
       return { ok: false, error: err.message };
     }
   },
@@ -1774,20 +1806,49 @@ const actions = {
    * onStarted(suite_key) fires when the 202 returns so the UI can offer
    * Cancel mid-generation (David 2026-10-18 requirement). */
   async ragasGenerate(_ctx, { repoId, options, onStarted, onProgress, signal } = {}) {
+    let wait = null;
     try {
       ensureServices();
       const started = await ragasService.generateSuite(repoId, options || {});
       if (!started || !started.suite_key) return { ok: true, result: started };
       if (typeof onStarted === 'function') onStarted(started.suite_key);
+      // #2195 — the generation registers ONCE the suite key exists (the
+      // overlay's Cancel then drives the REAL cancel path — the server
+      // route, not a fake affordance). POLL_ABORTED is the user's stop
+      // through either path; complete() is correct there because the
+      // overlay cancel already removed the entry and the component-driven
+      // stop already dispatched the cancel itself.
+      wait = require('@/services/operationWaitService').default.begin('ragas-generate', {
+        label: 'Generating benchmark',
+        labelKey: 'okf.opwait.ops.ragas',
+        cancellable: true,
+        onCancel: () => {
+          _ctx.dispatch('ragasCancelGeneration', { repoId, suiteKey: started.suite_key });
+        }
+      });
       // The server NEVER kills a healthy long job (David 2026-10-18: never
       // trash running work) — the 24h UI horizon only bounds a left-open
       // dialog; the job keeps running server-side and the timeout says so.
-      return await pollJob({
+      const result = await pollJob({
         fetchDoc: () => ragasService.getSuite(repoId, started.suite_key),
         pollMs: 2500,
         signal,
         isRunning: (doc) => !doc || doc.status === 'generating',
-        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        onProgress:
+          typeof onProgress === 'function'
+            ? (doc) => {
+                const prog = doc && doc.progress;
+                if (wait && prog && typeof prog.done === 'number' && typeof prog.total === 'number') {
+                  wait.setProgress(prog.done, prog.total);
+                }
+                onProgress(doc);
+              }
+            : (doc) => {
+                const prog = doc && doc.progress;
+                if (wait && prog && typeof prog.done === 'number' && typeof prog.total === 'number') {
+                  wait.setProgress(prog.done, prog.total);
+                }
+              },
         timeout: {
           code: 'GENERATION_TIMEOUT',
           message: LAB_ERROR_KEYS.generationTimeout
@@ -1795,7 +1856,11 @@ const actions = {
         failed: { code: 'GENERATION_FAILED', message: LAB_ERROR_KEYS.generationFailed },
         done: (doc) => ({ ok: true, result: doc })
       });
+      if (result && result.ok) wait.complete();
+      else wait.fail((result && result.message) || 'benchmark generation failed');
+      return result;
     } catch (err) {
+      if (wait) wait.fail(err.message);
       return {
         ok: false,
         code: (err && (err.code || (err.data && err.data.error))) || 'GENERATION_FAILED',

@@ -3637,6 +3637,17 @@ export default {
         colContent: 'Contenido del fragmento'
       }
     },
+    opwait: {
+      title: 'Trabajando…',
+      cancel: 'Cancelar',
+      ops: {
+        conceptList: 'Cargando conceptos',
+        reposList: 'Cargando repositorios',
+        links: 'Cargando enlaces',
+        ragas: 'Generando el benchmark',
+        topicLinkStart: 'Iniciando la vinculación de temas'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept} de {requested} preguntas ancladas — {discarded} no pudieron vincularse al corpus evaluado (reintentos: {rounds} ronda(s))'

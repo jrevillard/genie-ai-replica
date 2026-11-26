@@ -144,9 +144,12 @@ function toResponse(doc) {
 // repo ({...doc}) — 33 repos × ~158 KB = 5.2 MB per list call, JSON.parsed on
 // the dashboard's main thread, spooling through Kong's proxy buffers. The
 // LIST endpoint needs the CARD, not the corpus: this allowlist is pinned from
-// the fields StudioDashboard.vue and the wizard actually read (r.* in the
-// template + the clone step's concept_count contract). The full document
-// stays where it belongs — GET /:id.
+// an exhaustive sweep of the fields the STORE-FED consumers read — the
+// dashboard cards (StudioDashboard.vue r.*) AND the surfaces hydrated from
+// the same rows (okfRepoOps.isLabelsStale's ingested_version, isRedraining's
+// rag_drain_active, the wizard/editor provenance fields, frontmatter + head
+// for the editor shell). The truly heavy payload — documents, crawl_seeds,
+// artifacts — stays where it belongs, behind GET /:id.
 const SUMMARY_FIELDS = [
   'repo_id',
   'name',
@@ -156,12 +159,19 @@ const SUMMARY_FIELDS = [
   'created_at',
   'updated_at',
   'ingested_at',
+  'ingested_version',
+  'ingested_graph_name',
   'studio_step',
   'conversion',
   'rag_ingestion',
+  'rag_drain_active',
+  'source_document',
+  'source_documents',
   'metrics',
   'trust',
-  'cloned_from'
+  'cloned_from',
+  'frontmatter',
+  'head'
 ];
 
 function toSummary(doc) {
@@ -465,6 +475,12 @@ async function list({ domain, authz, cursor, limit, projection } = {}) {
     if (authz != null && !(authz instanceof Set)) {
       throw new RepoError('AUTHZ_TYPE_ERROR', 'authz must be a Set of repo_ids or null', 500);
     }
+    // Fail fast on a typo'd projection (code review !1095): an unknown value
+    // must not silently mean "full document" — that resurfaces the 5.2 MB
+    // body with nothing in the logs, while the span claims the projection.
+    if (projection !== undefined && projection !== 'summary') {
+      throw new RepoError('VALIDATION_ERROR', `unknown projection '${projection}' (only 'summary' is defined)`, 400);
+    }
     // Default-deny (Story 6.1, G3): an EMPTY authorized set sees NOTHING —
     // short-circuit before the query; it must never fall through to the full
     // catalog. authz = null/absent ⇒ unrestricted (super-admin / internal).
@@ -493,6 +509,12 @@ async function list({ domain, authz, cursor, limit, projection } = {}) {
       ? aql`FILTER d.created_at < ${cursorTs} OR (d.created_at == ${cursorTs} AND d.repo_id > ${cursorId})`
       : aql``;
 
+    // #2191 — project IN THE QUERY, not in Node: the ArangoDB → okf-server
+    // leg is the hot-path cost the issue measured, and the codebase's own
+    // pattern (internal-controller KEEP, ingestWorker CLAIM_KEEP_FIELDS)
+    // projects in AQL. One allowlist serves both the RETURN and the
+    // Node-side toSummary (the enrichers run after either shape).
+    const returnClause = projection === 'summary' ? aql`RETURN KEEP(d, ${SUMMARY_FIELDS})` : aql`RETURN d`;
     const query = aql`
       FOR d IN ${db.collection(COLLECTION)}
         FILTER d.deleted_at == null
@@ -501,7 +523,7 @@ async function list({ domain, authz, cursor, limit, projection } = {}) {
         ${cursorFilter}
         SORT d.created_at DESC, d.repo_id ASC
         LIMIT ${safeLimit}
-        RETURN d
+        ${returnClause}
     `;
     const result = await db.query(query);
     const docs = await result.all();

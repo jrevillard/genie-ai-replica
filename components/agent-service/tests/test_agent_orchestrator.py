@@ -18,6 +18,7 @@ from dataclasses import replace
 import pytest
 from conftest import (
     REQUIRED_KNOBS,
+    FakeMetadataSource,
     HangingLoopModel,
     ScriptedLoopModel,
     fake_port,
@@ -63,6 +64,7 @@ def _orchestrator(model, port, lane_dir, *, config=None, slots=1):
             lane=lane,
             model_client=model,
             port_factory=port_factory,
+            metadata_source=FakeMetadataSource(),
         ),
         port_calls,
         lane,
@@ -441,6 +443,7 @@ def test_a_port_factory_failure_answers_the_honest_terminal(tmp_path):
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=broken_factory,
+        metadata_source=FakeMetadataSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
@@ -503,6 +506,7 @@ def test_a_runtime_factory_failure_answers_the_honest_terminal(tmp_path):
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=lambda context, bearer: fake_port(),
         runtime_factory=broken_factory,
+        metadata_source=FakeMetadataSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
@@ -543,6 +547,7 @@ def test_a_runtime_that_does_not_satisfy_the_port_is_refused_with_the_honest_ter
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=lambda context, bearer: fake_port(),
         runtime_factory=lambda: _NotARuntime(),
+        metadata_source=FakeMetadataSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
@@ -567,6 +572,7 @@ def test_a_custom_runtime_is_driven_and_named_in_the_execution_version_record(tm
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=lambda context, bearer: fake_port(),
         runtime_factory=lambda: runtime,
+        metadata_source=FakeMetadataSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))

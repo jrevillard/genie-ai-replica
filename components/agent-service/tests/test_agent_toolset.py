@@ -24,6 +24,7 @@ import pytest
 from conftest import (
     ENDPOINT,
     AgentFakePort,
+    FakeMetadataSource,
     PreparationFakeTransport,
     ScriptedLoopModel,
     canned_read_result,
@@ -285,6 +286,7 @@ def _orchestrator(model, port, tmp_path, *, preparer_factory=None, config=None):
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=model,
         port_factory=lambda context, bearer: port,
+        metadata_source=FakeMetadataSource(),
         preparer_factory=preparer_factory,
     )
 

@@ -57,9 +57,10 @@ import tracing
 # citations onto the SAME envelope). The name is RE-EXPORTED here: the
 # pipeline's own callers and suites import it from this module, and the
 # output is byte-identical to the pre-extraction behavior.
-from capabilities.citations import source_document_envelope
+from capabilities.citations import resolve_source_metadata, source_document_envelope, source_is_surfaceed
 from capabilities.contract import (
     CallerContext,
+    LegacyFileProvenance,
     OperationBudget,
     OutcomeCode,
     PreparedQuery,
@@ -67,6 +68,7 @@ from capabilities.contract import (
     SearchKnowledgeResult,
 )
 from capabilities.model import chat_auth_headers, chat_choice, chat_choice_content, chat_completions_url
+from capabilities.sources import DocumentMetadataSource
 from preparation import PreparationConfig, QueryPreparer
 from preparation.registry import LanguageRegistry
 from preparation.translation import ModelEndpointCache
@@ -218,6 +220,8 @@ class NoAgentPipeline:
         budget: OperationBudget,
         translator: AnswerTranslator | None = None,
         score_calibrator=None,
+        *,
+        metadata_source: DocumentMetadataSource,
     ):
         self._config = config
         self._preparer = preparer
@@ -231,6 +235,10 @@ class NoAgentPipeline:
         # on the reranking config the capability owns); None keeps the raw
         # score (the default `none` calibration).
         self._score_calibrator = score_calibrator
+        # The document repository, through the port: the lane resolves the
+        # documents it cites, per answer, and a document that does not
+        # resolve is not cited (the D1 rule).
+        self._metadata_source = metadata_source
         # The static-token memo (deployed `_count_static_tokens`): the system
         # prompt is per-process invariant (override-or-default, at most two
         # texts), so its /tokenize count is paid once per text, not once per
@@ -280,13 +288,20 @@ class NoAgentPipeline:
         source_language=None,
         target_language=None,
         user_context: str = "",
+        bearer: str | None = None,
     ) -> NoAgentResult:
         """One single-pass turn. The lane wraps EVERY stage: a saturated lane
-        refuses before preparation touches anything."""
-        async with self._lane.acquire():
-            return await self._run(history, context, source_language, target_language, user_context)
+        refuses before preparation touches anything.
 
-    async def _run(self, history, context, source_language, target_language, user_context) -> NoAgentResult:
+        ``bearer`` is the caller's token: the metadata read the citations
+        need is authorized (the deployed path passes its own).
+        """
+        async with self._lane.acquire():
+            return await self._run(history, context, source_language, target_language, user_context, bearer)
+
+    async def _run(
+        self, history, context, source_language, target_language, user_context, bearer=None
+    ) -> NoAgentResult:
         with tracing.with_span("noagent.prepare") as span:
             preparation = await self._preparer.prepare(history, source_language)
             span.set_attribute("query_translation_status", preparation.status.value)
@@ -295,6 +310,7 @@ class NoAgentPipeline:
         query_text = ""
         documents: list[str] = []
         search_result: SearchKnowledgeResult | None = None
+        source_metadata: dict[str, dict] = {}
         abstained = False
         reason: str | None = None
 
@@ -308,6 +324,10 @@ class NoAgentPipeline:
                 context, search_input, self._budget, abstention_sink=sink_reasons.append
             )
             documents = [hit.text for hit in search_result.hits]
+            # The documents' names, resolved through the document repository
+            # (the deployed path's per-answer resolution): a document that
+            # does not resolve is not cited, and contributes no score.
+            source_metadata = await self._resolve_metadata(search_result.hits, bearer)
             if search_result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE:
                 # The recorded reasons stay distinct: the sink carries the
                 # exact one (no_documents_retrieved / reranker_input_too_long
@@ -365,6 +385,7 @@ class NoAgentPipeline:
         return self._assemble(
             answer=answer,
             search_result=search_result,
+            source_metadata=source_metadata,
             preparation=preparation,
             context=context,
             abstained=abstained,
@@ -389,11 +410,23 @@ class NoAgentPipeline:
             return answer, None
         return await self._translator.translate(answer, target_language)
 
+    async def _resolve_metadata(self, hits, bearer) -> dict[str, dict]:
+        """Resolve the legacy sources' metadata through the document repository.
+
+        The OKF concept ids are NOT asked for: they resolve in the OKF
+        server, not in the document repository, so the fetch would answer
+        404 by design.
+        """
+
+        file_ids = [hit.provenance.file_id for hit in hits if isinstance(hit.provenance, LegacyFileProvenance)]
+        return await resolve_source_metadata(file_ids, self._metadata_source, bearer)
+
     def _assemble(
         self,
         *,
         answer: str,
         search_result: SearchKnowledgeResult | None,
+        source_metadata: dict[str, dict],
         preparation,
         context: CallerContext,
         abstained: bool,
@@ -402,15 +435,20 @@ class NoAgentPipeline:
         too_long_answer: bool,
     ) -> NoAgentResult:
         hits = tuple(search_result.hits) if search_result else ()
+        # The SURFACED hits: a legacy source whose metadata did not resolve
+        # is not cited and contributes no score (the D1 rule). One rule, in
+        # the citations module — the projection and the aggregate cannot
+        # disagree about it.
+        surfaced = tuple(hit for hit in hits if source_is_surfaceed(hit.provenance, source_metadata))
         calibrate = self._score_calibrator
-        envelope = source_document_envelope(hits, calibrate)
+        envelope = source_document_envelope(surfaced, calibrate, metadata=source_metadata)
         # The confidence aggregate runs over the FULL hit list — duplicates
         # included (deployed M3: a duplicate's score counts while the entry
         # itself is not re-surfaced) — at confidence time, calibrated like the
         # envelope scores.
-        scores = [calibrate(hit.score) if calibrate is not None else hit.score for hit in hits]
+        scores = [calibrate(hit.score) if calibrate is not None else hit.score for hit in surfaced]
         confidence = _rank_weighted_confidence(scores, self._config.confidence_rank_decay)
-        is_grounded = bool(hits) and not too_long_answer
+        is_grounded = bool(surfaced) and not too_long_answer
         metadata: dict[str, Any] = {
             "source_documents": envelope,
             # The labels the retrieval filtered on (the request's narrowing —

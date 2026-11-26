@@ -19,7 +19,7 @@ import shutil
 import tempfile
 
 import pytest
-from conftest import VENDORED_REGISTRY_PATH, PreparationFakeTransport
+from conftest import VENDORED_REGISTRY_PATH, FakeMetadataSource, PreparationFakeTransport
 
 from capabilities.contract import (
     CallerContext,
@@ -155,6 +155,7 @@ def _pipeline(
     lane=None,
     translator=None,
     budget=BUDGET,
+    metadata_source=None,
 ):
     config = config or NoAgentConfig.load(env={})
     counter = counter or FakeCounter()
@@ -167,6 +168,7 @@ def _pipeline(
         counter,
         budget,
         translator,
+        metadata_source=metadata_source if metadata_source is not None else FakeMetadataSource(),
     )
 
 
@@ -196,6 +198,35 @@ def test_prepared_english_with_hits_answers_from_the_documents():
     assert result.metadata["filter_labels"] == ["L1"]
     assert "abstained" not in result.metadata
     assert len(result.source_documents) == 2
+
+
+def test_a_document_whose_metadata_did_not_resolve_is_not_cited_and_scores_nothing():
+    """The D1 rule, in the lane that assembles the cards: no source
+    surfaced, no confidence poison.
+
+    A deleted document (or a document repository that is down) must not
+    become a citation card, and its score must not reach the aggregate.
+    """
+    pipeline = _pipeline(
+        preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
+        capability=FakeCapability(result=_search_result()),
+        metadata_source=FakeMetadataSource(unresolved=("f1",)),
+    )
+
+    result = asyncio.run(pipeline.run(["USER: How does Geneva manage transport?"], _context()))
+
+    # The document that resolved is cited; the one that did not is not.
+    assert [entry["document_id"] for entry in result.source_documents] == ["f2"]
+    # And the unresolved document's score does not reach the aggregate: the
+    # confidence is the one the SURVIVING document alone would give (the
+    # same run over a retrieval that held only that document).
+    only_resolved = _pipeline(
+        preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
+        capability=FakeCapability(result=_search_result(hits=(_search_result().hits[1],))),
+        metadata_source=FakeMetadataSource(),
+    )
+    single = asyncio.run(only_resolved.run(["USER: How does Geneva manage transport?"], _context()))
+    assert result.metadata["retrieval_confidence_score"] == single.metadata["retrieval_confidence_score"]
 
 
 def test_prepared_translated_row_is_the_identical_flow():
@@ -579,7 +610,7 @@ def test_source_document_envelope_legacy_and_okf_shapes():
             provenance=OkfConceptProvenance(concept_id="c2", repo_id="repo-2", bundle_version=None), text="t", score=0.7
         ),
     )
-    envelope = source_document_envelope(hits)
+    envelope = source_document_envelope(hits, metadata={"f1": {"file_name": "f1 resolved.md", "labels": []}})
     legacy = envelope[0]
     assert legacy["document_id"] == "f1"
     assert "source" not in legacy  # the legacy branch: no marker

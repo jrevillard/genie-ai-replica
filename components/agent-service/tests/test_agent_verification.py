@@ -18,7 +18,7 @@ import asyncio
 import time
 
 import pytest
-from conftest import ScriptedLoopModel, run_budget
+from conftest import FakeMetadataSource, ScriptedLoopModel, run_budget
 
 from agent.budget import RunBudgetMonitor
 from agent.verification import (
@@ -270,7 +270,7 @@ def test_a_judge_error_still_records_the_served_usage():
 # ---------------------------------------------------------------------
 
 
-def _pipeline(monitor=None, judge_turns=(), authorized_repos=()):
+def _pipeline(monitor=None, judge_turns=(), authorized_repos=(), metadata_source=None):
     monitor = monitor if monitor is not None else RunBudgetMonitor(run_budget())
     pipeline = VerificationPipeline(
         policy=POLICY_VERDICT_MARKED,
@@ -278,8 +278,40 @@ def _pipeline(monitor=None, judge_turns=(), authorized_repos=()):
         judge_model_client=ScriptedLoopModel(judge_turns),
         monitor=monitor,
         authorized_repos=authorized_repos,
+        metadata_source=metadata_source if metadata_source is not None else FakeMetadataSource(),
     )
     return pipeline, monitor
+
+
+def test_a_source_whose_metadata_did_not_resolve_is_not_surfaced():
+    """The D1 rule, in the governed path: no source surfaced, no confidence
+    poison.
+
+    The delivered citations still ride the payload (the evidence is a fact),
+    but the CITATION CARD of a document that did not resolve does not: a
+    deleted document (or a document repository that is down) must not become
+    a source the reader sees.
+    """
+    pipeline, _monitor = _pipeline(
+        judge_turns=(ModelTurn(content='{"verdict": "grounded"}'),),
+        metadata_source=FakeMetadataSource(unresolved=("f-1",)),
+    )
+    pipeline.record_tool_result(
+        "search_knowledge",
+        {
+            "result": {
+                "outcome": "success",
+                "hits": [{"provenance": {"file_id": "f-1"}, "text": "the passage", "score": 0.9}],
+                "truncated": False,
+            }
+        },
+    )
+
+    verdict = asyncio.run(pipeline.finalize("an answer"))
+
+    assert verdict.payload()["source_documents"] == []
+    # The evidence itself is untouched: the ledger still holds the entry.
+    assert verdict.payload()["citations"][0]["provenance"] == {"file_id": "f-1"}
 
 
 def test_no_retrieval_at_all_verifies_unverified_with_the_judge_skipped():
@@ -389,6 +421,7 @@ def test_a_judge_exception_verifies_unverified_never_raises():
         judge_model_client=ExplodingJudgeModel(),
         monitor=monitor,
         authorized_repos=(),
+        metadata_source=FakeMetadataSource(),
     )
     pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
     verdict = asyncio.run(pipeline.finalize("the answer"))
@@ -437,7 +470,9 @@ def test_the_payload_is_the_projection_contract_verbatim():
     assert payload["source_documents"] == [
         {
             "document_id": "f-1",
-            "document_name": "f-1",
+            # The DOCUMENT's name, as the document repository resolved it —
+            # never the id (ADR agentic-009, F5).
+            "document_name": "f-1 resolved.md",
             "url": "",
             "categoryLabels": [],
             "serviceLabels": [],
@@ -539,6 +574,7 @@ def test_the_pipeline_converts_the_judge_timeout_knob_to_seconds():
         judge_model_client=_HangingJudgeModel(),
         monitor=RunBudgetMonitor(run_budget()),
         authorized_repos=(),
+        metadata_source=FakeMetadataSource(),
     )
     pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
 
@@ -567,6 +603,7 @@ def test_a_cancelled_judge_propagates_the_cancellation_never_a_verdict():
         judge_model_client=_CancellingJudgeModel(),
         monitor=RunBudgetMonitor(run_budget()),
         authorized_repos=(),
+        metadata_source=FakeMetadataSource(),
     )
     pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
 

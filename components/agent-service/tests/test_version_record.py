@@ -11,6 +11,7 @@ import json
 import re
 
 from conftest import (
+    FakeMetadataSource,
     ScriptedLoopModel,
     _governed_loop,
     fake_port,
@@ -210,6 +211,7 @@ def _orchestrator_with(model, port, tmp_path):
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=model,
         port_factory=lambda context, bearer: port,
+        metadata_source=FakeMetadataSource(),
     )
 
 
@@ -281,6 +283,7 @@ def test_the_pre_loop_failure_path_emits_the_record(tmp_path):
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=broken_factory,
+        metadata_source=FakeMetadataSource(),
     )
     events: list[AgentEvent] = []
 

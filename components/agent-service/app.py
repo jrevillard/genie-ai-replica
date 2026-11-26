@@ -140,6 +140,11 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         model_client=model_client,
         port_factory=port_factory,
         preparer_factory=preparer_factory,
+        # The document repository, through the port: the citation cards
+        # carry the documents' NAMES, resolved per answer (ADR agentic-009,
+        # F5). The adapter is the port's implementation; the core never
+        # learns the repository's surface.
+        metadata_source=adapters.docrepo,
     )
 
 

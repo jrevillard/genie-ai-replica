@@ -18,6 +18,7 @@ import json
 import pytest
 from conftest import (
     AgentFakePort,
+    FakeMetadataSource,
     HangingLoopModel,
     LoopRunner,
     ScriptedLoopModel,
@@ -96,6 +97,7 @@ def _verifying_loop(model, judge_turns=(), budget=None, token=None):
         judge_model_client=ScriptedLoopModel(judge_turns),
         monitor=monitor,
         authorized_repos=PROBE_CONTEXT.authorized_repos,
+        metadata_source=FakeMetadataSource(),
     )
     runner = LoopRunner(
         AgentLoop(),
@@ -643,6 +645,7 @@ def test_the_judge_runs_after_the_text_events_never_before_the_first_chunk():
         judge_model_client=RecordingJudgeModel(),
         monitor=monitor,
         authorized_repos=PROBE_CONTEXT.authorized_repos,
+        metadata_source=FakeMetadataSource(),
     )
     runner = LoopRunner(
         AgentLoop(),

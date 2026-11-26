@@ -354,6 +354,7 @@ class RequestOrchestrator:
         lane: Lane,
         model_client: LoopModelClient,
         port_factory,
+        metadata_source,
         preparer_factory=None,
         runtime_factory=None,
     ) -> None:
@@ -361,6 +362,9 @@ class RequestOrchestrator:
         self._lane = lane
         self._model_client = model_client
         self._port_factory = port_factory
+        # The document repository, through the port: the verdict's citation
+        # cards carry the documents' names (ADR agentic-009, F5).
+        self._metadata_source = metadata_source
         # The preparation wiring (the preparation module, consumed per
         # query): a factory building ONE preparer per run over the run's
         # monitor. ``None`` keeps the probe-shaped toolset (no preparation
@@ -457,6 +461,8 @@ class RequestOrchestrator:
                 judge_model_client=self._model_client,
                 monitor=monitor,
                 authorized_repos=request.context.authorized_repos,
+                metadata_source=self._metadata_source,
+                bearer=request.bearer,
             )
             # The dispatcher is the core's tool dispatch: the runtime reaches
             # the corpus through it and through nothing else.

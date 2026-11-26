@@ -13,7 +13,15 @@ from typing import Any, Protocol, runtime_checkable
 
 @runtime_checkable
 class DocumentMetadataSource(Protocol):
-    """Resolves a legacy file id to its metadata record, or ``None``."""
+    """Resolves a legacy file id to its metadata record, or ``None``.
+
+    The record is the document repository's own: ``file_name`` (the
+    document's name), ``labels`` (its labels), ``author`` and
+    ``source_url`` (the crawled page's URL, for a document the crawler
+    ingested). The port declares the shape it expects from its connector —
+    the core reads the fields through this declaration, never by scraping
+    the repository's surface (ADR agentic-009).
+    """
 
     async def fetch_metadata(self, file_id: str, bearer: str | None) -> dict[str, Any] | None: ...
 

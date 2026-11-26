@@ -17,6 +17,7 @@ import asyncio
 
 from conftest import (
     AgentFakePort,
+    FakeMetadataSource,
     HangingLoopModel,
     ScriptedLoopModel,
     _governed_loop,
@@ -183,6 +184,7 @@ def test_the_ledger_reads_the_degraded_outcome_from_the_wire_shape():
         judge_model_client=ScriptedLoopModel(()),
         monitor=RunBudgetMonitor(run_budget()),
         authorized_repos=(),
+        metadata_source=FakeMetadataSource(),
     )
     verifier.record_tool_result("search_knowledge", payload)
 

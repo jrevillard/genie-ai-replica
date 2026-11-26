@@ -294,6 +294,8 @@ def _governed_loop(
     execution_versions=None,
     runtime=None,
     with_verifier=True,
+    metadata_source=None,
+    bearer=None,
 ):
     """The governed answer path over fakes — one home for the suites that
     drive the loop WITH the verification pipeline wired (the orchestrator's
@@ -327,6 +329,8 @@ def _governed_loop(
             else ScriptedLoopModel((ModelTurn(content='{"verdict": "grounded"}'),)),
             monitor=monitor,
             authorized_repos=authorized_repos,
+            metadata_source=metadata_source if metadata_source is not None else FakeMetadataSource(),
+            bearer=bearer,
         )
         if with_verifier
         else None
@@ -345,6 +349,32 @@ def _governed_loop(
         execution_versions=execution_versions,
     )
     return runner, collector, monitor, verifier
+
+
+class FakeMetadataSource:
+    """The document repository's port, over a fixed record set.
+
+    The records carry the document repository's own fields: the document's
+    name, its labels, its author and the URL of a crawled page. A file id
+    the fake does not know does NOT resolve — which is what makes the D1
+    rule observable (a source without a resolved record is not surfaced).
+    """
+
+    def __init__(self, records: dict | None = None, unresolved: tuple = ()):
+        self.records = records if records is not None else {}
+        self.unresolved = set(unresolved)
+        self.requested: list[str] = []
+
+    async def fetch_metadata(self, file_id: str, bearer: str | None):
+        self.requested.append(file_id)
+        if file_id in self.unresolved:
+            return None
+        return self.records.get(file_id, {"file_name": f"{file_id} resolved.md", "labels": []})
+
+
+def resolved_metadata_source(*file_ids: str) -> FakeMetadataSource:
+    """A metadata source that resolves the given file ids."""
+    return FakeMetadataSource({file_id: {"file_name": f"{file_id} resolved.md", "labels": []} for file_id in file_ids})
 
 
 class AgentFakePort:

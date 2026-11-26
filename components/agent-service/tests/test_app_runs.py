@@ -18,6 +18,7 @@ from dataclasses import replace
 import pytest
 from conftest import (
     REQUIRED_KNOBS,
+    FakeMetadataSource,
     HangingLoopModel,
     ScriptedLoopModel,
     SlowUnwindLoopModel,
@@ -43,7 +44,11 @@ def _runtime(model, tmp_path):
     orchestrator itself (the module-level lazy singleton)."""
     lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
     return RequestOrchestrator(
-        config=orchestrator_config(), lane=lane, model_client=model, port_factory=lambda context, bearer: fake_port()
+        config=orchestrator_config(),
+        lane=lane,
+        model_client=model,
+        port_factory=lambda context, bearer: fake_port(),
+        metadata_source=FakeMetadataSource(),
     )
 
 
@@ -240,7 +245,9 @@ def test_the_verdict_projects_citations_onto_the_frontend_source_documents_shape
     assert verdict["source_documents"] == [
         {
             "document_id": "f-1",
-            "document_name": "f-1",
+            # The DOCUMENT's name, as the document repository resolved it —
+            # never the id (ADR agentic-009, F5).
+            "document_name": "f-1 resolved.md",
             "url": "",
             "categoryLabels": [],
             "serviceLabels": [],
@@ -285,7 +292,16 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
     monkeypatch.setattr(
         app_module,
         "build_stateless_adapters",
-        lambda config, env=None: type("Adapters", (), {"bind_executor": staticmethod(lambda context, bearer: port)})(),
+        lambda config, env=None: type(
+            "Adapters",
+            (),
+            {
+                "bind_executor": staticmethod(lambda context, bearer: port),
+                # The document repository, through the port: the citation
+                # cards carry the documents' names.
+                "docrepo": FakeMetadataSource(),
+            },
+        )(),
     )
     monkeypatch.setattr(
         app_module,
@@ -325,6 +341,7 @@ def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, mon
             lane=lane,
             model_client=ScriptedLoopModel(multihop_turns(answer="a fabricated answer")),
             port_factory=lambda context, bearer: fake_port(),
+            metadata_source=FakeMetadataSource(),
         ),
     )
     with TestClient(app_module.app) as client:

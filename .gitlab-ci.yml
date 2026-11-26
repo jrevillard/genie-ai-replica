@@ -2383,13 +2383,28 @@ test:agent-service:
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        # The BFF's seam files are in the list: the vocabulary drift guard
+        # (tests/test_wire_contract.py) lives in THIS lane, so the lane must
+        # run when the seam's consumer changes too.
+        paths:
+          - "components/agent-service/**/*"
+          - "components/gov-chat-backend/services/agent-frame-writer.js"
+          - "components/gov-chat-backend/services/agent-seam-parser.js"
+          - ".gitlab-ci.yml"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths:
+          - "components/agent-service/**/*"
+          - "components/gov-chat-backend/services/agent-frame-writer.js"
+          - "components/gov-chat-backend/services/agent-seam-parser.js"
+          - ".gitlab-ci.yml"
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
-        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+        paths:
+          - "components/agent-service/**/*"
+          - "components/gov-chat-backend/services/agent-frame-writer.js"
+          - "components/gov-chat-backend/services/agent-seam-parser.js"
+          - ".gitlab-ci.yml"
 
 # genie-ai-ragas-service (OKF RAGAS benchmark sidecar)
 build:ragas-service:

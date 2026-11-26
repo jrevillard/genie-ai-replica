@@ -3113,6 +3113,8 @@ export default {
         keepHint: 'Conserve una copia — elimine las demás.'
       },
       wireDone: 'Enlazadas {n} página(s) a «{hub}».',
+      wireAlias: 'Se usa la página existente "{hub}" como página de Fuentes — se vinculó(n) {n} página(s) más.',
+      wireNothing: 'Nada que vincular — cada página con citas ya enlaza a "{hub}".',
       wireCreated: 'Creada la página de fuentes y enlazadas {n} página(s).',
       mergedPages: '{n} pages',
       preview: {

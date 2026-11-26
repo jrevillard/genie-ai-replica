@@ -98,8 +98,12 @@ describe('computeReport — citations (#1036 Option 2)', () => {
   });
 
   test('a bundled sources page is detected as the hub; unlinked citing pages counted', () => {
+    // #2198: the title branch is an EXACT match ('Sources'/'Citations'/
+    // 'References') — the old substring rule let 'WHO Primary Sources Used
+    // in this Bundle' hijack hub detection (and, in wireCitationHub, let an
+    // index titled '28-living-reference' suppress hub generation entirely).
     const rows = [
-      row({ concept_id: 'who-sources', title: 'WHO Primary Sources Used in this Bundle', links: [] }),
+      row({ concept_id: 'who-sources', title: 'Sources', links: [] }),
       row({
         concept_id: 'a',
         sources: [{ id: 's1' }],
@@ -206,6 +210,99 @@ describe('wireCitationHub', () => {
     // The existing fm link is PRESERVED (array replaced whole — send merged).
     expect(conceptMeta.patchConceptFields.mock.calls[0][2]).toEqual({
       frontmatterPatch: { links: [{ target: 'other.md' }, { target: 'who-sources.md', label: 'Sources' }] }
+    });
+  });
+
+  // #2198 (2026-11-26, live): an index titled '28-living-reference' hijacked
+  // hub detection — the projection carried NO is_index (so !undefined was
+  // true for every row) and the title branch was a SUBSTRING match. The hub
+  // was "found", generation never ran, and a success-shaped no-op returned.
+  describe('#2198 — the hub-hijack defect', () => {
+    test('the wire query projects is_index', async () => {
+      mockRows([]);
+      await validationService.wireCitationHub('repo-1', { actor: { sub: 's' } });
+      const q = String(db.query.mock.calls[0][0]);
+      expect(q).toContain('is_index');
+    });
+
+    test('a repo whose index is titled "28-living-reference" still gets a REAL Sources hub', async () => {
+      mockRows([
+        {
+          concept_id: '28-living-reference',
+          title: '28-living-reference',
+          is_index: true,
+          links: [],
+          sources: null,
+          fm_links: []
+        },
+        { concept_id: 'a', title: 'A', is_index: false, links: [], sources: [{ id: 's1' }], fm_links: [] }
+      ]);
+      const result = await validationService.wireCitationHub('repo-1', { actor: { sub: 's' } });
+
+      expect(result.hub_created).toBe(true);
+      expect(result.hub_concept_id).toBe('sources');
+      expect(result.wired).toBe(1);
+      expect(result.outcome).toBe('generated');
+      expect(ingestService.ingestRepoConcepts).toHaveBeenCalledTimes(1);
+    });
+
+    test('the title branch is an EXACT match — a substring page never hijacks generation', async () => {
+      // 'Living References FAQ' contains 'references' — under the substring
+      // rule it became the hub and suppressed generation. Exact match only.
+      mockRows([
+        {
+          concept_id: 'ref-faq',
+          title: 'Living References FAQ',
+          is_index: false,
+          links: [],
+          sources: null,
+          fm_links: []
+        },
+        { concept_id: 'a', title: 'A', is_index: false, links: [], sources: [{ id: 's1' }], fm_links: [] }
+      ]);
+      const result = await validationService.wireCitationHub('repo-1', { actor: { sub: 's' } });
+      expect(result.hub_created).toBe(true);
+      expect(result.hub_concept_id).toBe('sources');
+    });
+
+    test('an exact-title alias page is USED, reported as hub_alias, and wired to', async () => {
+      mockRows([
+        { concept_id: 'ref-faq', title: 'References', is_index: false, links: [], sources: null, fm_links: [] },
+        {
+          concept_id: 'a',
+          title: 'A',
+          is_index: false,
+          links: [{ to_concept_id: 'ref-faq' }],
+          sources: [{ id: 's1' }],
+          fm_links: [{ target: 'ref-faq.md', label: 'Sources' }]
+        },
+        { concept_id: 'b', title: 'B', is_index: false, links: [], sources: [{ id: 's2' }], fm_links: [] }
+      ]);
+      const result = await validationService.wireCitationHub('repo-1', { actor: { sub: 's' } });
+      expect(result.hub_created).toBe(false);
+      expect(result.hub_concept_id).toBe('ref-faq');
+      expect(result.hub_alias).toBe(true);
+      expect(result.hub_title).toBe('References');
+      expect(result.wired).toBe(1); // b gets wired
+      expect(result.already_linked).toBe(1); // a already points there
+      expect(result.outcome).toBe('using_existing');
+      expect(ingestService.ingestRepoConcepts).not.toHaveBeenCalled();
+    });
+
+    test('zero work honestly says so — outcome nothing_to_do, never a bare success', async () => {
+      // No citing pages, no hub, no sources: generation still runs (the rule
+      // is ALWAYS generate when no hub exists) — the nothing_to_do case needs
+      // an existing hub with nobody to wire.
+      mockRows([
+        { concept_id: 'sources', title: 'Sources', is_index: false, links: [], sources: null, fm_links: [] },
+        { concept_id: 'plain', title: 'P', is_index: false, links: [], sources: null, fm_links: [] }
+      ]);
+      const result = await validationService.wireCitationHub('repo-1', { actor: { sub: 's' } });
+      expect(result.hub_created).toBe(false);
+      expect(result.hub_alias).toBe(false); // id-regex hit, not a title alias
+      expect(result.wired).toBe(0);
+      expect(result.already_linked).toBe(0);
+      expect(result.outcome).toBe('nothing_to_do');
     });
   });
 });

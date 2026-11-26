@@ -3094,6 +3094,8 @@ export default {
         keepHint: 'Simpan satu salinan — hapus sisanya.'
       },
       wireDone: '{n} halaman ditautkan ke "{hub}".',
+      wireAlias: 'Halaman yang ada "{hub}" digunakan sebagai halaman Sumber — {n} halaman lain ditautkan.',
+      wireNothing: 'Tidak ada yang perlu ditautkan — setiap halaman berkutip sudah menaut ke "{hub}".',
       wireCreated: 'Halaman Sumber dibuat dan {n} halaman ditautkan.',
       mergedPages: '{n} pages',
       preview: {

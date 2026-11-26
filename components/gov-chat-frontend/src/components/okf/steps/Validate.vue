@@ -761,15 +761,30 @@ export default {
       this.wireBusy = false;
       if (res && res.ok && res.result) {
         const r = res.result;
-        this.wireNote = this.translate('okf.validation.wireDone', 'Linked {n} page(s) to "{hub}".')
-          .replace('{n}', String(r.wired != null ? r.wired : 0))
-          .replace('{hub}', r.hub_concept_id || 'sources');
-        if (r.hub_created) {
-          this.wireNote =
-            this.translate('okf.validation.wireCreated', 'Created the Sources page and linked {n} page(s).').replace(
-              '{n}',
-              String(r.wired != null ? r.wired : 0)
-            ) + ' ';
+        const n = String(r.wired != null ? r.wired : 0);
+        // #2198 — the outcome is HONEST: {generated} / {using existing 'X'}
+        // / {wired N} / {nothing to do} — never a success-shaped no-op.
+        if (r.outcome === 'using_existing') {
+          this.wireNote = this.translate(
+            'okf.validation.wireAlias',
+            'Using the existing page "{hub}" as the Sources page — linked {n} more page(s).'
+          )
+            .replace('{hub}', r.hub_title || r.hub_concept_id || 'Sources')
+            .replace('{n}', n);
+        } else if (r.hub_created) {
+          this.wireNote = this.translate(
+            'okf.validation.wireCreated',
+            'Created the Sources page and linked {n} page(s).'
+          ).replace('{n}', n);
+        } else if (r.outcome === 'nothing_to_do') {
+          this.wireNote = this.translate(
+            'okf.validation.wireNothing',
+            'Nothing to wire — every citing page already links to "{hub}".'
+          ).replace('{hub}', r.hub_concept_id || 'sources');
+        } else {
+          this.wireNote = this.translate('okf.validation.wireDone', 'Linked {n} page(s) to "{hub}".')
+            .replace('{n}', n)
+            .replace('{hub}', r.hub_concept_id || 'sources');
         }
       } else {
         this.wireNote = (res && res.error) || '';

@@ -3980,6 +3980,8 @@ export default {
         keepHint: 'Keep one copy — delete the rest.'
       },
       wireDone: 'Linked {n} page(s) to "{hub}".',
+      wireAlias: 'Using the existing page "{hub}" as the Sources page — linked {n} more page(s).',
+      wireNothing: 'Nothing to wire — every citing page already links to "{hub}".',
       wireCreated: 'Created the Sources page and linked {n} page(s).',
       mergedPages: '{n} pages',
       preview: {

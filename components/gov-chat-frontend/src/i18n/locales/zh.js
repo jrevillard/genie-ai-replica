@@ -3003,6 +3003,8 @@ export default {
         keepHint: '保留一份——删除其余。'
       },
       wireDone: '已将 {n} 个页面链接到“{hub}”。',
+      wireAlias: '使用现有页面“{hub}”作为来源页 — 已链接另外 {n} 个页面。',
+      wireNothing: '无需链接 — 每个引用页都已链接到“{hub}”。',
       wireCreated: '已创建 Sources 页面并链接 {n} 个页面。',
       mergedPages: '{n} 个页面',
       preview: {

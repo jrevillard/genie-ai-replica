@@ -3110,6 +3110,8 @@ export default {
         keepHint: 'Mantenha uma cópia — exclua as demais.'
       },
       wireDone: '{n} página(s) vinculada(s) a "{hub}".',
+      wireAlias: 'A página existente "{hub}" é usada como página de Fontes — {n} página(s) adicional(is) vinculada(s).',
+      wireNothing: 'Nada a vincular — cada página com citações já aponta para "{hub}".',
       wireCreated: 'Página de Fontes criada e {n} página(s) vinculada(s).',
       mergedPages: '{n} pages',
       preview: {

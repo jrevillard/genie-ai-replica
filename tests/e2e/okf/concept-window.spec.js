@@ -39,8 +39,12 @@ const { pinEnglish } = require('../helpers/locale');
 const { BASE_URL } = require('../helpers/base-url');
 
 const ROW = '[data-test-id^="okf-concept-row-"]';
-const OP_PANEL = '.op-wait';
-const OP_CANCEL = `${OP_PANEL} button:has-text("Cancel")`;
+// Declared handles (the e2e-handle-locators contract: no class, no text
+// locators). The overlay exposes panel/row/cancel/failure handles; the row
+// carries data-op with the registry's op name.
+const OP_PANEL = '[data-test-id="op-wait-panel"]';
+const OP_CANCEL = '[data-test-id="op-wait-cancel"]';
+const OP_CONCEPT_ROW = '[data-test-id="op-wait-row"][data-op="concept-list-fetch"]';
 const CARD = (repoId) => `[data-test-id="okf-studio-repo-${repoId}"]`;
 
 /** Pull the venue's largest repository (by concept_count) through the
@@ -194,9 +198,9 @@ test.describe('#2188 windowed concept-list crawl', () => {
     await cancel.click();
 
     // the op retires (the registry's cancel() removes the entry at once)
-    await expect(page.locator(`${OP_PANEL}:has-text("Loading concepts")`)).toHaveCount(0, { timeout: 5000 });
+    await expect(page.locator(OP_CONCEPT_ROW)).toHaveCount(0, { timeout: 5000 });
     // no failure line: a deliberate cancel is not an error
-    await expect(page.locator('.op-wait__failure')).toHaveCount(0);
+    await expect(page.locator('[data-test-id="op-wait-failure"]')).toHaveCount(0);
 
     // the request stream is DEAD: no new concepts request starts after the
     // cancel (the in-flight window was aborted, later waves never dispatch)

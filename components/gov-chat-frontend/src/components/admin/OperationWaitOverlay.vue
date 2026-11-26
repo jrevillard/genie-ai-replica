@@ -11,9 +11,19 @@
        carries the Law's affordance (visible, app-level, cancellable)
        without re-introducing the lock. -->
   <div v-if="operations.length || lastFailure" class="op-wait" role="status" aria-live="polite">
-    <div class="op-wait__panel">
+    <div class="op-wait__panel" data-test-id="op-wait-panel">
       <div class="op-wait__title">{{ translate('okf.opwait.title', 'Working…') }}</div>
-      <div v-for="op in operations" :key="op.id" class="op-wait__row" :class="`op-wait__row--${op.state}`">
+      <!-- data-op carries the registry's op NAME (begin()'s first argument):
+           the e2e suite locates rows by declared handle + data attribute, and
+           the handle-locators contract forbids class and text locators. -->
+      <div
+        v-for="op in operations"
+        :key="op.id"
+        class="op-wait__row"
+        :class="`op-wait__row--${op.state}`"
+        data-test-id="op-wait-row"
+        :data-op="op.name"
+      >
         <DsSpinner v-if="op.state === 'active'" size="sm" />
         <span class="op-wait__label">{{ op.labelKey ? translate(op.labelKey, op.label) : op.label }}</span>
         <DsProgress v-if="op.total" class="op-wait__bar" :max="op.total" :value="op.done" />
@@ -22,11 +32,17 @@
              abort — never for a completing/failed row in its min-visible
              window (a cancel click there would fire the server cancel for a
              job that already ended). -->
-        <DsButton v-if="op.cancellable && op.state === 'active'" variant="secondary" small @click="onCancel(op)">
+        <DsButton
+          v-if="op.cancellable && op.state === 'active'"
+          variant="secondary"
+          small
+          data-test-id="op-wait-cancel"
+          @click="onCancel(op)"
+        >
           {{ translate('okf.opwait.cancel', 'Cancel') }}
         </DsButton>
       </div>
-      <div v-if="lastFailure" class="op-wait__failure">{{ lastFailure.message }}</div>
+      <div v-if="lastFailure" class="op-wait__failure" data-test-id="op-wait-failure">{{ lastFailure.message }}</div>
     </div>
   </div>
 </template>

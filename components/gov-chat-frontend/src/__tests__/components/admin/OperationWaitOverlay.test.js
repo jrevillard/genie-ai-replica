@@ -79,7 +79,10 @@ describe('OperationWaitOverlay', () => {
     });
     await wrapper.vm.$nextTick();
 
-    await wrapper.find('.op-wait button').trigger('click');
+    // located by the DECLARED handle (the e2e-handle-locators contract's
+    // spirit, and stub-rendering-agnostic: the attr falls through to the
+    // stub root whatever element the stub renders)
+    await wrapper.find('[data-test-id="op-wait-cancel"]').trigger('click');
     await wrapper.vm.$nextTick();
 
     expect(handle.state).toBe('removed');
@@ -90,7 +93,7 @@ describe('OperationWaitOverlay', () => {
     opWait.begin('ragas-generate', { label: 'Generating benchmark', cancellable: false });
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.op-wait').exists()).toBe(true);
-    expect(wrapper.findAll('.op-wait button')).toHaveLength(0);
+    expect(wrapper.findAll('[data-test-id="op-wait-cancel"]')).toHaveLength(0);
   });
 
   test('a failed operation surfaces its message', async () => {
@@ -144,12 +147,12 @@ describe('OperationWaitOverlay', () => {
       onCancel: () => {}
     });
     await wrapper.vm.$nextTick();
-    expect(wrapper.findAll('.op-wait button')).toHaveLength(1); // active: cancel visible
+    expect(wrapper.findAll('[data-test-id="op-wait-cancel"]')).toHaveLength(1); // active: cancel visible
 
     handle.complete();
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.op-wait').exists()).toBe(true); // min-visible window
-    expect(wrapper.findAll('.op-wait button')).toHaveLength(0); // no live Cancel
+    expect(wrapper.findAll('[data-test-id="op-wait-cancel"]')).toHaveLength(0); // no live Cancel
 
     jest.advanceTimersByTime(1000);
     await wrapper.vm.$nextTick();

@@ -1044,11 +1044,14 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
 
   it('ignores an unknown seam kind instead of breaking the stream (additive envelope)', async () => {
     setupAgentQuery();
+    // A kind the seam MAY add later (the design's pause surface names
+    // run_paused). This BFF does not know it — the envelope is additive by
+    // design, so a newer agent service must not break an older BFF.
     axios.post.mockResolvedValue({
       status: 200,
       headers: {},
       data: seamStream([
-        envelope('brand_new_seam_kind', { whatever: true }, { seq: 0 }),
+        envelope('run_paused', { pause_id: 'p-1', kind: 'approval' }, { seq: 0 }),
         envelope('text_message_content', { text: 'ok' }, { seq: 1 }),
         envelope('run_finished', { outcome: 'answered' }, { seq: 2 }),
         { usage_record: USAGE_RECORD }
@@ -1061,7 +1064,13 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
     });
 
     const frames = parseSSEEvents(response.text);
+    // The unknown kind produced NO frame — and nothing of its payload
+    // leaked onto the wire.
     expect(frames.map((f) => f.type)).toEqual(['chunk', 'metadata', 'done']);
+    expect(JSON.stringify(frames)).not.toContain('p-1');
+    // The answer still landed, and the terminal is still `done`.
+    expect(frames[0]).toEqual({ type: 'chunk', content: 'ok' });
+    expect(frames[frames.length - 1].type).toBe('done');
   });
 
   it('a malformed seam line is logged, never projected onto a client frame', async () => {
@@ -2222,41 +2231,5 @@ describe('POST /api/queries/stream — the terminal facts (the W-P2 wave)', () =
       expect.objectContaining({ translation_status: 'failed' }),
       expect.anything()
     );
-  });
-});
-
-// ── the seam vocabulary is additive ─────────────────────────────────────────
-
-describe('POST /api/queries/stream — a seam kind this BFF does not know', () => {
-  it('is ignored at debug level: the turn still finalizes as an answer', async () => {
-    setupAgentQuery();
-    // A kind the seam MAY add later (the design's pause surface names
-    // run_paused). This BFF does not know it — the envelope is additive by
-    // design, so a newer agent service must not break an older BFF.
-    const stream = seamStream([
-      envelope('run_started', { question: 'What is the tax rate?' }, { seq: 0 }),
-      envelope('run_paused', { pause_id: 'p-1', kind: 'approval' }, { seq: 1 }),
-      envelope('text_message_started', { role: 'assistant' }, { seq: 2 }),
-      envelope('text_message_content', { text: 'Hello.' }, { seq: 3 }),
-      envelope('text_message_finished', {}, { seq: 4 }),
-      envelope('run_finished', { outcome: 'answered' }, { seq: 5 }),
-      { usage_record: USAGE_RECORD }
-    ]);
-    axios.post.mockResolvedValue({ status: 200, headers: {}, data: stream });
-
-    const response = await authPost('/api/queries/stream', {
-      sessionId: 's1',
-      messages: [{ role: 'user', content: 'What is the tax rate?' }]
-    });
-
-    expect(response.status).toBe(200);
-    const frames = parseSSEEvents(response.text);
-    // The unknown kind produced NO frame — and nothing of its payload
-    // leaked onto the wire.
-    expect(frames.map((f) => f.type)).toEqual(['chunk', 'metadata', 'done']);
-    expect(JSON.stringify(frames)).not.toContain('p-1');
-    // The answer still landed, and the terminal is still `done`.
-    expect(frames[0]).toEqual({ type: 'chunk', content: 'Hello.' });
-    expect(frames[frames.length - 1].type).toBe('done');
   });
 });

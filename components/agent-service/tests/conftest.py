@@ -20,12 +20,11 @@ from langdetect import DetectorFactory
 
 from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
-from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter
 from agent.governance import governed_run
 from agent.loop import AgentLoop
 from agent.orchestrator import OrchestratorConfig
-from agent.runtime import BoundedModelClient, RunInputs
+from agent.runtime import build_run_inputs
 from agent.toolset import document_toolset
 from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
@@ -261,21 +260,20 @@ class LoopRunner:
     async def run(self, question: str):
         """One governed run over the port's inputs."""
 
-        inputs = RunInputs(
+        # The run's inputs are assembled by the OWN builder
+        # (agent.runtime.build_run_inputs) — a hand-assembly here is a
+        # second copy of the wiring, and a copy that drifts: a production
+        # change to the builder (the verifier dropped, the bound changed)
+        # leaves this fixture green.
+        inputs = build_run_inputs(
             question=question,
             instruction=self._instruction,
-            tools=self.registry.definitions(),
-            model=BoundedModelClient(self.model, self.monitor),
-            dispatcher=ToolDispatcher(
-                registry=self.registry,
-                monitor=self.monitor,
-                token=self.token,
-                emitter=self.emitter,
-                verifier=self.verifier,
-            ),
+            registry=self.registry,
             monitor=self.monitor,
             token=self.token,
             emitter=self.emitter,
+            model_client=self.model,
+            verifier=self.verifier,
         )
         return await governed_run(
             self.loop,

@@ -98,6 +98,7 @@ def test_the_model_client_is_bounded_by_the_run_monitor():
     """
 
     monitor = _monitor()
+    model = ScriptedLoopModel(multihop_turns(answer="the answer"))
     inputs = build_run_inputs(
         question=QUESTION,
         instruction=INSTRUCTION,
@@ -105,39 +106,18 @@ def test_the_model_client_is_bounded_by_the_run_monitor():
         monitor=monitor,
         token=CancellationToken(),
         emitter=EventEmitter(run_id="run-1"),
-        model_client=ScriptedLoopModel(multihop_turns(answer="the answer")),
+        model_client=model,
     )
 
     asyncio.run(inputs.model.complete([{"role": "user", "content": "hi"}], ()))
 
-    # The bound the client sent is the monitor's remaining allowance — not
-    # None, which would mean "the endpoint's own default".
-    remaining = monitor.remaining_output_tokens()
-    assert remaining is not None
-    assert remaining > 0
-
-
-def test_the_dispatcher_carries_the_verifier_when_there_is_one():
-    """The evidence ledger the tool results feed.
-
-    A dispatcher built without the verifier is a run whose tool results
-    never reach the ledger: the grounding verdict would read an empty
-    evidence trail and the citations would be gone.
-    """
-
-    verifier = object()
-    inputs = build_run_inputs(
-        question=QUESTION,
-        instruction=INSTRUCTION,
-        registry=_registry(),
-        monitor=_monitor(),
-        token=CancellationToken(),
-        emitter=EventEmitter(run_id="run-1"),
-        model_client=ScriptedLoopModel(multihop_turns(answer="the answer")),
-        verifier=verifier,
-    )
-
-    assert inputs.dispatcher._verifier is verifier
+    # The bound the client SENT is the monitor's remaining allowance — not
+    # None, which would mean "the endpoint's own default". The assertion
+    # reads the request the model client recorded: a test that only reads
+    # the monitor's own state would stay green if the wrapper stopped
+    # capping anything.
+    assert model.requests[0]["max_output_tokens"] == monitor.remaining_output_tokens()
+    assert model.requests[0]["max_output_tokens"] is not None
 
 
 def test_the_terminal_record_reads_its_counters_from_the_monitor():

@@ -133,22 +133,16 @@ def _inputs(*, model, registry, monitor, token, emitter, question=QUESTION) -> R
 
 
 def _result(inputs: RunInputs, outcome: str, final_text: str | None = None, error: str | None = None) -> RunResult:
-    """The terminal record, counted from the run's monitor."""
+    """The terminal record, counted from the run's monitor.
 
-    monitor = inputs.monitor
-    return RunResult(
-        outcome=outcome,
-        final_text=final_text,
-        steps=monitor.steps,
-        model_calls=monitor.model_calls,
-        aux_model_calls=monitor.aux_model_calls,
-        tool_calls=monitor.tool_calls,
-        evidence_bytes=monitor.evidence_bytes,
-        wall_clock_seconds=monitor.elapsed_seconds,
-        prompt_tokens=monitor.prompt_tokens,
-        completion_tokens=monitor.completion_tokens,
-        error=error,
-    )
+    The core's own builder (:meth:`agent.runtime.RunResult.from_monitor`)
+    — a double that stands in for a RUNTIME does not re-implement the
+    core's terminal-record builder: a copy here is a second source of
+    truth that nothing pins, and a counter swapped in the builder would
+    leave this suite green.
+    """
+
+    return RunResult.from_monitor(inputs.monitor, outcome, final_text=final_text, error=error)
 
 
 # ---------------------------------------------------------------------

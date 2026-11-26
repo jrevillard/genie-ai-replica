@@ -266,11 +266,20 @@ def _in_layers(modules: list[str], layers: tuple[str, ...], layout: Layout) -> l
 
 
 def _other_layers(layout: Layout) -> list[str]:
-    """The roots of what a core module may not import: the host, the adapters, the capability."""
+    """The roots of what a core module may not import: the host, the adapters,
+    the capability — and the MEASUREMENT layer.
+
+    The measurement layer is a measurement surface, not core: it reaches the
+    corpus through the adapters and the core's own modules, so a core module
+    importing it would make the core depend on an evidence surface (the
+    probe ships in the image and reaches the adapters). The direction is
+    one-way: the measurement layer may use the core, never the reverse.
+    """
 
     return [module for module in layout.host if module != TELEMETRY_FACADE] + [
         layout.leaf_adapters,
         layout.capability,
+        layout.measurement[0],
     ]
 
 

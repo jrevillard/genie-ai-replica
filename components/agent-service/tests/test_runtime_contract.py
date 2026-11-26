@@ -189,7 +189,7 @@ class _ScriptedRuntime:
                 messages.append({"role": "tool", "tool_call_id": request.call_id, "content": result_json})
 
 
-RUNTIMES = {"custom-loop": AgentLoop, "scripted": _ScriptedRuntime}
+RUNTIMES = {"custom-minimal-loop": AgentLoop, "scripted": _ScriptedRuntime}
 
 
 def _runtime(runtime_id: str):

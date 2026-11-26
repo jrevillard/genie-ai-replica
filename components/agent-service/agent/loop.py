@@ -67,7 +67,11 @@ class AgentLoop:
     travels with the dispatcher. The instance keeps nothing between runs.
     """
 
-    runtime_id = "custom-loop"
+    runtime_id = "custom-minimal-loop"
+    """The runtime's identity — it rides the execution-version record, so a
+    run is attributable to the runtime that drove it. ONE string: the
+    probe's evidence carries the same one (it reads it from here), and a
+    record join across the two evidence streams must not miss."""
 
     async def run(self, inputs: RunInputs) -> RunResult:
         """Drive one run to its terminal outcome; cancellation propagates."""

@@ -35,14 +35,16 @@ class HttpxTransport:
         self._verify = verify
 
     def _raise_transport_failure(self, failure: Exception) -> None:
-        """Raise ``failure`` the way the core must read it.
+        """Raise a timed-out call the way the core must read it.
 
-        A timeout becomes the core's timeout type; anything else travels
-        unchanged, with its upstream body attached.
+        A timeout becomes the core's timeout type — the builtin
+        ``TimeoutError`` — so the core can classify it without naming an
+        HTTP library. Every OTHER failure travels unwrapped: it never
+        reaches this helper (the callers catch a timeout and nothing else),
+        and the core reads the upstream error body off the exception
+        itself.
         """
-        if isinstance(failure, httpx.TimeoutException):
-            raise TransportTimeoutError(f"{type(failure).__name__}: {failure}") from failure
-        raise failure
+        raise TransportTimeoutError(f"{type(failure).__name__}: {failure}") from failure
 
     async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]:
         try:

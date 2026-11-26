@@ -122,7 +122,7 @@ The handshake's `execution_versions` — five axes, all ids and fingerprints:
   "model": {"id": "served-model", "source": "discovered", "note": "…"},
   "prompt": {"version": "prod-1", "sha256": "d7ed66b8bcaf"},
   "configuration": {"sha256": "0823eae7cdf1", "values": {…}},
-  "runtime": {"id": "custom-loop"}
+  "runtime": {"id": "custom-minimal-loop"}
 }
 ```
 

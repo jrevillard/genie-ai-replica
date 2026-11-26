@@ -422,11 +422,14 @@ class RequestOrchestrator:
                 run_id, outcome, monitor, error=error, request=request, preparation_statuses=preparation_statuses
             )
 
+        # The runtime is wired BEFORE the run starts: the record names it,
+        # and the record rides the run-start handshake. A factory that
+        # raises is a wiring defect, and it raises HERE — before any
+        # stream byte and before any handshake — so a run that never
+        # started can never carry a record-less start event.
+        runtime = self._runtime_factory()
+        execution_versions = await self._execution_versions(runtime.runtime_id)
         try:
-            # The runtime comes FIRST: the record names it, and the record
-            # rides the run-start handshake.
-            runtime = self._runtime_factory()
-            execution_versions = await self._execution_versions(runtime.runtime_id)
             # The per-request assembly is INSIDE the try: a build failure
             # (a port-factory refusal, a registry defect) must reach the
             # caller as the honest terminal — the RUN_ERROR event and the

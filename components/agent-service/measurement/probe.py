@@ -80,7 +80,10 @@ logger = logging.getLogger(__name__)
 # comment home each — the translation leg owns the translation-shaped
 # copies, this client the generation-shaped one.
 
-RUNTIME_ID = "custom-minimal-loop"
+RUNTIME_ID = AgentLoop.runtime_id
+"""The runtime the probe drives — read from the runtime itself, so the
+probe's evidence and the run's execution-version record cannot drift
+apart."""
 """The provisional candidate's runtime id — the field the runtime decision compares on."""
 
 QUESTION_ID = "probe-multihop-001"

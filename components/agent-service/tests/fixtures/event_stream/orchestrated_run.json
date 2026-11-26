@@ -35,7 +35,7 @@
           "version": "override"
         },
         "runtime": {
-          "id": "custom-loop"
+          "id": "custom-minimal-loop"
         }
       },
       "question": "How are complaints handled?"

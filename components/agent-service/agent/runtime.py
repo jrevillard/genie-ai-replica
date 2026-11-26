@@ -54,9 +54,12 @@ class RunResult:
 
     Every counter comes from the run's budget monitor — a runtime owns no
     usage state of its own, so the record and the cancellation's partial
-    evidence read the same source. ``final_text`` is the model's final
-    turn only — an exhausted or failed run carries ``None``, never a
-    fabricated answer.
+    evidence read the same source. ``final_text`` is the DELIVERED text:
+    the model's final turn, or the standard insufficiency message when
+    the ledger's state requires it. A runtime's own result carries its
+    DRAFT — the delivery is the core's decision — and the core rewrites
+    the field before the run's record leaves. An exhausted or failed run
+    carries ``None``, never a fabricated answer.
     """
 
     outcome: str

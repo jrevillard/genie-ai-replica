@@ -11,9 +11,10 @@ provisional custom minimal loop (:mod:`.loop`), the governed production
 prompt (:mod:`.prompt`), the registered toolset (:mod:`.toolset`), the
 taint scan (:mod:`.taint`), the citation verification pipeline
 (:mod:`.verification`), the runtime port and its bounded model client
-(:mod:`.runtime`), the tool dispatcher (:mod:`.dispatcher`), the core's
-governed run (:mod:`.governance`) and the bounded smoke probe
-(:mod:`.probe`). A
+(:mod:`.runtime`), the tool dispatcher (:mod:`.dispatcher`) and the core's
+governed run (:mod:`.governance`). The bounded smoke probe and the v0.6
+harness are MEASUREMENT surfaces, not core: they live in
+:mod:`measurement`. A
 runtime swap adapts its native events to this seam's vocabulary — it never
 renames it; nothing here ever speaks the BFF's client frame names. The
 ``source_documents`` projection lives across the port boundary

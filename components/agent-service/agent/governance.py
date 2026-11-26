@@ -22,6 +22,7 @@ The failures are the core's policy, and they are honest:
 """
 
 import logging
+from dataclasses import replace
 
 import tracing
 
@@ -101,7 +102,11 @@ async def governed_run(
             verdict = await verifier.finalize(text)
             inputs.emitter.emit(EventKind.VERDICT, verdict.payload())
         inputs.emitter.emit(EventKind.RUN_FINISHED, {"outcome": OUTCOME_ANSWERED})
-        return result
+        # The run's record carries the DELIVERED text — the runtime returned
+        # its draft, and the delivery is the core's decision (the
+        # insufficiency rule may replace it). A consumer that reads the
+        # record must read what the user received.
+        return replace(result, final_text=text)
 
 
 def _fail(inputs: RunInputs, outcome: str, message: str) -> RunResult:

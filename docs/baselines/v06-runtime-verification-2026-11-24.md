@@ -13,7 +13,9 @@ re-run's record.
 - **Venue:** unchanged from the 2026-11-21 record — GPU node
   `ai.assembly.govstack.global` (`:444/llm`), reached from the forge k3s dev
   cluster host; only the tool-calling launch flags changed
-- **Producer:** `agent.v06_harness` + `agent.probe`, on the shipped pins
+- **Producer:** the producer STRINGS `agent.v06_harness` + `agent.probe`
+  (the evidence's identity, kept verbatim — the modules themselves moved to
+  `measurement/`), on the shipped pins
   (the re-run emits the renamed producer string, as the 2026-11-21 record's
   rename note predicted)
 - **Machine record:** `_bmad-output/implementation-artifacts/v06-rerun-2026-11-24/`

@@ -405,6 +405,16 @@
             - "{{ deploy_dir }}/secrets/ssl"
 
     - name: Check if SSL certificate files exist
+      # ROOT (become_user): secrets/ssl is root-owned and 0750 (the shape
+      # "Create deploy directories" above and the runtime gate's rule 4
+      # both converge on) — the play runs as ansible_user, which cannot
+      # traverse it, so the stat died EACCES and, under failed_when:
+      # false, registered a result WITHOUT a "stat" key: the very next
+      # task's `ssl_files.results[0].stat.exists` then raised
+      # "object of type 'dict' has no attribute 'stat'" — a second-run
+      # failure on every host (the first run finds the dir still 0755).
+      become: true
+      become_user: root
       ansible.builtin.stat:
         path: "{{ deploy_dir }}/secrets/ssl/{{ item }}"
       register: ssl_files
@@ -432,6 +442,12 @@
       changed_when: true
 
     - name: Stat SSL certificate files before normalization
+      # ROOT (become_user): same reason as the stat above — the
+      # secrets/ssl directory is root-owned 0750 and the play runs as
+      # ansible_user, so the unprivileged stat could not traverse it
+      # (its results feed `item.stat.exists` below).
+      become: true
+      become_user: root
       ansible.builtin.stat:
         path: "{{ deploy_dir }}/secrets/ssl/{{ item }}"
       register: ssl_files_pre

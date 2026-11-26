@@ -4,7 +4,7 @@
 
 The orchestrator's default — the two-tier override
 (``AGENT_RUN_SYSTEM_PROMPT``) still wins over it, unchanged. The probe keeps
-its own prompt (:data:`agent.probe.PROBE_SYSTEM_PROMPT`): only the
+its own prompt (:data:`measurement.probe.PROBE_SYSTEM_PROMPT`): only the
 ORCHESTRATOR's default moved here, so the smoke harness's grading flow is
 untouched and the production mandate lives in a production module.
 

@@ -33,8 +33,8 @@ from conftest import (
     run_budget,
 )
 
-import agent.probe
 import agent.toolset
+import measurement.probe
 from agent.budget import RunBudgetMonitor
 from agent.events import AgentEvent
 from agent.orchestrator import (
@@ -43,13 +43,13 @@ from agent.orchestrator import (
     RequestOrchestrator,
     build_preparer_factory,
 )
-from agent.probe import PROBE_SYSTEM_PROMPT
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.toolset import document_toolset
 from agent.verification import INSUFFICIENCY_RESPONSE
 from capabilities.contract import CallerContext, OperationBudget, PreparedQuery, QueryPreparationStatus
 from capabilities.model import ModelTurn, ToolCallRequest
 from lane import AdmissionLane
+from measurement.probe import PROBE_SYSTEM_PROMPT
 from preparation.config import PreparationConfig
 from preparation.prepare import PreparationResult, QueryPreparer
 from preparation.registry import LanguageRegistry
@@ -91,7 +91,7 @@ def _judge_turn():
 
 
 def test_the_probe_reimports_the_moved_builder():
-    assert agent.probe.document_toolset is agent.toolset.document_toolset
+    assert measurement.probe.document_toolset is agent.toolset.document_toolset
     # The probe module keeps its own prompt; the governed default is the
     # production one (the orchestrator's default, not the harness's).
     assert PROBE_SYSTEM_PROMPT != PRODUCTION_SYSTEM_PROMPT

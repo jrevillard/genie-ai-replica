@@ -48,7 +48,7 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 | Evidence | Artifact | State |
 |---|---|---|
 | The runtime verification record (12 matrix completions, 2 cancellation demonstrations, 1 control call, 1 probe run — serial, read-only) | `docs/baselines/v06-runtime-verification-2026-11-21.md` | Recorded (story 2.2) |
-| The re-runnable producer | `components/agent-service/agent/v06_harness.py` (`python -m agent.v06_harness`) | Green (`test:agent-service`) |
+| The re-runnable producer | `components/agent-service/measurement/v06_harness.py` (`python -m measurement.v06_harness`) | Green (`test:agent-service`) |
 
 ## Check 4 — Rollback demo (V08)
 

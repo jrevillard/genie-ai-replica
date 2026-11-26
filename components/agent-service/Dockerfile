@@ -37,6 +37,7 @@ COPY capabilities/ ./capabilities/
 COPY preparation/ ./preparation/
 COPY noagent/ ./noagent/
 COPY agent/ ./agent/
+COPY measurement/ ./measurement/
 
 USER agentsvc
 EXPOSE 8010

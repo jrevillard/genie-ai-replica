@@ -41,7 +41,9 @@ from agent.loop import (
     ModelTurn,
     ToolCallRequest,
 )
-from agent.probe import (
+from capabilities.adapters.vllm import VllmModelClient, VllmTransientError
+from capabilities.contract import CallerContext, QueryPreparationStatus
+from measurement.probe import (
     PROBE_OPERATION_BUDGET,
     QUESTION_ID,
     RUNTIME_ID,
@@ -51,8 +53,6 @@ from agent.probe import (
     document_toolset,
     run_probe,
 )
-from capabilities.adapters.vllm import VllmModelClient, VllmTransientError
-from capabilities.contract import CallerContext, QueryPreparationStatus
 from noagent.config import NoAgentConfig
 from preparation.translation import MAX_SANE_TOKENS
 

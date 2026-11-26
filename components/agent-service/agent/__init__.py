@@ -30,15 +30,6 @@ from .loop import (
     AgentLoop,
     RunResult,
 )
-from .probe import (
-    PROBE_QUESTION,
-    QUESTION_ID,
-    RUNTIME_ID,
-    TOOLSET,
-    ProbeConfig,
-    ProbeEvidence,
-    run_probe,
-)
 from .prompt import PRODUCTION_SYSTEM_PROMPT
 from .registry import ToolDefinition, ToolExecutor, ToolRegistry, UnregisteredToolError
 from .toolset import document_toolset
@@ -49,11 +40,7 @@ __all__ = [
     "OUTCOME_BUDGET_EXHAUSTED",
     "OUTCOME_CANCELLED",
     "OUTCOME_ERROR",
-    "PROBE_QUESTION",
     "PRODUCTION_SYSTEM_PROMPT",
-    "QUESTION_ID",
-    "RUNTIME_ID",
-    "TOOLSET",
     "AgentEvent",
     "AgentLoop",
     "BudgetExhausted",
@@ -63,8 +50,6 @@ __all__ = [
     "EventSink",
     "LoopModelClient",
     "ModelTurn",
-    "ProbeConfig",
-    "ProbeEvidence",
     "RunBudget",
     "RunBudgetMonitor",
     "RunResult",
@@ -75,5 +60,4 @@ __all__ = [
     "UnregisteredToolError",
     "document_toolset",
     "run_cancellable",
-    "run_probe",
 ]

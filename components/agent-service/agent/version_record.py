@@ -119,7 +119,7 @@ def build_execution_version_record(
     names :data:`PROMPT_VERSION`, any override names ``override`` — both are
     identified by the hash of the EFFECTIVE text). ``model_id`` /
     ``model_source`` / ``model_note`` carry the resolved model identity (see
-    ``agent.probe.ProbeModelClient.model_identity`` — override, discovery,
+    ``capabilities.adapters.vllm.VllmModelClient.model_identity`` — override, discovery,
     or the fail-soft unresolved entry the I/O matrix requires).
     """
     effective_prompt = config.system_prompt

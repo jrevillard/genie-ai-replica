@@ -27,7 +27,7 @@ the decision selects.
 The probe itself runs IN-PROCESS; the HTTP surface for governed runs is
 the run surface (``app.py``). Live entry::
 
-    python -m agent.probe
+    python -m measurement.probe
 
 which assembles the real port from the environment (the knobs the adapters
 already read, plus ``AGENT_DOCREPO_URL``, ``AGENT_OKF_URL``,
@@ -43,6 +43,19 @@ import os
 import uuid
 from dataclasses import asdict, dataclass
 
+from agent.budget import RunBudget, RunBudgetMonitor
+from agent.cancellation import CancellationToken
+from agent.events import EventEmitter
+from agent.loop import (
+    OUTCOME_ANSWERED,
+    OUTCOME_CANCELLED,
+    AgentLoop,
+)
+
+# The registered toolset is a production surface, not a probe artifact — it
+# lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
+# name stays importable from here for the probe harness and its suites.
+from agent.toolset import document_toolset
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
 from capabilities.adapters.env_config import ArangoConfig
@@ -56,20 +69,6 @@ from capabilities.model import (
 )
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
-
-from .budget import RunBudget, RunBudgetMonitor
-from .cancellation import CancellationToken
-from .events import EventEmitter
-from .loop import (
-    OUTCOME_ANSWERED,
-    OUTCOME_CANCELLED,
-    AgentLoop,
-)
-
-# The registered toolset is a production surface, not a probe artifact — it
-# lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
-# name stays importable from here for the probe harness and its suites.
-from .toolset import document_toolset
 
 logger = logging.getLogger(__name__)
 

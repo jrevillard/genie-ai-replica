@@ -43,12 +43,12 @@ from agent.orchestrator import (
     RequestOrchestrator,
     build_preparer_factory,
 )
-from agent.probe import ProbeConfig, build_stateless_adapters
 from agent.version_record import IMPLEMENTATION_VERSION
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import CallerContext
 from lane import AdmissionLane
+from measurement.probe import ProbeConfig, build_stateless_adapters
 from noagent.config import NoAgentConfig
 from tracing import setup_tracing
 

@@ -19,7 +19,7 @@ import httpx
 import pytest
 from conftest import ENDPOINT, PreparationFakeTransport, hang_until_cancelled, verifier_config
 
-from agent.v06_harness import (
+from measurement.v06_harness import (
     SCHEMA_STRICTNESS,
     SCHEMAS,
     TOOL_CHOICE_MODES,
@@ -1117,7 +1117,7 @@ def test_terminal_events_on_a_cancelled_run_fail_the_verdict():
 
 
 def test_the_live_entry_exits_zero_only_on_the_full_acceptance(monkeypatch, capsys):
-    import agent.v06_harness as verification_module
+    import measurement.v06_harness as verification_module
 
     async def _run_ok(*a, **k):
         return _passing_evidence()
@@ -1130,7 +1130,7 @@ def test_the_live_entry_exits_zero_only_on_the_full_acceptance(monkeypatch, caps
 
 
 def test_the_live_entry_exits_one_when_the_verdict_fails(monkeypatch, capsys):
-    import agent.v06_harness as verification_module
+    import measurement.v06_harness as verification_module
 
     evidence = replace(
         _passing_evidence(), streaming_cancel=StreamingCancelObservation(3, False, False, True, 1.0, None)
@@ -1147,7 +1147,7 @@ def test_the_live_entry_exits_one_when_the_verdict_fails(monkeypatch, capsys):
 
 
 def test_the_live_entry_prints_a_json_error_record_never_a_traceback(monkeypatch, capsys):
-    import agent.v06_harness as verification_module
+    import measurement.v06_harness as verification_module
 
     def _fail(*a, **k):
         raise VerificationTransientError("the model discovery failed: OSError: down")

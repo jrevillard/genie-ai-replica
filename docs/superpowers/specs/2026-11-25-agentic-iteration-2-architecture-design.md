@@ -589,7 +589,7 @@ E01 and E02 continue unchanged. One added comparison: the simple run with `web_s
 |---|---|---|
 | P1 | A planted illegal import, top-level and function-local | does the architecture suite turn red |
 | P2 | `pip download deepseek-harness-sdk==0.2.2rc2 --no-deps`; read `METADATA` | the runtime wheel's license (ADR-002 revisit trigger) |
-| P3 | `python -m agent.v06_harness` per runtime against the venue's vLLM | the tool-calling matrix with several tools registered |
+| P3 | `python -m measurement.v06_harness` per runtime against the venue's vLLM | the tool-calling matrix with several tools registered |
 | P4 | On the venue's Keycloak 26.8.2: exchange a user token for an audience-bound one | standard token exchange V2 is available |
 | P5 | An MCP tool called twice with the same `_meta` key | the mock server honors idempotency |
 

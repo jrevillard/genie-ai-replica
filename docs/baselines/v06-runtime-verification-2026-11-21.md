@@ -9,8 +9,8 @@
 The V06 evidence record: the runtime verification the D03 decision (ADR
 `docs/adr/agentic-002-first-agent-runtime-d03.md`) cites, run against the
 DEPLOYED combination. The harness is
-`components/agent-service/agent/v06_harness.py` (`python -m
-agent.v06_harness`) — a re-runnable producer, so the matrix re-runs in one
+`components/agent-service/measurement/v06_harness.py` (`python -m
+measurement.v06_harness`) — a re-runnable producer, so the matrix re-runs in one
 command after any remediation below lands.
 
 - **Captured:** 2026-11-21 (final live run 15:30 UTC / 16:30 CET, after the
@@ -93,7 +93,7 @@ story's boundaries — no venue mutation), tracked as issue
 [#2052](https://opensource.unicc.org/un/itu/genie-ai/-/issues/2052)
 (`status::backlog`): relaunch the vLLM server with
 `--enable-auto-tool-choice --tool-call-parser granite4`, then re-run
-`python -m agent.v06_harness` at the venue. The harness is the acceptance
+`python -m measurement.v06_harness` at the venue. The harness is the acceptance
 check for that pin (its exit code reads 0 only on the full acceptance
 semantics: every cell valid, cancellation demos proven).
 

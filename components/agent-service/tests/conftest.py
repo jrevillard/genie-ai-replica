@@ -23,13 +23,13 @@ from agent.cancellation import CancellationToken
 from agent.events import EventEmitter
 from agent.loop import AgentLoop
 from agent.orchestrator import OrchestratorConfig
-from agent.probe import PROBE_OPERATION_BUDGET
 from agent.toolset import document_toolset
 from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
 from capabilities.adapters.vllm import VllmModelConfig
 from capabilities.contract import CallerContext, OperationBudget, ReadSourceResult, SearchKnowledgeResult
 from capabilities.model import ModelTurn, ToolCallRequest
+from measurement.probe import PROBE_OPERATION_BUDGET
 from noagent.config import NoAgentConfig
 
 

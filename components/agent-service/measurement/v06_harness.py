@@ -29,7 +29,7 @@ What it produces, against the DEPLOYED endpoint:
   not this harness's territory.
 * one JSON evidence record, printed by the live entry::
 
-      python -m agent.v06_harness
+      python -m measurement.v06_harness
 
 Every failing cell, latency observation or transport failure is recorded
 honestly in the record — a failure is evidence, never a silent pass.
@@ -53,19 +53,18 @@ from typing import Any, Protocol
 
 import httpx
 
+from agent.budget import RunBudgetMonitor
+from agent.cancellation import CancellationToken
+from agent.events import EventEmitter, EventKind
+from agent.loop import AgentLoop
+from agent.registry import ToolDefinition, ToolRegistry
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.model import VllmModelConfig
+from measurement.probe import PROBE_RUN_BUDGET
 from noagent.config import NoAgentConfig
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
 from preparation.translation import coerce_sane_int
-
-from .budget import RunBudgetMonitor
-from .cancellation import CancellationToken
-from .events import EventEmitter, EventKind
-from .loop import AgentLoop
-from .probe import PROBE_RUN_BUDGET
-from .registry import ToolDefinition, ToolRegistry
 
 logger = logging.getLogger(__name__)
 

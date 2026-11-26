@@ -38,7 +38,6 @@ from agent.loop import (
     ModelTurn,
     ToolCallRequest,
 )
-from agent.probe import PROBE_OPERATION_BUDGET, document_toolset
 from agent.verification import VerificationPipeline
 from capabilities.contract import (
     AuthorizationError,
@@ -46,6 +45,7 @@ from capabilities.contract import (
     OperationName,
     OutcomeCode,
 )
+from measurement.probe import PROBE_OPERATION_BUDGET, document_toolset
 
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 

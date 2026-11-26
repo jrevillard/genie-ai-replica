@@ -79,7 +79,7 @@ SERVICE_LAYOUT = Layout(
     ),
     leaf_adapters="capabilities.adapters",
     capability="capabilities.search_knowledge",
-    measurement=("agent.v06_harness",),
+    measurement=("measurement",),
 )
 
 # The telemetry facade: the one module of the host the core may import, and
@@ -125,17 +125,11 @@ IO_LIBRARIES_NOT_YET_IMPORTED = (
 TELEMETRY_SDK = "opentelemetry"
 
 # R1 — (core module, library): the files that still import an I/O library.
-KNOWN_IO_VIOLATIONS = {
-    ("agent.probe", "arango"),  # agent/probe.py: the adapter assembly still lives in the seam package
-}
+KNOWN_IO_VIOLATIONS: set[tuple[str, str]] = set()
 # R2 — (core module, module of another layer): the files that still reach another layer.
-KNOWN_INTERNAL_VIOLATIONS = {
-    ("agent.probe", SERVICE_LAYOUT.leaf_adapters),  # agent/probe.py: the adapter assembly lives in the seam package
-    ("agent.probe", SERVICE_LAYOUT.capability),  # agent/probe.py: the adapter assembly lives in the seam package
-}
+KNOWN_INTERNAL_VIOLATIONS: set[tuple[str, str]] = set()
 # R3 — the modules that import the leaf adapters.
 KNOWN_ADAPTER_IMPORTERS = {
-    "agent.probe",  # agent/probe.py: the adapter assembly lives in the seam package
     "app",  # app.py: the composition root builds the transport adapter
     "capabilities.search_knowledge",  # the capability builds its own adapters
 }

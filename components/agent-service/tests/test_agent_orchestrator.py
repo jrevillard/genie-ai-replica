@@ -35,12 +35,12 @@ from agent.orchestrator import (
     OrchestratorConfig,
     RequestOrchestrator,
 )
-from agent.probe import PROBE_SYSTEM_PROMPT
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
 from capabilities.contract import CallerContext, OperationBudget
 from capabilities.model import ModelTurn
 from lane import AdmissionLane
+from measurement.probe import PROBE_SYSTEM_PROMPT
 
 CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 

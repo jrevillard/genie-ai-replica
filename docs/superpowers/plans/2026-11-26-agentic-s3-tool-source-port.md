@@ -45,6 +45,7 @@ Beyond this slice: the MCP source and the `mcp` SDK (S6), the pydantic-ai spike 
 | `components/agent-service/agent/orchestrator.py` | the per-request assembly: the sources come from the host | 1, 3 |
 | `components/agent-service/agent/__init__.py` | the package's exports | 1 |
 | `docs/adr/agentic-005-tool-sources-and-mcp-consumption.md` | its Context sentence and its References line name the module this plan deletes | 1 |
+| `docs/adr/agentic-009-the-core-knows-nothing-of-the-outside.md` | its "the measurement surface owns its own tool contract" paragraph names the product's declaration home — `agent/toolset.py` — which this plan deletes; it becomes `agent/sources.py` | 1 |
 | `components/agent-service/measurement/probe.py` | the probe's registry, built over the source | 1 |
 | `components/agent-service/tool_catalog.py` | **the host's** catalog: the model, the loader, the startup validation, the per-request filter | 2, 3 |
 | `configs/agent/tool-catalog.json` | the deployment file — the two document entries | 2 |
@@ -413,9 +414,9 @@ class ToolSource(Protocol):
 class DocumentToolSource:
     """The document source: the two document tools, unchanged.
 
-    The two tools are the ones ``document_toolset`` built — the same
-    definitions, the same executors, the same preparation leg and the
-    same insufficiency recorder. What changes is WHERE the caller's
+    The two document tools, unchanged — the same definitions, the same
+    executors, the same preparation leg and the same insufficiency
+    recorder. What changes is WHERE the caller's
     identity enters: it arrives with ``tools()``, so the executor
     captures the context and the bearer of the CALL rather than the ones
     the source happened to be built with.
@@ -592,9 +593,12 @@ def _make_read_executor(port: DocumentCapabilityPort, context: CallerContext, bu
 
 - [ ] **Step 4: The registry's builder**
 
-In `components/agent-service/agent/registry.py`, add the builder next to the registry (the imports gain `Iterable`):
+In `components/agent-service/agent/registry.py`, add the builder next to the registry (the imports gain `Iterable` — from `collections.abc`, NOT `typing`: the repo's ruff selects `UP`, and `UP035` refuses `from typing import Iterable`):
 
 ```python
+from collections.abc import Iterable
+
+
 def build_registry(pairs: Iterable[tuple[ToolDefinition, ToolExecutor]]) -> ToolRegistry:
     """The registry of one run: the pairs the declared sources offered.
 
@@ -649,13 +653,31 @@ In `components/agent-service/agent/__init__.py`, replace `from .toolset import d
 from .sources import DocumentToolSource, ToolSource, ToolSourceContext
 ```
 
-and in `__all__`, replace `"document_toolset"` with `"DocumentToolSource"`, `"ToolSource"`, `"ToolSourceContext"` (keeping the list's alphabetical order).
+- the RENAMED suite's own prose is rewritten with the move — its module docstring ("the registered toolset lives in ``agent.toolset`` and the probe RE-IMPORTS it") and the section banner ("The toolset home: the registered toolset left the probe module") both name the module this plan deletes, and the probe no longer re-exports a builder at all. They become:
+
+  ```python
+  """The production document source and the preparation leg in the governed run.
+
+  Mutation-sensitive pins: the registered toolset is built over
+  ``agent.sources``' source and the suites reach the shared helper in
+  ``conftest`` (the probe does NOT re-export a builder);
+  ```
+
+  ```python
+  # ---------------------------------------------------------------------
+  # The document source: the registered toolset left the probe module
+  # ---------------------------------------------------------------------
+  ```
+
+and in `__all__`, replace `"document_toolset"` with `"DocumentToolSource"`, `"ToolSource"`, `"ToolSourceContext"`. The list is GROUPED (constants → classes → functions), so the three class names take their class places: `DocumentToolSource` after `CancellationToken`; `ToolSource` and `ToolSourceContext` after `ToolRegistry`, before `UnregisteredToolError`.
 
 The module's own docstring names the module it documents: "the registered toolset (:mod:`.toolset`)" becomes "the tool sources (:mod:`.sources`)" — a Sphinx reference to a deleted module dangles, and the package docstring is the first thing a reader sees.
 
 Delete `components/agent-service/agent/toolset.py` — its content moved, unchanged, into `agent/sources.py`.
 
-**The record that names the deleted module.** `docs/adr/agentic-005-tool-sources-and-mcp-consumption.md` points at it twice — its Context ("the agentic path registers two document tools in `document_toolset` (`components/agent-service/agent/toolset.py`)") and its References line. Both follow the move:
+**The TWO records that name the deleted module.** `docs/adr/agentic-009-the-core-knows-nothing-of-the-outside.md` names it once — in the paragraph "The measurement surface owns its own tool contract", where the product's declarations live at `agent/toolset.py` (the matrix's live with the matrix, `measurement/v06_harness.py`). That path becomes `agent/sources.py`.
+
+`docs/adr/agentic-005-tool-sources-and-mcp-consumption.md` points at it twice — its Context ("the agentic path registers two document tools in `document_toolset` (`components/agent-service/agent/toolset.py`)") and its References line. Both follow the move:
 
 ```markdown
 The agentic path registers two document tools behind the `ToolSource` port
@@ -672,6 +694,15 @@ and in the References, `components/agent-service/agent/toolset.py` becomes `comp
 | `tests/test_agent_loop.py` | `from measurement.probe import PROBE_OPERATION_BUDGET, document_toolset` | `from measurement.probe import PROBE_OPERATION_BUDGET` + `from conftest import document_registry` |
 | `tests/test_agent_probe.py` | `document_toolset` (in the `measurement.probe` import block) | `from conftest import document_registry` |
 | `tests/test_agent_sources.py` (the renamed file) | `from agent.toolset import document_toolset` | `from conftest import document_registry` |
+
+The probe's COMMENT is rewritten in the same commit — it names `:mod:`agent.toolset`` and "the builder", and both are gone with the move (the probe imports the SOURCE and the registry builder; the suites reach the shared helper in `tests/conftest.py`):
+
+```python
+# The document source is a production surface, not a probe artifact — it
+# lives in :mod:`agent.sources`; the probe imports the source and the
+# registry builder, and the suites reach the shared helper in
+# `tests/conftest.py`.
+```
 
 The probe no longer re-exports a builder: `measurement/probe.py` imports `DocumentToolSource` and `build_registry` now, so `measurement.probe.document_toolset` is gone — the suites that reached for it through the probe reach for the shared helper instead.
 
@@ -747,7 +778,7 @@ git commit -m "refactor(agent-service): the document tools become a source behin
 - Produces:
   - `tool_catalog.CatalogError(ValueError)` — the catalog is unusable; the run surface maps it to the honest 503.
   - `tool_catalog.CatalogEntry` — one validated entry (the file's shape).
-  - `tool_catalog.ToolCatalog` — the validated catalog: `entries`, `entry(name)`, `allows(name)`.
+  - `tool_catalog.ToolCatalog` — the validated catalog: `entries`, `entry(name)`. (There is no `allows(name)`: the factory reads the ENTRY and its `allow` flag, because it also needs that entry's `source` — a second accessor for one field would be a second way to ask the same question.)
   - `tool_catalog.DeclaredSource` — the HOST's record of one source a deployment runs: `source_id`, `served_tool_names`, `build` (the per-request builder). The deployment's facts about a source live here, not on the port.
   - `tool_catalog.budget_overrides(catalog) -> dict[str, OperationBudget]` — the per-tool budgets the catalog declares, for the host's source builders.
   - `tool_catalog.load_catalog(path, *, served_names, ceiling) -> ToolCatalog` — the loader and the startup validation.
@@ -1063,16 +1094,6 @@ class ToolCatalog:
         """The entry the catalog carries for ``name``, or ``None``."""
         return self._by_name.get(name)
 
-    def allows(self, name: str) -> bool:
-        """True when the catalog carries the name AND the entry is on.
-
-        A tool the catalog does not name, or whose entry is switched off
-        (``allow: false``), is neither listed to the model nor
-        dispatchable.
-        """
-        entry = self._by_name.get(name)
-        return entry is not None and entry.allow
-
 
 def load_catalog(
     path: str | Path,
@@ -1356,9 +1377,7 @@ def _registry(catalog, port):
 
 
 def test_a_tool_the_catalog_does_not_name_is_neither_listed_nor_dispatchable(tmp_path):
-    catalog = load_catalog(
-        _write(tmp_path, [_entry(name="read_source")]), served_names=SERVED, ceiling=CEILING
-    )
+    catalog = load_catalog(_write(tmp_path, [_entry(name="read_source")]), served_names=SERVED, ceiling=CEILING)
     port = AgentFakePort(search_result=canned_search_result())
     registry = _registry(catalog, port)
 
@@ -1386,7 +1405,10 @@ def test_a_tool_the_catalog_names_on_another_source_is_not_offered(tmp_path):
     # the document source's pair is not the catalogued one and must not be
     # offered (the source that serves it is not deployed yet).
     catalog = load_catalog(
-        _write(tmp_path, [_entry(name="search_knowledge", source="document"), _entry(name="read_source", source="web")]),
+        _write(
+            tmp_path,
+            [_entry(name="search_knowledge", source="document"), _entry(name="read_source", source="web")],
+        ),
         served_names={"document": SERVED["document"], "web": frozenset()},
         ceiling=CEILING,
     )
@@ -1474,7 +1496,7 @@ def build_tool_source_factory(
 
 In `components/agent-service/agent/orchestrator.py`:
 
-- the constructor's `port_factory` parameter becomes `tool_source_factory` (same position):
+- the constructor's `port_factory` parameter becomes `tool_source_factory` (same position), and the assignment `self._port_factory = port_factory` is DELETED — the old line names a parameter that no longer exists, so a literal application of the block below would raise `NameError` at construction:
 
 ```python
     def __init__(
@@ -1522,10 +1544,11 @@ In `components/agent-service/app.py`, `_build_orchestrator` gains the catalog an
 ```python
     # The tool catalog: the deployment file that decides what a run may
     # call. Read at assembly, fail-closed: a missing file, an unreadable
-    # file, a duplicate exposed name or an entry this deployment cannot
-    # honour is a ValueError, and the run surface answers the honest 503
-    # naming it. The knob is a PATH (the deployment's file lives
-    # wherever the deployment mounts it).
+    # file or a duplicate exposed name is a ValueError, and the run
+    # surface answers the honest 503 naming it. An ENTRY this deployment
+    # cannot serve costs the ENTRY, not the service — the tool is absent,
+    # and the catalog's other tools keep working. The knob is a PATH (the
+    # deployment's file lives wherever the deployment mounts it).
     catalog_path = str(env.get("AGENT_TOOL_CATALOG_PATH", "")).strip()
     if not catalog_path:
         raise ValueError("AGENT_TOOL_CATALOG_PATH is not set: the run surface declares no tool without a catalog")
@@ -1591,7 +1614,12 @@ def document_source_factory(port_factory):
     """The per-request factory that offers the document source.
 
     The core asks the declared sources for their tools per request; this
-    is the suite's declaration — the shape the host's factory has.
+    is the suite's declaration. It is the host's factory's SHAPE, not its
+    wiring: the host's `DeclaredSource.build` forwards the catalog's
+    per-tool budgets, and this helper forwards none — a suite-built
+    orchestrator therefore runs under the ceiling. The catalog's per-tool
+    budget is exercised by the catalog's own pins, which build their own
+    `DeclaredSource`.
     """
 
     def factory(bundle):
@@ -1613,11 +1641,18 @@ Every suite that uses it imports it from `conftest` — and the name goes in the
 
 Then every suite that built the orchestrator with `port_factory=` builds it with `tool_source_factory=` instead:
 
-- `tests/test_event_stream_gate.py`: the construction changes; the comparison and the fixture do not. **The gate builds its registry THROUGH THE CATALOG** — over the shipped file — so the frozen stream witnesses the DEPLOYED path (the catalog's filter included), not a path the catalog bypasses:
+- `tests/test_event_stream_gate.py`: the construction AND its imports change; the comparison and the fixture do not. The new construction calls `load_catalog`, `DeclaredSource` and `build_tool_source_factory` (module `tool_catalog`) and `DocumentToolSource` (module `agent.sources`) — none of which the file imports today, so a faithful "the CONSTRUCTION line only" edit raises `NameError` before the comparison runs. The import block therefore gains:
+
+  ```python
+  from agent.sources import DocumentToolSource
+  from tool_catalog import DeclaredSource, build_tool_source_factory, load_catalog
+  ```
+
+  (`agent.sources` joins the first-party group, after `agent.orchestrator`; `tool_catalog` is a top-level module of the service, so it stands alone after the `lane` import.) **The gate builds its registry THROUGH THE CATALOG** — over the shipped file — so the frozen stream witnesses the DEPLOYED path (the catalog's filter included), not a path the catalog bypasses:
 
   ```python
       catalog = load_catalog(
-          Path(__file__).resolve().parents[2] / ".." / ".." / ".." / "configs" / "agent" / "tool-catalog.json",
+          Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
           served_names={"document": frozenset({"search_knowledge", "read_source"})},
           ceiling=orchestrator_config().operation_budget,
       )
@@ -1646,7 +1681,7 @@ Then every suite that built the orchestrator with `port_factory=` builds it with
       )
   ```
 
-  (the shipped file's path is `components/agent-service/tests/` → the repository root is `parents[3]`; the gate's `FIXTURE` constant already resolves its own path the same way.) Without the catalog in the gate's path, the frozen stream would prove the MOVE and not the DEPLOYED wiring — and a catalog that dropped a tool would never show up in it.
+  (the shipped file's path is `components/agent-service/tests/` → the repository root is `parents[3]`: `parents[0]` is `tests`, `parents[1]` is `agent-service`, `parents[2]` is `components`, `parents[3]` is the repository root. The other three occurrences of this path in this plan use `parents[3]` too. The gate's own `FIXTURE` constant resolves a DIFFERENT path — `Path(__file__).parent / "fixtures" / ...` — so it is no guide here.) Without the catalog in the gate's path, the frozen stream would prove the MOVE and not the DEPLOYED wiring — and a catalog that dropped a tool would never show up in it.
 - `tests/test_app_runs.py` (two constructions), `tests/test_version_record.py` (two), `tests/test_agent_orchestrator.py` (the helper's construction and the four direct ones), `tests/test_agent_sources.py` (one).
 
 **The assembly-level test needs the knob.** `tests/test_app_runs.py::test_the_app_assembly_wires_preparation_into_the_run_surface` builds the REAL assembly (`app._build_orchestrator`) and asserts a 200 — so after this task the assembly reads `AGENT_TOOL_CATALOG_PATH`, and without it the answer is the honest 503 and the test reds on a change the plan never mentioned. The test therefore declares the catalog the way a deployment does:
@@ -1907,7 +1942,7 @@ git commit -m "feat(deploy): the tool catalog — the knob, the mount and the no
 | G1 | the agent-service suite | `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q` | green |
 | G2 | the recorded event stream | the same run (the gate test) | the stream IDENTICAL to `tests/fixtures/event_stream/orchestrated_run.json` — and the gate builds its registry THROUGH the shipped catalog, so the frozen stream witnesses the DEPLOYED path (the filter included), not a path the catalog bypasses |
 | G3 | the frozen capability contract | the same run (`tests/test_equivalence_v02.py`) | green — and the file UNTOUCHED: `git diff --exit-code -- components/agent-service/tests/test_equivalence_v02.py` is silent. This gate witnesses the CAPABILITY and the PREPARATION; the TOOLS' own witness is the renamed suite (G3b) |
-| G3b | the tools' own witness | the same run (`tests/test_agent_sources.py`), plus the diff of the renamed file | green — and the diff against `tests/test_agent_toolset.py` touches only the import lines, the helper and the added definitions pin: `git diff -M -- components/agent-service/tests/test_agent_toolset.py components/agent-service/tests/test_agent_sources.py` shows NO change to a behaviour pin. A behaviour pin that moved is a behaviour that moved |
+| G3b | the tools' own witness | the same run (`tests/test_agent_sources.py`), plus the diff of the renamed file | green — and the diff against `tests/test_agent_toolset.py` touches only the import lines, the helper, the docstring and the added pins: `git diff -M -- components/agent-service/tests/test_agent_toolset.py components/agent-service/tests/test_agent_sources.py` shows NO change to a behaviour pin. A behaviour pin that moved is a behaviour that moved |
 | G4 | the frozen fixture | `git diff --exit-code -- components/agent-service/tests/fixtures/event_stream/orchestrated_run.json` | silent — the wire did not move |
 | G5 | lint | `uvx ruff@0.16.3 check --no-cache …` and `uvx ruff@0.16.3 format --no-cache --check …` | silent |
 | G6 | the deployment gates | `cd tests/config-validator && npm test` | green |

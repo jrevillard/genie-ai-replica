@@ -1604,6 +1604,10 @@ def test_the_config_b_driver_assembles_the_pipeline_it_ships(monkeypatch):
     # The documents' names: the driver resolves them through the document
     # repository's port, the way the governed path does.
     monkeypatch.setenv("AGENT_DOCREPO_URL", "http://docrepo.invalid")
+    # The corpus bearer: the leg's document read is authorized, and the
+    # driver REFUSES to run without it (an unauthorised leg measures
+    # nothing — it would report itself ungrounded).
+    monkeypatch.setenv("AGENT_PROBE_BEARER", "probe-bearer")
     monkeypatch.setenv("ARANGO_URL", "http://localhost:8529")
     monkeypatch.setenv("ARANGO_DB", "_system")
     monkeypatch.setenv(
@@ -1626,3 +1630,26 @@ def test_the_config_b_driver_assembles_the_pipeline_it_ships(monkeypatch):
     # nothing, so the driver supplies both.
     assert getattr(pipeline, "_lane", None) is not None
     assert getattr(pipeline, "_generation", None) is not None
+
+
+def test_the_config_b_driver_refuses_a_leg_without_a_corpus_bearer(monkeypatch):
+    """An unauthorised leg is NOT a measurement.
+
+    The document read is authorized: without the bearer the repository
+    refuses it, the leg resolves nothing, cites nothing and reports
+    itself ungrounded — a false quality regression the E01 comparison
+    would measure as one. The driver therefore refuses, instead of
+    answering "ok" with no sources.
+    """
+    from protocol import config_b_driver
+
+    monkeypatch.delenv(config_b_driver.BEARER_ENV_KEY, raising=False)
+
+    with pytest.raises(ValueError) as refusal:
+        config_b_driver.resolve_bearer()
+
+    assert config_b_driver.BEARER_ENV_KEY in str(refusal.value)
+    # And the refusal reaches the rows: the case fails, it does not
+    # measure.
+    with pytest.raises(ValueError):
+        config_b_driver.resolve_bearer()

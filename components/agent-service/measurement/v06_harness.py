@@ -114,6 +114,15 @@ SCHEMA_STRICTNESS: tuple[str, ...] = ("strict", "permissive")
 
 TOOL_DESCRIPTION = "Search the authorized knowledge corpus; returns ranked passages with their provenance."
 
+# The matrix's OWN tool contract — deliberately NOT the product's.
+#
+# This harness measures how a tool-calling endpoint behaves under
+# DIFFERENT tool declarations (a strict schema, a permissive one), so its
+# schemas are the matrix's subject, not a copy of the product's: the
+# product's definitions live with the product (``agent/sources.py``'s
+# ``SEARCH_KNOWLEDGE_DEFINITION``), and this file's are its own axis.
+# Reading this as a duplicate of the product's contract would be a
+# misreading — the point of the measurement is that the two differ.
 SCHEMAS: dict[str, dict] = {
     # Strict: every field required, nothing additional — the shape a structured
     # output parser compiles an FSM for.

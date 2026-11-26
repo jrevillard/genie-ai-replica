@@ -182,6 +182,18 @@ KNOWN_ADAPTER_IMPORTERS = {
     "app",  # app.py: the composition root builds the transport adapter
 }
 
+# The MEASUREMENT layer's edges, declared rather than excluded. The probe
+# drives the deployment (it calls the host's assembly) and the v06 harness
+# drives the transport and the model client itself: a measurement surface
+# assembles its own runtime, and those edges are legal BY DECISION. Leaving
+# the layer out of the checks made them legal by OMISSION — a new
+# measurement import would have been invisible.
+KNOWN_MEASUREMENT_EDGES = {
+    ("measurement.probe", "assembly"),
+    ("measurement.probe", "capabilities.adapters"),
+    ("measurement.v06_harness", "capabilities.adapters"),
+}
+
 # R4 — the platform vocabulary the core's TEXT carries.
 #
 # R1–R3 and L1/L2 police the IMPORTS: a core module may hold a platform's
@@ -487,6 +499,27 @@ def test_only_the_listed_modules_import_the_leaf_adapters(internal: EvaluableArc
     assert importers == KNOWN_ADAPTER_IMPORTERS
 
 
+def test_the_measurement_layers_edges_are_declared(internal: EvaluableArchitecture) -> None:
+    """The measurement layer reaches the host and the adapters BY DECISION.
+
+    The probe drives the deployment (it calls the host's assembly) and the
+    v06 harness drives the transport and the model client itself: a
+    measurement surface assembles its own runtime, so those edges are
+    legal. They are now LISTED — the layer used to be excluded from the
+    adapter check, which made the edges legal by omission and left a new
+    measurement import invisible.
+    """
+
+    measurement = _in_layers(_leaf_modules(_modules(internal, SERVICE.name)), ("measurement",), SERVICE_LAYOUT)
+    edges = {
+        (module, other)
+        for module in measurement
+        for other in (*SERVICE_LAYOUT.host, SERVICE_LAYOUT.leaf_adapters)
+        if _violated(_imports_no_module(SERVICE.name, module, other), internal)
+    }
+    assert edges == KNOWN_MEASUREMENT_EDGES
+
+
 def test_the_telemetry_sdk_is_imported_by_the_tracing_module_only(with_libraries: EvaluableArchitecture) -> None:
     modules = [module for module in _modules(with_libraries, SERVICE.name) if module != TELEMETRY_FACADE]
     assert _io_violations(SERVICE.name, modules, with_libraries, (TELEMETRY_SDK,)) == set()
@@ -589,6 +622,31 @@ def test_the_core_carries_no_platform_vocabulary() -> None:
     assert _platform_vocabulary_findings() == KNOWN_PLATFORM_VOCABULARY
 
 
+def test_the_platform_vocabulary_rule_catches_the_shapes_it_catches() -> None:
+    """R4 must be ABLE to fail — the rule's own capability, proven.
+
+    The ratchet asserts an empty finding set; that assertion alone is
+    satisfied by a rule that matches nothing. This test plants one
+    instance of each vocabulary and asserts the rule reports it, so the
+    empty set means "the core carries none of these", not "the rule reads
+    nothing".
+    """
+
+    # The rule reads CODE, not prose: a docstring that names a platform is
+    # documentation, and the shape only matters where it can change a
+    # behaviour.
+    code = (
+        "ARANGO_HOST = 'x'\n"
+        "GRAPH_SOURCE = 'y'\n"
+        "path = '/api/files'\n"
+        "dir = 'uploaded_files'\n"
+        "label = value.replace('_', ' ')\n"
+        'label = value.replace("_", " ")\n'
+    )
+    found = {name for name, patterns in PLATFORM_VOCABULARY.items() if any(re.search(p, code) for p in patterns)}
+    assert found == set(PLATFORM_VOCABULARY)
+
+
 # R6 — the core states no FOREIGN system's acceptance rules.
 #
 # R4 reads the deciding modules' code for a platform's NAMES, from an
@@ -665,6 +723,32 @@ ACCEPTANCE_CLAIM = re.compile(
 )
 
 
+# The words that open a SENTENCE and are part of no subject: a
+# determiner, a pronoun, an article. They are capitalised because the
+# sentence starts with them, not because they name anything — so the
+# first word of a multi-word subject is exempt ONLY when it is one of
+# these. A first word that is a NAME ("Redis key accepts ...") is the
+# platform the claim is about, and it is the word the rule must report.
+SENTENCE_OPENERS = frozenset(
+    {
+        "A",
+        "An",
+        "Any",
+        "Each",
+        "Every",
+        "Its",
+        "No",
+        "One",
+        "Our",
+        "Some",
+        "That",
+        "The",
+        "Their",
+        "This",
+    }
+)
+
+
 def _is_a_name(word: str) -> bool:
     """Is this word a NAME rather than an ordinary word?
 
@@ -673,8 +757,14 @@ def _is_a_name(word: str) -> bool:
     (``okf-server``). An ordinary English word is none of those — which is
     what keeps "the datastore accepts" out of the findings: a datastore is
     a word, a system is a name.
+
+    A SINGLE LETTER names nothing: the subject's own token class splits
+    an abbreviation ("the I/O matrix requires" → the subject's first word
+    is the ``O``), and a one-letter fragment is not a platform.
     """
 
+    if len(word) < 2:
+        return False
     return (
         word[:1].isupper()
         or word.isupper()
@@ -688,16 +778,20 @@ def _foreign_claim_subjects(text: str) -> set[str]:
     """The foreign subjects the text claims an acceptance rule about.
 
     A word is a foreign subject when it is a NAME and is not one of the
-    core's own concepts. The FIRST word of a multi-word subject is exempt:
-    a sentence capitalises it for the sentence, not because it names a
-    system ("The guard accepts ...").
+    core's own concepts. The first word of a multi-word subject is exempt
+    ONLY when it is an ordinary determiner or pronoun: a sentence
+    capitalises those for the sentence, not because they name a system
+    ("The guard accepts ..."). A first word that IS a name is not
+    exempt — "Redis key accepts ..." and "S3 bucket names accept ..."
+    are claims about a foreign system, and exempting the first word
+    unconditionally hid exactly the phrasings a platform leads with.
     """
 
     subjects: set[str] = set()
     for match in ACCEPTANCE_CLAIM.finditer(text):
         subject = match.group(1) or match.group(2) or ""
         words = subject.split()
-        if len(words) > 1:
+        if len(words) > 1 and words[0] in SENTENCE_OPENERS:
             words = words[1:]
         for word in words:
             if word not in CORE_VOCABULARY and _is_a_name(word):
@@ -712,11 +806,19 @@ KNOWN_FOREIGN_CLAIMS: set[tuple[str, str]] = set()
 
 
 def _foreign_claim_findings() -> set[tuple[str, str]]:
-    """The (module, subject) pairs that state a foreign system's rules."""
+    """The (module, subject) pairs that state a foreign system's rules.
+
+    The PORTS are excluded, exactly as R4 excludes them: a port names the
+    vocabulary it expects from its connector, and that is the port's job
+    (ADR agentic-009 — "the counterparty's vocabulary stays in the port").
+    A rule that forbade in a port what the ADR permits there was
+    forbidding the ports from declaring their own contract.
+    """
 
     findings: set[tuple[str, str]] = set()
     modules = _leaf_modules(_modules(_graph(SERVICE, with_libraries=False), SERVICE.name))
-    for module in _in_layers(modules, DECIDING_LAYERS, SERVICE_LAYOUT):
+    deciding = [module for module in _in_layers(modules, DECIDING_LAYERS, SERVICE_LAYOUT) if module not in PORTS]
+    for module in deciding:
         path = SERVICE / Path(*module.split(".")).with_suffix(".py")
         if not path.exists():
             continue
@@ -738,6 +840,41 @@ def test_the_core_states_no_foreign_acceptance_rule() -> None:
     """
 
     assert _foreign_claim_findings() == KNOWN_FOREIGN_CLAIMS
+
+
+def test_the_foreign_claim_rule_catches_the_phrasings_it_claims_to_catch() -> None:
+    """R6 must be ABLE to fail — the rule's own capability, proven.
+
+    The ratchet asserts an empty finding set; that assertion alone is
+    satisfied by a rule that matches nothing. This test plants the
+    phrasings the ADR names and asserts the rule reports each platform,
+    so the empty set means "the core states no foreign rule", not "the
+    rule reads nothing".
+
+    The platform LEADING the phrase is the case a sweep that drops the
+    subject's first word misses — "Redis key accepts ..." becomes
+    "key accepts ..." and nothing is found. The determiner-led phrasing
+    ("The okf-server accepts ...") is the case the exemption exists for:
+    the determiner is dropped and the platform is reported.
+    """
+
+    caught = {
+        subject
+        for text in (
+            "Redis key accepts only alphanumerics.",
+            "S3 bucket names accept only lowercase characters.",
+            "vLLM endpoint rejects an over-long prompt.",
+            "TEI endpoint requires a bearer token.",
+            "okf-server accepts only uuid tokens.",
+            "The okf-server accepts only uuid tokens.",
+        )
+        for subject in _foreign_claim_subjects(text)
+    }
+    assert caught == {"Redis", "S3", "vLLM", "TEI", "okf-server"}
+
+    # An ordinary word is not a platform: the rule reports NAMES.
+    assert _foreign_claim_subjects("The datastore accepts only lowercase.") == set()
+    assert _foreign_claim_subjects("A guard accepts any safe token.") == set()
 
 
 def test_no_identifier_guard_encodes_a_platform_form() -> None:
@@ -768,12 +905,19 @@ def test_no_identifier_guard_encodes_a_platform_form() -> None:
     """
 
     from capabilities import identifiers
-    from capabilities.contract import OperationName
+    from capabilities.contract import AuthorizationError, OperationName
 
     guards = _identifier_guards(identifiers)
     assert guards, "the identifiers port declares no guard: the sweep would prove nothing"
 
     general_tokens = ("a", "a-b_c", "1795706154681_2f1d1fc5", "12345", "X" * 60)
+    # The characters a guard MUST refuse: the ones that would change the
+    # meaning of the URL or the query the identifier is bound to. The
+    # sweep measures BOTH halves — a guard that accepts everything is as
+    # broken as one that refuses everything, and only the first half was
+    # measured. (A slash is NOT among them: a concept id is a path slug,
+    # and its own pattern admits one.)
+    unsafe_tokens = ("..", "a b", "a;b", "a%b", "a\\b")
     for name, guard in guards:
         # A guard that names the operation gets it: the refusal's channel
         # is part of what the guard is. One that does not (the
@@ -784,6 +928,9 @@ def test_no_identifier_guard_encodes_a_platform_form() -> None:
                 f"{name} refused a safe token: a guard that encodes a platform's form "
                 "refuses the corpus the day the platform changes it"
             )
+        for token in unsafe_tokens:
+            with pytest.raises((AuthorizationError, ValueError)):
+                guard(token, **keywords)
 
 
 def _identifier_guards(module) -> list[tuple[str, object]]:

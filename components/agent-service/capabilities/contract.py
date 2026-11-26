@@ -277,6 +277,16 @@ class LegacyFileProvenance(BaseModel):
     file_id: str
 
 
+# The provenance marker's ONE spelling. The port declares it (the
+# counterparty's vocabulary stays in the port), and every consumer reads
+# THIS: a literal re-spelled in the core is a literal that can drift —
+# a rename on the port side would leave the core comparing against a
+# stale value, and every OKF source would silently take the legacy
+# branch (the concept card never projected, the D1 gate reading OKF
+# provenance against the document map).
+OKF_CONCEPT_SOURCE = "okf-concept"
+
+
 class OkfConceptProvenance(BaseModel):
     """Provenance of an OKF concept: the identity of the published concept.
 
@@ -287,7 +297,7 @@ class OkfConceptProvenance(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source: Literal["okf-concept"] = "okf-concept"
+    source: Literal["okf-concept"] = OKF_CONCEPT_SOURCE
     concept_id: str
     repo_id: str
     bundle_version: int | None

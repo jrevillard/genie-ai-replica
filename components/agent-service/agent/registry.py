@@ -10,8 +10,12 @@ permissions are the caller's context over the registered toolset; nothing
 unregistered is callable, by construction.
 
 The model-facing definitions are registry-owned too: the JSON-schema
-parameter contracts the model sees are declared here, next to the executor
-that enforces them, so a definition and its enforcement cannot drift apart.
+parameter contracts the model sees are declared here, beside the executor
+that runs the tool. WHAT ENFORCES them is the contract's own typed input
+(``capabilities.contract``) — the executor validates the model's arguments
+against that model, not against the JSON schema; the schema is the
+DECLARATION the model is told, and the typed input is the ENFORCEMENT. The
+two are kept in step by the equivalence suite, not by one code path.
 """
 
 from dataclasses import dataclass, field

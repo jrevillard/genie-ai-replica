@@ -80,8 +80,10 @@ platform to exist is fetched from that platform, never derived from an identifie
    **R5** (an identifier guard encodes a platform's form), **R6** (the core states a foreign
    system's acceptance rules). Every fix removes one finding and shrinks the list in the same
    commit. A **new** leak turns the test red immediately — the ratchet is a floor as well as a
-   ceiling. The rules read SHAPES, not a list of literals: a rule that named the platforms would
-   only catch the platforms it already knows (see the leak ledger's note on R6).
+   ceiling. **R6** reads a SHAPE (a subject and an acceptance verb) and names no platform: a rule
+   that named the platforms would only catch the platforms it already knows. **R4** is by
+   construction a ratchet of KNOWN vocabularies plus one shape — see "What the ratchets prove"
+   below for exactly how far each of them reaches.
 
 ### Why the ratchet comes first
 
@@ -121,15 +123,17 @@ without a rule is a leak that returns.
 | F2 | The **Arango adapter** imported by a core module | **R3** + **L2** — the capability leaves `KNOWN_ADAPTER_IMPORTERS` and reaches the corpus through the ports alone | closed (`a1c7e5c67`) |
 | F3 | The **charset of an Arango graph name** | **R6** — the core states no foreign system's acceptance rules | closed (`c68f856b4`) |
 | F4 | The **vocabulary of the OKF counterparty** | the port boundary itself — the core consumes the port's types and declares none of its own | verified, no change |
-| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed on **both** branches: the legacy branch resolves the document's name through the doc-repo port (`f8100fab9`), the OKF branch resolves the concept's title through the OKF port — and the R4 ratchet's known-leak set is **empty**. The scope is the **agent service's core** (the modules R4 scans): the BFF's compatibility fallback for an OLDER agent payload still derives a label from an id (`components/gov-chat-backend/services/agent-run-contract.js:119`), unreachable with a payload that carries `source_documents` — the backend is the adapter to the client, not the core |
+| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed on **both** branches: the legacy branch resolves the document's name through the doc-repo port (`f8100fab9`), the OKF branch resolves the concept's title through the OKF port — and the R4 ratchet's known-leak set is **empty** (which says the core carries none of the shapes and vocabularies R4 reads — see "What the ratchets prove"). The scope is the **agent service's core** (the modules R4 scans): the BFF's compatibility fallback for an OLDER agent payload still derives a label from an id (`components/gov-chat-backend/services/agent-run-contract.js:119`), unreachable with a payload that carries `source_documents` — the backend is the adapter to the client, not the core |
 
 **R6 is generic.** It reads the core's text for the SHAPE of an acceptance
 claim — a subject and an acceptance verb, or a `<name>-safe` compound — and
 reports the subject when it is a NAME that is not one of the core's own
 concepts. No platform is named in the rule: `Redis`, `S3`, `okf-server`,
-`vLLM` and `TEI` are caught by the shape, and an ordinary word ("the
-datastore accepts") is not. The allow-list holds the core's vocabulary and
-never a platform's name.
+`vLLM` and `TEI` are caught by the shape — "Redis key accepts …", "TEI
+endpoint requires …" — and an ordinary word ("the datastore accepts") is
+not. The allow-list holds the core's vocabulary and never a platform's name.
+The rule reads an ACCEPTANCE verb; a foreign rule stated with another verb
+is out of its reach (see "What the ratchets prove").
 
 **R4 is a floor, not the proof.** Its rule reads the SHAPE of an
 id-derived value (a `replace` whose separator is the token's own `_`), not
@@ -140,6 +144,49 @@ BEHAVIOURAL assertions (the citation card carries the source's own name, on
 either branch), and those are where F5's closure is proven; the ratchet's
 empty known-leak set says the core carries no id-derived value **in the shape
 the rule reads**.
+
+**What the ratchets prove — and what they do not.** The import-direction half of this
+decision is COMPLETE and verified: R1–R3, L1 and L2 hold on the tree, and the only
+host-to-adapter importers are the two the composition root owns. The TEXT half is a set of
+ratchets over the leaks that were found, and each of them has a reach that is narrower than
+"the core is clean":
+
+| Rule | What it reads | What its empty result proves |
+|---|---|---|
+| R4 | the deciding modules' code, for **one shape** (an id turned into a display value) plus **three literal vocabularies** the author already knew (Arango's collection names, the `ARANGO_` prefix, the document repository's HTTP surface) | the core carries none of THAT shape and none of THOSE three vocabularies |
+| R5 | the identifier port's public guards, found by **signature**, and both halves of each (it accepts a safe token, it refuses an unsafe one) | no guard encodes a platform's form |
+| R6 | the deciding modules' **prose**, for a subject and an **acceptance verb** | the core states no acceptance rule about a system it does not implement, **in the phrasings the rule reads** |
+
+So an EMPTY known-leak set means "no text matches what these rules read" — it is NOT a proof
+that the core carries no platform vocabulary. It is a floor, and a floor is what a ratchet
+is for. Two limits are named here so no reader mistakes it for more:
+
+- **R4's three vocabularies are a list.** A platform whose vocabulary is not in that list
+  enters the core today without turning any rule red.
+- **R6's verbs are a list.** A foreign rule stated with another verb — "the endpoint
+  *served* …", "vLLM *validates* …" — is invisible to it, and the rule reads prose, the most
+  volatile surface in the tree.
+
+**The measurement surface owns its own tool contract.** The v06 matrix measures how an
+endpoint behaves under DIFFERENT tool declarations — a strict schema, a permissive one — so
+its schemas are the matrix's subject, not a copy of the product's. The product's
+declarations live with the product (`agent/toolset.py`), and the matrix's live with the
+matrix (`measurement/v06_harness.py`); the two are meant to differ, and the matrix's
+verdicts describe the contract it declared. The registry's model-facing JSON schema is the
+DECLARATION the model is told; the contract's typed input is the ENFORCEMENT (ADR
+agentic-009, F4) — the two are kept in step by the equivalence suite, not by one code path.
+
+**The vocabulary no rule reads, recorded.** The core still carries platform names that the
+rules above do not look for, and the ledger's empty sets do not speak about them: the OKF
+counterparty's name in the concept read's error messages
+(`capabilities/executor.py:235,244`), the model endpoint's name in the no-agent path's prose
+(`noagent/generation.py:110,146`), and the deployment's `CHATQNA_*` / `VLLM_*` environment
+names (`noagent/config.py:190-192`, `preparation/translation.py:104-186`). These pre-date this
+slice — the slice added the DECISION, not these strings — and they are left in place as a
+recorded residual rather than silently fixed: the no-agent path reads the deployment's
+environment names and the OpenAI-compatible wire shapes by design, and moving them behind a
+port is its own slice of work. What the decision buys today is the DIRECTION (the core
+reaches the outside only through ports) and a ratchet that grows one rule per shape of leak.
 
 **R5 sweeps by signature, not by name.** The rule looks for the port's
 public guards — a public function that takes an identifier and returns it —

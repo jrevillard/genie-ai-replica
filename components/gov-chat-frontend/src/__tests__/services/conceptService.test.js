@@ -34,14 +34,27 @@ describe('conceptService', () => {
     it('GETs /okf/repos/:id/concepts (no /api prefix)', async () => {
       mockGet.mockResolvedValue({ data: [] });
       await conceptService.listForRepo('r-1');
-      expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-1/concepts');
+      // #2188: the options slot exists for the caller's AbortSignal (undefined
+      // when none was passed)
+      expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-1/concepts', {}, { signal: undefined });
       expect(mockGet.mock.calls[0][0].startsWith('/api/')).toBe(false);
     });
 
     it('appends the since query param correctly', async () => {
       mockGet.mockResolvedValue({ data: [] });
       await conceptService.listForRepo('r-1', { since: '2026-08-01' });
-      expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-1/concepts?since=2026-08-01');
+      expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-1/concepts?since=2026-08-01', {}, { signal: undefined });
+    });
+
+    it('threads the caller AbortSignal into httpService options (#2188)', async () => {
+      mockGet.mockResolvedValue({ data: [] });
+      const controller = new AbortController();
+      await conceptService.listForRepo('r-1', { limit: 200, offset: 0, signal: controller.signal });
+      expect(mockGet).toHaveBeenCalledWith(
+        '/okf/repos/r-1/concepts?limit=200&offset=0',
+        {},
+        { signal: controller.signal }
+      );
     });
   });
 

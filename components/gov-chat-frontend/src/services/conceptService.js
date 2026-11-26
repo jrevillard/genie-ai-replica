@@ -25,7 +25,14 @@ const conceptService = {
     if (opts.offset !== undefined) params.push(`offset=${encodeURIComponent(opts.offset)}`);
     const qs = params.length ? `?${params.join('&')}` : '';
     try {
-      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concepts${qs}`);
+      // #2188: opts.signal threads a caller-owned AbortSignal through
+      // httpService's options spread — no httpService change; the abort
+      // decision stays with the caller (the operation-wait overlay's Cancel).
+      const res = await httpService.get(
+        `/okf/repos/${encodeURIComponent(repoId)}/concepts${qs}`,
+        {},
+        { signal: opts.signal }
+      );
       return res && res.data ? res.data : [];
     } catch (err) {
       if (err && (err.status === 404 || err.status === 501))

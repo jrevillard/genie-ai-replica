@@ -922,15 +922,21 @@ const actions = {
     commit('setConceptsLoading', true);
     commit('setConceptsLoadProgress', null);
     const stale = () => myGen !== fetchGeneration || (state.editor.repoId && state.editor.repoId !== repoId);
+    // #2188 — the crawl has a REAL abort path: the overlay's Cancel aborts
+    // the AbortController every page (page 1 included) rides.
+    const controller = new AbortController();
     // #2195 — the whole paging crawl registers as ONE operation-wait entry
     // (the overlay renders off this data path — the 10k-row commits are the
     // very main-thread pressure that used to eat the progress bar).
+    // #2188 — cancellable now, because the cancel actually cancels.
     const wait = require('@/services/operationWaitService').default.begin('concept-list-fetch', {
       label: 'Loading concepts',
-      labelKey: 'okf.opwait.ops.conceptList'
+      labelKey: 'okf.opwait.ops.conceptList',
+      cancellable: true,
+      onCancel: () => controller.abort()
     });
     try {
-      const first = await conceptService.listForRepo(repoId, { limit: PAGE, offset: 0 });
+      const first = await conceptService.listForRepo(repoId, { limit: PAGE, offset: 0, signal: controller.signal });
       // STALE GUARD BEFORE THE FIRST COMMIT (round 20): the repo could have
       // switched while page 1 was in flight — committing then would plant
       // the OLD repo's rows over the NEW repo's editor. Same cleanup rule
@@ -955,9 +961,29 @@ const actions = {
       const multiPage = total > PAGE;
       if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
       wait.setProgress(acc.length, total);
+      // #2188 — pages 2..N fetch in WINDOWS of five concurrent requests.
+      // The old loop was sequential "by design — each offset needs the
+      // previous count", a false premise: only page 1's `total` is needed.
+      // Each wave pins its offsets from acc.length AT WAVE START (so a
+      // ragged page never causes skipped rows), commits once per wave
+      // instead of once per page, and yields to the renderer between waves
+      // so the progress bar keeps painting.
+      const CONCURRENCY = 5;
+      const yieldToRenderer = () => new Promise((resolve) => setTimeout(resolve, 0));
+      let wave = 0;
       while (acc.length < total) {
-        // Pages are SEQUENTIAL by design — each offset needs the previous count.
-        const page = await conceptService.listForRepo(repoId, { limit: PAGE, offset: acc.length });
+        if (wave > 0) await yieldToRenderer();
+        const waveOffsets = [];
+        for (let k = 0; k < CONCURRENCY && acc.length + k * PAGE < total; k++) {
+          waveOffsets.push(acc.length + k * PAGE);
+        }
+        const settled = await Promise.all(
+          waveOffsets.map((offset) =>
+            conceptService
+              .listForRepo(repoId, { limit: PAGE, offset, signal: controller.signal })
+              .then((p) => ({ offset, p }))
+          )
+        );
         if (stale()) {
           // Round 11 (!622): the abandoned fetch must clean up after itself
           // — EXCEPT when a NEWER fetch superseded it (generation moved):
@@ -972,11 +998,15 @@ const actions = {
           wait.complete();
           return { ok: true, concepts: acc, stale: true };
         }
-        const rows = page && Array.isArray(page.concepts) ? page.concepts : Array.isArray(page) ? page : [];
+        const rows = settled
+          .sort((a, b) => a.offset - b.offset)
+          .flatMap(({ p }) => (p && Array.isArray(p.concepts) ? p.concepts : Array.isArray(p) ? p : []));
         acc = acc.concat(rows);
         commit('setConcepts', { repoId, concepts: acc });
         if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
         wait.setProgress(acc.length, total);
+        wave += 1;
+        if (rows.length === 0) break; // a wave that returned nothing can never reach total
       }
       // TAIL GUARD (round 20b, #80862): the natural-completion arm needs the
       // same predicate as the in-loop guard — a fetch superseded while its
@@ -998,6 +1028,15 @@ const actions = {
       wait.complete();
       return { ok: true, concepts: acc };
     } catch (err) {
+      // #2188 — a deliberate Cancel is not an error: the op settles complete
+      // (the overlay shows its cancelled state), the committed rows stay
+      // (keep-last-known), and the caller learns ABORTED.
+      if (controller.signal.aborted) {
+        if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
+        if (myGen === fetchGeneration) commit('setConceptsLoadProgress', null);
+        wait.complete();
+        return { ok: false, code: 'ABORTED', message: 'concept fetch cancelled' };
+      }
       commit('setError', err.message || 'fetchConcepts failed');
       // KEEP THE LAST KNOWN LIST (round 20, #80803): the already-loaded rows
       // are known-good data — one gateway 502 (or a failed page N of the

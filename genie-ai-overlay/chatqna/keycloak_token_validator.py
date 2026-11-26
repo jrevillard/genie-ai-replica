@@ -29,7 +29,14 @@ class JwksUnavailableError(Exception):
 
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
-KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+# `or`, not a default argument: the compose file passes this var as
+# ${KEYCLOAK_INTERNAL_URL:-} (empty when the deployment does not define it),
+# and an EMPTY value must behave like an UNSET one — a default argument keeps
+# the empty string, and the JWKS URI then has no protocol at all
+# ("Request URL is missing an 'http://' or 'https://' protocol" on every
+# authenticated request). dataprep's keycloak_service_account.py and
+# okf-server's service-token.js already treat the empty string as unset.
+KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL") or "http://keycloak:8080"
 
 
 def _expected_issuers() -> list:
@@ -97,7 +104,10 @@ async def _fetch_jwks():
         if _jwks_keys and (now - _jwks_fetched_at) < _JWKS_CACHE_TTL:
             return _jwks_keys
 
-        jwks_uri = f"{KEYCLOAK_INTERNAL_URL}/realms/{KC_REALM}/protocol/openid-connect/certs"
+        # .rstrip('/'), like _expected_issuers: a deployment setting the var
+        # with a trailing slash must not double it into the JWKS path — the
+        # request would 404 and every cold-cache request would 503.
+        jwks_uri = f"{KEYCLOAK_INTERNAL_URL.rstrip('/')}/realms/{KC_REALM}/protocol/openid-connect/certs"
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(jwks_uri)

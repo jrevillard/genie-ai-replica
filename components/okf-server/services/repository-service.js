@@ -140,6 +140,61 @@ function toResponse(doc) {
   return out;
 }
 
+// #2191 (2026-11-26, measured): GET /okf/repos shipped the FULL document per
+// repo ({...doc}) — 33 repos × ~158 KB = 5.2 MB per list call, JSON.parsed on
+// the dashboard's main thread, spooling through Kong's proxy buffers. The
+// LIST endpoint needs the CARD, not the corpus: this allowlist is pinned from
+// an exhaustive sweep of the fields the STORE-FED consumers read — the
+// dashboard cards (StudioDashboard.vue r.*) AND the surfaces hydrated from
+// the same rows (okfRepoOps.isLabelsStale's ingested_version, isRedraining's
+// rag_drain_active, the wizard/editor provenance fields, frontmatter + head
+// for the editor shell). The truly heavy payload — documents, crawl_seeds,
+// artifacts — stays where it belongs, behind GET /:id.
+const SUMMARY_FIELDS = [
+  'repo_id',
+  'name',
+  'domain',
+  'version',
+  'lifecycle_state',
+  'created_at',
+  'updated_at',
+  'ingested_at',
+  'ingested_version',
+  'ingested_graph_name',
+  'studio_step',
+  'conversion',
+  'rag_ingestion',
+  'rag_drain_active',
+  'source_document',
+  'source_documents',
+  'metrics',
+  'trust',
+  'cloned_from',
+  'frontmatter',
+  'head'
+];
+
+function toSummary(doc) {
+  if (!doc) return null;
+  const out = {};
+  for (const k of SUMMARY_FIELDS) {
+    if (doc[k] !== undefined) out[k] = doc[k];
+  }
+  if (out.head) {
+    // #2191 (live-measured on the first deploy): `head` carried the whole
+    // computed head — per_field alone is ~143 KB and the embedding vector
+    // ~19 KB per repo, i.e. the whale inside the whale. NOTHING in the
+    // store-fed surfaces reads them from a LIST row: the three head.vector
+    // call sites test TRUTHINESS only ('missing' gates). The summary keeps
+    // every scalar and replaces the vector with its LENGTH — truthy ⟺ a
+    // vector exists, and the number carries the dim.
+    const { vector, ...headRest } = out.head;
+    out.head = { ...headRest, vector: Array.isArray(vector) ? vector.length : vector ? 1 : 0 };
+    delete out.head.per_field; // the ~143 KB per-field map no list consumer reads
+  }
+  return out;
+}
+
 function encodeCursor(created_at, repo_id) {
   return Buffer.from(JSON.stringify({ ts: created_at, id: repo_id })).toString('base64url');
 }
@@ -424,12 +479,19 @@ async function cloneRepository(source_id, input, actor) {
  * a wrong-typed authz must never fail open to unrestricted (review fix).
  * @param {object} opts { domain?, authz?: Set<string>|null, cursor?, limit? }
  */
-async function list({ domain, authz, cursor, limit } = {}) {
+async function list({ domain, authz, cursor, limit, projection } = {}) {
   return withSpan('okf.repo.list', async (span) => {
     span.setAttribute('okf.operation', 'list');
+    if (projection) span.setAttribute('okf.projection', projection);
     if (domain) span.setAttribute('okf.domain', domain);
     if (authz != null && !(authz instanceof Set)) {
       throw new RepoError('AUTHZ_TYPE_ERROR', 'authz must be a Set of repo_ids or null', 500);
+    }
+    // Fail fast on a typo'd projection (code review !1095): an unknown value
+    // must not silently mean "full document" — that resurfaces the 5.2 MB
+    // body with nothing in the logs, while the span claims the projection.
+    if (projection !== undefined && projection !== 'summary') {
+      throw new RepoError('VALIDATION_ERROR', `unknown projection '${projection}' (only 'summary' is defined)`, 400);
     }
     // Default-deny (Story 6.1, G3): an EMPTY authorized set sees NOTHING —
     // short-circuit before the query; it must never fall through to the full
@@ -459,6 +521,12 @@ async function list({ domain, authz, cursor, limit } = {}) {
       ? aql`FILTER d.created_at < ${cursorTs} OR (d.created_at == ${cursorTs} AND d.repo_id > ${cursorId})`
       : aql``;
 
+    // #2191 — project IN THE QUERY, not in Node: the ArangoDB → okf-server
+    // leg is the hot-path cost the issue measured, and the codebase's own
+    // pattern (internal-controller KEEP, ingestWorker CLAIM_KEEP_FIELDS)
+    // projects in AQL. One allowlist serves both the RETURN and the
+    // Node-side toSummary (the enrichers run after either shape).
+    const returnClause = projection === 'summary' ? aql`RETURN KEEP(d, ${SUMMARY_FIELDS})` : aql`RETURN d`;
     const query = aql`
       FOR d IN ${db.collection(COLLECTION)}
         FILTER d.deleted_at == null
@@ -467,11 +535,13 @@ async function list({ domain, authz, cursor, limit } = {}) {
         ${cursorFilter}
         SORT d.created_at DESC, d.repo_id ASC
         LIMIT ${safeLimit}
-        RETURN d
+        ${returnClause}
     `;
     const result = await db.query(query);
     const docs = await result.all();
-    const items = docs.map(toResponse);
+    // projection:'summary' — the list endpoint's card projection (#2191).
+    // Absent ⇒ the full document (internal callers unchanged; additive-first).
+    const items = docs.map(projection === 'summary' ? toSummary : toResponse);
     await attachIndexingPending(items);
     await attachConceptCounts(items);
     await attachFailedCounts(items);

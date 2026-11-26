@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`GET /okf/repos` ships card summaries, not full documents** (#2191, measured 2026-11-26: 5,238,230 bytes for 33 repositories — ~158 KB per repo — with a Kong temp-file spool per call and a main-thread `JSON.parse` on the dashboard's 5 s poll). The list endpoint now returns a card projection pinned from the fields the dashboard and the wizard actually read (identity, domain, version, lifecycle, timestamps, ingestion state, metrics, and the `concept_count`/`failed_count`/`indexing_pending` enrichments — the wizard Choose-step's clone-patch contract is test-pinned). The full document — frontmatter, documents, crawl seeds, artifacts — stays behind `GET /:id` where it always belonged. Internal service callers are unchanged (additive `projection` parameter, default off). Conditional GET is EXPLICIT (a small sendConditional helper): measured on the local build, express 4's built-in freshness check never fires in this service — every route answered 200 on a matched If-None-Match — so the list route compares the validator itself and answers 304.
+
 ## [3.1.1] - 2026-11-26
 
 **In one line: the Ansible deployment runs again — the `cartesian` lookup the `config_bootstrap` role needs is now declared, and the SSL directory check runs with the privileges that check requires.**

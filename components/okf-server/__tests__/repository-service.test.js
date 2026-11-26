@@ -943,6 +943,123 @@ describe('list concept_count attach (David 2026-09-30 "0 topics")', () => {
   });
 });
 
+describe('list summary projection (#2191 — 5.2 MB → KB)', () => {
+  beforeEach(() => db._reset());
+
+  // The heavy inline payload a real repo doc carries (document rows, crawl
+  // seeds, artifacts) — the bytes that made 33 repos ship 5.2 MB on
+  // GET /okf/repos (measured 2026-11-26). frontmatter/head are CARD fields
+  // (KB-scale, store-fed editor surfaces read them); these three are not.
+  const HEAVY = {
+    documents: [{ file_id: 'f1', bytes: 999999 }],
+    crawl_seeds: ['a', 'b'],
+    artifacts: [{ name: 'a' }]
+  };
+  const seedRow = (id) => ({
+    repo_id: id,
+    name: `N-${id}`,
+    domain: 'social',
+    version: 'v3',
+    lifecycle_state: 'published',
+    created_at: '2026-11-01T00:00:00Z',
+    updated_at: '2026-11-02T00:00:00Z',
+    ingested_at: '2026-11-03T00:00:00Z',
+    ingested_version: 'v3',
+    ingested_graph_name: 'OKF_x_v1',
+    studio_step: null,
+    conversion: null,
+    rag_ingestion: { status: 'draining' },
+    rag_drain_active: false,
+    source_document: { url: 'https://x' },
+    source_documents: [{ url: 'https://x' }],
+    metrics: { a: 1 },
+    trust: null,
+    cloned_from: null,
+    frontmatter: { tags: ['x'] },
+    head: { version: 'v3', computed_at: 't' },
+    ...HEAVY,
+    _key: id
+  });
+
+  test('projection:summary ships the STORE-FED consumer contract — and never the heavy payload', async () => {
+    // Distinct answers per attach query (code review !1095: one shared
+    // COLLECT mock made concept_count pass incidentally — each attach now
+    // proves its own supply).
+    db.query.mockImplementation(async (query, bind) => {
+      const q = String(query || '');
+      // attachFailedCounts is the SAME query as attachIndexingPending modulo
+      // its bound status — disambiguate on the BIND PARAM, not the text.
+      if (q.includes('index_status') && bind && bind.st === 'failed') {
+        return { all: async () => [{ repo_id: 'r1', n: 1 }] };
+      }
+      if (q.includes('index_status')) return { all: async () => [{ repo_id: 'r1', n: 2 }] }; // indexing pending
+      if (q.includes('COLLECT repo_id')) return { all: async () => [{ repo_id: 'r1', n: 5 }] }; // concept count
+      return { all: async () => [seedRow('r1'), seedRow('r2')] };
+    });
+    const result = await repoService.list({ projection: 'summary' });
+    expect(result.items).toHaveLength(2);
+    const item = result.items[0];
+    // The consumer contract, pinned from the STORE-FED surfaces (dashboard
+    // r.* reads + okfRepoOps.isLabelsStale/isRedraining + wizard/editor
+    // provenance + the editor shell's frontmatter/head):
+    for (const k of [
+      'repo_id',
+      'name',
+      'domain',
+      'version',
+      'lifecycle_state',
+      'created_at',
+      'updated_at',
+      'ingested_at',
+      'ingested_version',
+      'ingested_graph_name',
+      'studio_step',
+      'conversion',
+      'rag_ingestion',
+      'rag_drain_active',
+      'source_document',
+      'source_documents',
+      'metrics',
+      'trust',
+      'cloned_from',
+      'frontmatter',
+      'head'
+    ]) {
+      expect(item).toHaveProperty(k);
+    }
+    // The heavy payload stays behind GET /:id:
+    expect(item).not.toHaveProperty('documents');
+    expect(item).not.toHaveProperty('crawl_seeds');
+    expect(item).not.toHaveProperty('artifacts');
+    // Each enrichment attaches from ITS OWN query:
+    expect(item.concept_count).toBe(5);
+    expect(item.indexing_pending).toBe(2);
+    expect(item.failed_count).toBe(1);
+  });
+
+  test('the summary projection runs IN THE QUERY — ArangoDB never ships the heavy docs (code review !1095)', async () => {
+    db.query.mockResolvedValue({ all: async () => [seedRow('r1')] });
+    await repoService.list({ projection: 'summary' });
+    const sent = String(db.query.mock.calls[0][0].query);
+    expect(sent).toContain('KEEP(d,');
+    expect(sent).not.toContain('RETURN d');
+  });
+
+  test('an unknown projection fails fast — it must not silently mean full doc', async () => {
+    await expect(repoService.list({ projection: 'summaries' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+  });
+
+  test('default (no projection) keeps the full doc — internal callers unchanged', async () => {
+    db.query.mockResolvedValue({ all: async () => [seedRow('r1')] });
+    const result = await repoService.list({});
+    expect(result.items[0]).toHaveProperty('documents');
+    expect(result.items[0]).toHaveProperty('frontmatter');
+  });
+});
+
 describe('cloneRepository response concept_count (David 2026-09-30)', () => {
   beforeEach(() => {
     db._reset();
@@ -982,5 +1099,51 @@ describe('cloneRepository response concept_count (David 2026-09-30)', () => {
     const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
     expect(clone.copied_concepts).toBe(2);
     expect(clone.concept_count).toBe(2);
+  });
+});
+
+describe('summary head sub-projection + explicit conditional GET (#2191 live round)', () => {
+  beforeEach(() => db._reset());
+
+  test('summary head carries scalars + vector LENGTH — per_field and the raw vector never ship', async () => {
+    db.query.mockImplementation(async (query) => {
+      if (String(query || '').includes('COLLECT repo_id')) return { all: async () => [{ repo_id: 'r1', n: 3 }] };
+      return {
+        all: async () => [
+          {
+            repo_id: 'r1',
+            name: 'N',
+            domain: 'd',
+            created_at: 't',
+            head: {
+              version: 'v2',
+              computed_at: 'ct',
+              dim: 768,
+              vector: [0.1, 0.2, 0.3],
+              per_field: { title: [0.1, 0.2] }
+            },
+            _key: 'r1'
+          }
+        ]
+      };
+    });
+    const result = await repoService.list({ projection: 'summary' });
+    const h = result.items[0].head;
+    expect(h.version).toBe('v2');
+    expect(h.computed_at).toBe('ct');
+    expect(h.dim).toBe(768);
+    expect(h.vector).toBe(3); // length — truthy ⟺ a vector exists
+    expect(h).not.toHaveProperty('per_field');
+    expect(JSON.stringify(result.items[0]).length).toBeLessThan(2000);
+  });
+
+  test('a head without a vector reads falsy through the summary', async () => {
+    db.query.mockResolvedValue({
+      all: async () => [{ repo_id: 'r2', name: 'N', domain: 'd', created_at: 't', head: { version: 'v1' }, _key: 'r2' }]
+    });
+    const result = await repoService.list({ projection: 'summary' });
+    const h = result.items[0].head;
+    expect(h.version).toBe('v1');
+    expect(!h.vector).toBe(true); // the 'missing' gate stays honest
   });
 });

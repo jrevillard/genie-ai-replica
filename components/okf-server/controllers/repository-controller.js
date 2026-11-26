@@ -4,6 +4,7 @@
 // snake_case response → next(err) on failure. No business logic.
 
 const repoService = require('../services/repository-service');
+const sendConditional = require('../lib/conditional-get'); // #2191 — explicit 304 on matched If-None-Match
 const { RepoError } = repoService;
 const accessControlService = require('../services/access-control-service');
 const conceptMetaService = require('../services/concept-meta-service');
@@ -398,9 +399,18 @@ async function listRepos(req, res, next) {
     const result = await repoService.list({
       authz: authzForService(req),
       cursor,
-      limit: parseInt(limit, 10)
+      limit: parseInt(limit, 10),
+      // #2191 (2026-11-26, measured): the list shipped the FULL document per
+      // repo — 5.2 MB for 33 repos, a Kong temp-file spool per call, and a
+      // main-thread JSON.parse on the dashboard. The dashboard needs the
+      // card, not the corpus; the full document stays behind GET /:id.
+      projection: 'summary'
     });
-    res.status(200).json(result);
+    // Explicit conditional GET (#2191): express's built-in freshness check
+    // does not fire in this service (measured: matched If-None-Match answered
+    // 200 on every route), and the dashboard's poll MUST 304 — the whole
+    // point of the ETag.
+    sendConditional(req, res, result);
   } catch (err) {
     next(err);
   }

@@ -70,10 +70,12 @@ class ToolDispatcher:
         The checks precede the ``tool_call_started`` event, so a refused
         dispatch (budget spent, run cancelled) never announces a tool call
         that will not run. The registry refuses an unregistered name (that
-        refusal propagates — it ends the run); a port error or an invalid
-        argument flows back to the model as the structured tool result. Both
-        paths emit the ``tool_call_finished`` event that reports what
-        actually happened.
+        refusal propagates — it ends the run, and the run's terminal is
+        the error event: an unregistered name is NOT answered with a
+        ``tool_call_finished``, because no tool ran); a port error or an
+        invalid argument flows back to the model as the structured tool
+        result, and THAT path emits the ``tool_call_finished`` event that
+        reports what actually happened.
         """
         self._monitor.check_wall_clock()
         self._token.raise_if_cancelled()

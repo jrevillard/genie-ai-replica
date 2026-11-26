@@ -69,11 +69,20 @@ def _is_missing_okf_collection(error) -> bool:
     the *collection-level tolerated absence* — the identity join has nothing
     to join, the chunks are served unattributed and the leg is NOT broken.
     Every OTHER join failure is a real degradation.
+
+    The ERROR CODE is the whole test. This query reads ONE collection — the
+    OKF control-plane's — so "data source not found" on it IS the tolerated
+    absence, whatever the server's wording. Matching the message as well
+    made the decision depend on a phrase the server chooses ("collection or
+    view not found: okf_concepts_meta"), and a different wording turned the
+    tolerated absence into a degradation: every answer replaced by the
+    insufficiency message, on a deployment that never ran the pillar.
     """
 
     if getattr(error, "error_code", None) != ARANGO_ERROR_DATA_SOURCE_NOT_FOUND:
         return False
-    return OKF_CONCEPTS_META_COLLECTION in str(error)
+    logger.debug("the OKF control-plane collection is absent: %s", error)
+    return True
 
 
 def _materialized_rows(db, aql, bind_vars) -> list:

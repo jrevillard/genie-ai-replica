@@ -49,7 +49,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .contract import OkfConceptProvenance
+from .contract import OKF_CONCEPT_SOURCE, OkfConceptProvenance
 from .sources import ConceptSource, DocumentMetadataSource
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def _is_concept(provenance) -> bool:
     """
 
     if isinstance(provenance, dict):
-        return provenance.get("source") == "okf-concept"
+        return provenance.get("source") == OKF_CONCEPT_SOURCE
     return isinstance(provenance, OkfConceptProvenance)
 
 
@@ -257,7 +257,7 @@ def _okf_entry(concept_id, repo_id, bundle_version, score, card: dict) -> dict:
         "serviceLabels": [],
         "score": score,
         "concept_id": concept_id,
-        "source": "okf-concept",
+        "source": OKF_CONCEPT_SOURCE,
     }
     if repo_id:
         entry["repo_id"] = repo_id

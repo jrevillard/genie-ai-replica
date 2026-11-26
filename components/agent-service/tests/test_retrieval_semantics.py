@@ -503,6 +503,30 @@ def test_cap1_join_over_a_missing_collection_is_tolerated_not_degraded():
     assert adapter.cap1_degraded is False
 
 
+def test_cap1_join_tolerates_the_absence_by_the_error_code_not_by_the_wording():
+    """The decision is the ERROR CODE, not the server's phrase.
+
+    The join reads ONE collection, so "data source not found" on it is the
+    tolerated absence whatever the server calls it. A wording the rule did
+    not expect turned the tolerated absence into a degradation: every
+    answer replaced by the insufficiency message, on a deployment that
+    never ran the pillar.
+    """
+
+    rows_file_id = [{"key": "c1", "file_id": "f1"}]
+    adapter = make_adapter(
+        {
+            "file_id: doc.file_id": rows_file_id,
+            "okf_concepts_meta": UnwordedMissingCollectionTriggered(),
+        },
+        config_env={"OKF_ENABLED": "1"},
+    )
+    results = [{"doc": _chunk("c1", "a"), "score": 0.9}]
+    run(adapter.enrich(results))
+    assert results[0]["doc"].repo_id is None
+    assert adapter.cap1_degraded is False
+
+
 class RuntimeErrorTriggered:
     """A row-map entry that raises when its query runs."""
 
@@ -524,6 +548,22 @@ class MissingCollectionTriggered:
 
     def __iter__(self):
         raise MissingCollectionError()
+
+
+class UnwordedMissingCollectionError(Exception):
+    """The same failure, as a server that words it differently would raise it."""
+
+    error_code = 1203
+
+    def __init__(self) -> None:
+        super().__init__("[HTTP 404][ERR 1203] data source not found")
+
+
+class UnwordedMissingCollectionTriggered:
+    """A row-map entry that raises the collection-not-found failure, unworded."""
+
+    def __iter__(self):
+        raise UnwordedMissingCollectionError()
 
 
 def test_cap1_join_is_the_recorded_graph_scoped_concept_join():

@@ -81,6 +81,7 @@ from dataclasses import dataclass, field
 
 import tracing
 from capabilities.citations import SourceRecords, resolve_source_records, source_documents_from_citations
+from capabilities.contract import OKF_CONCEPT_SOURCE
 
 from .budget import BudgetExhausted, RunBudgetMonitor
 
@@ -133,7 +134,7 @@ def citation_identity(provenance: dict) -> tuple:
     """The stable identity key of one provenance dict — the no-agent
     dedup's convention: ``(repo_id, concept_id)`` for an OKF concept,
     ``(None, file_id)`` for a legacy file."""
-    if provenance.get("source") == "okf-concept":
+    if provenance.get("source") == OKF_CONCEPT_SOURCE:
         return (provenance.get("repo_id"), provenance.get("concept_id"))
     return (None, provenance.get("file_id"))
 
@@ -289,7 +290,7 @@ def check_reference_validity(entries: list[dict], authorized_repos: frozenset[st
     for entry in entries:
         provenance = entry["provenance"]
         repo_id = provenance.get("repo_id")
-        if provenance.get("source") == "okf-concept" and repo_id not in authorized_repos:
+        if provenance.get("source") == OKF_CONCEPT_SOURCE and repo_id not in authorized_repos:
             invalid.append({"provenance": provenance, "reason": "unauthorized_repo"})
             continue
         delivered.append(entry)

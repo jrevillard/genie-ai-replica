@@ -1339,7 +1339,7 @@ In `components/agent-service/app.py`, `_build_orchestrator` gains the catalog an
     # honour is a ValueError, and the run surface answers the honest 503
     # naming it. The knob is a PATH (the deployment's file lives
     # wherever the deployment mounts it).
-    catalog_path = str(source.get("AGENT_TOOL_CATALOG_PATH", "")).strip()
+    catalog_path = str(env.get("AGENT_TOOL_CATALOG_PATH", "")).strip()
     if not catalog_path:
         raise ValueError("AGENT_TOOL_CATALOG_PATH is not set: the run surface declares no tool without a catalog")
     catalog = load_catalog(
@@ -1367,7 +1367,16 @@ and the orchestrator is built with the host's factory:
 
 with the imports: `from agent.sources import DocumentToolSource` and `from tool_catalog import build_tool_source_factory, load_catalog`.
 
-The `source` local is the environment mapping (`os.environ if env is None else env`) — add it next to the other reads at the top of `_build_orchestrator`.
+The knob is read from the environment mapping — and the mapping is normalized ONCE, at the top of `_build_orchestrator`, so the read is not a second name for what the parameter already carries:
+
+```python
+def _build_orchestrator(env=None) -> RequestOrchestrator:
+    # The environment mapping, normalized once: every read below (the
+    # budget knobs, the port assembly, the catalog's path) reads THIS.
+    env = os.environ if env is None else env
+```
+
+`os` is already imported in `app.py`. Every existing call (`OrchestratorConfig.load(env)`, `build_stateless_adapters(env)`, `build_preparer_factory(transport, env=env)`) then reads the same mapping it read before — `load(None)` already meant `os.environ`, so the normalization changes nothing but the knob's read.
 
 - [ ] **Step 6: The suites' declarations**
 

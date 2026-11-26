@@ -20,9 +20,11 @@ from langdetect import DetectorFactory
 
 from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
+from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter
 from agent.loop import AgentLoop
 from agent.orchestrator import OrchestratorConfig
+from agent.runtime import BoundedModelClient, RunInputs
 from agent.toolset import document_toolset
 from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
@@ -212,6 +214,59 @@ GOVERNED_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",
 """The one caller context the governed-answer-path suites share."""
 
 
+class LoopRunner:
+    """The loop over the runtime port, with the run's inputs built per call.
+
+    The suites drive ``run(question)``: the port's inputs carry the run's
+    machinery, and this wrapper builds them per call so a suite can change
+    the question without rebuilding the run. The machinery stays reachable
+    by name — a suite cancels ``runner.token`` or asserts on the requests
+    ``runner.model`` recorded.
+    """
+
+    def __init__(
+        self,
+        loop,
+        *,
+        model,
+        registry,
+        monitor,
+        token,
+        emitter,
+        verifier=None,
+        instruction="the system prompt",
+    ) -> None:
+        self.loop = loop
+        self.model = model
+        self.registry = registry
+        self.monitor = monitor
+        self.token = token
+        self.emitter = emitter
+        self.verifier = verifier
+        self._instruction = instruction
+
+    async def run(self, question: str):
+        """One run over the port's inputs."""
+
+        inputs = RunInputs(
+            question=question,
+            instruction=self._instruction,
+            tools=self.registry.definitions(),
+            model=BoundedModelClient(self.model, self.monitor),
+            dispatcher=ToolDispatcher(
+                registry=self.registry,
+                monitor=self.monitor,
+                token=self.token,
+                emitter=self.emitter,
+                verifier=self.verifier,
+            ),
+            monitor=self.monitor,
+            token=self.token,
+            emitter=self.emitter,
+        )
+        return await self.loop.run(inputs)
+
+
 def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=None, execution_versions=None):
     """The governed answer path over fakes — one home for the suites that
     drive the loop WITH the verification pipeline wired (the orchestrator's
@@ -236,17 +291,19 @@ def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=No
         monitor=monitor,
         authorized_repos=authorized_repos,
     )
-    loop = AgentLoop(
+    token = CancellationToken()
+    emitter = EventEmitter(run_id="run-1", sink=collector.append)
+    runner = LoopRunner(
+        AgentLoop(verifier=verifier, execution_versions=execution_versions),
         model=model,
         registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
-        token=CancellationToken(),
-        emitter=EventEmitter(run_id="run-1", sink=collector.append),
-        system_prompt="the production prompt",
+        token=token,
+        emitter=emitter,
         verifier=verifier,
-        execution_versions=execution_versions,
+        instruction="the production prompt",
     )
-    return loop, collector, monitor, verifier
+    return runner, collector, monitor, verifier
 
 
 class AgentFakePort:

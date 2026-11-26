@@ -33,16 +33,15 @@ from conftest import (
 )
 
 from agent.cancellation import CancellationToken
-from agent.loop import (
+from agent.runtime import (
     OUTCOME_ANSWERED,
     OUTCOME_BUDGET_EXHAUSTED,
     OUTCOME_CANCELLED,
     OUTCOME_ERROR,
-    ModelTurn,
-    ToolCallRequest,
 )
 from capabilities.adapters.vllm import VllmModelClient, VllmTransientError
 from capabilities.contract import CallerContext, QueryPreparationStatus
+from capabilities.model import ModelTurn, ToolCallRequest
 from measurement.probe import (
     PROBE_OPERATION_BUDGET,
     QUESTION_ID,

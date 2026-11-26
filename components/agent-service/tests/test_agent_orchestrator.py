@@ -27,7 +27,6 @@ from conftest import (
 
 from agent.budget import RunBudget
 from agent.events import BFF_FRAME_NAMES, AgentEvent
-from agent.loop import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR
 from agent.orchestrator import (
     AdmissionRefused,
     AgentRunRequest,
@@ -36,6 +35,7 @@ from agent.orchestrator import (
     RequestOrchestrator,
 )
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
+from agent.runtime import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR
 from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
 from capabilities.contract import CallerContext, OperationBudget
 from capabilities.model import ModelTurn

@@ -10,7 +10,9 @@ authorization surface (:mod:`.registry`), the run budget and its monitor
 provisional custom minimal loop (:mod:`.loop`), the governed production
 prompt (:mod:`.prompt`), the registered toolset (:mod:`.toolset`), the
 taint scan (:mod:`.taint`), the citation verification pipeline
-(:mod:`.verification`) and the bounded smoke probe (:mod:`.probe`). A
+(:mod:`.verification`), the runtime port and its bounded model client
+(:mod:`.runtime`), the tool dispatcher (:mod:`.dispatcher`) and the bounded
+smoke probe (:mod:`.probe`). A
 runtime swap adapts its native events to this seam's vocabulary — it never
 renames it; nothing here ever speaks the BFF's client frame names. The
 ``source_documents`` projection lives across the port boundary
@@ -21,17 +23,21 @@ from capabilities.model import LoopModelClient, ModelTurn, ToolCallRequest
 
 from .budget import BudgetExhausted, RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
+from .dispatcher import ToolDispatcher
 from .events import BFF_FRAME_NAMES, AgentEvent, EventEmitter, EventKind, EventSink
-from .loop import (
+from .loop import AgentLoop
+from .prompt import PRODUCTION_SYSTEM_PROMPT
+from .registry import ToolDefinition, ToolExecutor, ToolRegistry, UnregisteredToolError
+from .runtime import (
     OUTCOME_ANSWERED,
     OUTCOME_BUDGET_EXHAUSTED,
     OUTCOME_CANCELLED,
     OUTCOME_ERROR,
-    AgentLoop,
+    BoundedModelClient,
+    RunInputs,
     RunResult,
+    RuntimeDriver,
 )
-from .prompt import PRODUCTION_SYSTEM_PROMPT
-from .registry import ToolDefinition, ToolExecutor, ToolRegistry, UnregisteredToolError
 from .toolset import document_toolset
 
 __all__ = [
@@ -43,6 +49,7 @@ __all__ = [
     "PRODUCTION_SYSTEM_PROMPT",
     "AgentEvent",
     "AgentLoop",
+    "BoundedModelClient",
     "BudgetExhausted",
     "CancellationToken",
     "EventEmitter",
@@ -52,9 +59,12 @@ __all__ = [
     "ModelTurn",
     "RunBudget",
     "RunBudgetMonitor",
+    "RunInputs",
     "RunResult",
+    "RuntimeDriver",
     "ToolCallRequest",
     "ToolDefinition",
+    "ToolDispatcher",
     "ToolExecutor",
     "ToolRegistry",
     "UnregisteredToolError",

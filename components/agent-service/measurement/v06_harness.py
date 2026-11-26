@@ -55,9 +55,11 @@ import httpx
 
 from agent.budget import RunBudgetMonitor
 from agent.cancellation import CancellationToken
+from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter, EventKind
 from agent.loop import AgentLoop
 from agent.registry import ToolDefinition, ToolRegistry
+from agent.runtime import BoundedModelClient, RunInputs
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.model import VllmModelConfig
@@ -1189,25 +1191,32 @@ async def demo_loop_cancel(config: VllmModelConfig, transport, model_id: str | N
     emitter = EventEmitter(run_id="v06-cancel-demo", sink=lambda event: emitted.append(str(event.kind.value)))
     registry = ToolRegistry()
     registry.register(_CLOCK_TOOL, _read_clock_executor)
-    loop = AgentLoop(
-        model=_CancelDuringModelCall(
-            VllmModelClient(config, transport=_DispatchRecordingTransport(transport, recorder)), token, recorder
+    monitor = _demo_monitor()
+    dispatcher = ToolDispatcher(registry=registry, monitor=monitor, token=token, emitter=emitter)
+    loop = AgentLoop()
+    inputs = RunInputs(
+        question="What time is it right now?",
+        instruction="You answer using the provided tools. Answer in English.",
+        tools=registry.definitions(),
+        model=BoundedModelClient(
+            _CancelDuringModelCall(
+                VllmModelClient(config, transport=_DispatchRecordingTransport(transport, recorder)), token, recorder
+            ),
+            monitor,
         ),
-        registry=registry,
-        monitor=_demo_monitor(),
+        dispatcher=dispatcher,
+        monitor=monitor,
         token=token,
         emitter=emitter,
-        system_prompt="You answer using the provided tools. Answer in English.",
     )
     cancelled_error_propagated = False
     error: str | None = None
     try:
-        await loop.run("What time is it right now?")
+        await loop.run(inputs)
     except asyncio.CancelledError:
         cancelled_error_propagated = True
     except Exception as failed:  # noqa: BLE001 — recorded honestly, like any demo observation
         error = _error_preview(failed)
-    monitor = loop.monitor
     terminal = tuple(kind for kind in emitted if kind in (EventKind.RUN_FINISHED.value, EventKind.RUN_ERROR.value))
     if not cancelled_error_propagated and error is None:
         error = "the loop run completed instead of propagating the cancellation; the demo is void"

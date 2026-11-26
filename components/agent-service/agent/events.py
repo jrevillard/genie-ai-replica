@@ -40,6 +40,11 @@ logger = logging.getLogger(__name__)
 # set at import.
 BFF_FRAME_NAMES = frozenset({"chunk", "done", "error", "metadata", "translation", "agent_activity", "agent_verdict"})
 
+MESSAGE_TRUNCATION = 200
+"""The cap on a message the seam carries — a truncated failure text, never a
+whole traceback. The envelope's home: every message that rides an event
+passes through this cap."""
+
 
 class EventKind(StrEnum):
     """The seam's event kinds — AG-UI-shaped, seam-owned, closed.

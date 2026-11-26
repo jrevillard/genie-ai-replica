@@ -3,20 +3,27 @@
 """The provisional runtime candidate: the custom minimal loop behind the seam.
 
 One implementation of "whatever drives the loop": model call → tool dispatch
-through the registry → events on the seam vocabulary. It is a PROBE
+through the core's dispatcher → events on the seam vocabulary. It is a PROBE
 candidate, not a production commitment: if the runtime decision selects
 another runtime, that runtime plugs onto the same seam — this envelope, this
 vocabulary, this registry, these budget and cancellation hooks — and this
 module carries no successor obligation; whichever runtime is selected builds
 the production integration slice on this seam.
 
+The loop implements the runtime port (:mod:`agent.runtime`): it takes the
+run's inputs, drives the model and the tool dispatch, and returns the
+drafted text with its result. It holds no per-run state — the message list
+is a local of :meth:`run` — so one instance serves many runs and nothing of
+one run leaks into the next.
+
 What the loop owns, and the invariants it keeps:
 
-* **The port is reached only through the registry.** The loop never touches
-  the document capability port directly; the tool executors registered in
-  the registry adapt model-generated arguments into the contract's input
-  types. Nothing unregistered is dispatched (the registry refuses before
-  any resolution), so nothing unreachable through the registry is called.
+* **The corpus is reached only through the dispatcher.** The loop never
+  touches the document capability port directly; the tool executors
+  registered in the registry adapt model-generated arguments into the
+  contract's input types, and the dispatcher is the only path to them.
+  Nothing unregistered is dispatched (the registry refuses before any
+  resolution), so nothing unreachable through the registry is called.
 * **Budget checks precede every dispatch** — the step before the iteration,
   the model call (and the served-usage token check) before the model, the
   tool call (and the wall clock and the evidence volume) before each tool.
@@ -41,95 +48,56 @@ system + user, assistant tool-call turns, role-``tool`` results.
 
 import json
 import logging
-from dataclasses import dataclass
-
-from pydantic import ValidationError
 
 import tracing
-from capabilities.contract import CapabilityError
-from capabilities.model import LoopModelClient, ModelTurn, ToolCallRequest
+from capabilities.model import ModelTurn
 
-from .budget import BudgetExhausted, RunBudgetMonitor
-from .cancellation import CancellationToken, run_cancellable
-from .events import EventEmitter, EventKind, run_started_payload
-from .registry import ToolRegistry, UnregisteredToolError
-from .taint import scan_tool_result
+from .budget import BudgetExhausted
+from .cancellation import run_cancellable
+from .events import MESSAGE_TRUNCATION, EventKind, run_started_payload
+from .registry import UnregisteredToolError
+from .runtime import (
+    OUTCOME_ANSWERED,
+    OUTCOME_BUDGET_EXHAUSTED,
+    OUTCOME_ERROR,
+    RunInputs,
+    RunResult,
+)
 from .verification import INSUFFICIENCY_RESPONSE, VerificationPipeline
 
 logger = logging.getLogger(__name__)
 
-# The outcome vocabulary of a run's evidence. ``cancelled`` is never
-# RETURNED by the loop — the CancelledError propagates untouched and the
-# caller (the probe harness) records it — it is defined here so the
-# vocabulary has one home.
-OUTCOME_ANSWERED = "answered"
-OUTCOME_ERROR = "error"
-OUTCOME_BUDGET_EXHAUSTED = "budget_exhausted"
-OUTCOME_CANCELLED = "cancelled"
 
-MESSAGE_TRUNCATION = 200
-
-
-@dataclass(frozen=True)
-class RunResult:
-    """The terminal record of a completed run (never produced for a cancellation).
-
-    Every counter comes from the run's budget monitor — the loop owns no
-    usage state of its own, so the record and the cancellation's partial
-    evidence read the same source. ``final_text`` is the model's final
-    turn only — an exhausted or failed run carries ``None``, never a
-    fabricated answer.
-    """
-
-    outcome: str
-    final_text: str | None
-    steps: int
-    model_calls: int
-    aux_model_calls: int
-    tool_calls: int
-    evidence_bytes: int
-    wall_clock_seconds: float
-    prompt_tokens: int | None
-    completion_tokens: int | None
-    error: str | None = None
-
-
-@dataclass
 class AgentLoop:
-    """The minimal governed loop: model call → registry dispatch → seam events.
+    """The minimal governed loop: model call → dispatcher → seam events.
 
-    Constructed per run with the run's monitor, token and emitter (the
-    request orchestrator / probe harness builds them, so a cancelled run
-    still leaves readable counters behind); the registry is the run's
-    authorization surface. One instance drives ONE run — the message list
-    is per-run state created in :meth:`run`, the usage counters live on
-    the monitor.
+    The run's monitor, token, emitter, model client and dispatcher arrive
+    with the run's inputs; the verifier and the execution-version record
+    are the loop's own construction material (the verdict and the
+    run-start handshake are the loop's business until the governance moves
+    to the core). The registry is the run's authorization surface, and it
+    travels with the dispatcher.
 
-    ``verifier`` is the run's citation verification pipeline. The
-    governed run surface always builds one; the probe smoke harness runs
-    without one (``None`` — the probe measures the loop, not the verdict).
+    The message list is per-run state created in :meth:`run` — the instance
+    keeps nothing between runs.
     """
 
-    model: LoopModelClient
-    registry: ToolRegistry
-    monitor: RunBudgetMonitor
-    token: CancellationToken
-    emitter: EventEmitter
-    system_prompt: str
-    verifier: VerificationPipeline | None = None
-    # The run's execution-version record, built by the request
-    # orchestrator at assembly. ``None`` keeps the probe-shaped
-    # ``{"question"}`` payload — the handshake key is additive.
-    execution_versions: dict | None = None
+    runtime_id = "custom-loop"
 
-    async def run(self, question: str) -> RunResult:
+    def __init__(self, verifier: VerificationPipeline | None = None, execution_versions: dict | None = None) -> None:
+        self._verifier = verifier
+        # The run's execution-version record, built by the request
+        # orchestrator at assembly. ``None`` keeps the probe-shaped
+        # ``{"question"}`` payload — the handshake key is additive.
+        self._execution_versions = execution_versions
+
+    async def run(self, inputs: RunInputs) -> RunResult:
         """Drive one run to a terminal outcome; cancellation propagates."""
-        self._messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": question},
+        messages = [
+            {"role": "system", "content": inputs.instruction},
+            {"role": "user", "content": inputs.question},
         ]
-        tool_definitions = self.registry.definitions()
-        self.emitter.emit(EventKind.RUN_STARTED, run_started_payload(question, self.execution_versions))
+        inputs.emitter.emit(EventKind.RUN_STARTED, run_started_payload(inputs.question, self._execution_versions))
         # The run-path span uses the ACTIVATING helper deliberately: the
         # per-model-call and per-tool-call children below (and the
         # verification/judge spans) are opened with ``tracing.with_span``,
@@ -143,34 +111,29 @@ class AgentLoop:
                     # The budget checks precede the span: a refused dispatch
                     # (step, token or fleet model-call budget spent) opens no
                     # span — the model_call span covers DISPATCHED calls only.
-                    self.monitor.begin_step()
-                    self.token.raise_if_cancelled()
-                    self.monitor.check_tokens()
-                    self.monitor.take_model_call()
-                    with tracing.with_span("agent.model_call", attributes={"step": self.monitor.steps}) as model_span:
-                        # The token bound rides the request: the call may spend at
-                        # most the remaining allowance (None — field omitted — when
-                        # the served usage is a lower bound and no honest bound
-                        # exists).
+                    inputs.monitor.begin_step()
+                    inputs.token.raise_if_cancelled()
+                    inputs.monitor.check_tokens()
+                    inputs.monitor.take_model_call()
+                    with tracing.with_span("agent.model_call", attributes={"step": inputs.monitor.steps}) as model_span:
+                        # The token bound rides the request, capped by the
+                        # core's bounded client — the runtime never passes
+                        # it, so it cannot forget it.
                         turn = await run_cancellable(
-                            self.token,
-                            self.model.complete(
-                                list(self._messages),
-                                tool_definitions,
-                                max_output_tokens=self.monitor.remaining_output_tokens(),
-                            ),
+                            inputs.token,
+                            inputs.model.complete(list(messages), inputs.tools),
                         )
                         self._model_span_counters(model_span, turn)
-                    self.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
+                    inputs.monitor.record_usage(turn.prompt_tokens, turn.completion_tokens)
                     if turn.tool_calls:
-                        self._messages.append(self._assistant_tool_call_message(turn))
+                        messages.append(self._assistant_tool_call_message(turn))
                         for request in turn.tool_calls:
-                            result_payload = await self._dispatch_tool(request)
+                            result_payload = await inputs.dispatcher.dispatch(request)
                             # One serialization home: the evidence size and the
                             # tool message report the same bytes.
                             result_json = json.dumps(result_payload)
-                            self.monitor.record_evidence(len(result_json.encode("utf-8")))
-                            self._messages.append(
+                            inputs.monitor.record_evidence(len(result_json.encode("utf-8")))
+                            messages.append(
                                 {
                                     "role": "tool",
                                     "tool_call_id": request.call_id,
@@ -178,16 +141,16 @@ class AgentLoop:
                                 }
                             )
                         continue
-                    return await self._finish(turn)
+                    return await self._finish(turn, inputs)
             except UnregisteredToolError as refused:
                 # The registry refused before any resolution; the run ends
                 # honestly with the refusal — no tool result is invented.
-                return self._fail(OUTCOME_ERROR, str(refused))
+                return self._fail(OUTCOME_ERROR, str(refused), inputs)
             except BudgetExhausted as exhausted:
-                return self._fail(OUTCOME_BUDGET_EXHAUSTED, str(exhausted))
+                return self._fail(OUTCOME_BUDGET_EXHAUSTED, str(exhausted), inputs)
             except Exception as failed:  # noqa: BLE001 — a failed run still gets its terminal event
                 logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:MESSAGE_TRUNCATION])
-                return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}")
+                return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:MESSAGE_TRUNCATION]}", inputs)
 
     @staticmethod
     def _model_span_counters(span, turn: ModelTurn) -> None:
@@ -202,7 +165,7 @@ class AgentLoop:
 
     # -- the model turn ------------------------------------------------------
 
-    async def _finish(self, turn: ModelTurn) -> RunResult:
+    async def _finish(self, turn: ModelTurn, inputs: RunInputs) -> RunResult:
         """A final (text) turn: the mechanical insufficiency decision, the
         text-message lifecycle, the verification verdict, the terminal.
 
@@ -229,20 +192,20 @@ class AgentLoop:
         if text is None:
             # Neither a tool call nor a final text is a protocol anomaly;
             # the run ends honestly instead of answering with nothing.
-            return self._fail(OUTCOME_ERROR, "the model returned neither a tool call nor a final text")
-        if self.verifier is not None and self.verifier.insufficiency_decision()["required"]:
+            return self._fail(OUTCOME_ERROR, "the model returned neither a tool call nor a final text", inputs)
+        if self._verifier is not None and self._verifier.insufficiency_decision()["required"]:
             # Insufficiency by mechanism, not prose: the ledger decided,
             # the drafted text is discarded, the standard message is the
             # delivered answer.
             text = INSUFFICIENCY_RESPONSE
-        self.emitter.emit(EventKind.TEXT_MESSAGE_STARTED, {"role": "assistant"})
-        self.emitter.emit(EventKind.TEXT_MESSAGE_CONTENT, {"text": text})
-        self.emitter.emit(EventKind.TEXT_MESSAGE_FINISHED, {})
-        if self.verifier is not None:
-            verdict = await self.verifier.finalize(text)
-            self.emitter.emit(EventKind.VERDICT, verdict.payload())
-        self.emitter.emit(EventKind.RUN_FINISHED, {"outcome": OUTCOME_ANSWERED})
-        return self._terminal(OUTCOME_ANSWERED, final_text=text)
+        inputs.emitter.emit(EventKind.TEXT_MESSAGE_STARTED, {"role": "assistant"})
+        inputs.emitter.emit(EventKind.TEXT_MESSAGE_CONTENT, {"text": text})
+        inputs.emitter.emit(EventKind.TEXT_MESSAGE_FINISHED, {})
+        if self._verifier is not None:
+            verdict = await self._verifier.finalize(text)
+            inputs.emitter.emit(EventKind.VERDICT, verdict.payload())
+        inputs.emitter.emit(EventKind.RUN_FINISHED, {"outcome": OUTCOME_ANSWERED})
+        return self._terminal(OUTCOME_ANSWERED, inputs, final_text=text)
 
     def _assistant_tool_call_message(self, turn: ModelTurn) -> dict:
         """The assistant message that carries the requested tool calls back on the list."""
@@ -259,98 +222,29 @@ class AgentLoop:
             ],
         }
 
-    # -- tool dispatch ---------------------------------------------------------
-
-    async def _dispatch_tool(self, request: ToolCallRequest) -> dict:
-        """One tool call: budget and token checks, lifecycle events, registry dispatch.
-
-        The checks precede the ``tool_call_started`` event, so a refused
-        dispatch (budget spent, run cancelled) never announces a tool call
-        that will not run — every started event is answered by a finish, a
-        refusal, or a cancellation that reached a genuinely in-flight call.
-        The registry refuses an unregistered name (that refusal propagates —
-        it ends the run); a port error or an invalid argument flows back to
-        the model as the structured tool result. Both paths emit the
-        ``tool_call_finished`` event that reports what actually happened.
-        """
-        self.monitor.check_wall_clock()
-        self.token.raise_if_cancelled()
-        self.monitor.check_evidence_volume()
-        self.monitor.take_tool_call()
-        self.emitter.emit(
-            EventKind.TOOL_CALL_STARTED,
-            {"name": request.name, "arguments": request.arguments},
-            call_id=request.call_id,
-        )
-        with tracing.with_span(
-            "agent.tool_call", attributes={"call_id": request.call_id, "tool": request.name}
-        ) as tool_span:
-            result_payload = await self._execute(request)
-            # The declared-error surface flows back as data (see _execute):
-            # the span records THAT fact, never the payload text.
-            tool_span.set_attribute("errored", "error" in result_payload)
-        if self.verifier is not None:
-            # Every dispatched result reaches the verification ledger —
-            # success shapes contribute their citations, error envelopes
-            # record the attempt (the ledger classifies both itself).
-            self.verifier.record_tool_result(request.name, result_payload)
-            # The taint scan: retrieved content is data, never
-            # instructions. An instruction pattern in a retrieved text is a
-            # recorded finding — ledger, verdict payload and usage record —
-            # and the content STILL passes as data: the same payload feeds
-            # the model's role-tool message either way, no behavior change
-            # from content.
-            findings = scan_tool_result(request.name, result_payload)
-            for finding in findings:
-                self.verifier.record_finding(finding)
-            if findings:
-                self.monitor.record_injection_findings(len(findings))
-        self.emitter.emit(EventKind.TOOL_CALL_FINISHED, result_payload, call_id=request.call_id)
-        return result_payload
-
-    async def _execute(self, request: ToolCallRequest) -> dict:
-        """Run the executor through the registry; map the declared error surface to data."""
-        try:
-            result = await run_cancellable(self.token, self.registry.dispatch(request.name, request.arguments))
-        except (CapabilityError, ValidationError) as failed:
-            # The contract's declared errors (and the argument validation a
-            # model can violate) are data for the model, not run failures:
-            # the loop never fabricates a successful result for them, and
-            # never converts one into an instruction.
-            if isinstance(failed, CapabilityError):
-                code, operation = failed.code.value, failed.operation.value if failed.operation else None
-            else:
-                code, operation = "invalid_arguments", None
-            detail = {"code": code, "operation": operation, "message": str(failed)[:MESSAGE_TRUNCATION]}
-            logger.info(
-                "tool %s reported %s: %s",
-                request.name,
-                detail["code"],
-                detail["message"],
-            )
-            return {"error": detail}
-        return {"result": result}
-
     # -- failure and usage -------------------------------------------------
 
-    def _terminal(self, outcome: str, *, final_text: str | None = None, error: str | None = None) -> RunResult:
+    def _terminal(
+        self, outcome: str, inputs: RunInputs, *, final_text: str | None = None, error: str | None = None
+    ) -> RunResult:
         """The terminal record every completed run returns: the run's monitor
         counts, the accumulated usage, and the outcome the caller asked for."""
+        monitor = inputs.monitor
         return RunResult(
             outcome=outcome,
             final_text=final_text,
-            steps=self.monitor.steps,
-            model_calls=self.monitor.model_calls,
-            aux_model_calls=self.monitor.aux_model_calls,
-            tool_calls=self.monitor.tool_calls,
-            evidence_bytes=self.monitor.evidence_bytes,
-            wall_clock_seconds=self.monitor.elapsed_seconds,
-            prompt_tokens=self.monitor.prompt_tokens,
-            completion_tokens=self.monitor.completion_tokens,
+            steps=monitor.steps,
+            model_calls=monitor.model_calls,
+            aux_model_calls=monitor.aux_model_calls,
+            tool_calls=monitor.tool_calls,
+            evidence_bytes=monitor.evidence_bytes,
+            wall_clock_seconds=monitor.elapsed_seconds,
+            prompt_tokens=monitor.prompt_tokens,
+            completion_tokens=monitor.completion_tokens,
             error=error,
         )
 
-    def _fail(self, outcome: str, message: str) -> RunResult:
+    def _fail(self, outcome: str, message: str, inputs: RunInputs) -> RunResult:
         """End the run honestly: the terminal ``run_error``, no answer text."""
-        self.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:MESSAGE_TRUNCATION]})
-        return self._terminal(outcome, error=message[:MESSAGE_TRUNCATION])
+        inputs.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:MESSAGE_TRUNCATION]})
+        return self._terminal(outcome, inputs, error=message[:MESSAGE_TRUNCATION])

@@ -45,11 +45,14 @@ from dataclasses import asdict, dataclass
 
 from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
+from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter
-from agent.loop import (
+from agent.loop import AgentLoop
+from agent.runtime import (
     OUTCOME_ANSWERED,
     OUTCOME_CANCELLED,
-    AgentLoop,
+    BoundedModelClient,
+    RunInputs,
 )
 
 # The registered toolset is a production surface, not a probe artifact — it
@@ -166,13 +169,17 @@ async def run_probe(
     token = token if token is not None else CancellationToken()
     registry = document_toolset(port, context, operation_budget)
     emitter = EventEmitter(run_id=f"probe-{uuid.uuid4().hex}")
-    loop = AgentLoop(
-        model=model_client,
-        registry=registry,
+    dispatcher = ToolDispatcher(registry=registry, monitor=monitor, token=token, emitter=emitter)
+    loop = AgentLoop()
+    inputs = RunInputs(
+        question=question,
+        instruction=PROBE_SYSTEM_PROMPT,
+        tools=registry.definitions(),
+        model=BoundedModelClient(model_client, monitor),
+        dispatcher=dispatcher,
         monitor=monitor,
         token=token,
         emitter=emitter,
-        system_prompt=PROBE_SYSTEM_PROMPT,
     )
 
     def _record(
@@ -202,7 +209,7 @@ async def run_probe(
         )
 
     try:
-        result = await loop.run(question)
+        result = await loop.run(inputs)
     except asyncio.CancelledError:
         # The loop's RunResult never exists on this path; the monitor's
         # partial counts are the honest record.

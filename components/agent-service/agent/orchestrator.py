@@ -48,6 +48,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 
 from capabilities.contract import CallerContext, OperationBudget
+from capabilities.model import LoopModelClient
 from noagent.config import required_positive_float, required_positive_int
 from noagent.lane import Lane, LaneBusyError
 from preparation.config import PreparationConfig
@@ -57,9 +58,18 @@ from preparation.translation import ModelEndpointCache, TranslationClient
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
-from .events import EventEmitter, EventKind, EventSink, run_started_payload
-from .loop import MESSAGE_TRUNCATION, OUTCOME_CANCELLED, OUTCOME_ERROR, AgentLoop, LoopModelClient, RunResult
+from .dispatcher import ToolDispatcher
+from .events import MESSAGE_TRUNCATION, EventEmitter, EventKind, EventSink, run_started_payload
+from .loop import AgentLoop
 from .prompt import PRODUCTION_SYSTEM_PROMPT
+from .runtime import (
+    OUTCOME_CANCELLED,
+    OUTCOME_ERROR,
+    BoundedModelClient,
+    RunInputs,
+    RunResult,
+    RuntimeDriver,
+)
 from .toolset import document_toolset
 from .verification import (
     IMPLEMENTED_POLICIES,
@@ -288,6 +298,18 @@ class BudgetedTranslationClient(TranslationClient):
         return await super().translate_prompt(prompt, translategemma, model_id)
 
 
+def default_runtime_factory(*, verifier, execution_versions) -> RuntimeDriver:
+    """The runtime the orchestrator drives when nothing else is chosen.
+
+    The custom minimal loop: the seam's first implementation, and the one
+    the governed run surface ships. The verifier and the execution-version
+    record are the loop's own construction material; everything else the
+    run needs travels with the inputs.
+    """
+
+    return AgentLoop(verifier=verifier, execution_versions=execution_versions)
+
+
 def build_preparer_factory(transport, env=None):
     """The per-run preparer factory the orchestrator wires.
 
@@ -332,6 +354,7 @@ class RequestOrchestrator:
         model_client: LoopModelClient,
         port_factory,
         preparer_factory=None,
+        runtime_factory=None,
     ) -> None:
         self._config = config
         self._lane = lane
@@ -343,6 +366,11 @@ class RequestOrchestrator:
         # leg) — the tests' and the probe's path; the governed surface
         # always wires one.
         self._preparer_factory = preparer_factory
+        # The runtime seam: the orchestrator drives a RUNTIME, not a loop.
+        # The factory is how the runtime is chosen — the default builds the
+        # custom minimal loop; a test or a future runtime plugs its own
+        # driver in here, and the governance around it stays the core's.
+        self._runtime_factory = runtime_factory if runtime_factory is not None else default_runtime_factory
 
     @asynccontextmanager
     async def admit(self) -> AsyncIterator[None]:
@@ -415,17 +443,23 @@ class RequestOrchestrator:
                 monitor=monitor,
                 authorized_repos=request.context.authorized_repos,
             )
-            loop = AgentLoop(
-                model=self._model_client,
-                registry=registry,
+            # The dispatcher is the core's tool dispatch: the runtime reaches
+            # the corpus through it and through nothing else.
+            dispatcher = ToolDispatcher(
+                registry=registry, monitor=monitor, token=token, emitter=emitter, verifier=verifier
+            )
+            runtime = self._runtime_factory(verifier=verifier, execution_versions=execution_versions)
+            inputs = RunInputs(
+                question=request.question,
+                instruction=self._config.system_prompt,
+                tools=registry.definitions(),
+                model=BoundedModelClient(self._model_client, monitor),
+                dispatcher=dispatcher,
                 monitor=monitor,
                 token=token,
                 emitter=emitter,
-                system_prompt=self._config.system_prompt,
-                verifier=verifier,
-                execution_versions=execution_versions,
             )
-            result: RunResult = await loop.run(request.question)
+            result: RunResult = await runtime.run(inputs)
         except asyncio.CancelledError:
             logger.warning(
                 "agent run cancelled mid-flight; the partial usage record: %s",

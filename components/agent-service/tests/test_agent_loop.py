@@ -19,6 +19,7 @@ import pytest
 from conftest import (
     AgentFakePort,
     HangingLoopModel,
+    LoopRunner,
     ScriptedLoopModel,
     cancel_when_started,
     canned_read_result,
@@ -30,14 +31,8 @@ from conftest import (
 from agent.budget import RunBudgetMonitor
 from agent.cancellation import CancellationToken
 from agent.events import BFF_FRAME_NAMES, AgentEvent, EventEmitter
-from agent.loop import (
-    OUTCOME_ANSWERED,
-    OUTCOME_BUDGET_EXHAUSTED,
-    OUTCOME_ERROR,
-    AgentLoop,
-    ModelTurn,
-    ToolCallRequest,
-)
+from agent.loop import AgentLoop
+from agent.runtime import OUTCOME_ANSWERED, OUTCOME_BUDGET_EXHAUSTED, OUTCOME_ERROR
 from agent.verification import VerificationPipeline
 from capabilities.contract import (
     AuthorizationError,
@@ -45,6 +40,7 @@ from capabilities.contract import (
     OperationName,
     OutcomeCode,
 )
+from capabilities.model import ModelTurn, ToolCallRequest
 from measurement.probe import PROBE_OPERATION_BUDGET, document_toolset
 
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
@@ -101,16 +97,17 @@ def _verifying_loop(model, judge_turns=(), budget=None, token=None):
         monitor=monitor,
         authorized_repos=PROBE_CONTEXT.authorized_repos,
     )
-    loop = AgentLoop(
+    runner = LoopRunner(
+        AgentLoop(verifier=verifier),
         model=model,
         registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
         token=token,
         emitter=EventEmitter(run_id="run-1", sink=collector.append),
-        system_prompt="probe system prompt",
         verifier=verifier,
+        instruction="probe system prompt",
     )
-    return loop, collector, monitor
+    return runner, collector, monitor
 
 
 def _loop(model, port=None, budget=None, token=None, registry=None, verifier=None):
@@ -119,16 +116,17 @@ def _loop(model, port=None, budget=None, token=None, registry=None, verifier=Non
     if registry is None:
         registry = document_toolset(port if port is not None else _port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     monitor = RunBudgetMonitor(budget or DEFAULT_BUDGET)
-    loop = AgentLoop(
+    runner = LoopRunner(
+        AgentLoop(verifier=verifier),
         model=model,
         registry=registry,
         monitor=monitor,
         token=token,
         emitter=EventEmitter(run_id="run-1", sink=collector.append),
-        system_prompt="probe system prompt",
         verifier=verifier,
+        instruction="probe system prompt",
     )
-    return loop, collector, monitor
+    return runner, collector, monitor
 
 
 # ---------------------------------------------------------------------
@@ -646,17 +644,18 @@ def test_the_judge_runs_after_the_text_events_never_before_the_first_chunk():
         monitor=monitor,
         authorized_repos=PROBE_CONTEXT.authorized_repos,
     )
-    loop = AgentLoop(
+    runner = LoopRunner(
+        AgentLoop(verifier=verifier),
         model=ScriptedLoopModel(MULTI_HOP_TURNS),
         registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
         token=CancellationToken(),
         emitter=EventEmitter(run_id="run-1", sink=lambda event: sequence.append(event.kind.value)),
-        system_prompt="the production prompt",
         verifier=verifier,
+        instruction="the production prompt",
     )
 
-    asyncio.run(loop.run("q"))
+    asyncio.run(runner.run("q"))
 
     assert sequence == [
         "run_started",

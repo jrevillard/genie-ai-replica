@@ -4,7 +4,7 @@
 
 **Goal:** Give the agent service its architecture test — six `pytestarch` rules, with the violations that remain written as a list that can only shrink — and close the two leaks of the design that need no code to move.
 
-**Architecture:** `pytestarch` reads the import graph of `components/agent-service` at test time. Every module is first classified into one layer (host, core, leaf adapters, capability), so nothing sits outside the rules. Rule R1 (a core module imports no I/O library) and rule R2 (a core module imports nothing of another layer) are ratchets: the set of violations found on the tree, named by the file that causes each one, is asserted equal to a listed set in `tests/test_architecture.py`. Closing a leak turns the test red until the list shrinks; a new leak turns it red as well. Rule T confines the telemetry SDK to `tracing.py`; rules L1 and L2 are layer rules that hold on the whole tree today. The executor then stops naming concrete adapters (three Protocols in `capabilities/sources.py`), and the reranker abstention text moves from the capability module to the contract.
+**Architecture:** `pytestarch` reads the import graph of `components/agent-service` at test time. Every module is first classified into one layer (host, core, leaf adapters, capability), so nothing sits outside the rules. Rule R1 (a core module imports no I/O library) and rule R2 (a core module imports nothing of another layer) are ratchets: the set of violations found on the tree, named by the file that causes each one, is asserted equal to a listed set in `tests/test_architecture.py`. Closing a leak turns the test red until the list shrinks; a new leak turns it red as well. Rule R3 lists the modules that import the leaf adapters. Rule T confines the telemetry SDK to `tracing.py` and to nothing else; rules L1 and L2 are layer rules that hold on the whole tree today. The executor then stops naming concrete adapters (three Protocols in `capabilities/sources.py`), and the reranker abstention text moves from the capability module to the contract.
 
 **Tech Stack:** Python 3.11, pytest 9.1.1, pytestarch 5.1.1 (its one requirement, networkx, pinned to 3.6.1), ruff 0.16.3.
 
@@ -67,6 +67,15 @@ After this plan the two ratchets list these violations, all closed by plan 2:
 | R1 | `("preparation.translation", "httpx")` | `preparation/translation.py` |
 | R2 | `("agent.probe", "capabilities.adapters")`, `("agent.probe", "capabilities.search_knowledge")` | `agent/probe.py` |
 
+and rule R3 lists the modules that import the leaf adapters:
+
+| Rule | Module listed | Caused by |
+|---|---|---|
+| R3 | `agent.probe` | `agent/probe.py` |
+| R3 | `capabilities.search_knowledge` | the capability builds its own adapters |
+
+Plan 2 empties the three sets.
+
 ## File map
 
 | File | Responsibility | Task |
@@ -92,7 +101,9 @@ Each was checked on a copy of the service before being written here.
 - **Every module is classified first.** R1 and R2 look at direct imports. A module outside every layer — a new root-level `wiring.py` that imports `httpx`, say — would give the core a path no rule sees. The classification test refuses such a module until it is given a layer.
 - **The telemetry facade is an allowed dependency, bounded.** Four core modules import `tracing`, where the OpenTelemetry SDK is wired. Rule T pins that the SDK is imported by `tracing` and nothing else outside the host.
 - **A library nobody imports is absent from the graph**, and a rule that names it raises `ModuleUnknown`. The I/O list is therefore filtered by presence before any rule is built.
-- **A deny-list, presence-filtered.** An allow-list of what the core may import was rejected: every new standard-library import would need an edit of the test.
+- **A deny-list, presence-filtered, and the absences declared.** An allow-list of what the core may import was rejected: every new standard-library import would need an edit of the test. A library nobody imports is absent from the graph, and a rule that names it raises `ModuleUnknown` — so the list declares the libraries the service does not import yet, and a test checks that the declaration and the tree agree. A name that is neither imported nor declared is a typo, and the test says so.
+- **The libraries are named by package.** `pytestarch` names an import after the package it comes from: `from urllib import request` is the import of `urllib`. A list of dotted names would miss that spelling.
+- **R3 counts direct importers, and the transitive form is not used.** `be_imported_by_modules_except_modules_that()` evaluates the transitive closure and reports the whole import chain — eighteen lines on today's tree, among them a module importing its own package. The direct form, over the modules that are not adapters themselves, names the importers.
 - **Set equality, not one test per pair.** One test per rule prints the complete list of what changed; a fix and a regression are both one visible diff.
 
 ---
@@ -366,14 +377,15 @@ Every module of the service belongs to one of four layers:
 * CAPABILITY — ``capabilities/search_knowledge.py``: the search capability,
   which builds its own adapters today.
 
-Six rules keep the layers apart:
+Seven rules keep the layers apart:
 
 * **C** — every module is classified. A module outside the layers would have
   no rule looking at it.
 * **R1** — a core module imports no I/O library.
-* **R2** — a core module imports nothing of another layer, the telemetry
+* **R2** — a core module imports no module of another layer, the telemetry
   facade ``tracing`` excepted.
-* **T** — the telemetry SDK is imported by ``tracing`` only.
+* **R3** — the modules that import the leaf adapters are a listed set.
+* **T** — the telemetry SDK is imported by ``tracing`` and by nothing else.
 * **L1**, **L2** — a leaf adapter accesses only the ports it implements; the
   capability accesses only the ports and the leaf adapters.
 
@@ -386,9 +398,10 @@ new leak adds a pair and the test goes red as well. The lists change only
 through a visible edit of this file.
 
 ``pytestarch`` reads imports from the syntax tree: a function-local ``import``
-is seen, a dynamic ``importlib.import_module`` is not. The last test plants
-each violation on a synthetic package and checks that the same helpers report
-it.
+is seen, a dynamic ``importlib.import_module`` is not. It names an import after
+the PACKAGE it comes from — ``from urllib import request`` is the import of
+``urllib`` — so the rules name packages. The last test plants each violation on
+a synthetic package and checks that the same helpers report it.
 """
 
 from pathlib import Path
@@ -401,7 +414,11 @@ SERVICE = Path(__file__).resolve().parents[1]
 
 
 class Layout(NamedTuple):
-    """What each layer is made of, by module name relative to the service root."""
+    """What each layer is made of, by module name relative to the service root.
+
+    The host is named module by module: a module that joins the host is
+    declared here, so the rules see it.
+    """
 
     host: tuple[str, ...]
     core_packages: tuple[str, ...]
@@ -425,21 +442,19 @@ SERVICE_LAYOUT = Layout(
     capability="capabilities.search_knowledge",
 )
 
+# The telemetry facade: the one module of the host the core may import, and
+# the only one allowed to import the telemetry SDK.
+TELEMETRY_FACADE = "tracing"
 # What the core and the adapters exchange.
 PORTS = ("capabilities.contract", "capabilities.identifiers")
-# What a core module never imports from another layer: the composition root,
-# the adapters and the capability. The telemetry facade is left out on purpose.
-NON_CORE_MODULES = ("app", SERVICE_LAYOUT.leaf_adapters, SERVICE_LAYOUT.capability)
-# The layers a rule covers when it excludes the host.
-OUTSIDE_HOST = ("core", "leaf adapters", "capability")
-# The import names a core module never imports. The list names, it does not
-# match: a new I/O library is added here when the service adopts it.
+# The import names a core module never imports. The list names PACKAGES, so
+# ``from urllib import request`` is caught as the import of ``urllib``.
 IO_LIBRARIES = (
     "httpx",
     "requests",
     "aiohttp",
-    "http.client",
-    "urllib.request",
+    "http",
+    "urllib",
     "socket",
     "fastapi",
     "starlette",
@@ -451,6 +466,21 @@ IO_LIBRARIES = (
     "openai",
     "subprocess",
     "fcntl",
+)
+# The libraries of the list above that the service does not import yet. A
+# library that enters the tree leaves this set; a name of IO_LIBRARIES that is
+# neither imported nor declared here is a typo, and the rule that checks the
+# list says so.
+IO_LIBRARIES_NOT_YET_IMPORTED = (
+    "aiohttp",
+    "socket",
+    "starlette",
+    "uvicorn",
+    "sqlite3",
+    "redis",
+    "mcp",
+    "openai",
+    "subprocess",
 )
 TELEMETRY_SDK = "opentelemetry"
 
@@ -467,6 +497,12 @@ KNOWN_INTERNAL_VIOLATIONS = {
     ("agent.probe", SERVICE_LAYOUT.capability),  # agent/probe.py: the adapter assembly lives in the seam package
     ("capabilities.executor", SERVICE_LAYOUT.leaf_adapters),  # the executor names three concrete adapters
     ("noagent.prompt", SERVICE_LAYOUT.capability),  # noagent/prompt.py imports the reranker abstention text
+}
+# R3 — the modules that import the leaf adapters.
+KNOWN_ADAPTER_IMPORTERS = {
+    "agent.probe",  # agent/probe.py: the adapter assembly lives in the seam package
+    "capabilities.executor",  # the executor names three concrete adapters
+    "capabilities.search_knowledge",  # the capability builds its own adapters
 }
 
 LAYERS = {
@@ -534,6 +570,16 @@ def _modules(graph: EvaluableArchitecture, root: str) -> list[str]:
     return sorted(name[len(root) + 1 :] for name in graph.modules if _is_module(name, root + "."))
 
 
+def _leaf_modules(modules: list[str]) -> list[str]:
+    """The modules that hold imports of their own.
+
+    A package node carries none: the imports of its ``__init__.py`` sit in its
+    ``__init__`` node.
+    """
+
+    return [module for module in modules if f"{module}.__init__" not in modules]
+
+
 def _within(module: str, package: str) -> bool:
     return module == package or module.startswith(package + ".")
 
@@ -553,13 +599,24 @@ def _layer_of(module: str, layout: Layout) -> str | None:
 
 
 def _in_layers(modules: list[str], layers: tuple[str, ...], layout: Layout) -> list[str]:
-    """The modules of the given layers that hold imports of their own.
+    """The modules of the given layers."""
 
-    A package node carries none: the imports of its ``__init__.py`` sit in its
-    ``__init__`` node.
-    """
+    return [module for module in modules if _layer_of(module, layout) in layers]
 
-    return [module for module in modules if _layer_of(module, layout) in layers and f"{module}.__init__" not in modules]
+
+def _other_layers(layout: Layout) -> list[str]:
+    """The roots of what a core module may not import: the host, the adapters, the capability."""
+
+    return [module for module in layout.host if module != TELEMETRY_FACADE] + [
+        layout.leaf_adapters,
+        layout.capability,
+    ]
+
+
+def _present(graph: EvaluableArchitecture, library: str) -> bool:
+    """True when the library is in the graph at all."""
+
+    return any(name == library or name.startswith(library + ".") for name in graph.modules)
 
 
 def _io_violations(
@@ -567,11 +624,10 @@ def _io_violations(
 ) -> set[tuple[str, str]]:
     """The (module, library) pairs of ``subjects`` that import a library of ``libraries``."""
 
-    modules = graph.modules
     violations = set()
     for module in subjects:
         for library in libraries:
-            if not any(name == library or name.startswith(library + ".") for name in modules):
+            if not _present(graph, library):
                 continue  # nothing imports this library: the rule has nothing to check
             if _violated(_imports_no_library(root, module, library), graph):
                 violations.add((module, library))
@@ -624,24 +680,48 @@ def test_every_module_belongs_to_a_layer(internal: EvaluableArchitecture) -> Non
     assert [module for module in modules if _layer_of(module, SERVICE_LAYOUT) is None] == []
 
 
+def test_the_io_library_list_covers_the_tree(with_libraries: EvaluableArchitecture) -> None:
+    """Every name of the list is imported by the service or declared as not yet imported."""
+
+    modules = _leaf_modules(_modules(with_libraries, SERVICE.name))
+    imported = {
+        library
+        for library in IO_LIBRARIES
+        if _present(with_libraries, library)
+        and any(_violated(_imports_no_library(SERVICE.name, module, library), with_libraries) for module in modules)
+    }
+    assert imported | set(IO_LIBRARIES_NOT_YET_IMPORTED) == set(IO_LIBRARIES)
+    assert not imported & set(IO_LIBRARIES_NOT_YET_IMPORTED)
+
+
 def test_core_modules_import_no_io_library(with_libraries: EvaluableArchitecture) -> None:
-    core = _in_layers(_modules(with_libraries, SERVICE.name), ("core",), SERVICE_LAYOUT)
+    core = _in_layers(_leaf_modules(_modules(with_libraries, SERVICE.name)), ("core",), SERVICE_LAYOUT)
     assert _io_violations(SERVICE.name, core, with_libraries) == KNOWN_IO_VIOLATIONS
 
 
 def test_core_modules_import_no_other_layer(internal: EvaluableArchitecture) -> None:
-    core = _in_layers(_modules(internal, SERVICE.name), ("core",), SERVICE_LAYOUT)
-    assert _internal_violations(SERVICE.name, core, NON_CORE_MODULES, internal) == KNOWN_INTERNAL_VIOLATIONS
+    core = _in_layers(_leaf_modules(_modules(internal, SERVICE.name)), ("core",), SERVICE_LAYOUT)
+    violations = _internal_violations(SERVICE.name, core, tuple(_other_layers(SERVICE_LAYOUT)), internal)
+    assert violations == KNOWN_INTERNAL_VIOLATIONS
+
+
+def test_only_the_listed_modules_import_the_leaf_adapters(internal: EvaluableArchitecture) -> None:
+    modules = [
+        module
+        for module in _leaf_modules(_modules(internal, SERVICE.name))
+        if not _within(module, SERVICE_LAYOUT.leaf_adapters)
+    ]
+    importers = {
+        module
+        for module in modules
+        if _internal_violations(SERVICE.name, [module], (SERVICE_LAYOUT.leaf_adapters,), internal)
+    }
+    assert importers == KNOWN_ADAPTER_IMPORTERS
 
 
 def test_the_telemetry_sdk_is_imported_by_the_tracing_module_only(with_libraries: EvaluableArchitecture) -> None:
-    modules = _modules(with_libraries, SERVICE.name)
-    assert (
-        _io_violations(
-            SERVICE.name, _in_layers(modules, OUTSIDE_HOST, SERVICE_LAYOUT), with_libraries, (TELEMETRY_SDK,)
-        )
-        == set()
-    )
+    modules = [module for module in _modules(with_libraries, SERVICE.name) if module != TELEMETRY_FACADE]
+    assert _io_violations(SERVICE.name, modules, with_libraries, (TELEMETRY_SDK,)) == set()
 
 
 def test_leaf_adapters_access_only_the_ports(internal: EvaluableArchitecture) -> None:
@@ -687,36 +767,46 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
     for relative, source in clean.items():
         _plant(package, relative, source)
 
-    def core_modules(with_libraries: bool) -> list[str]:
-        graph = _graph(package, with_libraries=with_libraries)
-        return _in_layers(_modules(graph, root), ("core",), layout)
+    def modules(with_libraries: bool) -> list[str]:
+        return _leaf_modules(_modules(_graph(package, with_libraries=with_libraries), root))
+
+    def core_modules() -> list[str]:
+        return _in_layers(modules(True), ("core",), layout)
 
     # An environment directory is not part of the architecture.
     assert "ssl" not in _graph(package, with_libraries=True).modules
 
     # C: the module outside every layer is named, and it is gone once deleted.
-    modules = _modules(_graph(package, with_libraries=True), root)
-    assert [module for module in modules if _layer_of(module, layout) is None] == ["wiring"]
+    assert [module for module in modules(True) if _layer_of(module, layout) is None] == ["wiring"]
     (package / "wiring.py").unlink()
 
     # R1: the planted import is reported by its file; the clean module and the host are not.
-    assert _io_violations(root, core_modules(True), _graph(package, with_libraries=True)) == {("core.leaky", "httpx")}
+    assert _io_violations(root, core_modules(), _graph(package, with_libraries=True)) == {("core.leaky", "httpx")}
 
     # R2: the same for a core module that reaches another layer.
     assert _internal_violations(
-        root, core_modules(False), ("app", "adapters", "capability"), _graph(package, with_libraries=False)
+        root, core_modules(), tuple(_other_layers(layout)), _graph(package, with_libraries=False)
     ) == {("core.leaky", "adapters")}
 
-    # T: the SDK sits in the host; a module outside the host importing it is reported.
-    def outside_host() -> list[str]:
-        return _in_layers(
-            _modules(_graph(package, with_libraries=True), root), ("core", "leaf adapters", "capability"), layout
-        )
+    # R3: the direct importers of the adapters are the listed ones.
+    def adapter_importers() -> set[str]:
+        subjects = [module for module in modules(False) if not _within(module, "adapters")]
+        return {
+            module
+            for module in subjects
+            if _internal_violations(root, [module], ("adapters",), _graph(package, with_libraries=False))
+        }
 
-    assert _io_violations(root, outside_host(), _graph(package, with_libraries=True), (TELEMETRY_SDK,)) == set()
-    _plant(package, "capability.py", clean["capability.py"] + "import opentelemetry\n")
-    assert _io_violations(root, outside_host(), _graph(package, with_libraries=True), (TELEMETRY_SDK,)) == {
-        ("capability", "opentelemetry")
+    assert adapter_importers() == {"app", "core.leaky", "capability"}
+
+    # T: the SDK sits in the facade; any other module importing it is reported.
+    def outside_facade() -> list[str]:
+        return [module for module in modules(True) if module != "tracing"]
+
+    assert _io_violations(root, outside_facade(), _graph(package, with_libraries=True), (TELEMETRY_SDK,)) == set()
+    _plant(package, "app.py", clean["app.py"] + "import opentelemetry\n")
+    assert _io_violations(root, outside_facade(), _graph(package, with_libraries=True), (TELEMETRY_SDK,)) == {
+        ("app", "opentelemetry")
     }
 
     # L1 and L2: they hold, then a cross-layer import breaks each.
@@ -735,20 +825,18 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
 
     # The ratchet releases: a repaired tree reports no violation at all.
     _plant(package, "core/leaky.py", clean["core/clean.py"])
-    assert _io_violations(root, core_modules(True), _graph(package, with_libraries=True)) == set()
+    assert _io_violations(root, core_modules(), _graph(package, with_libraries=True)) == set()
     assert (
-        _internal_violations(
-            root, core_modules(False), ("app", "adapters", "capability"), _graph(package, with_libraries=False)
-        )
+        _internal_violations(root, core_modules(), tuple(_other_layers(layout)), _graph(package, with_libraries=False))
         == set()
     )
 ```
 
 How to read it:
 
-- `SERVICE_LAYOUT` names the four layers. `core_packages` are whole packages; `core_modules` are the modules of `capabilities/` that belong to the core. The search capability is its own layer, counted as adapter code by rule R2, because it builds its own adapters today (leak 5 of the design). `capabilities/sources` is not there yet: Task 3 creates it and classifies it.
-- `IO_LIBRARIES` names sixteen import names. Five are imported somewhere in the service today (`httpx`, `requests`, `fastapi`, `arango`, `fcntl`); the other eleven wait for the day the service adopts them. A name is checked by its exact import name: `urllib.parse` is imported today and is not on the list, `urllib.request` is on the list and is not imported.
-- The two `KNOWN_*` sets are the ratchet. Do not edit them in this task.
+- `SERVICE_LAYOUT` names the four layers. `core_packages` are whole packages; `core_modules` are the modules of `capabilities/` that belong to the core. The host is named module by module: a module that joins the host is declared there, so rule R2 sees it. The search capability is its own layer, counted as adapter code by rule R2, because it builds its own adapters today (leak 5 of the design). `capabilities/sources` is not there yet: Task 3 creates it and classifies it.
+- `IO_LIBRARIES` names sixteen PACKAGES. Seven are imported somewhere in the service today (`httpx`, `requests`, `http`, `urllib`, `fastapi`, `arango`, `fcntl`); the other nine are declared in `IO_LIBRARIES_NOT_YET_IMPORTED` and wait for the day the service adopts them. The declaration is checked by `test_the_io_library_list_covers_the_tree`: a name that is neither imported nor declared is a typo, and the test says so.
+- The three `KNOWN_*` sets are the ratchets: the I/O violations, the cross-layer violations and the modules that import the leaf adapters. Do not edit them in this task.
 
 - [ ] **Step 2: Run the module**
 
@@ -758,12 +846,14 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -v
 ```
 
-Expected: seven lines ending in `PASSED`, then `7 passed in < 1s`:
+Expected: nine lines ending in `PASSED`, then `9 passed in < 1s`:
 
 ```
 tests/test_architecture.py::test_every_module_belongs_to_a_layer PASSED
+tests/test_architecture.py::test_the_io_library_list_covers_the_tree PASSED
 tests/test_architecture.py::test_core_modules_import_no_io_library PASSED
 tests/test_architecture.py::test_core_modules_import_no_other_layer PASSED
+tests/test_architecture.py::test_only_the_listed_modules_import_the_leaf_adapters PASSED
 tests/test_architecture.py::test_the_telemetry_sdk_is_imported_by_the_tracing_module_only PASSED
 tests/test_architecture.py::test_leaf_adapters_access_only_the_ports PASSED
 tests/test_architecture.py::test_the_capability_accesses_only_ports_and_leaf_adapters PASSED
@@ -795,12 +885,16 @@ git restore noagent/config.py
 git status --short noagent/config.py
 ```
 
-Expected, in order: ` 1 file changed, 1 insertion(+)`; then `1 failed, 6 passed` with these lines in the failure of `test_core_modules_import_no_io_library`:
+Expected, in order: ` 1 file changed, 1 insertion(+)`; then `2 failed, 7 passed`:
+
+- `test_core_modules_import_no_io_library`, with
 
 ```
 E         Extra items in the left set:
 E         ('noagent.config', 'socket')
 ```
+
+- `test_the_io_library_list_covers_the_tree`, because `socket` entered the tree while the list declares it as not yet imported. The second failure is the list's own gate: a library that arrives must leave the declared set.
 
 then nothing: the file is back to the committed content.
 
@@ -816,16 +910,41 @@ git restore noagent/config.py
 git status --short noagent/config.py
 ```
 
-Expected: ` 1 file changed, 4 insertions(+)` (two blank lines, the `def` line, the `import` line); then `1 failed, 6 passed` with:
+Expected: ` 1 file changed, 4 insertions(+)` (two blank lines, the `def` line, the `import` line); then `2 failed, 7 passed` — the I/O rule with
 
 ```
 E         Extra items in the left set:
 E         ('noagent.config', 'sqlite3')
 ```
 
+and the list's own gate, because `sqlite3` entered the tree while the list declares it as not yet imported.
+
 then nothing.
 
-- [ ] **Step 6: Probe — a core module that imports an adapter**
+- [ ] **Step 6: Probe — the stdlib client under its other spelling**
+
+`pytestarch` names an import after the package it comes from, so a rule that names `urllib.request` misses `from urllib import request`.
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
+printf 'from urllib import request\n' >> noagent/config.py
+git diff --stat noagent/config.py
+/tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
+git restore noagent/config.py
+git status --short noagent/config.py
+```
+
+Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 8 passed` with:
+
+```
+E         Extra items in the left set:
+E         ('noagent.config', 'urllib')
+```
+
+then nothing.
+
+- [ ] **Step 7: Probe — a core module that imports an adapter**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
@@ -837,16 +956,18 @@ git restore noagent/config.py
 git status --short noagent/config.py
 ```
 
-Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 6 passed`, this time in `test_core_modules_import_no_other_layer`, with:
+Expected: ` 1 file changed, 1 insertion(+)`; then `2 failed, 7 passed` — `test_core_modules_import_no_other_layer`, with
 
 ```
 E         Extra items in the left set:
 E         ('noagent.config', 'capabilities.adapters')
 ```
 
+and `test_only_the_listed_modules_import_the_leaf_adapters`, which lists the importers of the adapters and finds one more.
+
 then nothing.
 
-- [ ] **Step 7: Probe — a new leak in a file whose package already has one**
+- [ ] **Step 8: Probe — a new leak in a file whose package already has one**
 
 `agent/v06_harness.py` is listed for `httpx`. A second `httpx` import in another file of `agent/` must still be reported.
 
@@ -860,7 +981,7 @@ git restore agent/registry.py
 git status --short agent/registry.py
 ```
 
-Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 6 passed` with:
+Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 8 passed` with:
 
 ```
 E         Extra items in the left set:
@@ -869,7 +990,7 @@ E         ('agent.registry', 'httpx')
 
 then nothing.
 
-- [ ] **Step 8: Probe — a module outside every layer**
+- [ ] **Step 9: Probe — a module outside every layer**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
@@ -880,15 +1001,40 @@ rm wiring.py
 git status --short wiring.py
 ```
 
-Expected: `1 failed, 6 passed` in `test_every_module_belongs_to_a_layer`, with:
+Expected: `2 failed, 7 passed` — `test_every_module_belongs_to_a_layer`, with
 
 ```
 E         Left contains one more item: 'wiring'
 ```
 
+and the list's own gate, because the planted module imports `socket`, which the list declares as not yet imported.
+
 then nothing.
 
-- [ ] **Step 9: Run the whole suite and the lint job's checks**
+- [ ] **Step 10: Probe — the telemetry SDK outside the facade**
+
+The rule is « the SDK is imported by `tracing` and by nothing else », the host included.
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
+cd components/agent-service
+printf 'from opentelemetry import trace\n' >> app.py
+git diff --stat app.py
+/tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
+git restore app.py
+git status --short app.py
+```
+
+Expected: ` 1 file changed, 1 insertion(+)`; then `1 failed, 8 passed` in `test_the_telemetry_sdk_is_imported_by_the_tracing_module_only`, with:
+
+```
+E         Extra items in the left set:
+E         ('app', 'opentelemetry')
+```
+
+then nothing.
+
+- [ ] **Step 11: Run the whole suite and the lint job's checks**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
@@ -898,9 +1044,9 @@ uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agen
 uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
-Expected: `929 passed, 2 warnings` (the 922 of the baseline plus seven); `All checks passed!`; `90 files already formatted`.
+Expected: `931 passed, 2 warnings` (the 922 of the baseline plus nine); `All checks passed!`; `90 files already formatted`.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
@@ -931,15 +1077,18 @@ git commit -m "test(agent-service): the dependency rules of the hexagonal map, a
 
 Create `components/agent-service/tests/test_sources.py`:
 
+The import of the ports comes first: once `capabilities/sources.py` exists, the lint rule `I` reads it as the component's own module and the adapters as the package's.
+
 ```python
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """The driven ports of the document capability and the adapters that satisfy them."""
 
+from capabilities.sources import ChunkReader, ConceptSource, DocumentMetadataSource
+
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
 from capabilities.adapters.okf import OkfAdapter
-from capabilities.sources import ChunkReader, ConceptSource, DocumentMetadataSource
 
 
 def test_the_corpus_adapters_satisfy_the_driven_ports() -> None:
@@ -1030,7 +1179,7 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
 ```
 
-Expected: `1 failed, 6 passed` in `test_every_module_belongs_to_a_layer`, with:
+Expected: `1 failed, 8 passed` in `test_every_module_belongs_to_a_layer`, with:
 
 ```
 E         Left contains one more item: 'capabilities.sources'
@@ -1067,7 +1216,7 @@ PORTS = ("capabilities.contract", "capabilities.identifiers", "capabilities.sour
 
 Run the command of this step again.
 
-Expected: `7 passed in < 1s`.
+Expected: `9 passed in < 1s`.
 
 - [ ] **Step 7: Point the executor at the Protocols**
 
@@ -1135,16 +1284,23 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
 ```
 
-Expected: `1 failed, 6 passed` in `test_core_modules_import_no_other_layer`, with:
+Expected: `2 failed, 7 passed` — in `test_core_modules_import_no_other_layer`, with:
 
 ```
 E         Extra items in the right set:
 E         ('capabilities.executor', 'capabilities.adapters')
 ```
 
-The right set is the list. The tree no longer has the violation, so the list is now too long.
+and in `test_only_the_listed_modules_import_the_leaf_adapters`, with:
 
-- [ ] **Step 9: Shrink the list**
+```
+E         Extra items in the right set:
+E         'capabilities.executor'
+```
+
+The right set is the list. The tree no longer has the violation, so both lists are now too long.
+
+- [ ] **Step 9: Shrink the two lists**
 
 In `components/agent-service/tests/test_architecture.py`, delete this line from `KNOWN_INTERNAL_VIOLATIONS`:
 
@@ -1152,9 +1308,15 @@ In `components/agent-service/tests/test_architecture.py`, delete this line from 
     ("capabilities.executor", SERVICE_LAYOUT.leaf_adapters),  # the executor names three concrete adapters
 ```
 
+and delete this line from `KNOWN_ADAPTER_IMPORTERS`:
+
+```python
+    "capabilities.executor",  # the executor names three concrete adapters
+```
+
 Run the command of Step 8 again.
 
-Expected: `7 passed in < 1s`.
+Expected: `9 passed in < 1s`.
 
 - [ ] **Step 10: Run the whole suite and the lint job's checks**
 
@@ -1166,7 +1328,7 @@ uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agen
 uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
-Expected: `930 passed, 2 warnings` (one more than Task 2: the test of Step 1); `All checks passed!`; `92 files already formatted`.
+Expected: `932 passed, 2 warnings` (one more than Task 2: the test of Step 1); `All checks passed!`; `92 files already formatted`.
 
 - [ ] **Step 11: Commit**
 
@@ -1291,7 +1453,7 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_architecture.py -q
 ```
 
-Expected: `1 failed, 6 passed` in `test_core_modules_import_no_other_layer`, with:
+Expected: `1 failed, 8 passed` in `test_core_modules_import_no_other_layer`, with:
 
 ```
 E         Extra items in the right set:
@@ -1308,7 +1470,7 @@ In `components/agent-service/tests/test_architecture.py`, delete this line from 
 
 Run the command of Step 4 again.
 
-Expected: `7 passed in < 1s`.
+Expected: `9 passed in < 1s`.
 
 - [ ] **Step 6: Run the whole suite and the lint job's checks**
 
@@ -1320,7 +1482,7 @@ uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agen
 uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
-Expected: `930 passed, 2 warnings` — the same count as Task 3, because no test was added or removed; `All checks passed!`; `92 files already formatted`.
+Expected: `932 passed, 2 warnings` — the same count as Task 3, because no test was added or removed; `All checks passed!`; `92 files already formatted`.
 
 - [ ] **Step 7: Commit**
 
@@ -1350,17 +1512,19 @@ Expected:
 - `OK 51 pinned package(s): licence verified, defaults audit recorded.`
 - The last four commits are the four this plan makes, newest first: `refactor(agent-service): the reranker abstention text…`, `refactor(agent-service): the executor depends on Protocols…`, `test(agent-service): the dependency rules…`, `build(agent-service): pin pytestarch…`.
 - `git status --short` prints nothing. If it prints a line, it names a file this plan does not touch: stop and report it.
-- `930 passed, 2 warnings`.
+- `932 passed, 2 warnings`.
 - `All checks passed!` and `92 files already formatted`.
 
 ### What this plan establishes
 
 | Design item | Where | Evidence |
 |---|---|---|
-| C — every module classified (§2.5) | `test_every_module_belongs_to_a_layer` | Step 8 of Task 2: a root-level `wiring.py` turns it red; Task 3, Step 6: a new module turns it red until declared |
-| R1 as a ratchet, named by file (§2.5) | `test_core_modules_import_no_io_library` | Steps 4, 5 and 7 of Task 2: a module-level import, a function-local import, a second leak in a listed package |
-| R2 as a ratchet (§2.5) | `test_core_modules_import_no_other_layer` | Step 6 of Task 2: a core module importing an adapter; Tasks 3 and 4: the ratchet goes red when each leak closes |
-| T — the SDK in `tracing` only (§2.5) | `test_the_telemetry_sdk_is_imported_by_the_tracing_module_only` | green on the tree; red on a planted SDK import (Task 2, Step 1, last test) |
+| C — every module classified (§2.5) | `test_every_module_belongs_to_a_layer` | Step 9 of Task 2: a root-level `wiring.py` turns it red; Task 3, Step 6: a new module turns it red until declared |
+| The I/O list covers the tree (§2.5) | `test_the_io_library_list_covers_the_tree` | green on the tree; a name that is neither imported nor declared turns it red |
+| R1 as a ratchet, named by file (§2.5) | `test_core_modules_import_no_io_library` | Steps 4, 5, 6 and 8 of Task 2: a module-level import, a function-local import, the stdlib client under its package spelling, a second leak in a listed package |
+| R2 as a ratchet (§2.5) | `test_core_modules_import_no_other_layer` | Step 7 of Task 2: a core module importing an adapter; Tasks 3 and 4: the ratchet goes red when each leak closes |
+| R3 — the listed importers of the adapters (§2.5) | `test_only_the_listed_modules_import_the_leaf_adapters` | green on the tree; red in Task 3, Step 8, when the executor stops importing them |
+| T — the SDK in `tracing` only (§2.5) | `test_the_telemetry_sdk_is_imported_by_the_tracing_module_only` | Step 10 of Task 2: the SDK in the composition root turns it red; red on a planted SDK import (Task 2, Step 1, last test) |
 | L1, L2 (§2.5) | `test_leaf_adapters_access_only_the_ports`, `test_the_capability_accesses_only_ports_and_leaf_adapters` | green on the tree; each red on a planted cross-layer import (Task 2, Step 1, last test) |
 | Probe P1 (§10.8) | Task 2, Steps 4 and 5 | an illegal import at module level and one inside a function each turn the suite red |
 | Leak 4 closed (§2.3) | `capabilities/sources.py`, `capabilities/executor.py` | the pair leaves the ratchet; `test_the_corpus_adapters_satisfy_the_driven_ports` |

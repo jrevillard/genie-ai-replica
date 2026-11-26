@@ -150,17 +150,22 @@ the baseline that suite starts from.
 
 Rename `tests/test_agent_toolset.py` to `tests/test_agent_sources.py` and re-point it at the source. The pins that were about the BUILDER become pins about the SOURCE; the behaviour pins (the preparation leg, the insufficiency envelope, the abstention recorder) stay EXACTLY as they are — they are the frozen behaviour this move must not touch.
 
-The suite's helper becomes:
+The suite's helper becomes the SHARED one (it lives in `tests/conftest.py`, beside `orchestrator_config`, and every suite that builds a document registry calls it — a copy of the wiring in each suite is a copy that drifts):
 
 ```python
-def _registry(port, context=CONTEXT, budget=None, **wiring):
-    """The registry the document source offers, over one port."""
+def document_registry(port, context, budget=None, **wiring):
+    """The registry the document source offers, over one port.
+
+    ONE helper for the suites: the source builds its pairs per call and
+    the registry is the authorization surface. The budget defaults to the
+    orchestrator's own; a suite that runs under another budget passes it.
+    """
     budget = budget if budget is not None else orchestrator_config().operation_budget
     source = DocumentToolSource(lambda _context, _bearer: port, budget, **wiring)
     return build_registry(source.tools(context, None))
 ```
 
-and the pins that called `document_toolset(port, CONTEXT, budget)` call `_registry(port, CONTEXT, budget)` instead.
+and the pins that called `document_toolset(port, CONTEXT, budget)` call `document_registry(port, CONTEXT, budget)` instead.
 
 The probe pin becomes:
 
@@ -602,6 +607,42 @@ from .sources import DocumentToolSource, ToolSource, ToolSourceContext
 and in `__all__`, replace `"document_toolset"` with `"DocumentToolSource"`, `"ToolSource"`, `"ToolSourceContext"` (keeping the list's alphabetical order).
 
 Delete `components/agent-service/agent/toolset.py` — its content moved, unchanged, into `agent/sources.py`.
+
+**The suites that imported the old builder.** Four files import it today, and deleting the module breaks all four at once — the plan names them in its file list, so the change belongs here rather than at the gate, where the breakage would look like a defect:
+
+| file | the import | becomes |
+|---|---|---|
+| `tests/conftest.py` | `from agent.toolset import document_toolset` | `from agent.sources import DocumentToolSource` + `from agent.registry import build_registry` — it hosts the shared helper |
+| `tests/test_agent_loop.py` | `from measurement.probe import PROBE_OPERATION_BUDGET, document_toolset` | `from measurement.probe import PROBE_OPERATION_BUDGET` + `from conftest import document_registry` |
+| `tests/test_agent_probe.py` | `document_toolset` (in the `measurement.probe` import block) | `from conftest import document_registry` |
+| `tests/test_agent_sources.py` (the renamed file) | `from agent.toolset import document_toolset` | `from conftest import document_registry` |
+
+The probe no longer re-exports a builder: `measurement/probe.py` imports `DocumentToolSource` and `build_registry` now, so `measurement.probe.document_toolset` is gone — the suites that reached for it through the probe reach for the shared helper instead.
+
+**ONE helper, in the suite's shared home** (`tests/conftest.py`) — the one Step 1 already declared:
+
+```python
+def document_registry(port, context, budget=None, **wiring):
+    """The registry the document source offers, over one port.
+
+    ONE helper for the suites: the source builds its pairs per call and
+    the registry is the authorization surface. Every suite that used the
+    old builder calls this — a copy of the wiring in each suite is a copy
+    that drifts.
+    """
+    budget = budget if budget is not None else orchestrator_config().operation_budget
+    source = DocumentToolSource(lambda _context, _bearer: port, budget, **wiring)
+    return build_registry(source.tools(context, None))
+```
+
+and the call sites change shape — the old `document_toolset(port, CONTEXT, budget, preparer=preparer)` becomes `document_registry(port, CONTEXT, budget, preparer=preparer)`:
+
+- `tests/conftest.py` (the `LoopRunner` fixture): `document_registry(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET)`.
+- `tests/test_agent_loop.py` (four call sites): `document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)` — and the one that wires a preparer keeps it: `document_registry(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET, preparer=preparer)`.
+- `tests/test_agent_probe.py` (five call sites): `document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)`.
+- `tests/test_agent_sources.py`: the plan's own helper is the shared one — the renamed suite imports `document_registry` from `conftest` instead of keeping a local copy.
+
+The renamed suite's `import agent.toolset` (the module pin) becomes `import agent.sources`.
 
 - [ ] **Step 8: The gate compares**
 

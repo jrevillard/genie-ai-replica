@@ -1054,8 +1054,8 @@ Expected: `9 passed in < 1s`.
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
-uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
-uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 check --no-cache app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
 Expected: `934 passed, 2 warnings` (the 932 of the baseline plus the two adapter tests); `All checks passed!`; `94 files already formatted`.
@@ -1580,8 +1580,8 @@ Expected: `9 passed in < 1s`.
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
-uvx ruff@0.16.3 check app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
-uvx ruff@0.16.3 format --check app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 check --no-cache app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
 Expected: `934 passed, 2 warnings` — the same count as Task 1; `All checks passed!`; `95 files already formatted`.
@@ -1604,8 +1604,8 @@ git log --oneline -3
 git status --short
 cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
-uvx ruff@0.16.3 check app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
-uvx ruff@0.16.3 format --check app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 check --no-cache app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py tracing.py lane.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
 Expected:

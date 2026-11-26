@@ -18,7 +18,7 @@
 - **Test-only dependency.** `pytestarch` goes into `requirements-test.txt` and the `test` extra of `pyproject.toml`. It never goes into `requirements.txt`: the image installs only that file.
 - **NFR-2.** Every pin carries an exact-version licence row and a defaults-audit verdict in `docs/dependencies/agent-service-dependency-evidence.json`. The offline verifier must print `OK`.
 - **Frozen behavior.** The RAG capability's behavior is frozen (`docs/baselines/v02-opea-query-path-contract.md`). This plan edits no existing test; `tests/test_equivalence_v02.py` stays green and untouched.
-- **Ruff.** CI pin `RUFF_VERSION` is `0.16.3`; py311, line length 120, rules `E, W, F, I, UP, B, SIM`. The lint job runs, from `components/agent-service`: `ruff check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/` and `ruff format --check` on the same paths.
+- **Ruff.** CI pin `RUFF_VERSION` is `0.16.3`; py311, line length 120, rules `E, W, F, I, UP, B, SIM`. The lint job runs, from `components/agent-service`: `ruff check --no-cache app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/` and `ruff format --check` on the same paths.
 - **Comments and docstrings.** English, they describe the current code, they carry no issue or merge-request number.
 - **An output that differs from the expected one is a stop.** Report it; do not adjust a test or a list to make it pass.
 
@@ -1040,8 +1040,8 @@ then nothing.
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
-uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
-uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 check --no-cache app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
 Expected: `931 passed, 2 warnings` (the 922 of the baseline plus nine); `All checks passed!`; `90 files already formatted`.
@@ -1084,11 +1084,10 @@ The import of the ports comes first: once `capabilities/sources.py` exists, the 
 # SPDX-License-Identifier: Apache-2.0
 """The driven ports of the document capability and the adapters that satisfy them."""
 
-from capabilities.sources import ChunkReader, ConceptSource, DocumentMetadataSource
-
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
 from capabilities.adapters.okf import OkfAdapter
+from capabilities.sources import ChunkReader, ConceptSource, DocumentMetadataSource
 
 
 def test_the_corpus_adapters_satisfy_the_driven_ports() -> None:
@@ -1324,8 +1323,8 @@ Expected: `9 passed in < 1s`.
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
-uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
-uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 check --no-cache app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
 Expected: `932 passed, 2 warnings` (one more than Task 2: the test of Step 1); `All checks passed!`; `92 files already formatted`.
@@ -1478,8 +1477,8 @@ Expected: `9 passed in < 1s`.
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/architecture ] || { echo "not in the checkout that carries feat/agentic-foundations/architecture"; exit 1; }
 cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
-uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
-uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 check --no-cache app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
 Expected: `932 passed, 2 warnings` — the same count as Task 3, because no test was added or removed; `All checks passed!`; `92 files already formatted`.
@@ -1503,8 +1502,8 @@ git log --oneline -4
 git status --short
 cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
-uvx ruff@0.16.3 check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
-uvx ruff@0.16.3 format --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 check --no-cache app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py tracing.py capabilities/ preparation/ noagent/ agent/ tests/
 ```
 
 Expected:

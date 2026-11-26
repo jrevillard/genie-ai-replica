@@ -1541,9 +1541,11 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_PROBE_BEARER:
 #   the bearer the corpus reads carry — the probe's own read, and the
 #   config-B evaluation leg's (it resolves the documents it cites through
-#   the document repository, and that read is authorized). Unset means no
-#   bearer: the document repository refuses the read, so the sources
-#   resolve to nothing and the leg reports itself ungrounded.
+#   the document repository, and that read is authorized). The
+#   config-B driver REFUSES to run without it: an unauthenticated leg
+#   resolves nothing, cites nothing and reports itself ungrounded, which
+#   the evaluation would measure as a quality regression. Set it before
+#   running the config-B evaluation leg.
 # Query preparation (the preparation module, wired into the run surface): the
 # agent service consumes the SAME preparation knobs the deployed query
 # path reads (documented at their own sections above) — the translation

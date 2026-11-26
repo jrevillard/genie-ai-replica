@@ -59,7 +59,32 @@ AGENT_SERVICE_HOME = os.environ.get("AGENT_SERVICE_HOME", "/app")
 # quality regression, not a measurement. The knob is the deployment's own
 # (the probe's corpus bearer), read per case so a deployment change takes
 # effect without a re-import.
+#
+# UNSET is therefore a REFUSAL, not a degraded run: an unauthorised leg
+# that answered "ok" with no sources would be measured as a quality
+# regression by the E01 comparison, and every threshold derived from it
+# would be an artefact of a missing credential. The driver refuses to
+# start without it, and a bearer that disappears mid-run fails the case
+# instead of measuring it.
 BEARER_ENV_KEY = "AGENT_PROBE_BEARER"
+
+
+def resolve_bearer() -> str:
+    """The corpus bearer, or the refusal that says why there is none.
+
+    A leg without a bearer is not a measurement — it is an unauthorised
+    read that resolves nothing and cites nothing. Refusing is the only
+    honest answer: an "ok" row with no sources is indistinguishable from
+    a quality regression.
+    """
+    bearer = os.environ.get(BEARER_ENV_KEY) or ""
+    if not bearer.strip():
+        raise ValueError(
+            f"{BEARER_ENV_KEY} is not set: the config-B leg's corpus read is authorized, "
+            "and an unauthenticated leg measures nothing (it would report itself ungrounded)"
+        )
+    return bearer
+
 
 # The resolved-env keys the driver records in ``resolved`` — the noagent /
 # port knobs plus the eval knobs (EVAL_DEFAULT_GRAPH: the two legs'
@@ -182,7 +207,7 @@ async def run_case(case: dict, pipeline) -> dict:
             history,
             context,
             target_language=case.get("language") or None,
-            bearer=os.environ.get(BEARER_ENV_KEY) or None,
+            bearer=resolve_bearer(),
         )
         wall_ms = (time.monotonic() - started) * 1000.0
         return row_from_result(case, result, wall_ms)
@@ -239,6 +264,10 @@ def build_pipeline():
     from noagent.pipeline import NoAgentPipeline
 
     env = dict(os.environ)
+    # The corpus bearer, checked BEFORE anything is built: a leg without
+    # it is not a measurement (see ``resolve_bearer``), and the refusal
+    # must come before a rows file is written.
+    resolve_bearer()
     orchestrator_config = OrchestratorConfig.load(env)
     noagent_config = NoAgentConfig.load(env)
     budget = orchestrator_config.operation_budget

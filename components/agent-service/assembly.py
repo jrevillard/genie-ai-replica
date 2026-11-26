@@ -64,13 +64,36 @@ class _LegRetrieverFactory:
     The leg label is opaque to the capability and resolved here — the host
     is the side that knows the corpus platform's collections, views and
     identifiers (ADR agentic-009, F3).
+
+    The factory is PUBLIC and its wiring is public: the suite that drives
+    the capability over a fake corpus drives THIS factory (not a replay of
+    it), so the wiring the capability is tested against is the wiring that
+    ships.
     """
 
-    def __init__(self, for_leg):
-        self._for_leg = for_leg
+    def __init__(self, db_factory, arango_config: ArangoConfig, hybrid_config: HybridConfig):
+        self.db_factory = db_factory
+        self.arango_config = arango_config
+        self.hybrid_config = hybrid_config
+        # The ensured-BM25-view cache spans the legs and the requests: the
+        # retriever instance is per leg, the cache is the factory's.
+        self.ensured_bm25_views: set[str] = set()
 
-    def for_leg(self, leg: str):
-        return self._for_leg(leg)
+    def for_leg(self, leg: str) -> ArangoRetrievalAdapter:
+        return ArangoRetrievalAdapter(
+            self.db_factory(leg),
+            self.arango_config,
+            self.hybrid_config,
+            graph_name=leg,
+            ensured_bm25_views=self.ensured_bm25_views,
+        )
+
+
+def build_leg_retriever_factory(
+    db_factory, arango_config: ArangoConfig, hybrid_config: HybridConfig
+) -> _LegRetrieverFactory:
+    """The factory the host injects into the search capability."""
+    return _LegRetrieverFactory(db_factory, arango_config, hybrid_config)
 
 
 class _PillarNotDeployed:
@@ -196,18 +219,5 @@ def build_search_capability(env=None, db_factory=None, arango_config=None):
     # connector serves which corpus leg. The capability asks it per leg and
     # drives what it gets back — the code that decides never builds the
     # connector that reaches (ADR agentic-009, F2).
-    #
-    # The ensured-BM25-view cache spans the legs and the requests: the
-    # retriever instance is per leg, the cache is the factory's.
-    ensured_bm25_views: set[str] = set()
-
-    def for_leg(leg: str) -> ArangoRetrievalAdapter:
-        return ArangoRetrievalAdapter(
-            db_factory(leg),
-            arango_config,
-            hybrid_config,
-            graph_name=leg,
-            ensured_bm25_views=ensured_bm25_views,
-        )
-
-    return SearchKnowledgeCapability(embedding, reranking, _LegRetrieverFactory(for_leg))
+    factory = build_leg_retriever_factory(db_factory, arango_config, hybrid_config)
+    return SearchKnowledgeCapability(embedding, reranking, factory)

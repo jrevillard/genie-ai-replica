@@ -15,24 +15,15 @@ import asyncio
 import re
 
 from conftest import (
-    GOVERNED_CONTEXT,
-    PROBE_OPERATION_BUDGET,
     AgentFakePort,
-    CancellationToken,
-    EventEmitter,
-    LoopRunner,
-    RunBudgetMonitor,
     ScriptedLoopModel,
     _governed_loop,
     canned_read_result,
     canned_search_result,
     multihop_turns,
-    run_budget,
 )
 
-from agent.loop import AgentLoop
 from agent.taint import INSTRUCTION_MARKERS, scan_text, scan_tool_result
-from agent.toolset import document_toolset
 from capabilities.contract import LegacyFileProvenance, OkfConceptProvenance, SearchHit
 
 HOSTILE = (
@@ -147,20 +138,12 @@ def test_the_taint_scan_runs_even_when_no_ledger_is_wired():
         search_result=canned_search_result(),
         read_result=canned_read_result(content=HOSTILE),
     )
-    monitor = RunBudgetMonitor(run_budget())
-    runner = LoopRunner(
-        AgentLoop(),
-        model=ScriptedLoopModel(multihop_turns(answer="The grievance process takes thirty days.")),
-        registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
-        monitor=monitor,
-        token=CancellationToken(),
-        emitter=EventEmitter(run_id="run-1", sink=lambda _event: None),
-        verifier=None,
-        instruction="the production prompt",
-    )
+    model = ScriptedLoopModel(multihop_turns(answer="The grievance process takes thirty days."))
+    runner, _collector, monitor, verifier = _governed_loop(model, port, with_verifier=False)
 
     asyncio.run(runner.run("How are complaints handled?"))
 
+    assert verifier is None
     assert monitor.injection_findings == 1
 
 

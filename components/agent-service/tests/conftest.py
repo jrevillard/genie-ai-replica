@@ -286,7 +286,14 @@ class LoopRunner:
 
 
 def _governed_loop(
-    model, port, judge_model=None, authorized_repos=(), budget=None, execution_versions=None, runtime=None
+    model,
+    port,
+    judge_model=None,
+    authorized_repos=(),
+    budget=None,
+    execution_versions=None,
+    runtime=None,
+    with_verifier=True,
 ):
     """The governed answer path over fakes — one home for the suites that
     drive the loop WITH the verification pipeline wired (the orchestrator's
@@ -298,21 +305,31 @@ def _governed_loop(
     pipeline (the caller's repo set); ``execution_versions`` rides the loop
     (the run-start handshake, ``None`` keeps the probe shape); ``runtime``
     replaces the default runtime (the seam's plug-in point — a suite that
-    drives the core's guarantees against a runtime of its own). Returns
+    drives the core's guarantees against a runtime of its own);
+    ``with_verifier=False`` runs WITHOUT the verification pipeline (the
+    ledger is optional in the runtime). Returns
     ``(runner, collector, monitor, verifier)`` — the runner drives the
     governed run, the collector carries every seam event, the monitor the
-    run's counts, the verifier its ledger for finding assertions.
+    run's counts, the verifier its ledger for finding assertions (``None``
+    when the pipeline is not wired).
     """
     collector: list = []
     monitor = RunBudgetMonitor(budget or run_budget())
-    verifier = VerificationPipeline(
-        policy="verdict-marked",
-        judge_timeout_ms=5000,
-        judge_model_client=judge_model
-        if judge_model is not None
-        else ScriptedLoopModel((ModelTurn(content='{"verdict": "grounded"}'),)),
-        monitor=monitor,
-        authorized_repos=authorized_repos,
+    # ``with_verifier=False`` wires the run WITHOUT the verification
+    # pipeline: the ledger is optional in the runtime, and a suite that
+    # drives the run without one must not rebuild the wiring to do it.
+    verifier = (
+        VerificationPipeline(
+            policy="verdict-marked",
+            judge_timeout_ms=5000,
+            judge_model_client=judge_model
+            if judge_model is not None
+            else ScriptedLoopModel((ModelTurn(content='{"verdict": "grounded"}'),)),
+            monitor=monitor,
+            authorized_repos=authorized_repos,
+        )
+        if with_verifier
+        else None
     )
     token = CancellationToken()
     emitter = EventEmitter(run_id="run-1", sink=collector.append)

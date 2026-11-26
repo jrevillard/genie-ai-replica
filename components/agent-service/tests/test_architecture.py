@@ -730,7 +730,7 @@ def test_the_core_states_no_foreign_acceptance_rule() -> None:
     assert _foreign_claim_findings() == KNOWN_FOREIGN_CLAIMS
 
 
-def test_the_identifier_guards_accept_any_safe_token() -> None:
+def test_no_identifier_guard_encodes_a_platform_form() -> None:
     """R5 — a guard encodes no platform's FORM (ADR agentic-009).
 
     A guard's charset is the core's only knowledge of the shape an
@@ -744,15 +744,27 @@ def test_the_identifier_guards_accept_any_safe_token() -> None:
     the unsafe characters. What an identifier looks like where it was
     minted belongs to the platform that resolves it: it refuses what it
     does not know.
+
+    The rule SWEEPS the guards the port declares: a guard added tomorrow
+    with a platform's charset is caught here without anyone remembering to
+    name it — the document-id leak was never one named guard's fault; it
+    was a charset chosen once.
     """
 
+    from capabilities import identifiers
     from capabilities.contract import OperationName
-    from capabilities.identifiers import validate_file_id, validate_repo_id
+
+    guards = sorted(name for name in dir(identifiers) if name.startswith("validate_"))
+    assert guards, "the identifiers port declares no guard: the sweep would prove nothing"
 
     general_tokens = ("a", "a-b_c", "1795706154681_2f1d1fc5", "12345", "X" * 60)
-    for token in general_tokens:
-        assert validate_file_id(token, operation=OperationName.READ_SOURCE) == token
-        assert validate_repo_id(token, operation=OperationName.READ_SOURCE) == token
+    for name in guards:
+        guard = getattr(identifiers, name)
+        for token in general_tokens:
+            assert guard(token, operation=OperationName.READ_SOURCE) == token, (
+                f"{name} refused a safe token: a guard that encodes a platform's form "
+                "refuses the corpus the day the platform changes it"
+            )
 
 
 def test_leaf_adapters_access_only_the_ports(internal: EvaluableArchitecture) -> None:

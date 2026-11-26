@@ -15,8 +15,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from assembly import build_search_capability
-from capabilities.adapters.arango_retrieval import ArangoRetrievalAdapter
+from assembly import build_leg_retriever_factory, build_search_capability
 from capabilities.adapters.env_config import ArangoConfig, HybridConfig, RerankingConfig
 from capabilities.contract import (
     AuthorizationError,
@@ -84,37 +83,16 @@ class FakeReranking:
         return score  # the none calibration: the raw score, like the real adapter's default
 
 
-class FakeRetrieverFactory:
-    """The host's retriever factory, over the fake corpus.
-
-    The capability drives the retriever it is HANDED; the host decides which
-    connector serves which leg. The test plays the host here — the port the
-    capability drives is the same one the assembly wires in production.
-    """
-
-    def __init__(self, db_factory, arango_config, hybrid_config):
-        self.db_factory = db_factory
-        self.arango_config = arango_config
-        self.hybrid_config = hybrid_config
-
-    def for_leg(self, leg):
-        return ArangoRetrievalAdapter(
-            self.db_factory(leg),
-            self.arango_config,
-            self.hybrid_config,
-            graph_name=leg,
-        )
-
-
 def _with_db(capability, db_factory):
     """Point the capability's retriever factory at another database.
 
     The capability drives the retriever the host injected; the host decides
-    which connector serves a leg. Overriding the factory's database keeps
-    the deployment posture (the config) the capability was wired with.
+    which connector serves a leg. The factory is the HOST's own — the test
+    re-wires its database, never its shape — so the wiring under test is
+    the wiring that ships.
     """
     factory = capability._retrievers
-    capability._retrievers = FakeRetrieverFactory(db_factory, factory.arango_config, factory.hybrid_config)
+    capability._retrievers = build_leg_retriever_factory(db_factory, factory.arango_config, factory.hybrid_config)
 
 
 class FakeDbFactory:
@@ -176,38 +154,6 @@ def _split_db(rows_file_id, rows_identity):
     return SplitDb()
 
 
-def test_the_capability_drives_the_retriever_the_host_injected():
-    """The capability asks the injected factory for the retriever of each leg.
-
-    The host decides which connector serves a corpus leg; the capability
-    drives what it is handed. A capability that built its own connector would
-    never ask the factory — which is what ADR agentic-009 (F2) closed.
-    """
-    asked: list[str] = []
-
-    class FakeRetriever:
-        bm25_degraded = False
-        cap1_degraded = False
-
-        async def fused_candidates(self, embedding, raw_query, labels_to_filter):
-            return []
-
-    class RecordingFactory:
-        def for_leg(self, leg):
-            asked.append(leg)
-            return FakeRetriever()
-
-    capability = SearchKnowledgeCapability(
-        FakeEmbedding(),
-        FakeReranking(outcome=RerankOutcome(selection=())),
-        RecordingFactory(),
-    )
-    result = asyncio.run(capability.search_knowledge(context(graphs=("GRAPH", "OTHER_g")), prepared(), BUDGET))
-
-    assert asked == ["GRAPH", "OTHER_g"]
-    assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
-
-
 def make_capability(embedding=None, reranking=None, rows=None):
     """A search capability over the fake seams.
 
@@ -223,7 +169,7 @@ def make_capability(embedding=None, reranking=None, rows=None):
     capability = SearchKnowledgeCapability(
         embedding,
         reranking,
-        FakeRetrieverFactory(
+        build_leg_retriever_factory(
             db_factory,
             ArangoConfig.load(
                 {
@@ -666,7 +612,7 @@ def _capability_with_okf_posture(enabled: bool, db_factory):
     return SearchKnowledgeCapability(
         FakeEmbedding(),
         FakeReranking(outcome=RerankOutcome(selection=selection)),
-        FakeRetrieverFactory(db_factory, arango_config, HybridConfig.load({})),
+        build_leg_retriever_factory(db_factory, arango_config, HybridConfig.load({})),
     )
 
 

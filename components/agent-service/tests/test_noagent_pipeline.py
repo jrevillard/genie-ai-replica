@@ -32,9 +32,10 @@ from capabilities.contract import (
     SearchHit,
     SearchKnowledgeResult,
 )
+from lane import AdmissionLane
 from noagent.config import NoAgentConfig
 from noagent.generation import GenerationTransientError
-from noagent.lane import AdmissionLane, LaneBusyError
+from noagent.lane import LaneBusyError
 from noagent.pipeline import (
     PREPARATION_DEGRADED,
     AnswerTranslator,

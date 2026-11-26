@@ -243,10 +243,8 @@ def test_a_server_overflow_rejection_refuses_instead_of_falling_back(monkeypatch
 
 
 def test_a_timeout_returns_unprepared_with_the_timeout_status():
-    import httpx
-
     config = _config()
-    transport = PreparationFakeTransport(error=httpx.TimeoutException("read timed out"))
+    transport = PreparationFakeTransport(error=TimeoutError("read timed out"))
     result = asyncio.run(_preparer(config, transport).prepare(FRENCH_SAMPLE, "fr"))
 
     assert result.status is QueryPreparationStatus.FALLBACK_TIMEOUT

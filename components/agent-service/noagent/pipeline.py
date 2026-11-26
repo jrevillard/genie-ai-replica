@@ -68,12 +68,12 @@ from capabilities.contract import (
 )
 from preparation import PreparationConfig, QueryPreparer
 from preparation.registry import LanguageRegistry
-from preparation.translation import HttpxTransport, ModelEndpointCache
+from preparation.translation import ModelEndpointCache
 
 from . import prompt as prompt_module
 from .config import NoAgentConfig
 from .generation import GenerationClient, TokenCounter, chat_choice, chat_choice_content
-from .lane import AdmissionLane
+from .lane import Lane
 
 logger = logging.getLogger(__name__)
 
@@ -137,10 +137,10 @@ class AnswerTranslator:
     nothing usable, or cut off — the English answer stays).
     """
 
-    def __init__(self, config: NoAgentConfig, registry: LanguageRegistry, transport=None, cache=None):
+    def __init__(self, config: NoAgentConfig, registry: LanguageRegistry, transport, cache=None):
         self._config = config
         self._registry = registry
-        self._transport = transport or HttpxTransport(config.tls_verify)
+        self._transport = transport
         self._cache = cache or ModelEndpointCache(
             config.translation_endpoint, self._transport, config.probe_timeout_seconds, config.detect_ttl_seconds
         )
@@ -211,7 +211,7 @@ class NoAgentPipeline:
         config: NoAgentConfig,
         preparer: QueryPreparer,
         capability,
-        lane: AdmissionLane,
+        lane: Lane,
         generation: GenerationClient,
         counter: TokenCounter,
         budget: OperationBudget,
@@ -245,7 +245,9 @@ class NoAgentPipeline:
         return cached
 
     @classmethod
-    def create(cls, config: NoAgentConfig, capability, budget: OperationBudget, env=None) -> "NoAgentPipeline":
+    def create(
+        cls, config: NoAgentConfig, capability, budget: OperationBudget, env=None, transport=None, lane=None
+    ) -> "NoAgentPipeline":
         """Assemble the default wiring: the preparer over the same env, the
         generation client (whose transport the counter shares — one wiring
         change lands once), the lane over the config, the answer translator
@@ -256,13 +258,14 @@ class NoAgentPipeline:
         (the same file, its own read-once cache) — the preparer's is private
         to the preparer."""
         preparer = QueryPreparer.create(env)
-        generation = GenerationClient.create(config)
+        generation = GenerationClient.create(config, transport=transport)
         counter = TokenCounter(config, generation.model_id, generation.transport)
-        lane = AdmissionLane.from_config(config)
+        if lane is None:
+            raise ValueError("the pipeline needs an admission lane; the composition root builds it")
         translator = None
         if config.answer_translation_enabled:
             registry = LanguageRegistry(PreparationConfig.load(env).registry_path)
-            translator = AnswerTranslator(config, registry)
+            translator = AnswerTranslator(config, registry, transport=transport)
         return cls(
             config, preparer, capability, lane, generation, counter, budget, translator, capability.score_calibrator
         )

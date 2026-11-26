@@ -32,7 +32,7 @@ RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
 # its vendored language registry. The noagent package rides
 # beside both: config B, the fixed single-pass pipeline. The agent package
 # rides beside all of them: the runtime seam and the probe.
-COPY app.py tracing.py ./
+COPY app.py tracing.py lane.py ./
 COPY capabilities/ ./capabilities/
 COPY preparation/ ./preparation/
 COPY noagent/ ./noagent/

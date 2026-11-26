@@ -32,7 +32,7 @@ from agent.version_record import (
     configuration_values,
     short_sha256,
 )
-from noagent.lane import AdmissionLane
+from lane import AdmissionLane
 
 # ---------------------------------------------------------------------
 # The builder: fields, hash stability, the no-secrets invariant

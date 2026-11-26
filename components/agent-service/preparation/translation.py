@@ -40,8 +40,6 @@ import time
 from contextlib import suppress
 from typing import Any, Protocol
 
-import httpx
-
 from .config import NEGATIVE_CACHE_SECONDS, PreparationConfig
 
 logger = logging.getLogger(__name__)
@@ -250,7 +248,7 @@ def classify_transport_error(exc: Exception) -> TranslationFailedError:
         return TranslationInputTooLongError(
             f"translation request exceeds the translation window: {type(exc).__name__}: {str(exc)[:200]}"
         )
-    if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
+    if isinstance(exc, TimeoutError):
         return TranslationTimeoutError(f"translation timed out: {type(exc).__name__}: {str(exc)[:200]}")
     return TranslationFailedError(f"translation failed: {type(exc).__name__}: {str(exc)[:200]}")
 
@@ -259,37 +257,13 @@ class TranslationTransport(Protocol):
     """The transport seam: the two HTTP verbs the client needs.
 
     Implementations return ``(status, parsed body)`` or raise. Raw transport
-    exceptions (``httpx.TimeoutException``, connection errors, test doubles'
-    arbitrary exceptions) propagate to the client's classification.
+    exceptions (a timeout, connection errors, test doubles' arbitrary
+    exceptions) propagate to the client's classification.
     """
 
     async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]: ...
 
     async def post_json(self, url: str, headers: dict, payload: dict, timeout_s: float) -> tuple[int, Any]: ...
-
-
-class HttpxTransport:
-    """The production transport: one ``AsyncClient`` per call.
-
-    The per-call client is the deployed seam's shape (the deployed module
-    builds an ``AsyncClient`` per request with the call's timeout and the
-    TLS-verify knob); what the per-call shape trades away is connection
-    pooling, never credential isolation — the bearer travels per call in the
-    headers.
-    """
-
-    def __init__(self, verify: bool):
-        self._verify = verify
-
-    async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]:
-        async with httpx.AsyncClient(timeout=timeout_s, verify=self._verify) as client:
-            response = await client.get(url, headers=headers)
-        return response.status_code, response.json()
-
-    async def post_json(self, url: str, headers: dict, payload: dict, timeout_s: float) -> tuple[int, Any]:
-        async with httpx.AsyncClient(timeout=timeout_s, verify=self._verify) as client:
-            response = await client.post(url, headers=headers, json=payload)
-        return response.status_code, response.json()
 
 
 class ModelEndpointCache:
@@ -477,12 +451,12 @@ class TranslationClient:
         self,
         config: PreparationConfig,
         registry,
-        transport: TranslationTransport | None = None,
+        transport: TranslationTransport,
         cache: ModelEndpointCache | None = None,
     ):
         self._config = config
         self._registry = registry
-        self._transport = transport or HttpxTransport(config.tls_verify)
+        self._transport = transport
         self._cache = cache or ModelEndpointCache(
             config.translation_endpoint, self._transport, config.probe_timeout_seconds, config.detect_ttl_seconds
         )

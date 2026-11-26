@@ -45,9 +45,10 @@ from agent.orchestrator import (
 )
 from agent.probe import ProbeConfig, ProbeModelClient, build_stateless_adapters
 from agent.version_record import IMPLEMENTATION_VERSION
+from capabilities.adapters.httpx import HttpxTransport
 from capabilities.contract import CallerContext
+from lane import AdmissionLane
 from noagent.config import NoAgentConfig
-from noagent.lane import AdmissionLane
 from tracing import setup_tracing
 
 SERVICE_NAME = "agent-service"
@@ -118,12 +119,13 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     noagent = NoAgentConfig.load(env)
     probe_config = ProbeConfig.load(env)
     adapters = build_stateless_adapters(probe_config, env)
-    model_client = ProbeModelClient(probe_config)
+    transport = HttpxTransport(probe_config.tls_verify)
+    model_client = ProbeModelClient(probe_config, transport)
     lane = AdmissionLane.from_config(noagent)
     # The preparation wiring (the preparation module): one per-run
     # preparer over the run's budget monitor; the discovery caches are
     # process-wide.
-    preparer_factory = build_preparer_factory(env)
+    preparer_factory = build_preparer_factory(env, transport=transport)
 
     def port_factory(context: CallerContext, bearer: str | None):
         # Per request: one executor binds ONE trusted context to the

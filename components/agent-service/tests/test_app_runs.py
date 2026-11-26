@@ -31,7 +31,7 @@ import app as app_module
 from agent.events import BFF_FRAME_NAMES
 from agent.orchestrator import AdmissionRefused, RequestOrchestrator
 from capabilities.contract import CallerContext, PreparedQuery, QueryPreparationStatus
-from noagent.lane import AdmissionLane
+from lane import AdmissionLane
 from preparation.prepare import PreparationResult
 
 CONTEXT = {"user_id": "u-1", "authorized_graph_names": ["GRAPH"]}
@@ -277,7 +277,7 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
 
     preparer = ScriptedPreparer()
 
-    def fake_factory(env=None):
+    def fake_factory(env=None, transport=None):
         return lambda monitor, language=None: preparer
 
     monkeypatch.setattr(app_module, "build_preparer_factory", fake_factory)
@@ -290,7 +290,7 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
     monkeypatch.setattr(
         app_module,
         "ProbeModelClient",
-        lambda config: ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "grounded"}')),
+        lambda config, transport=None: ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "grounded"}')),
     )
     monkeypatch.setattr(app_module, "_RUNTIME", None)
     with TestClient(app_module.app) as client:

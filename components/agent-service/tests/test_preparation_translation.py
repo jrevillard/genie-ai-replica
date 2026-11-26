@@ -103,7 +103,7 @@ class TestOverflowClassification:
 
 class TestClassifyTransportError:
     def test_a_timeout_is_its_own_typed_class(self):
-        typed = classify_transport_error(httpx.TimeoutException("read timed out"))
+        typed = classify_transport_error(TimeoutError("read timed out"))
         assert isinstance(typed, TranslationTimeoutError)
         assert isinstance(typed, TranslationFailedError)  # a subtype, not a separate family
 
@@ -345,7 +345,7 @@ class TestTranslatePrompt:
             asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 
     def test_a_timeout_maps_to_the_timeout_class(self):
-        transport = FakeTransport(error=httpx.TimeoutException("timed out"))
+        transport = FakeTransport(error=TimeoutError("timed out"))
         with pytest.raises(TranslationTimeoutError):
             asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 

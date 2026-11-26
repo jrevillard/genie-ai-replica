@@ -49,7 +49,7 @@ from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.toolset import document_toolset
 from agent.verification import INSUFFICIENCY_RESPONSE
 from capabilities.contract import CallerContext, OperationBudget, PreparedQuery, QueryPreparationStatus
-from noagent.lane import AdmissionLane
+from lane import AdmissionLane
 from preparation.config import PreparationConfig
 from preparation.prepare import PreparationResult, QueryPreparer
 from preparation.registry import LanguageRegistry
@@ -303,7 +303,7 @@ class RecordingTranslator(TranslationClient):
     prepare() at the operation budget, and a DNS-hung probe would race it."""
 
     def __init__(self, config, registry):
-        super().__init__(config, registry)
+        super().__init__(config, registry, transport=PreparationFakeTransport())
         self.prompts: list[str] = []
 
     async def translation_window(self):
@@ -594,7 +594,8 @@ def test_a_spent_fleet_budget_refuses_the_translation_before_any_call():
 
 def test_the_factory_builds_one_preparer_per_run():
     factory = build_preparer_factory(
-        env={"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
+        env={"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"},
+        transport=PreparationFakeTransport(),
     )
     first = factory(RunBudgetMonitor(run_budget()))
     second = factory(RunBudgetMonitor(run_budget()))
@@ -604,13 +605,11 @@ def test_the_factory_builds_one_preparer_per_run():
     assert first is not second  # one preparer PER RUN, over the shared wiring
 
 
-def test_the_real_factory_counts_the_preparation_translation_on_the_usage_record(tmp_path, monkeypatch):
+def test_the_real_factory_counts_the_preparation_translation_on_the_usage_record(tmp_path):
     """The factory-built preparer, driven through orchestrator.run over the
     fake transport: the request's language hint sends the query to
     translation, whose dispatch claims one AUXILIARY model call — the run's
     usage record counts it (alongside the judge's), and the status lands."""
-    import agent.orchestrator as orchestrator_module
-
     transport = PreparationFakeTransport(
         responses={
             f"{ENDPOINT}/v1/chat/completions": (
@@ -619,9 +618,9 @@ def test_the_real_factory_counts_the_preparation_translation_on_the_usage_record
             )
         }
     )
-    monkeypatch.setattr(orchestrator_module, "HttpxTransport", lambda tls_verify: transport)
     factory = build_preparer_factory(
-        env={"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
+        env={"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"},
+        transport=transport,
     )
 
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())

@@ -39,7 +39,7 @@ from agent.probe import PROBE_SYSTEM_PROMPT
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
 from capabilities.contract import CallerContext, OperationBudget
-from noagent.lane import AdmissionLane
+from lane import AdmissionLane
 
 CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 

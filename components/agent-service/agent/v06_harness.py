@@ -53,8 +53,9 @@ from typing import Any, Protocol
 
 import httpx
 
+from capabilities.adapters.httpx import HttpxTransport
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
-from preparation.translation import HttpxTransport, coerce_sane_int
+from preparation.translation import coerce_sane_int
 
 from .budget import RunBudgetMonitor
 from .cancellation import CancellationToken

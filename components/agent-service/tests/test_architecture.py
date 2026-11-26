@@ -51,7 +51,9 @@ class Layout(NamedTuple):
     """What each layer is made of, by module name relative to the service root.
 
     The host is named module by module: a module that joins the host is
-    declared here, so the rules see it.
+    declared here, so the rules see it. The measurement surfaces are named
+    the same way: a script that assembles its own runtime to verify a
+    deployment is not core, and the rules read it as such.
     """
 
     host: tuple[str, ...]
@@ -59,10 +61,11 @@ class Layout(NamedTuple):
     core_modules: tuple[str, ...]
     leaf_adapters: str
     capability: str
+    measurement: tuple[str, ...]
 
 
 SERVICE_LAYOUT = Layout(
-    host=("app", "tracing"),
+    host=("app", "tracing", "lane"),
     core_packages=("agent", "noagent", "preparation"),
     core_modules=(
         "capabilities",
@@ -75,6 +78,7 @@ SERVICE_LAYOUT = Layout(
     ),
     leaf_adapters="capabilities.adapters",
     capability="capabilities.search_knowledge",
+    measurement=("agent.v06_harness",),
 )
 
 # The telemetry facade: the one module of the host the core may import, and
@@ -122,9 +126,6 @@ TELEMETRY_SDK = "opentelemetry"
 # R1 — (core module, library): the files that still import an I/O library.
 KNOWN_IO_VIOLATIONS = {
     ("agent.probe", "arango"),  # agent/probe.py: the adapter assembly still lives in the seam package
-    ("agent.v06_harness", "httpx"),  # agent/v06_harness.py: the measurement harness lives in the seam package
-    ("noagent.lane", "fcntl"),  # noagent/lane.py: the admission lane takes file locks from inside a core package
-    ("preparation.translation", "httpx"),  # preparation/translation.py: the HTTP transport lives in the core module
 }
 # R2 — (core module, module of another layer): the files that still reach another layer.
 KNOWN_INTERNAL_VIOLATIONS = {
@@ -134,6 +135,7 @@ KNOWN_INTERNAL_VIOLATIONS = {
 # R3 — the modules that import the leaf adapters.
 KNOWN_ADAPTER_IMPORTERS = {
     "agent.probe",  # agent/probe.py: the adapter assembly lives in the seam package
+    "app",  # app.py: the composition root builds the transport adapter
     "capabilities.search_knowledge",  # the capability builds its own adapters
 }
 
@@ -221,6 +223,8 @@ def _layer_of(module: str, layout: Layout) -> str | None:
 
     if module in layout.host:
         return "host"
+    if any(_within(module, name) for name in layout.measurement):
+        return "measurement"
     if _within(module, layout.leaf_adapters):
         return "leaf adapters"
     if module == layout.capability:
@@ -341,7 +345,7 @@ def test_only_the_listed_modules_import_the_leaf_adapters(internal: EvaluableArc
     modules = [
         module
         for module in _leaf_modules(_modules(internal, SERVICE.name))
-        if not _within(module, SERVICE_LAYOUT.leaf_adapters)
+        if not _within(module, SERVICE_LAYOUT.leaf_adapters) and _layer_of(module, SERVICE_LAYOUT) != "measurement"
     ]
     importers = {
         module
@@ -376,15 +380,17 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
     package = tmp_path / "fakepkg"
     root = package.name
     layout = Layout(
-        host=("app", "tracing"),
+        host=("app", "tracing", "lane"),
         core_packages=("core",),
         core_modules=("contract",),
         leaf_adapters="adapters",
         capability="capability",
+        measurement=("measure",),
     )
     layers = {"ports": ("contract",), "leaf adapters": ("adapters",), "capability": ("capability",)}
     clean = {
         "app.py": "import fakepkg.adapters.x\nimport requests\n",
+        "lane.py": '"""The host lane."""\n',
         "tracing.py": "import opentelemetry\n",
         "contract.py": "",
         "core/__init__.py": "",
@@ -393,6 +399,7 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
         "adapters/__init__.py": "",
         "adapters/x.py": "import fakepkg.contract\n",
         "capability.py": "import fakepkg.adapters.x\nimport fakepkg.contract\n",
+        "measure.py": "import fakepkg.adapters.x\n",
         "wiring.py": "import socket\n",
         ".venv/lib/python3.11/site-packages/hidden.py": "import ssl\n",
     }
@@ -422,7 +429,11 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
 
     # R3: the direct importers of the adapters are the listed ones.
     def adapter_importers() -> set[str]:
-        subjects = [module for module in modules(False) if not _within(module, "adapters")]
+        subjects = [
+            module
+            for module in modules(False)
+            if not _within(module, "adapters") and _layer_of(module, layout) != "measurement"
+        ]
         return {
             module
             for module in subjects

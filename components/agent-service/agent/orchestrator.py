@@ -49,11 +49,11 @@ from dataclasses import asdict, dataclass
 
 from capabilities.contract import CallerContext, OperationBudget
 from noagent.config import required_positive_float, required_positive_int
-from noagent.lane import AdmissionLane, LaneBusyError
+from noagent.lane import Lane, LaneBusyError
 from preparation.config import PreparationConfig
 from preparation.prepare import QueryPreparer
 from preparation.registry import LanguageRegistry
-from preparation.translation import HttpxTransport, ModelEndpointCache, TranslationClient
+from preparation.translation import ModelEndpointCache, TranslationClient
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
@@ -279,7 +279,7 @@ class BudgetedTranslationClient(TranslationClient):
     bound stays a lower bound, nothing is guessed.
     """
 
-    def __init__(self, config: PreparationConfig, registry, monitor: RunBudgetMonitor, transport=None, cache=None):
+    def __init__(self, config: PreparationConfig, registry, monitor: RunBudgetMonitor, transport, cache=None):
         super().__init__(config, registry, transport=transport, cache=cache)
         self._budget_monitor = monitor
 
@@ -288,7 +288,7 @@ class BudgetedTranslationClient(TranslationClient):
         return await super().translate_prompt(prompt, translategemma, model_id)
 
 
-def build_preparer_factory(env=None):
+def build_preparer_factory(env=None, transport=None):
     """The per-run preparer factory the orchestrator wires.
 
     The expensive, stateless parts (the config, the language registry, the
@@ -301,7 +301,6 @@ def build_preparer_factory(env=None):
     """
     config = PreparationConfig.load(env)
     registry = LanguageRegistry(config.registry_path)
-    transport = HttpxTransport(config.tls_verify)
     cache = ModelEndpointCache(
         config.translation_endpoint, transport, config.probe_timeout_seconds, config.detect_ttl_seconds
     )
@@ -329,7 +328,7 @@ class RequestOrchestrator:
     def __init__(
         self,
         config: OrchestratorConfig,
-        lane: AdmissionLane,
+        lane: Lane,
         model_client: LoopModelClient,
         port_factory,
         preparer_factory=None,

@@ -47,13 +47,14 @@ from dataclasses import asdict, dataclass
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
 from capabilities.adapters.env_config import ArangoConfig
+from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.okf import OkfAdapter
 from capabilities.contract import AuthorizedRepo, CallerContext, DocumentCapabilityPort, OperationBudget
 from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content, resolve_window_tokens
-from preparation.translation import HttpxTransport, coerce_sane_int
+from preparation.translation import coerce_sane_int
 
 from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
@@ -313,9 +314,9 @@ class ProbeModelClient:
     process; the discovered model id is resolved once.
     """
 
-    def __init__(self, config: ProbeConfig, transport=None):
+    def __init__(self, config: ProbeConfig, transport):
         self._config = config
-        self._transport = transport if transport is not None else HttpxTransport(config.tls_verify)
+        self._transport = transport
         self._model_id: str | None = None
         self._discovered_window: int | None = None
         self._window: int | None = None
@@ -593,7 +594,8 @@ def _main() -> int:
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
     config = ProbeConfig.load()
     port, context = build_port(config)
-    model_client = ProbeModelClient(config)
+    transport = HttpxTransport(config.tls_verify)
+    model_client = ProbeModelClient(config, transport)
     evidence = asyncio.run(run_probe(port=port, context=context, model_client=model_client))
     print(json.dumps(evidence.as_dict(), indent=2))
     return 0 if evidence.outcome == OUTCOME_ANSWERED else 1

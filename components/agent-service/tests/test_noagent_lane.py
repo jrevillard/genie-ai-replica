@@ -13,7 +13,8 @@ import os
 
 import pytest
 
-from noagent.lane import AdmissionLane, LaneBusyError
+from lane import AdmissionLane
+from noagent.lane import LaneBusyError
 
 
 @pytest.fixture()

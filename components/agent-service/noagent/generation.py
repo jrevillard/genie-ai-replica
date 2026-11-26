@@ -30,7 +30,6 @@ import logging
 import time
 
 from preparation.translation import (
-    HttpxTransport,
     ModelEndpointCache,
     is_input_overflow,
     parse_tokenize_count,
@@ -128,8 +127,7 @@ class GenerationClient:
         return self._transport
 
     @classmethod
-    def create(cls, config: NoAgentConfig, transport=None) -> "GenerationClient":
-        transport = transport or HttpxTransport(config.tls_verify)
+    def create(cls, config: NoAgentConfig, transport) -> "GenerationClient":
         cache = ModelEndpointCache(
             config.generation_endpoint, transport, config.probe_timeout_seconds, config.detect_ttl_seconds
         )

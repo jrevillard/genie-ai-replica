@@ -3091,6 +3091,8 @@ export default {
         keepHint: 'Weka nakala moja — futa zilizobaki.'
       },
       wireDone: 'Kurasa {n} zimeunganishwa na "{hub}".',
+      wireAlias: 'Ukurasa uliopo "{hub}" unatumika kama ukurasa wa Vyanzo — kurasa {n} zaidi zimeunganishwa.',
+      wireNothing: 'Hakuna cha kuunganisha — kila ukurasa unao cite tayari unaunganisha "{hub}".',
       wireCreated: 'Ukurasa wa Vyanzo umeundwa na kurasa {n} zimeunganishwa.',
       mergedPages: '{n} pages',
       preview: {

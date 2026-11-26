@@ -144,10 +144,25 @@ function citationState(rows) {
   const citing = rows
     .map((r) => norm(r.concept_id))
     .filter((id, i) => Array.isArray(rows[i].sources) && rows[i].sources.length > 0);
-  const hub =
-    rows.find((r) => /^(sources|citations|references)([-._].*)?$/i.test(norm(r.concept_id))) ||
-    rows.find((r) => !r.is_index && /citation|reference|sources/i.test(String(r.title || ''))) ||
-    null;
+  // #2198 (2026-11-26, live): the title branch was a SUBSTRING match
+  // (/citation|reference|sources/i) — an index titled '28-living-reference'
+  // hijacked hub detection, generation never ran, and a success-shaped no-op
+  // returned. Two fixes: the branch requires is_index to be EXPLICITLY false
+  // (a row whose projection lacks the flag is not a title-hub candidate),
+  // and the title match is EXACT ('Sources'/'Citations'/'References'), never
+  // a substring. The id-regex branch is unchanged.
+  const hubById = rows.find((r) => /^(sources|citations|references)([-._].*)?$/i.test(norm(r.concept_id))) || null;
+  const hubByTitle =
+    rows.find(
+      (r) =>
+        r.is_index === false &&
+        ['sources', 'citations', 'references'].includes(
+          String(r.title || '')
+            .trim()
+            .toLowerCase()
+        )
+    ) || null;
+  const hub = hubById || hubByTitle;
   const hubId = hub ? norm(hub.concept_id) : null;
   const needingLink = hubId
     ? citing.filter(
@@ -159,7 +174,13 @@ function citationState(rows) {
           )
       )
     : citing;
-  return { citing, hub_concept_id: hubId, needing_link: needingLink };
+  return {
+    citing,
+    hub_concept_id: hubId,
+    needing_link: needingLink,
+    hub_alias: !!(hubByTitle && !hubById),
+    hub_title: hub && hub.title ? hub.title : null
+  };
 }
 
 /**
@@ -304,8 +325,8 @@ async function wireCitationHub(repo_id, { hub_concept_id, actor } = {}) {
     const rows = await (
       await db.query(
         'FOR m IN okf_concepts_meta FILTER m.repo_id == @r AND m.index_status != "rejected" SORT m.concept_id ' +
-          'RETURN { concept_id: m.concept_id, title: m.title, links: m.links, sources: m.frontmatter.sources, ' +
-          'fm_links: m.frontmatter.links }',
+          'RETURN { concept_id: m.concept_id, title: m.title, is_index: m.is_index, links: m.links, ' +
+          'sources: m.frontmatter.sources, fm_links: m.frontmatter.links }',
         { r: repo_id }
       )
     ).all();
@@ -313,6 +334,11 @@ async function wireCitationHub(repo_id, { hub_concept_id, actor } = {}) {
     const cit = citationState(rows);
     let hubId = hub_concept_id ? norm(hub_concept_id) : cit.hub_concept_id;
     let hubCreated = false;
+    // #2198 — the response must distinguish {generated} / {using existing
+    // 'X'} / {wired N} / {nothing to do}: a success-shaped no-op (wired 0,
+    // nothing created, no hub named) is the defect that hid this bug.
+    const hubAlias = !hub_concept_id && !!(cit.hub_alias && cit.hub_concept_id);
+    const hubTitle = hubAlias ? cit.hub_title : null;
 
     if (!hubId) {
       // Generate the hub from the union of the citing pages' sources.
@@ -375,14 +401,25 @@ async function wireCitationHub(repo_id, { hub_concept_id, actor } = {}) {
       wired += 1;
     }
     span.setAttribute('okf.citations.wired', wired);
+    const outcome = hubCreated ? 'generated' : hubAlias ? 'using_existing' : wired > 0 ? 'wired' : 'nothing_to_do';
     logger.info('OKF citations wired to hub', {
       repo_id,
       hub: hubId,
       hub_created: hubCreated,
+      hub_alias: hubAlias,
+      outcome,
       wired,
       already_linked: alreadyLinked
     });
-    return { hub_concept_id: hubId, hub_created: hubCreated, wired, already_linked: alreadyLinked };
+    return {
+      hub_concept_id: hubId,
+      hub_created: hubCreated,
+      hub_alias: hubAlias,
+      hub_title: hubTitle,
+      wired,
+      already_linked: alreadyLinked,
+      outcome
+    };
   });
 }
 

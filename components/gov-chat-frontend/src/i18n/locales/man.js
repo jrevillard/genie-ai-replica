@@ -3051,6 +3051,8 @@ export default {
         keepHint: 'Kopi kiling mara — foro bee fiti.'
       },
       wireDone: 'Page {n} «{hub}» la link benta.',
+      wireAlias: 'A ka linkoo "{hub}" le a ka Sources ye — {n} linkoo daa...',
+      wireNothing: 'linkoo bula — bota bota linkoo "{hub}" le...',
       wireCreated: 'Sources page dadata ani page {n} link benta.',
       mergedPages: '{n} pages',
       preview: {

@@ -3107,6 +3107,10 @@ export default {
         keepHint: 'Boloka khopi e le nngwe — hlakola tse ling.'
       },
       wireDone: 'Maqephe {n} a hokahanntsoe ho "{hub}".',
+      wireAlias:
+        'Leqephe le seng le teng "{hub}" le sebelisoa e le leqephe la Mehlodi — maqephe a {n} a ile a hokahanngwa.',
+      wireNothing:
+        'Ha ho na le hokahanya — leqephe le leng le le leng le etsang litšoanepe le se le hokahantse le "{hub}".',
       wireCreated: 'Leqephe la Mehlodi le thehilwe mme maqephe {n} a hokahanntsoe.',
       mergedPages: '{n} pages',
       preview: {

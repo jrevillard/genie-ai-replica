@@ -3122,6 +3122,8 @@ export default {
         keepHint: 'Conservez une seule copie — supprimez les autres.'
       },
       wireDone: '{n} page(s) liée(s) à « {hub} ».',
+      wireAlias: 'La page existante « {hub} » est utilisée comme page Sources — {n} page(s) supplémentaire(s) liée(s).',
+      wireNothing: 'Rien à lier — chaque page citante pointe déjà vers « {hub} ».',
       wireCreated: 'Page Sources créée et {n} page(s) liée(s).',
       mergedPages: '{n} pages',
       preview: {

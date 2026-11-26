@@ -3126,6 +3126,8 @@ export default {
         keepHint: 'Eine Kopie behalten — den Rest löschen.'
       },
       wireDone: '{n} Seite(n) mit „{hub}“ verlinkt.',
+      wireAlias: 'Die vorhandene Seite "{hub}" wird als Quellen-Seite verwendet — {n} weitere Seite(n) verlinkt.',
+      wireNothing: 'Nichts zu verlinken — jede zitierende Seite verlinkt bereits "{hub}".',
       wireCreated: 'Quellen-Seite erstellt und {n} Seite(n) verlinkt.',
       mergedPages: '{n} pages',
       preview: {

@@ -17,7 +17,7 @@
 - **The wire is frozen.** The order on the wire is unchanged: `run_started` → tool events → `text_message_started`, `text_message_content`, `text_message_finished` → `verdict` → `run_finished`. The gate compares the recorded stream byte for byte; a difference is a stop, not a detail.
 - **The BFF frame names stay BFF-owned.** The runtime emits no lifecycle event and knows no frame name (rule C4 of the design's §2.5).
 - **Frozen behavior.** The RAG capability's behavior is frozen (`docs/baselines/v02-opea-query-path-contract.md`); `tests/test_equivalence_v02.py` stays green and untouched.
-- **The recorded strings keep their bytes.** The execution-version record gains a `runtime` axis — a NEW key beside implementation, model, prompt and configuration; the values it carries do not change.
+- **The recorded strings keep their bytes.** The execution-version record does NOT change in this plan: the `runtime` axis belongs to the wire freeze (plan 6), where a deliberate wire change is recorded. Here the record rides the handshake exactly as it does today.
 - **Lint locally with `--no-cache`.** A stale `.ruff_cache` answers green on a tree the CI rejects (2026-11-26).
 - **An output that differs from the expected one is a stop.** Report it; do not adjust a test or a list to make it pass.
 
@@ -36,11 +36,11 @@
 
 | File | Responsibility | Task |
 |---|---|---|
-| `components/agent-service/agent/runtime.py` | the port: `RunInputs`, `RuntimeDriver`, `BoundedModelClient` | 1 |
-| `components/agent-service/agent/loop.py` | the custom loop, as a `RuntimeDriver` | 1 |
-| `components/agent-service/agent/orchestrator.py` | the lifecycle, the text delivery, the verdict; the runtime factory | 1, 2 |
-| `components/agent-service/agent/dispatcher.py` | the tool dispatcher: the governance the runtime no longer owns | 2 |
-| `components/agent-service/agent/version_record.py` | the record's `runtime` axis | 1 |
+| `components/agent-service/agent/runtime.py` | the port: `RunInputs`, `RuntimeDriver`, `BoundedModelClient`, the outcome vocabulary | 1 |
+| `components/agent-service/agent/dispatcher.py` | the tool dispatcher: the dispatch the runtime reaches the corpus through | 1 |
+| `components/agent-service/agent/loop.py` | the custom loop, as a `RuntimeDriver` | 1, 2 |
+| `components/agent-service/agent/orchestrator.py` | the runtime factory; the per-request assembly | 1, 2 |
+| `components/agent-service/agent/governance.py` | the core's governed run: the lifecycle, the delivered text, the verdict, the failures | 2 |
 | `components/agent-service/tests/test_runtime_contract.py` | the contract suite (C1–C5) and one violator per rule | 2 |
 | `components/agent-service/tests/test_event_stream_gate.py` | the recorded stream, compared byte for byte | 1, 2 |
 
@@ -51,7 +51,8 @@ Each was checked against the code before being written here.
 - **The gate is recorded BEFORE the change.** The stream is captured from the orchestrator's own tests — the frames the BFF receives today — and stored as a fixture. After each step the same capture is compared with `==`, not with a tolerant matcher: the extraction is a pure move, and any difference is a defect to explain, not a shape to accept.
 - **The bound is structural before it is a rule.** Today each call site passes `max_output_tokens` by hand; a runtime that forgets it runs unbounded. The core wraps the client once (`BoundedModelClient`) and hands the wrapper to the runtime, so the cap cannot be forgotten (the design's §3.2).
 - **The dispatcher never raises to steer.** LangChain turns a tool's exception into a message for the model; a raised exception would not stop every runtime. The dispatcher returns a structured result or records the reason and cancels through the token (rule C3).
-- **The runtime's own events stay tool events.** The runtime emits `tool_call_started` / `tool_call_finished` and nothing else; the orchestrator owns the lifecycle and the text delivery (rule C4).
+- **The runtime's own events stay tool events.** The runtime emits `tool_call_started` / `tool_call_finished` and nothing else; the core owns the lifecycle and the text delivery (rule C4).
+- **The dispatcher's extraction lands with the extraction, not with the governance.** The design's §3.6 puts both in step 2; the dispatcher moves in step 1 instead, because it is a pure move (the loop calls it instead of its own method) and it keeps the port's shape stable across both steps — the runtime's inputs carry the dispatcher from the start.
 
 ---
 
@@ -67,15 +68,16 @@ Each was checked against the code before being written here.
 
 **Interfaces:**
 - Produces:
-  - `runtime.RunInputs` — frozen dataclass: `question`, `instruction`, `tools`, `model`, `dispatcher`, `monitor`, `token`, `emitter`.
+  - `runtime.RunInputs` — frozen dataclass: `question`, `instruction`, `tools` (the registry's definitions), `model` (the bounded client), `dispatcher`, `monitor`, `token`, `emitter`.
   - `runtime.RuntimeDriver` — the protocol: `runtime_id: str` and `async def run(self, inputs: RunInputs) -> RunResult`.
   - `runtime.BoundedModelClient` — the core-owned wrapper that caps the output bound itself.
+  - `dispatcher.ToolDispatcher` — the dispatch: the checks, the tool events, the execution through the registry, the declared errors mapped to data, the evidence-ledger feed, the injection scan.
 
 - [ ] **Step 1: Record the stream BEFORE the change**
 
-Create `components/agent-service/tests/test_event_stream_gate.py`, whose fixture captures the frames the orchestrator emits today and stores them under `tests/fixtures/event_stream/`. The capture goes through the orchestrator's own path (the same one the BFF drives), not a mock.
+Create `components/agent-service/tests/test_event_stream_gate.py`, whose fixture captures the frames the orchestrator emits today and stores them under `tests/fixtures/event_stream/`. The capture goes through the ORCHESTRATOR (the same path the BFF drives), not a mock: the gate must survive the refactor of the orchestrator's own wiring, so the test drives the public shape and not the internals.
 
-The test asserts the fixture exists and matches the capture. At this point it records the CURRENT stream — that file is the gate.
+The fixture is recorded with `AGENT_RECORD_EVENT_STREAM=1`; an ordinary run only compares. The only field left out of the comparison is the minted `run_id` (a uuid, by design) — the sequence, the kinds, the call ids and the payloads are compared byte for byte.
 
 - [ ] **Step 2: The port module**
 
@@ -92,17 +94,19 @@ class BoundedModelClient:
     """
 ```
 
-- [ ] **Step 3: The loop implements the driver**
+- [ ] **Step 3: The dispatcher leaves the loop, the loop implements the driver**
 
-In `components/agent-service/agent/loop.py`, the class keeps its behaviour and gains the driver's shape: `runtime_id` names it, and `run(inputs)` takes the port's inputs. The loop's own parameters become the inputs' fields.
+Create `components/agent-service/agent/dispatcher.py` with the body of today's `_dispatch_tool` and `_execute` — a pure move: the loop calls the dispatcher instead of its own method.
+
+In `components/agent-service/agent/loop.py`, the class keeps its behaviour and gains the driver's shape: `runtime_id` names it, and `run(inputs)` takes the port's inputs. The loop's own parameters become the inputs' fields, and the message list becomes a local of `run` — the instance keeps nothing between runs.
 
 - [ ] **Step 4: The orchestrator receives a runtime factory**
 
 In `components/agent-service/agent/orchestrator.py`, the orchestrator takes a factory (the default builds the custom loop) and calls the runtime instead of the loop directly. The sequence is unchanged: mint the run id, build the monitor, token and emitter, emit `run_started`, call the runtime, then the existing delivery and verdict.
 
-- [ ] **Step 5: The record gains the runtime axis**
+- [ ] **Step 5: The record does NOT change**
 
-In `components/agent-service/agent/version_record.py`, the record gains `{"id": runtime_id}` beside implementation, model, prompt and configuration. The test that pins the record's keys is updated; the recorded values do not change.
+The execution-version record keeps its four axes. The `runtime` axis belongs to the wire freeze (plan 6): adding it here would change the handshake's bytes, and the gate's whole point is that this plan changes none.
 
 - [ ] **Step 6: The gate compares**
 
@@ -136,24 +140,23 @@ git commit -m "refactor(agent-service): the loop is a runtime behind a port"
 - Modify: `components/agent-service/tests/test_event_stream_gate.py`
 
 **Interfaces:**
-- Consumes: `runtime.RunInputs`, `runtime.RuntimeDriver` from Task 1.
+- Consumes: `runtime.RunInputs`, `runtime.RuntimeDriver`, `dispatcher.ToolDispatcher` from Task 1.
 - Produces:
-  - `dispatcher.ToolDispatcher` — the tool dispatch: the budget and token checks, the tool events, the execution through the registry, the declared errors mapped to data, the evidence-ledger feed and the injection scan.
-  - `dispatcher.DispatchResult` — the structured outcome: the data, or the reason the run must stop.
+  - `governance.governed_run(runtime, inputs, *, verifier=None, execution_versions=None)` — the core's governed run: the handshake, the runtime call, the delivered text, the verdict, the terminal, and the honest failures.
 
-- [ ] **Step 1: The dispatcher leaves the runtime**
+- [ ] **Step 1: The core's governed run**
 
-Create `components/agent-service/agent/dispatcher.py` with the body of today's `_dispatch_tool` (the design's §3.2): the budget and token checks, the `tool_call_started` event, the execution through the registry, the declared errors mapped to data, the evidence-ledger feed, the injection scan and the `tool_call_finished` event.
+Create `components/agent-service/agent/governance.py` with the function that drives a runtime: the handshake (`run_started`), the runtime call, the delivered text (the mechanical insufficiency decision first — it owns the text), the text events, the verification verdict, the terminal — and the failures.
 
-The dispatcher NEVER raises to steer a run: it returns a `DispatchResult`, or it records the reason on the core's state and cancels the run through the token (rule C3).
+The failures are the core's policy: the runtime's exceptions become the terminal event they deserve (the registry's refusal is an `error`, an exhausted budget is `budget_exhausted`), and `CancelledError` propagates untouched.
 
-- [ ] **Step 2: The runtime calls the dispatcher**
+- [ ] **Step 2: The runtime keeps only the runtime's own work**
 
-In `components/agent-service/agent/loop.py`, the loop's dispatch becomes a call to the core's dispatcher, and the loop loses the governance it used to own. The loop keeps: calling the model (through the bounded client), dispatching tools (through the dispatcher), and returning the drafted text with its `RunResult`.
+In `components/agent-service/agent/loop.py`, the loop loses the governance it used to own: it emits no event, it applies no insufficiency rule, it verifies nothing. It keeps: calling the model (through the bounded client), dispatching tools (through the dispatcher), and returning the DRAFTED text with its `RunResult`.
 
-- [ ] **Step 3: The lifecycle, the text delivery and the verdict move to the orchestrator**
+- [ ] **Step 3: The orchestrator drives the runtime**
 
-In `components/agent-service/agent/orchestrator.py`, the orchestrator owns what the runtime no longer does: the lifecycle events (`run_started`, `run_finished`, `run_error`), the delivered text and the mechanical insufficiency decision, and the verification pipeline with its `verdict` event (the design's §3.4).
+In `components/agent-service/agent/orchestrator.py`, the runtime factory takes no argument (the runtime is stateless — everything the run needs rides the inputs), and the run calls `governed_run`. The run-path span moves with the governance: `agent.run` is the run's span, and the run's owner opens it.
 
 - [ ] **Step 4: The contract suite**
 
@@ -198,7 +201,7 @@ git commit -m "refactor(agent-service): the governance belongs to the core, not 
 | Design item | Where | Evidence |
 |---|---|---|
 | The runtime port (§3.2) | `agent/runtime.py`, `agent/loop.py` | the loop is a `RuntimeDriver`; the orchestrator takes a factory |
-| The governance is the core's (§3.1, §3.3) | `agent/dispatcher.py` | the dispatcher returns a result; the runtime never steers by raising |
+| The governance is the core's (§3.1, §3.3) | `agent/governance.py`, `agent/dispatcher.py` | the core drives the runtime; the runtime emits no event and decides no text |
 | The wire is unchanged (§3.4) | `tests/test_event_stream_gate.py` | the recorded stream compares byte for byte, before and after |
 | The port is a contract (§3.5) | `tests/test_runtime_contract.py` | C1–C5 green on the loop, red on one violator per rule |
 

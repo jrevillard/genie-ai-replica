@@ -71,6 +71,13 @@ def _verdict_payload(collector):
     return next(event.payload for event in collector if event.kind.value == "verdict")
 
 
+def _delivered_text(collector):
+    """The texts the client received — the DELIVERED answer, which is the
+    core's decision: the runtime returns its draft, and the insufficiency
+    rule may replace it."""
+    return [event.payload["text"] for event in collector if event.kind.value == "text_message_content"]
+
+
 # ---------------------------------------------------------------------
 # No successful retrieval → the standard insufficiency response
 # ---------------------------------------------------------------------
@@ -86,10 +93,11 @@ def test_no_retrieval_run_delivers_the_standard_message_not_the_draft():
     result = asyncio.run(loop.run("How are complaints handled?"))
 
     assert result.outcome == "answered"
+    # The runtime returns its DRAFT; the core decides what is delivered.
+    assert result.final_text == HOSTILE_DRAFT
     # The drafted text is discarded: the delivered answer IS the standard
     # explicit insufficiency message.
-    assert result.final_text == INSUFFICIENCY_RESPONSE
-    content = [event.payload["text"] for event in collector if event.kind.value == "text_message_content"]
+    content = _delivered_text(collector)
     assert content == [INSUFFICIENCY_RESPONSE]
     assert HOSTILE_DRAFT not in [event.payload.get("text", "") for event in collector]
     verdict = _verdict_payload(collector)
@@ -114,7 +122,8 @@ def test_every_search_insufficient_and_errors_yields_the_no_retrieval_reason():
 
     result = asyncio.run(loop.run("q"))
 
-    assert result.final_text == INSUFFICIENCY_RESPONSE
+    assert result.final_text == "I found everything you need."
+    assert _delivered_text(collector) == [INSUFFICIENCY_RESPONSE]
     assert _verdict_payload(collector)["insufficient_evidence"]["reasons"] == [REASON_NO_SUCCESSFUL_RETRIEVAL]
 
 
@@ -139,7 +148,8 @@ def test_a_degraded_run_reports_insufficiency_with_citations_carried_for_diagnos
 
     assert result.outcome == "answered"
     # Never a confident answer, citations notwithstanding.
-    assert result.final_text == INSUFFICIENCY_RESPONSE
+    assert result.final_text == HOSTILE_DRAFT
+    assert _delivered_text(collector) == [INSUFFICIENCY_RESPONSE]
     verdict = _verdict_payload(collector)
     assert verdict["insufficient_evidence"]["required"] is True
     # The degraded search's citations GREW the ledger, so the degradation
@@ -276,7 +286,8 @@ def test_the_insufficiency_decision_never_waits_for_the_judge():
 
     result = asyncio.run(asyncio.wait_for(loop.run("q"), timeout=5))
 
-    assert result.final_text == INSUFFICIENCY_RESPONSE
+    assert result.final_text == HOSTILE_DRAFT
+    assert _delivered_text(collector) == [INSUFFICIENCY_RESPONSE]
     verdict = _verdict_payload(collector)
     assert verdict["judge"] == {"ran": False, "outcome": "skipped", "verdict": None}
     assert verdict["insufficient_evidence"]["required"] is True

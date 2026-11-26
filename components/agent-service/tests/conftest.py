@@ -22,6 +22,7 @@ from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
 from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter
+from agent.governance import governed_run
 from agent.loop import AgentLoop
 from agent.orchestrator import OrchestratorConfig
 from agent.runtime import BoundedModelClient, RunInputs
@@ -235,6 +236,7 @@ class LoopRunner:
         emitter,
         verifier=None,
         instruction="the system prompt",
+        execution_versions: dict | None = None,
     ) -> None:
         self.loop = loop
         self.model = model
@@ -244,9 +246,10 @@ class LoopRunner:
         self.emitter = emitter
         self.verifier = verifier
         self._instruction = instruction
+        self._execution_versions = execution_versions
 
     async def run(self, question: str):
-        """One run over the port's inputs."""
+        """One governed run over the port's inputs."""
 
         inputs = RunInputs(
             question=question,
@@ -264,7 +267,12 @@ class LoopRunner:
             token=self.token,
             emitter=self.emitter,
         )
-        return await self.loop.run(inputs)
+        return await governed_run(
+            self.loop,
+            inputs,
+            verifier=self.verifier,
+            execution_versions=self._execution_versions,
+        )
 
 
 def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=None, execution_versions=None):
@@ -294,7 +302,7 @@ def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=No
     token = CancellationToken()
     emitter = EventEmitter(run_id="run-1", sink=collector.append)
     runner = LoopRunner(
-        AgentLoop(verifier=verifier, execution_versions=execution_versions),
+        AgentLoop(),
         model=model,
         registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
@@ -302,6 +310,7 @@ def _governed_loop(model, port, judge_model=None, authorized_repos=(), budget=No
         emitter=emitter,
         verifier=verifier,
         instruction="the production prompt",
+        execution_versions=execution_versions,
     )
     return runner, collector, monitor, verifier
 

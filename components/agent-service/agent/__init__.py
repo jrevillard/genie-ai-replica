@@ -11,8 +11,9 @@ provisional custom minimal loop (:mod:`.loop`), the governed production
 prompt (:mod:`.prompt`), the registered toolset (:mod:`.toolset`), the
 taint scan (:mod:`.taint`), the citation verification pipeline
 (:mod:`.verification`), the runtime port and its bounded model client
-(:mod:`.runtime`), the tool dispatcher (:mod:`.dispatcher`) and the bounded
-smoke probe (:mod:`.probe`). A
+(:mod:`.runtime`), the tool dispatcher (:mod:`.dispatcher`), the core's
+governed run (:mod:`.governance`) and the bounded smoke probe
+(:mod:`.probe`). A
 runtime swap adapts its native events to this seam's vocabulary — it never
 renames it; nothing here ever speaks the BFF's client frame names. The
 ``source_documents`` projection lives across the port boundary
@@ -25,6 +26,7 @@ from .budget import BudgetExhausted, RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
 from .dispatcher import ToolDispatcher
 from .events import BFF_FRAME_NAMES, AgentEvent, EventEmitter, EventKind, EventSink
+from .governance import governed_run
 from .loop import AgentLoop
 from .prompt import PRODUCTION_SYSTEM_PROMPT
 from .registry import ToolDefinition, ToolExecutor, ToolRegistry, UnregisteredToolError
@@ -69,5 +71,6 @@ __all__ = [
     "ToolRegistry",
     "UnregisteredToolError",
     "document_toolset",
+    "governed_run",
     "run_cancellable",
 ]

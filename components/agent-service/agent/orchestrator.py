@@ -17,10 +17,11 @@ One instance of this class answers one HTTP run request end to end:
   raises :class:`MissingKnobsError` naming EVERY knob that failed — no run
   starts unbounded, and no numeric default exists anywhere in the
   enforcement path.
-* **the run** — the seam loop with the monitor/token/emitter built here, so
-  a cancellation leaves the monitor's partial counts readable (the
-  ``CancelledError`` is logged with the partial usage record and
-  re-raised untouched — a cancelled run has no honest terminal state).
+* **the run** — the governed run over the runtime (the monitor, token and
+  emitter are built here), so a cancellation leaves the monitor's partial
+  counts readable (the ``CancelledError`` is logged with the partial usage
+  record and re-raised untouched — a cancelled run has no honest terminal
+  state).
   The per-request wiring also builds the preparation entry (the
   preparation module) over the run's monitor — every query the model
   writes is prepared (detected, translated to English) under the aux
@@ -60,6 +61,7 @@ from .budget import RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken
 from .dispatcher import ToolDispatcher
 from .events import MESSAGE_TRUNCATION, EventEmitter, EventKind, EventSink, run_started_payload
+from .governance import governed_run
 from .loop import AgentLoop
 from .prompt import PRODUCTION_SYSTEM_PROMPT
 from .runtime import (
@@ -298,16 +300,16 @@ class BudgetedTranslationClient(TranslationClient):
         return await super().translate_prompt(prompt, translategemma, model_id)
 
 
-def default_runtime_factory(*, verifier, execution_versions) -> RuntimeDriver:
+def default_runtime_factory() -> RuntimeDriver:
     """The runtime the orchestrator drives when nothing else is chosen.
 
     The custom minimal loop: the seam's first implementation, and the one
-    the governed run surface ships. The verifier and the execution-version
-    record are the loop's own construction material; everything else the
-    run needs travels with the inputs.
+    the governed run surface ships. It is stateless — everything the run
+    needs travels with the inputs — so one instance would serve every run;
+    the factory keeps the choice explicit and per-run.
     """
 
-    return AgentLoop(verifier=verifier, execution_versions=execution_versions)
+    return AgentLoop()
 
 
 def build_preparer_factory(transport, env=None):
@@ -338,7 +340,7 @@ def build_preparer_factory(transport, env=None):
 
 
 class RequestOrchestrator:
-    """The per-request owner: admission → budget → seam loop → usage record.
+    """The per-request owner: admission → budget → governed run → usage record.
 
     One instance is the run surface's long-lived wiring (lane + config +
     model client + port factory); each :meth:`run` is one request's
@@ -448,7 +450,7 @@ class RequestOrchestrator:
             dispatcher = ToolDispatcher(
                 registry=registry, monitor=monitor, token=token, emitter=emitter, verifier=verifier
             )
-            runtime = self._runtime_factory(verifier=verifier, execution_versions=execution_versions)
+            runtime = self._runtime_factory()
             inputs = RunInputs(
                 question=request.question,
                 instruction=self._config.system_prompt,
@@ -459,7 +461,12 @@ class RequestOrchestrator:
                 token=token,
                 emitter=emitter,
             )
-            result: RunResult = await runtime.run(inputs)
+            # The core's governed run: the handshake, the runtime, the
+            # delivered text, the verdict and the terminal. The runtime
+            # emits no event of its own.
+            result: RunResult = await governed_run(
+                runtime, inputs, verifier=verifier, execution_versions=execution_versions
+            )
         except asyncio.CancelledError:
             logger.warning(
                 "agent run cancelled mid-flight; the partial usage record: %s",

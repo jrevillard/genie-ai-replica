@@ -47,6 +47,7 @@ from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
 from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter
+from agent.governance import governed_run
 from agent.loop import AgentLoop
 from agent.runtime import (
     OUTCOME_ANSWERED,
@@ -209,7 +210,7 @@ async def run_probe(
         )
 
     try:
-        result = await loop.run(inputs)
+        result = await governed_run(loop, inputs, verifier=None)
     except asyncio.CancelledError:
         # The loop's RunResult never exists on this path; the monitor's
         # partial counts are the honest record.

@@ -57,6 +57,7 @@ from agent.budget import RunBudgetMonitor
 from agent.cancellation import CancellationToken
 from agent.dispatcher import ToolDispatcher
 from agent.events import EventEmitter, EventKind
+from agent.governance import governed_run
 from agent.loop import AgentLoop
 from agent.registry import ToolDefinition, ToolRegistry
 from agent.runtime import BoundedModelClient, RunInputs
@@ -136,7 +137,7 @@ SCHEMAS: dict[str, dict] = {
 MARKUP_LEAK_MARKERS = ("<tool_call>", "</tool_call>", "<|python_tag|>", "<function=", "[TOOL_CALL]")
 
 CONTENT_PREVIEW_CHARS = 200
-# Deliberately wider than loop.py's MESSAGE_TRUNCATION (200): this bounds
+# Deliberately wider than the seam's MESSAGE_TRUNCATION (200): this bounds
 # evidence-record error text; the verification record cites the 300-char cap.
 _ERROR_PREVIEW_CHARS = 300
 
@@ -1212,7 +1213,7 @@ async def demo_loop_cancel(config: VllmModelConfig, transport, model_id: str | N
     cancelled_error_propagated = False
     error: str | None = None
     try:
-        await loop.run(inputs)
+        await governed_run(loop, inputs, verifier=None)
     except asyncio.CancelledError:
         cancelled_error_propagated = True
     except Exception as failed:  # noqa: BLE001 — recorded honestly, like any demo observation

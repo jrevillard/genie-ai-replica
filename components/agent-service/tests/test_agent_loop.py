@@ -98,7 +98,7 @@ def _verifying_loop(model, judge_turns=(), budget=None, token=None):
         authorized_repos=PROBE_CONTEXT.authorized_repos,
     )
     runner = LoopRunner(
-        AgentLoop(verifier=verifier),
+        AgentLoop(),
         model=model,
         registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
@@ -117,7 +117,7 @@ def _loop(model, port=None, budget=None, token=None, registry=None, verifier=Non
         registry = document_toolset(port if port is not None else _port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     monitor = RunBudgetMonitor(budget or DEFAULT_BUDGET)
     runner = LoopRunner(
-        AgentLoop(verifier=verifier),
+        AgentLoop(),
         model=model,
         registry=registry,
         monitor=monitor,
@@ -645,7 +645,7 @@ def test_the_judge_runs_after_the_text_events_never_before_the_first_chunk():
         authorized_repos=PROBE_CONTEXT.authorized_repos,
     )
     runner = LoopRunner(
-        AgentLoop(verifier=verifier),
+        AgentLoop(),
         model=ScriptedLoopModel(MULTI_HOP_TURNS),
         registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,

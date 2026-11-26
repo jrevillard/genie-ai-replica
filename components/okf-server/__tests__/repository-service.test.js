@@ -943,6 +943,82 @@ describe('list concept_count attach (David 2026-09-30 "0 topics")', () => {
   });
 });
 
+describe('list summary projection (#2191 — 5.2 MB → KB)', () => {
+  beforeEach(() => db._reset());
+
+  // The heavy inline payload a real repo doc carries (frontmatter snapshots,
+  // document rows, crawl seeds, artifacts) — the bytes that made 33 repos
+  // ship 5.2 MB on GET /okf/repos (measured 2026-11-26).
+  const HEAVY = {
+    frontmatter: { tags: ['x'], forbidden: ['y'], body: 'huge markdown...' },
+    documents: [{ file_id: 'f1', bytes: 999999 }],
+    crawl_seeds: ['a', 'b'],
+    artifacts: [{ name: 'a' }]
+  };
+  const seedRow = (id) => ({
+    repo_id: id,
+    name: `N-${id}`,
+    domain: 'social',
+    version: 'v3',
+    lifecycle_state: 'published',
+    created_at: '2026-11-01T00:00:00Z',
+    updated_at: '2026-11-02T00:00:00Z',
+    ingested_at: '2026-11-03T00:00:00Z',
+    studio_step: null,
+    conversion: null,
+    rag_ingestion: null,
+    metrics: { a: 1 },
+    trust: null,
+    cloned_from: null,
+    ...HEAVY,
+    _key: id
+  });
+
+  test('projection:summary ships ONLY card fields — the heavy per-repo payload never leaves the server', async () => {
+    db.query.mockImplementation(async (query) => {
+      if (String(query || '').includes('COLLECT repo_id')) {
+        return { all: async () => [{ repo_id: 'r1', n: 5 }] };
+      }
+      return { all: async () => [seedRow('r1'), seedRow('r2')] };
+    });
+    const result = await repoService.list({ projection: 'summary' });
+    expect(result.items).toHaveLength(2);
+    const item = result.items[0];
+    // The card contract, pinned from StudioDashboard.vue's field reads:
+    for (const k of [
+      'repo_id',
+      'name',
+      'domain',
+      'version',
+      'lifecycle_state',
+      'created_at',
+      'updated_at',
+      'ingested_at',
+      'studio_step',
+      'conversion',
+      'rag_ingestion',
+      'metrics',
+      'trust',
+      'cloned_from'
+    ]) {
+      expect(item).toHaveProperty(k);
+    }
+    // The heavy payload stays behind GET /:id:
+    expect(item).not.toHaveProperty('frontmatter');
+    expect(item).not.toHaveProperty('documents');
+    expect(item).not.toHaveProperty('crawl_seeds');
+    expect(item).not.toHaveProperty('artifacts');
+    // The enrichments still attach to summaries (wizard concept_count):
+    expect(item.concept_count).toBe(5);
+  });
+
+  test('default (no projection) keeps the full doc — internal callers unchanged', async () => {
+    db.query.mockResolvedValue({ all: async () => [seedRow('r1')] });
+    const result = await repoService.list({});
+    expect(result.items[0]).toHaveProperty('frontmatter');
+  });
+});
+
 describe('cloneRepository response concept_count (David 2026-09-30)', () => {
   beforeEach(() => {
     db._reset();

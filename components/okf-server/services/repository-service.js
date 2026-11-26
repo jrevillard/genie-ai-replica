@@ -140,6 +140,39 @@ function toResponse(doc) {
   return out;
 }
 
+// #2191 (2026-11-26, measured): GET /okf/repos shipped the FULL document per
+// repo ({...doc}) — 33 repos × ~158 KB = 5.2 MB per list call, JSON.parsed on
+// the dashboard's main thread, spooling through Kong's proxy buffers. The
+// LIST endpoint needs the CARD, not the corpus: this allowlist is pinned from
+// the fields StudioDashboard.vue and the wizard actually read (r.* in the
+// template + the clone step's concept_count contract). The full document
+// stays where it belongs — GET /:id.
+const SUMMARY_FIELDS = [
+  'repo_id',
+  'name',
+  'domain',
+  'version',
+  'lifecycle_state',
+  'created_at',
+  'updated_at',
+  'ingested_at',
+  'studio_step',
+  'conversion',
+  'rag_ingestion',
+  'metrics',
+  'trust',
+  'cloned_from'
+];
+
+function toSummary(doc) {
+  if (!doc) return null;
+  const out = {};
+  for (const k of SUMMARY_FIELDS) {
+    if (doc[k] !== undefined) out[k] = doc[k];
+  }
+  return out;
+}
+
 function encodeCursor(created_at, repo_id) {
   return Buffer.from(JSON.stringify({ ts: created_at, id: repo_id })).toString('base64url');
 }
@@ -424,9 +457,10 @@ async function cloneRepository(source_id, input, actor) {
  * a wrong-typed authz must never fail open to unrestricted (review fix).
  * @param {object} opts { domain?, authz?: Set<string>|null, cursor?, limit? }
  */
-async function list({ domain, authz, cursor, limit } = {}) {
+async function list({ domain, authz, cursor, limit, projection } = {}) {
   return withSpan('okf.repo.list', async (span) => {
     span.setAttribute('okf.operation', 'list');
+    if (projection) span.setAttribute('okf.projection', projection);
     if (domain) span.setAttribute('okf.domain', domain);
     if (authz != null && !(authz instanceof Set)) {
       throw new RepoError('AUTHZ_TYPE_ERROR', 'authz must be a Set of repo_ids or null', 500);
@@ -471,7 +505,9 @@ async function list({ domain, authz, cursor, limit } = {}) {
     `;
     const result = await db.query(query);
     const docs = await result.all();
-    const items = docs.map(toResponse);
+    // projection:'summary' — the list endpoint's card projection (#2191).
+    // Absent ⇒ the full document (internal callers unchanged; additive-first).
+    const items = docs.map(projection === 'summary' ? toSummary : toResponse);
     await attachIndexingPending(items);
     await attachConceptCounts(items);
     await attachFailedCounts(items);

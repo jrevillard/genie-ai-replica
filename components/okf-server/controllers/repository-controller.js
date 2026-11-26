@@ -398,7 +398,12 @@ async function listRepos(req, res, next) {
     const result = await repoService.list({
       authz: authzForService(req),
       cursor,
-      limit: parseInt(limit, 10)
+      limit: parseInt(limit, 10),
+      // #2191 (2026-11-26, measured): the list shipped the FULL document per
+      // repo — 5.2 MB for 33 repos, a Kong temp-file spool per call, and a
+      // main-thread JSON.parse on the dashboard. The dashboard needs the
+      // card, not the corpus; the full document stays behind GET /:id.
+      projection: 'summary'
     });
     res.status(200).json(result);
   } catch (err) {

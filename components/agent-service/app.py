@@ -145,6 +145,10 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         # F5). The adapter is the port's implementation; the core never
         # learns the repository's surface.
         metadata_source=adapters.docrepo,
+        # The OKF server, through ITS port: the citation cards carry the
+        # concepts' names, read from the card the server served — each
+        # branch asks the platform that holds the source.
+        concept_source=adapters.okf,
     )
 
 

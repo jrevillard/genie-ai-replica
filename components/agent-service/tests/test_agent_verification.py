@@ -18,7 +18,7 @@ import asyncio
 import time
 
 import pytest
-from conftest import FakeMetadataSource, ScriptedLoopModel, run_budget
+from conftest import FakeConceptSource, FakeMetadataSource, ScriptedLoopModel, run_budget
 
 from agent.budget import RunBudgetMonitor
 from agent.verification import (
@@ -270,7 +270,7 @@ def test_a_judge_error_still_records_the_served_usage():
 # ---------------------------------------------------------------------
 
 
-def _pipeline(monitor=None, judge_turns=(), authorized_repos=(), metadata_source=None):
+def _pipeline(monitor=None, judge_turns=(), authorized_repos=(), metadata_source=None, concept_source=None):
     monitor = monitor if monitor is not None else RunBudgetMonitor(run_budget())
     pipeline = VerificationPipeline(
         policy=POLICY_VERDICT_MARKED,
@@ -279,6 +279,7 @@ def _pipeline(monitor=None, judge_turns=(), authorized_repos=(), metadata_source
         monitor=monitor,
         authorized_repos=authorized_repos,
         metadata_source=metadata_source if metadata_source is not None else FakeMetadataSource(),
+        concept_source=concept_source if concept_source is not None else FakeConceptSource(),
     )
     return pipeline, monitor
 
@@ -295,6 +296,7 @@ def test_a_source_whose_metadata_did_not_resolve_is_not_surfaced():
     pipeline, _monitor = _pipeline(
         judge_turns=(ModelTurn(content='{"verdict": "grounded"}'),),
         metadata_source=FakeMetadataSource(unresolved=("f-1",)),
+        concept_source=FakeConceptSource(),
     )
     pipeline.record_tool_result(
         "search_knowledge",
@@ -422,6 +424,7 @@ def test_a_judge_exception_verifies_unverified_never_raises():
         monitor=monitor,
         authorized_repos=(),
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
     pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
     verdict = asyncio.run(pipeline.finalize("the answer"))
@@ -575,6 +578,7 @@ def test_the_pipeline_converts_the_judge_timeout_knob_to_seconds():
         monitor=RunBudgetMonitor(run_budget()),
         authorized_repos=(),
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
     pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
 
@@ -604,6 +608,7 @@ def test_a_cancelled_judge_propagates_the_cancellation_never_a_verdict():
         monitor=RunBudgetMonitor(run_budget()),
         authorized_repos=(),
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
     pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
 

@@ -127,6 +127,32 @@ def build_metadata_source(env=None) -> DocRepoAdapter:
     return DocRepoAdapter(docrepo_url)
 
 
+def build_concept_source(env=None, *, okf_enabled: bool | None = None) -> ConceptSource:
+    """The OKF server's port: the adapter that resolves a concept's card
+    (its name, its labels).
+
+    The posture is the deployment's own ``OKF_ENABLED`` — the same variable
+    the retrieval's identity join reads — so the citation read and the
+    retrieval cannot disagree about whether the pillar is deployed. When the
+    pillar is NOT deployed, no concept can resolve: the read refuses with the
+    honest reason instead of dialling a base URL that was never configured.
+
+    ``okf_enabled`` is passed by the caller that already read the posture
+    (the assembly reads it ONCE, from the config that also carries the
+    retrieval knobs — the assembly and the retrieval must not read the flag
+    twice and disagree about it).
+    """
+    source = os.environ if env is None else env
+    if okf_enabled is None:
+        okf_enabled = ArangoConfig.load(env).okf_identity_enabled
+    if not okf_enabled:
+        return _PillarNotDeployed()
+    okf_url = str(source.get("AGENT_OKF_URL", ""))
+    if not okf_url:
+        raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
+    return OkfAdapter(okf_url)
+
+
 def build_stateless_adapters(env=None) -> StatelessAdapters:
     """Assemble the stateless adapters from the environment.
 
@@ -142,16 +168,13 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     honest reason, and the retrieval does not attempt the OKF identity join.
     """
     source = os.environ if env is None else env
-    okf_url = str(source.get("AGENT_OKF_URL", ""))
     docrepo = build_metadata_source(source)
 
     # The posture is read ONCE, from the config that also carries the
     # retrieval knobs — the assembly and the retrieval must not read the
     # flag twice and disagree about it.
     arango_config = ArangoConfig.load(env)
-    okf_enabled = arango_config.okf_identity_enabled
-    if okf_enabled and not okf_url:
-        raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
+    concept = build_concept_source(source, okf_enabled=arango_config.okf_identity_enabled)
 
     # The ArangoDB driver stays a call-time import: it is the one heavy
     # dependency only a live assembly needs, and keeping it off the module
@@ -175,7 +198,7 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
 
     return StatelessAdapters(
         docrepo=docrepo,
-        okf=OkfAdapter(okf_url) if okf_enabled else _PillarNotDeployed(),
+        okf=concept,
         chunks=LegacyChunkAdapter(db_factory),
         search_port=search,
         legacy_graph_name=arango_config.graph_name,

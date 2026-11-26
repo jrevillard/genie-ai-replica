@@ -80,7 +80,7 @@ import logging
 from dataclasses import dataclass, field
 
 import tracing
-from capabilities.citations import resolve_source_metadata, source_documents_from_citations
+from capabilities.citations import SourceRecords, resolve_source_records, source_documents_from_citations
 
 from .budget import BudgetExhausted, RunBudgetMonitor
 
@@ -446,10 +446,10 @@ class Verdict:
     invalid_citations: list[dict] = field(default_factory=list)
     insufficient_evidence: dict = field(default_factory=lambda: {"required": False, "reasons": []})
     findings: list[dict] = field(default_factory=list)
-    # The resolved document records, by legacy file id: the citation card
-    # carries the DOCUMENT's name, and a document that did not resolve is
-    # not surfaced (the D1 rule).
-    source_metadata: dict = field(default_factory=dict)
+    # What each source's OWN platform resolved: the citation card carries
+    # the source's name, and a source whose record did not resolve is not
+    # surfaced (the D1 rule).
+    source_records: SourceRecords = field(default_factory=SourceRecords)
 
     @property
     def is_grounded(self) -> bool:
@@ -477,9 +477,7 @@ class Verdict:
             "invalid_citations": list(self.invalid_citations),
             "insufficient_evidence": dict(self.insufficient_evidence),
             "findings": list(self.findings),
-            "source_documents": source_documents_from_citations(
-                self.delivered_citations, metadata=self.source_metadata
-            ),
+            "source_documents": source_documents_from_citations(self.delivered_citations, records=self.source_records),
             "marking": {"required": self.marking_required, "reason": self.status if self.marking_required else None},
         }
 
@@ -505,16 +503,19 @@ class VerificationPipeline:
         monitor: RunBudgetMonitor,
         authorized_repos: tuple,
         metadata_source,
+        concept_source,
         bearer: str | None = None,
     ) -> None:
         self.policy = policy
         self.ledger = RetrievalLedger()
         self._authorized_repos = frozenset(repo.repo_id for repo in authorized_repos)
-        # The document repository, through the port, and the caller's token:
-        # the citation cards carry the documents' NAMES, resolved per answer
-        # (the deployed path's resolution), and a document that does not
-        # resolve is not surfaced (the D1 rule).
+        # The document repository and the OKF server, through their OWN
+        # ports, and the caller's token: the citation cards carry each
+        # source's NAME, resolved per answer (the deployed path's
+        # resolution), and a source that does not resolve is not surfaced
+        # (the D1 rule).
         self._metadata_source = metadata_source
+        self._concept_source = concept_source
         self._bearer = bearer
         self._judge = GroundingJudge(
             model_client=judge_model_client,
@@ -539,7 +540,7 @@ class VerificationPipeline:
         delivered=None,
         invalid=None,
         insufficient_evidence=None,
-        source_metadata=None,
+        source_records=None,
     ) -> Verdict:
         """One construction home for every verdict this pipeline emits.
 
@@ -562,7 +563,7 @@ class VerificationPipeline:
             if insufficient_evidence is None
             else insufficient_evidence,
             findings=self.ledger.findings,
-            source_metadata=source_metadata or {},
+            source_records=source_records if source_records is not None else SourceRecords(),
         )
 
     def insufficiency_decision(self) -> dict:
@@ -619,31 +620,29 @@ class VerificationPipeline:
             finalize_span.set_attribute("grounding_status", verdict.status)
             return verdict
 
-    async def _resolve_metadata(self) -> dict[str, dict]:
-        """Resolve the ledger's legacy sources' metadata through the document
-        repository.
+    async def _resolve_records(self) -> SourceRecords:
+        """Resolve the ledger's sources' records through their OWN platform's
+        port.
 
-        The OKF concept ids are NOT asked for: they resolve in the OKF
-        server, not in the document repository, so the fetch would answer 404
-        by design (the deployed path surfaces them from their provenance).
+        A legacy document is resolved by the document repository, an OKF
+        concept by the OKF server — the route that applies the repository's
+        fence and the publication gate on the CALLER's own token.
         """
 
-        file_ids: list[str] = []
-        for entry in self.ledger.entries:
-            provenance = entry.get("provenance") or {}
-            if provenance.get("source") == "okf-concept":
-                continue
-            file_id = provenance.get("file_id")
-            if file_id and file_id not in file_ids:
-                file_ids.append(file_id)
-        return await resolve_source_metadata(file_ids, self._metadata_source, self._bearer)
+        provenances = [(entry.get("provenance") or {}) for entry in self.ledger.entries]
+        return await resolve_source_records(
+            provenances,
+            document_source=self._metadata_source,
+            concept_source=self._concept_source,
+            bearer=self._bearer,
+        )
 
     async def _finalize_decision(self, answer_text: str) -> Verdict:
         # The documents' names, resolved through the document repository
         # (the deployed path's per-answer resolution): the citation card
         # carries the DOCUMENT's name, and a document that did not resolve
         # is not surfaced and contributes no score (the D1 rule).
-        source_metadata = await self._resolve_metadata()
+        source_records = await self._resolve_records()
         # The insufficiency decision runs FIRST — before the judge, before
         # the grounded claim is surfaced (degraded beats grounded).
         # The judge is skipped on this path: the answer it would evaluate is
@@ -664,7 +663,7 @@ class VerificationPipeline:
                 delivered=[dict(entry) for entry in validity.delivered],
                 invalid=[dict(entry) for entry in validity.invalid],
                 insufficient_evidence=insufficiency,
-                source_metadata=source_metadata,
+                source_records=source_records,
             )
         validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
         delivered = [dict(entry) for entry in validity.delivered]
@@ -677,11 +676,9 @@ class VerificationPipeline:
                 {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
                 delivered=delivered,
                 invalid=[dict(entry) for entry in validity.invalid],
-                source_metadata=source_metadata,
+                source_records=source_records,
             )
         judge_result = await self._judge.judge(answer_text, delivered)
         if judge_result["outcome"] != JUDGE_OUTCOME_COMPLETED:
-            return self._verdict(VERDICT_UNVERIFIED, judge_result, delivered=delivered, source_metadata=source_metadata)
-        return self._verdict(
-            judge_result["verdict"], judge_result, delivered=delivered, source_metadata=source_metadata
-        )
+            return self._verdict(VERDICT_UNVERIFIED, judge_result, delivered=delivered, source_records=source_records)
+        return self._verdict(judge_result["verdict"], judge_result, delivered=delivered, source_records=source_records)

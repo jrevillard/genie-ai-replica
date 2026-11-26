@@ -7,13 +7,23 @@ the fields the frontend citation mapping reads (``translateSources`` —
 document_id/name, url, score, source, concept_id, repo_id, bundle_version;
 graph_name deliberately absent, the recorded delta) — asserted per variant,
 so dropping or renaming a field reddens here before the frontend silently
-loses it; the no-agent lane re-imports the SAME function objects (the
+loses it; EACH BRANCH asks ITS OWN platform for the source's name (the
+document repository for a document, the OKF server for a concept) and a
+source whose record did not resolve is not surfaced, on either branch (the
+D1 rule); the no-agent lane re-imports the SAME function objects (the
 extraction is a move, not a copy); a governed citation entry projects onto
 the identical shape; the dedup keeps the first served source.
 """
 
+import asyncio
+
 import noagent.pipeline as noagent_pipeline
-from capabilities.citations import source_document_envelope, source_documents_from_citations
+from capabilities.citations import (
+    SourceRecords,
+    resolve_source_records,
+    source_document_envelope,
+    source_documents_from_citations,
+)
 from capabilities.contract import LegacyFileProvenance, OkfConceptProvenance, SearchHit
 
 # The fields the frontend store mapping reads per variant
@@ -33,6 +43,16 @@ _METADATA = {
     "source_url": "",
 }
 
+# The OKF server's own card for one concept (the shape its port declares):
+# the concept's TITLE — the name the citation card carries — its labels and
+# its identity.
+_CARD = {
+    "repo_id": "r-1",
+    "concept_id": "c-1",
+    "title": "Hangar Access Notes",
+    "labels": ["security"],
+}
+
 
 def _legacy_hit(file_id="f-1", score=0.9):
     return SearchHit(provenance=LegacyFileProvenance(file_id=file_id), text="the passage", score=score)
@@ -46,6 +66,30 @@ def _okf_hit(concept_id="c-1", repo_id="r-1", bundle_version=3, score=0.8):
     )
 
 
+class FakeDocumentSource:
+    """The document repository's port, over a fixed record set."""
+
+    def __init__(self, records=None):
+        self.records = records or {}
+        self.requested = []
+
+    async def fetch_metadata(self, file_id, bearer):
+        self.requested.append((file_id, bearer))
+        return self.records.get(file_id)
+
+
+class FakeConceptSource:
+    """The OKF server's port, over a fixed card set."""
+
+    def __init__(self, cards=None):
+        self.cards = cards or {}
+        self.requested = []
+
+    async def fetch_concept(self, repo_id, concept_id, bearer):
+        self.requested.append((repo_id, concept_id, bearer))
+        return self.cards.get((repo_id, concept_id))
+
+
 # ---------------------------------------------------------------------
 # The envelope variants, pinned per field
 # ---------------------------------------------------------------------
@@ -57,7 +101,7 @@ def test_the_legacy_variant_carries_the_frontend_fields_and_no_source_marker():
     The name is the document's, never the id's: an id turned into a display
     name is a value the core derived from a token (ADR agentic-009, F5).
     """
-    [entry] = source_document_envelope([_legacy_hit()], metadata={"f-1": _METADATA})
+    [entry] = source_document_envelope([_legacy_hit()], records=SourceRecords(documents={"f-1": _METADATA}))
     assert set(entry) == LEGACY_FIELDS
     assert entry["document_id"] == "f-1"
     assert entry["document_name"] == "XR-7 Controller Reference.md"
@@ -76,8 +120,7 @@ def test_a_legacy_source_whose_metadata_did_not_resolve_is_not_surfaced():
     become a citation card — and must not contribute its score to the
     aggregate.
     """
-    assert source_document_envelope([_legacy_hit()], metadata={}) == []
-    assert source_document_envelope([_legacy_hit()], metadata={"f-1": None}) == []
+    assert source_document_envelope([_legacy_hit()], records=SourceRecords()) == []
 
 
 def test_a_crawled_page_carries_its_own_url():
@@ -85,21 +128,39 @@ def test_a_crawled_page_carries_its_own_url():
     URL; every other document carries none (the clients build the view URL
     from their own public base and the file id)."""
     crawled = {"file_name": "page.html", "author": "crawler", "source_url": "https://example.org/page"}
-    [entry] = source_document_envelope([_legacy_hit()], metadata={"f-1": crawled})
+    [entry] = source_document_envelope([_legacy_hit()], records=SourceRecords(documents={"f-1": crawled}))
     assert entry["url"] == "https://example.org/page"
 
 
-def test_the_okf_fallback_keeps_the_id_derived_name():
-    """An OKF concept's id resolves in the OKF server, NOT in the document
-    repository: the deployed path surfaces it from its own provenance, with
-    the id-derived name."""
-    [entry] = source_document_envelope([_okf_hit()], metadata={})
-    assert entry["document_name"] == "c-1"
+def test_the_concept_carries_the_name_its_own_platform_resolved():
+    """The OKF concept's name is the card's TITLE, read from the OKF server.
+
+    The id is not a name: a concept's id turned into a label is a value the
+    core derived from a token (ADR agentic-009, F5 — closed on BOTH
+    branches). The deployed path keeps the id-derived label
+    (``genieai_chatqna.py:3724``); the agentic path asks the platform that
+    holds the concept, and the divergence is recorded in ADR agentic-009.
+    """
+    [entry] = source_document_envelope([_okf_hit()], records=SourceRecords(concepts={("r-1", "c-1"): _CARD}))
+    assert entry["document_name"] == "Hangar Access Notes"
     assert entry["source"] == "okf-concept"
 
 
+def test_a_concept_whose_card_did_not_resolve_is_not_surfaced():
+    """The D1 rule, symmetric: an unresolved NAME is as fatal as an
+    unresolved identity.
+
+    The OKF branch used to be exempt — the concept had no name to resolve,
+    so the id stood in for one. It does have one: the card the OKF server
+    serves. A concept the server does not serve (a restricted repository, an
+    unpublished concept, the pillar down) is not a citation card, and
+    contributes no score to the aggregate.
+    """
+    assert source_document_envelope([_okf_hit()], records=SourceRecords()) == []
+
+
 def test_the_okf_variant_carries_the_frontend_fields_and_the_marker():
-    [entry] = source_document_envelope([_okf_hit()], metadata={})
+    [entry] = source_document_envelope([_okf_hit()], records=SourceRecords(concepts={("r-1", "c-1"): _CARD}))
     assert set(entry) == OKF_FIELDS
     assert entry["document_id"] == "c-1"
     assert entry["concept_id"] == "c-1"
@@ -111,19 +172,99 @@ def test_the_okf_variant_carries_the_frontend_fields_and_the_marker():
 
 
 def test_optional_okf_fields_follow_the_contract_shape():
-    # A repo-less or version-less concept says so by OMITTING the optional
-    # key — the contract's nullable fields never appear as invented values.
-    [no_repo] = source_document_envelope(
-        [
-            SearchHit(
-                provenance=OkfConceptProvenance(concept_id="c-1", repo_id="", bundle_version=None), text="t", score=0.1
-            )
-        ],
-        metadata={},
+    # A version-less concept says so by OMITTING the optional key — the
+    # contract's nullable fields never appear as invented values.
+    [no_version] = source_document_envelope(
+        [_okf_hit(bundle_version=None)],
+        records=SourceRecords(concepts={("r-1", "c-1"): _CARD}),
     )
-    assert "repo_id" not in no_repo
-    assert "bundle_version" not in no_repo
-    assert no_repo["source"] == "okf-concept"
+    assert "bundle_version" not in no_version
+    assert no_version["source"] == "okf-concept"
+
+
+def test_a_concept_without_a_repository_address_cannot_resolve():
+    """No repository, no card: the address the OKF server serves a concept
+    by is ``(repo_id, concept_id)``, and a concept that carries no
+    repository has no address to ask for. The read is not even attempted,
+    and the concept is not surfaced — the same D1 rule, one step earlier."""
+    concepts = FakeConceptSource({("", "c-1"): _CARD})
+    records = asyncio.run(
+        resolve_source_records(
+            [OkfConceptProvenance(concept_id="c-1", repo_id="", bundle_version=None)],
+            document_source=FakeDocumentSource(),
+            concept_source=concepts,
+            bearer=None,
+        )
+    )
+    assert concepts.requested == []
+    assert records.record_for(OkfConceptProvenance(concept_id="c-1", repo_id="", bundle_version=None)) is None
+
+
+# ---------------------------------------------------------------------
+# Each branch asks ITS OWN platform
+# ---------------------------------------------------------------------
+
+
+def test_each_branch_resolves_through_its_own_port():
+    """A legacy document is resolved by the document repository, an OKF
+    concept by the OKF server — and each read carries the caller's token,
+    because the OKF server's fence decides on that token (the repository's
+    fence and the publication gate live on the server's side; no
+    authorization rule changes here)."""
+    documents = FakeDocumentSource({"f-1": _METADATA})
+    concepts = FakeConceptSource({("r-1", "c-1"): _CARD})
+
+    records = asyncio.run(
+        resolve_source_records(
+            [
+                LegacyFileProvenance(file_id="f-1"),
+                OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3),
+            ],
+            document_source=documents,
+            concept_source=concepts,
+            bearer="the-caller-token",
+        )
+    )
+
+    assert documents.requested == [("f-1", "the-caller-token")]
+    assert concepts.requested == [("r-1", "c-1", "the-caller-token")]
+    # Each record lands under ITS OWN address — the document repository is
+    # never asked for a concept, and the OKF server never for a document.
+    assert records.record_for(LegacyFileProvenance(file_id="f-1")) == _METADATA
+    assert records.record_for(OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)) == _CARD
+
+
+def test_a_platform_that_answers_nothing_surfaces_nothing():
+    """A source whose read failed is a source that did not resolve: the
+    answer never fails on it, and the source is not surfaced."""
+    records = asyncio.run(
+        resolve_source_records(
+            [
+                LegacyFileProvenance(file_id="f-1"),
+                OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3),
+            ],
+            document_source=FakeDocumentSource(),
+            concept_source=FakeConceptSource(),
+            bearer=None,
+        )
+    )
+    assert records.record_for(LegacyFileProvenance(file_id="f-1")) is None
+    assert records.record_for(OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)) is None
+
+
+def test_a_card_without_a_name_is_not_a_resolved_name():
+    """The card that carries no title resolves the concept's IDENTITY, not
+    its NAME — and an unresolved name is as fatal as an unresolved identity.
+    """
+    records = asyncio.run(
+        resolve_source_records(
+            [OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)],
+            document_source=FakeDocumentSource(),
+            concept_source=FakeConceptSource({("r-1", "c-1"): {"repo_id": "r-1", "concept_id": "c-1"}}),
+            bearer=None,
+        )
+    )
+    assert records.record_for(OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)) is None
 
 
 # ---------------------------------------------------------------------
@@ -152,11 +293,17 @@ def test_ledger_entries_project_onto_the_identical_variants():
         },
         {"provenance": {"file_id": "f-2"}, "text": "a read source", "score": None},  # a read carries no score
     ]
-    envelope = source_documents_from_citations(delivered, metadata={"f-1": _METADATA, "f-2": _METADATA})
+    records = SourceRecords(documents={"f-1": _METADATA, "f-2": _METADATA}, concepts={("r-1", "c-1"): _CARD})
+    envelope = source_documents_from_citations(delivered, records=records)
     # The dict path renders the SAME shapes the object path does for the
     # same sources — the frontend cannot tell which lane delivered it.
-    assert envelope[0] == source_document_envelope([_legacy_hit()], metadata={"f-1": _METADATA})[0]
-    assert envelope[1] == source_document_envelope([_okf_hit()], metadata={})[0]
+    assert (
+        envelope[0] == source_document_envelope([_legacy_hit()], records=SourceRecords(documents={"f-1": _METADATA}))[0]
+    )
+    assert (
+        envelope[1]
+        == source_document_envelope([_okf_hit()], records=SourceRecords(concepts={("r-1", "c-1"): _CARD}))[0]
+    )
     assert set(envelope[2]) == LEGACY_FIELDS
     assert envelope[2]["score"] is None  # an absent score is carried, never guessed
 
@@ -174,7 +321,7 @@ def test_every_projected_entry_carries_what_the_frontend_mapping_reads():
                 "score": 0.8,
             },
         ],
-        metadata={"f-1": _METADATA},
+        records=SourceRecords(documents={"f-1": _METADATA}, concepts={("r-1", "c-1"): _CARD}),
     )
     for entry in (legacy, concept):
         for field in ("document_id", "document_name", "url", "score"):

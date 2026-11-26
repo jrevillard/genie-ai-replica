@@ -32,7 +32,14 @@ import json
 import os
 from pathlib import Path
 
-from conftest import FakeMetadataSource, ScriptedLoopModel, fake_port, multihop_turns, orchestrator_config
+from conftest import (
+    FakeConceptSource,
+    FakeMetadataSource,
+    ScriptedLoopModel,
+    fake_port,
+    multihop_turns,
+    orchestrator_config,
+)
 
 from agent.events import AgentEvent
 from agent.orchestrator import AgentRunRequest, RequestOrchestrator
@@ -57,6 +64,7 @@ def _capture(lane_dir: Path) -> list[dict]:
         model_client=model,
         port_factory=lambda context, bearer: fake_port(),
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
     request = AgentRunRequest(question=QUESTION, deadline_ms=5000, context=CONTEXT, bearer="tok-1")
     asyncio.run(orchestrator.run(request, sink=collector.append))

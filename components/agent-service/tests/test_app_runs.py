@@ -18,6 +18,7 @@ from dataclasses import replace
 import pytest
 from conftest import (
     REQUIRED_KNOBS,
+    FakeConceptSource,
     FakeMetadataSource,
     HangingLoopModel,
     ScriptedLoopModel,
@@ -49,6 +50,7 @@ def _runtime(model, tmp_path):
         model_client=model,
         port_factory=lambda context, bearer: fake_port(),
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
 
 
@@ -302,6 +304,9 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
                 # The document repository, through the port: the citation
                 # cards carry the documents' names.
                 "docrepo": FakeMetadataSource(),
+                # The OKF server, through ITS port: the citation cards
+                # carry the concepts' names.
+                "okf": FakeConceptSource(),
             },
         )(),
     )
@@ -344,6 +349,7 @@ def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, mon
             model_client=ScriptedLoopModel(multihop_turns(answer="a fabricated answer")),
             port_factory=lambda context, bearer: fake_port(),
             metadata_source=FakeMetadataSource(),
+            concept_source=FakeConceptSource(),
         ),
     )
     with TestClient(app_module.app) as client:

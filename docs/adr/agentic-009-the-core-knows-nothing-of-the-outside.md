@@ -34,11 +34,12 @@ a platform's vocabulary:
 | **F4** | The **vocabulary of the OKF counterparty** (`repo_id`, `concept_id`, `bundle_version`) | `capabilities/contract.py`, `capabilities/executor.py:208`, `agent/taint.py:79`, `agent/verification.py:135` | The core's *identity model* is the counterparty's data model |
 | **F5** | A **display name derived from an id** (`str(file_id).replace("_", " ")`) | `capabilities/citations.py:69,89` | The citation card shows `"1794932396634 ea188888"` — a deformed id, not a name; the E2E's source-card assertion can never hold |
 
-F5 is a **recorded delta**, not an oversight: `capabilities/citations.py`'s own docstring names it
+F5 was a **recorded delta**, not an oversight: `capabilities/citations.py`'s own docstring named it
 ("the deployed legacy branch resolves `document_name`/`url`/`categoryLabels` from doc-repo metadata per
 answer … Widening the delta — resolving doc-repo metadata here — is a deliberate future extension, not
 silently taken"). The deployed path resolves the metadata per answer
-(`genieai_chatqna.py:3749-3757`); the agentic path does not.
+(`genieai_chatqna.py:3749-3757`); the agentic path now does too — on BOTH branches, each asking the
+platform that holds the source.
 
 ### What is NOT a leak
 
@@ -59,15 +60,15 @@ platform to exist is fetched from that platform, never derived from an identifie
    the general token shape.
 2. **An identifier never derives a value.** The core does not turn an identifier into a display name,
    a URL, a label or a title. A source carries what the platform knows about it — the doc-repo's
-   `file_name`, its labels — resolved **through the adapter**, or nothing at all. The id-derived name
-   disappears; where the deployed path resolves metadata per answer, the agentic path resolves it
-   through the same port the deployed path uses, and the D1 rule (a source whose metadata does not
-   resolve is not surfaced, and contributes no score to the aggregate) holds.
-   **One exception, and it is the deployed path's own shape**: an OKF concept has no document to
-   fetch a name from, so the deployed path surfaces its id as the label
-   (`genieai_chatqna.py:3724`), and the agentic path keeps that fallback rather than inventing a
-   second one. The R4 ratchet lists that single finding, and the leak ledger names it — "F5 closed"
-   means closed for the **legacy** branch, not "the core never derives a name from an id".
+   `file_name`, its labels; the OKF server's card title — resolved **through the adapter**, or nothing
+   at all. The id-derived name disappears; where the deployed path resolves metadata per answer, the
+   agentic path resolves it through the same port the deployed path uses, and the D1 rule (a source
+   whose record does not resolve is not surfaced, and contributes no score to the aggregate) holds.
+   **The rule is symmetric**: each branch asks ITS OWN platform for its source's name — the document
+   repository for a legacy document, the OKF server for a concept — and a name that does not resolve
+   is as fatal as an identity that does not resolve. There is no branch that keeps an id-derived
+   label: the deployed path's OKF fallback (`genieai_chatqna.py:3724`, the concept's id as the
+   label) is a **divergence we accept**, not a shape we inherit.
 3. **The corpus leg is a label, not a database concept.** The core manipulates an opaque leg label;
    the adapter that serves a leg resolves it to the collection, the view and the identifier the
    platform uses. The core never validates a leg against a database's charset.
@@ -97,7 +98,7 @@ correction, or the correction is a guess about what "done" means.
 | Fix F1 | A document id in the doc-repo's own form reaches `read_source` | The guard accepts the token; the adapter validates the platform's form; `read_source` resolves the document |
 | Fix F2 | The capability no longer builds its own connector | `capabilities.search_knowledge` leaves `KNOWN_ADAPTER_IMPORTERS`; the host injects the connector the capability drives |
 | Fix F3 | A deployment misconfigures its corpus leg | The refusal names the deployment's configuration, not a database's charset; the core never sees the charset |
-| Fix F5 | An answer cites a legacy document | The citation card carries the document's **name** (resolved through the doc-repo port), not a deformed id; a source whose metadata does not resolve is not surfaced and contributes no score (D1). The OKF concept keeps the deployed path's id-derived label — see the decision's exception |
+| Fix F5 | An answer cites a source | The citation card carries the source's **name** — the document's, resolved through the doc-repo port; the concept's, resolved through the OKF port — never a deformed id; a source whose record does not resolve is not surfaced and contributes no score (D1), on either branch |
 
 ## Alternatives considered
 
@@ -120,7 +121,7 @@ without a rule is a leak that returns.
 | F2 | The **Arango adapter** imported by a core module | **R3** + **L2** — the capability leaves `KNOWN_ADAPTER_IMPORTERS` and reaches the corpus through the ports alone | closed (`a1c7e5c67`) |
 | F3 | The **charset of an Arango graph name** | **R6** — the core states no foreign system's acceptance rules | closed (`c68f856b4`) |
 | F4 | The **vocabulary of the OKF counterparty** | the port boundary itself — the core consumes the port's types and declares none of its own | verified, no change |
-| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed for the **legacy** branch (`f8100fab9`); the **OKF branch keeps the deployed path's own id-derived fallback** (an OKF concept has no name to fetch — `genieai_chatqna.py:3724` writes the same), and the R4 ratchet lists that one finding as accepted |
+| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed on **both** branches: the legacy branch resolves the document's name through the doc-repo port (`f8100fab9`), the OKF branch resolves the concept's title through the OKF port — and the R4 ratchet's known-leak set is **empty** |
 
 **R6 is generic.** It reads the core's text for the SHAPE of an acceptance
 claim — a subject and an acceptance verb, or a `<name>-safe` compound — and
@@ -138,10 +139,21 @@ imports the port's provenance type, the verification ledger reads the port's
 provenance fields. The core defines no identity model of its own, so there is
 nothing to move.
 
-## A recorded divergence from the deployed path — the OKF concept whose identity join degraded
+## A recorded divergence from the deployed path — the OKF concept
 
-**What differs.** The deployed path recognises an OKF concept by the GRAPH
-NAME of the provenance (`graph_name.startswith("OKF_")`,
+Two deltas, one decision: the agentic path resolves an OKF concept's name
+through the OKF server, and it resolves a concept's IDENTITY through the
+CAP-1 join. The deployed path does neither.
+
+**What differs — the name.** The deployed path surfaces an OKF concept with
+its id as the label (`genieai_chatqna.py:3724`:
+`str(file_id).replace("_", " ").strip()`). The agentic path reads the
+concept's card through the OKF port and surfaces the card's **title**. The
+deployed path's id-derived label is a value derived from a token — F5 — and
+this path does not derive it.
+
+**What differs — the identity.** The deployed path recognises an OKF concept
+by the GRAPH NAME of the provenance (`graph_name.startswith("OKF_")`,
 `genieai_chatqna.py:3709`): a chunk the document repository cannot resolve
 (an OKF concept has no document) is still surfaced, as an OKF source, and its
 score counts. The agentic path recognises it by the **CAP-1 identity join**:
@@ -161,6 +173,14 @@ optional and the per-citation authorization check
 (`agent/verification.py::check_reference_validity`) accepts an OKF citation
 whose repository is unknown — a change to the AUTHORIZATION semantics, on a
 path this slice cannot exercise (the laptop venue runs no OKF pillar).
+
+**No authorization rule changed.** The card is read through the OKF server's
+own serving route (`GET /api/okf/repos/:repo_id/concepts/:concept_id`), which
+applies the repository's fence and the publication gate **on the caller's
+token** (`components/okf-server/controllers/repository-controller.js`). A
+concept the server does not serve is not surfaced, and a 403 and a 404 both
+mean "does not resolve". The decision about a concept's NAME was never a
+decision about who may read it.
 
 **Recorded, not decided here.** This slice carries the divergence as a known
 delta; the OKF pillar's own story owns the decision, with the pillar deployed

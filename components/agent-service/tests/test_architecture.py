@@ -209,17 +209,14 @@ PLATFORM_VOCABULARY = {
 
 # The leak set the core still carries. A fix removes one finding and shrinks
 # this list in the same commit; a NEW leak adds one and turns the test red.
-KNOWN_PLATFORM_VOCABULARY: set[tuple[str, str]] = {
-    # F5, the OKF branch ONLY — the id-derived name the DEPLOYED path also
-    # writes (genieai_chatqna.py:3724, the OKF-concept fallback): an OKF
-    # concept has no document to fetch a name from, so both paths surface
-    # its id as the label. The LEGACY branch resolves the document's own
-    # name through the port — that is where F5 is closed (ADR agentic-009).
-    # This entry is the ONE accepted finding: it is a known shape, and the
-    # ledger names it — a reviewer reading the ADR must not read "F5 closed"
-    # as "the core never derives a name from an id".
-    ("capabilities.citations", "id_derived_value"),
-}
+KNOWN_PLATFORM_VOCABULARY: set[tuple[str, str]] = set()
+# EMPTY, and that is the point: F5 is closed on BOTH branches. The
+# legacy branch resolves the document's own name through the document
+# repository's port, and the OKF branch resolves the concept's own name
+# through the OKF server's port — each branch asks the platform that
+# holds the source, and neither derives a name from a token
+# (ADR agentic-009). The rule that found them stays: an id turned into
+# a display value is still a leak, and a NEW one turns this test red.
 
 # The modules whose TEXT the rule reads: the core and the capability — the
 # modules that DECIDE. The ports (contract, identifiers, model, sources) are

@@ -57,10 +57,14 @@ import tracing
 # citations onto the SAME envelope). The name is RE-EXPORTED here: the
 # pipeline's own callers and suites import it from this module, and the
 # output is byte-identical to the pre-extraction behavior.
-from capabilities.citations import resolve_source_metadata, source_document_envelope, source_is_surfaceed
+from capabilities.citations import (
+    SourceRecords,
+    resolve_source_records,
+    source_document_envelope,
+    source_is_surfaceed,
+)
 from capabilities.contract import (
     CallerContext,
-    LegacyFileProvenance,
     OperationBudget,
     OutcomeCode,
     PreparedQuery,
@@ -68,7 +72,7 @@ from capabilities.contract import (
     SearchKnowledgeResult,
 )
 from capabilities.model import chat_auth_headers, chat_choice, chat_choice_content, chat_completions_url
-from capabilities.sources import DocumentMetadataSource
+from capabilities.sources import ConceptSource, DocumentMetadataSource
 from preparation import PreparationConfig, QueryPreparer
 from preparation.registry import LanguageRegistry
 from preparation.translation import ModelEndpointCache
@@ -222,6 +226,7 @@ class NoAgentPipeline:
         score_calibrator=None,
         *,
         metadata_source: DocumentMetadataSource,
+        concept_source: ConceptSource,
     ):
         self._config = config
         self._preparer = preparer
@@ -239,6 +244,10 @@ class NoAgentPipeline:
         # documents it cites, per answer, and a document that does not
         # resolve is not cited (the D1 rule).
         self._metadata_source = metadata_source
+        # The OKF server, through ITS port: the lane resolves the concepts
+        # it cites the same way — each branch asks the platform that holds
+        # the source (ADR agentic-009, F5).
+        self._concept_source = concept_source
         # The static-token memo (deployed `_count_static_tokens`): the system
         # prompt is per-process invariant (override-or-default, at most two
         # texts), so its /tokenize count is paid once per text, not once per
@@ -255,7 +264,16 @@ class NoAgentPipeline:
 
     @classmethod
     def create(
-        cls, config: NoAgentConfig, capability, budget: OperationBudget, transport, lane, env=None, *, metadata_source
+        cls,
+        config: NoAgentConfig,
+        capability,
+        budget: OperationBudget,
+        transport,
+        lane,
+        env=None,
+        *,
+        metadata_source,
+        concept_source,
     ) -> "NoAgentPipeline":
         """Assemble the wiring the caller supplies: the preparer over the
         same env, the generation client (whose transport the counter
@@ -267,11 +285,11 @@ class NoAgentPipeline:
         translator owns its registry instance (the same file, its own
         read-once cache) — the preparer's is private to the preparer.
 
-        The transport, the lane and the document resolver are REQUIRED:
-        the core composes nothing, so the caller supplies all three. A
+        The transport, the lane and the two source resolvers are REQUIRED:
+        the core composes nothing, so the caller supplies them all. A
         missing one fails here, where the wiring is, and not at the first
         call that needs it — and a missing resolver would empty every
-        citation card instead (the D1 rule drops a source whose metadata
+        citation card instead (the D1 rule drops a source whose record
         does not resolve)."""
         preparer = QueryPreparer.create(transport, env)
         generation = GenerationClient.create(config, transport=transport)
@@ -291,6 +309,7 @@ class NoAgentPipeline:
             translator,
             capability.score_calibrator,
             metadata_source=metadata_source,
+            concept_source=concept_source,
         )
 
     async def run(
@@ -322,7 +341,7 @@ class NoAgentPipeline:
         query_text = ""
         documents: list[str] = []
         search_result: SearchKnowledgeResult | None = None
-        source_metadata: dict[str, dict] = {}
+        source_records = SourceRecords()
         abstained = False
         reason: str | None = None
 
@@ -336,10 +355,10 @@ class NoAgentPipeline:
                 context, search_input, self._budget, abstention_sink=sink_reasons.append
             )
             documents = [hit.text for hit in search_result.hits]
-            # The documents' names, resolved through the document repository
-            # (the deployed path's per-answer resolution): a document that
+            # The sources' names, resolved through their OWN platform's port
+            # (the deployed path's per-answer resolution): a source that
             # does not resolve is not cited, and contributes no score.
-            source_metadata = await self._resolve_metadata(search_result.hits, bearer)
+            source_records = await self._resolve_records(search_result.hits, bearer)
             if search_result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE:
                 # The recorded reasons stay distinct: the sink carries the
                 # exact one (no_documents_retrieved / reranker_input_too_long
@@ -397,7 +416,7 @@ class NoAgentPipeline:
         return self._assemble(
             answer=answer,
             search_result=search_result,
-            source_metadata=source_metadata,
+            source_records=source_records,
             preparation=preparation,
             context=context,
             abstained=abstained,
@@ -422,23 +441,28 @@ class NoAgentPipeline:
             return answer, None
         return await self._translator.translate(answer, target_language)
 
-    async def _resolve_metadata(self, hits, bearer) -> dict[str, dict]:
-        """Resolve the legacy sources' metadata through the document repository.
+    async def _resolve_records(self, hits, bearer) -> SourceRecords:
+        """Resolve every source's record through its OWN platform's port.
 
-        The OKF concept ids are NOT asked for: they resolve in the OKF
-        server, not in the document repository, so the fetch would answer
-        404 by design.
+        A legacy document is resolved by the document repository, an OKF
+        concept by the OKF server — each branch asks the platform that holds
+        the source, and a source that did not resolve is not cited (the D1
+        rule).
         """
 
-        file_ids = [hit.provenance.file_id for hit in hits if isinstance(hit.provenance, LegacyFileProvenance)]
-        return await resolve_source_metadata(file_ids, self._metadata_source, bearer)
+        return await resolve_source_records(
+            (hit.provenance for hit in hits),
+            document_source=self._metadata_source,
+            concept_source=self._concept_source,
+            bearer=bearer,
+        )
 
     def _assemble(
         self,
         *,
         answer: str,
         search_result: SearchKnowledgeResult | None,
-        source_metadata: dict[str, dict],
+        source_records: SourceRecords,
         preparation,
         context: CallerContext,
         abstained: bool,
@@ -447,18 +471,18 @@ class NoAgentPipeline:
         too_long_answer: bool,
     ) -> NoAgentResult:
         hits = tuple(search_result.hits) if search_result else ()
-        # The SURFACED hits: a legacy source whose metadata did not resolve
-        # is not cited and contributes no score (the D1 rule). One rule, in
+        # The SURFACED hits: a source whose record did not resolve is not
+        # cited and contributes no score (the D1 rule). One rule, in
         # the citations module — the projection and the aggregate cannot
         # disagree about it.
-        surfaced = tuple(hit for hit in hits if source_is_surfaceed(hit.provenance, source_metadata))
+        surfaced = tuple(hit for hit in hits if source_is_surfaceed(hit.provenance, source_records))
         calibrate = self._score_calibrator
-        envelope = source_document_envelope(surfaced, calibrate, metadata=source_metadata)
+        envelope = source_document_envelope(surfaced, calibrate, records=source_records)
         # The confidence aggregate runs over the SURFACED hits — duplicates
         # included (deployed M3: a duplicate's score counts while the entry
         # itself is not re-surfaced; the dedup is the envelope's) — at
         # confidence time, calibrated like the envelope scores. A source
-        # whose metadata did not resolve is NOT in that list: the D1 rule
+        # whose record did not resolve is NOT in that list: the D1 rule
         # keeps its score out of the aggregate, and a reader who restores
         # the full hit list here re-poisons the confidence.
         scores = [calibrate(hit.score) if calibrate is not None else hit.score for hit in surfaced]

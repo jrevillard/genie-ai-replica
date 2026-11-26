@@ -11,6 +11,7 @@ import json
 import re
 
 from conftest import (
+    FakeConceptSource,
     FakeMetadataSource,
     ScriptedLoopModel,
     _governed_loop,
@@ -212,6 +213,7 @@ def _orchestrator_with(model, port, tmp_path):
         model_client=model,
         port_factory=lambda context, bearer: port,
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
 
 
@@ -284,6 +286,7 @@ def test_the_pre_loop_failure_path_emits_the_record(tmp_path):
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=broken_factory,
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
     events: list[AgentEvent] = []
 

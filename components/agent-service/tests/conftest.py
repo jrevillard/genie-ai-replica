@@ -295,6 +295,7 @@ def _governed_loop(
     runtime=None,
     with_verifier=True,
     metadata_source=None,
+    concept_source=None,
     bearer=None,
 ):
     """The governed answer path over fakes — one home for the suites that
@@ -330,6 +331,7 @@ def _governed_loop(
             monitor=monitor,
             authorized_repos=authorized_repos,
             metadata_source=metadata_source if metadata_source is not None else FakeMetadataSource(),
+            concept_source=concept_source if concept_source is not None else FakeConceptSource(),
             bearer=bearer,
         )
         if with_verifier
@@ -375,6 +377,28 @@ class FakeMetadataSource:
 def resolved_metadata_source(*file_ids: str) -> FakeMetadataSource:
     """A metadata source that resolves the given file ids."""
     return FakeMetadataSource({file_id: {"file_name": f"{file_id} resolved.md", "labels": []} for file_id in file_ids})
+
+
+class FakeConceptSource:
+    """The OKF server's port, over a fixed card set.
+
+    The cards carry the OKF server's own fields: the concept's TITLE (its
+    name — the value the citation card carries), its labels and its
+    identity. A concept the fake does not know does NOT resolve, which is
+    what makes the D1 rule observable on the OKF branch too: a concept
+    whose card did not resolve is not surfaced.
+    """
+
+    def __init__(self, cards: dict | None = None, unresolved: tuple = ()):
+        self.cards = cards if cards is not None else {}
+        self.unresolved = set(unresolved)
+        self.requested: list[tuple[str, str]] = []
+
+    async def fetch_concept(self, repo_id: str, concept_id: str, bearer: str | None):
+        self.requested.append((repo_id, concept_id))
+        if (repo_id, concept_id) in self.unresolved:
+            return None
+        return self.cards.get((repo_id, concept_id), {"title": f"{concept_id} resolved", "labels": []})
 
 
 class AgentFakePort:

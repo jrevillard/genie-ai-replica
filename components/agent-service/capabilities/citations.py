@@ -22,68 +22,149 @@ Two consumers, one builder per provenance variant:
   (``{"provenance": dict, "text": str, "score": ...}``), already deduped first-served by
   the ledger.
 
-THE NAME IS THE DOCUMENT'S, NOT THE ID'S. A legacy source carries the name
-the document repository resolved for it — resolved through the port, per
-answer, exactly as the deployed path does. The core never derives a value
-from an identifier (ADR agentic-009, F5), so the id-derived name is gone from
-the legacy branch: it survives only in the OKF fallback, where the id is all
-the platform offers (an OKF concept's id resolves in the OKF server, not in
-the document repository, so the document repository would 404 it BY DESIGN).
+THE NAME IS THE PLATFORM'S, NOT THE ID'S. Every source carries the name ITS
+OWN platform resolved for it: a legacy document carries the name the document
+repository resolved for it (resolved through the port, per answer, exactly as
+the deployed path does), an OKF concept carries the title the OKF server served
+on its card. The core never derives a value from an identifier (ADR
+agentic-009, F5): the id-derived name is gone from BOTH branches — the
+exception the deployed path keeps (`genieai_chatqna.py:3724` surfaces the id
+as the label) is recorded as a divergence, not inherited.
 
-THE D1 RULE. A legacy source whose metadata does NOT resolve is NOT
-surfaced and contributes NO score to the confidence aggregate ("no source
-surfaced, no confidence poison") — the deployed rule, kept here: a deleted
-document, or a document repository that is down, must not become a citation
-card. :func:`source_is_surfaceed` is the ONE place that rule lives, so the
+THE D1 RULE. A source whose record does NOT resolve is NOT surfaced and
+contributes NO score to the confidence aggregate ("no source surfaced, no
+confidence poison") — the deployed rule, kept here: a deleted document, a
+document repository that is down, a concept the repository's fence refuses,
+must not become a citation card. The rule is SYMMETRIC: each branch asks its
+own platform, and an unresolved name is as fatal as an unresolved identity.
+:func:`source_is_surfaceed` is the ONE place that rule lives, so the
 projection and the aggregate can never disagree about it.
 """
 
 import asyncio
 import logging
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any
 
 from .contract import LegacyFileProvenance, OkfConceptProvenance
-from .sources import DocumentMetadataSource
+from .sources import ConceptSource, DocumentMetadataSource
 
 logger = logging.getLogger(__name__)
 
 
-def source_is_surfaceed(provenance, metadata: dict[str, dict]) -> bool:
-    """Can this source be surfaced?
+@dataclass(frozen=True)
+class SourceRecords:
+    """What the platforms resolved for the sources of ONE answer.
 
-    An OKF concept always can: its id resolves in the OKF server, not in the
-    document repository, so the document repository would answer 404 BY
-    DESIGN — the deployed path surfaces it from its own provenance, with the
-    id-derived name.
+    A legacy document's record comes from the document repository, keyed by
+    the file id; an OKF concept's card comes from the OKF server, keyed by the
+    ``(repo_id, concept_id)`` address the card is served at. Each branch
+    asked its OWN platform — the core derives nothing from an id (ADR
+    agentic-009, F5) — and a source whose record did NOT resolve is ABSENT
+    from its map: the D1 rule's evidence.
+    """
 
-    A legacy document only when its metadata RESOLVED: the D1 rule — no
-    source surfaced, no confidence poison. A source that did not resolve
-    contributes no score to the aggregate either.
+    documents: Mapping[str, dict] = field(default_factory=dict)
+    concepts: Mapping[tuple[str, str], dict] = field(default_factory=dict)
 
-    ``provenance`` is the contract's provenance object (the no-agent lane's
-    hits) or the ledger's provenance dict (the governed path's citations):
-    the two lanes carry the same identity in two shapes, and this function
-    reads both — so the projection and the aggregate apply ONE rule.
+    def record_for(self, provenance) -> dict | None:
+        """The record this source's own platform resolved — ``None`` when it
+        did not resolve (the D1 rule).
+
+        ``provenance`` is the contract's provenance object (the no-agent
+        lane's hits) or the ledger's provenance dict (the governed path's
+        citations): the two lanes carry the same identity in two shapes, and
+        this method reads both — so the projection and the aggregate apply
+        ONE rule.
+        """
+
+        if _is_concept(provenance):
+            return self.concepts.get(_concept_address(provenance))
+        file_id = _legacy_file_id(provenance)
+        if file_id is None:
+            return None
+        return self.documents.get(file_id)
+
+
+def _is_concept(provenance) -> bool:
+    """Is this provenance an OKF concept's?
+
+    The marker is the port's own vocabulary (``repo_id``/``concept_id``), the
+    counterparty's data model — naming it in a PORT is the port's job, and
+    the core never learns a platform's identifier FORM.
     """
 
     if isinstance(provenance, dict):
-        if provenance.get("source") == "okf-concept":
-            return True
-        file_id = provenance.get("file_id")
-    elif isinstance(provenance, OkfConceptProvenance):
-        return True
-    else:
-        file_id = getattr(provenance, "file_id", None)
-    return metadata.get(file_id) is not None
+        return provenance.get("source") == "okf-concept"
+    return isinstance(provenance, OkfConceptProvenance)
 
 
-async def resolve_source_metadata(file_ids, source: DocumentMetadataSource, bearer: str | None) -> dict[str, dict]:
+def _concept_address(provenance) -> tuple[str, str]:
+    """The ``(repo_id, concept_id)`` address a concept's card is served at."""
+
+    if isinstance(provenance, dict):
+        return (str(provenance.get("repo_id") or ""), str(provenance.get("concept_id") or ""))
+    return (str(provenance.repo_id or ""), str(provenance.concept_id or ""))
+
+
+def _legacy_file_id(provenance) -> str | None:
+    """The document repository's file id — the legacy source's address."""
+
+    if isinstance(provenance, dict):
+        return provenance.get("file_id")
+    return getattr(provenance, "file_id", None)
+
+
+def source_is_surfaceed(provenance, records: SourceRecords) -> bool:
+    """Can this source be surfaced?
+
+    A source is surfaced when ITS OWN platform resolved its record: the
+    document repository for a legacy document, the OKF server for a concept.
+    A source that did not resolve is NOT surfaced and contributes no score
+    to the aggregate either — the D1 rule, one rule for both branches.
+    """
+
+    return records.record_for(provenance) is not None
+
+
+async def resolve_source_records(
+    provenances, *, document_source: DocumentMetadataSource, concept_source: ConceptSource, bearer: str | None
+) -> SourceRecords:
+    """Resolve every source's record through its OWN platform's port.
+
+    A legacy document is resolved by the document repository; an OKF concept
+    by the OKF server — the route that applies the repository's fence and the
+    publication gate on the CALLER's own token, so a restricted or draft
+    repository stays unreachable from the citation list. No authorization
+    rule changes here: the server decides, on the token the caller carries.
+
+    A record that did NOT resolve is ABSENT from the result — a deleted
+    document, a repository that is down, a concept the fence refuses, a card
+    without a name. The source is not surfaced and contributes no score.
+    """
+
+    file_ids: list[str] = []
+    addresses: list[tuple[str, str]] = []
+    for provenance in provenances:
+        if _is_concept(provenance):
+            address = _concept_address(provenance)
+            if address not in addresses:
+                addresses.append(address)
+            continue
+        file_id = _legacy_file_id(provenance)
+        if file_id and file_id not in file_ids:
+            file_ids.append(file_id)
+    documents, concepts = await asyncio.gather(
+        _resolve_documents(file_ids, document_source, bearer),
+        _resolve_concepts(addresses, concept_source, bearer),
+    )
+    return SourceRecords(documents=documents, concepts=concepts)
+
+
+async def _resolve_documents(file_ids, source: DocumentMetadataSource, bearer: str | None) -> dict[str, dict]:
     """Resolve the metadata of every legacy file id through the document
     repository.
-
-    The result maps a file id to the record the repository resolved. An id
-    that did NOT resolve is ABSENT from the map — the D1 rule's evidence: a
-    source without a resolved record is not surfaced.
 
     A resolution that FAILED (a deleted document, a repository that is down)
     is a resolution that did not happen: it never fails the answer, and the
@@ -100,6 +181,36 @@ async def resolve_source_metadata(file_ids, source: DocumentMetadataSource, bear
     unique = list(dict.fromkeys(file_ids))
     records = await asyncio.gather(*(_one(file_id) for file_id in unique))
     return {file_id: record for file_id, record in zip(unique, records, strict=True) if record}
+
+
+async def _resolve_concepts(addresses, source: ConceptSource, bearer: str | None) -> dict[tuple[str, str], dict]:
+    """Resolve every concept's card through the OKF server.
+
+    A card that did NOT resolve — 403 (the repository's fence), 404 (the
+    concept is not published), a transport failure — is a card that does not
+    exist: the concept is not surfaced. A card WITHOUT a name is the same
+    case: an unresolved name is as fatal as an unresolved identity (the D1
+    rule applies to the name too).
+    """
+
+    async def _one(address: tuple[str, str]) -> dict | None:
+        repo_id, concept_id = address
+        if not repo_id:
+            # No repository address, no card to read: the concept cannot
+            # resolve, and a concept that cannot resolve is not surfaced.
+            return None
+        try:
+            card = await source.fetch_concept(repo_id, concept_id, bearer)
+        except Exception as failure:  # noqa: BLE001 — a failed lookup is an unresolved source
+            logger.warning("concept card did not resolve: the source is not surfaced (%s)", type(failure).__name__)
+            return None
+        if not isinstance(card, dict) or not str(card.get("title") or "").strip():
+            return None
+        return card
+
+    unique = list(dict.fromkeys(addresses))
+    cards = await asyncio.gather(*(_one(address) for address in unique))
+    return {address: card for address, card in zip(unique, cards, strict=True) if card}
 
 
 def hit_identity(hit) -> tuple[str, str] | None:
@@ -133,12 +244,13 @@ def _crawled_url(record: dict) -> str:
     return ""
 
 
-def _okf_entry(concept_id, repo_id, bundle_version, score) -> dict:
-    """One OKF-concept envelope entry: the deployed fallback shape (the
-    id-derived name, no URL — the concept has no doc-repo file to link)."""
+def _okf_entry(concept_id, repo_id, bundle_version, score, card: dict) -> dict:
+    """One OKF-concept envelope entry: the concept's OWN name, read from the
+    card its platform served (no URL — the concept has no document file to
+    link)."""
     entry: dict[str, Any] = {
         "document_id": concept_id,
-        "document_name": str(concept_id).replace("_", " ").strip(),
+        "document_name": str(card.get("title") or "").strip(),
         "url": "",
         "categoryLabels": [],
         "serviceLabels": [],
@@ -172,7 +284,7 @@ def _legacy_entry(file_id, score, record: dict) -> dict:
     }
 
 
-def source_document_envelope(hits, score_calibrator=None, *, metadata: dict[str, dict]) -> list[dict]:
+def source_document_envelope(hits, score_calibrator=None, *, records: SourceRecords) -> list[dict]:
     """The ``source_documents`` entries of one result, in the deployed shape.
 
     The no-agent lane's entry point (re-imported there verbatim). Duplicates
@@ -185,9 +297,9 @@ def source_document_envelope(hits, score_calibrator=None, *, metadata: dict[str,
     applied at confidence time ONLY — never on the selection comparisons the
     capability already made.
 
-    ``metadata`` maps a legacy file id to the record the document repository
-    resolved for it (the port's own shape). A legacy hit whose id is ABSENT
-    from the map did not resolve: it is not surfaced — the D1 rule.
+    ``records`` carries what each source's OWN platform resolved. A hit whose
+    record is ABSENT from it did not resolve: it is not surfaced — the D1
+    rule, the same rule for both branches.
     """
 
     envelope: list[dict] = []
@@ -199,20 +311,21 @@ def source_document_envelope(hits, score_calibrator=None, *, metadata: dict[str,
             continue
         seen.add(identity)
         score = score_calibrator(hit.score) if score_calibrator is not None else hit.score
+        record = records.record_for(provenance)
+        if record is None:
+            # The D1 rule: a source whose record did not resolve is not
+            # surfaced (and contributes no score to the aggregate).
+            continue
         if isinstance(provenance, OkfConceptProvenance):
-            entry = _okf_entry(provenance.concept_id, provenance.repo_id, provenance.bundle_version, score)
+            entry = _okf_entry(provenance.concept_id, provenance.repo_id, provenance.bundle_version, score, record)
         else:
             legacy: LegacyFileProvenance = provenance
-            if not source_is_surfaceed(provenance, metadata):
-                # The D1 rule: a source whose metadata did not resolve is not
-                # surfaced (and contributes no score to the aggregate).
-                continue
-            entry = _legacy_entry(legacy.file_id, score, metadata[legacy.file_id])
+            entry = _legacy_entry(legacy.file_id, score, record)
         envelope.append(entry)
     return envelope
 
 
-def source_documents_from_citations(citations, *, metadata: dict[str, dict]) -> list[dict]:
+def source_documents_from_citations(citations, *, records: SourceRecords) -> list[dict]:
     """Project the governed path's delivered citations onto the same envelope.
 
     ``citations`` are the verification ledger's delivered entries —
@@ -224,24 +337,28 @@ def source_documents_from_citations(citations, *, metadata: dict[str, dict]) -> 
     surfaced with ``None`` — the field the frontend mapping reads is
     present, and an absent score is never guessed into a number.
 
-    ``metadata`` maps a legacy file id to the record the document repository
-    resolved for it. A citation whose legacy id is ABSENT from the map did
-    not resolve: it is not surfaced — the D1 rule.
+    ``records`` carries what each source's OWN platform resolved. A citation
+    whose record is ABSENT from it did not resolve: it is not surfaced — the
+    D1 rule.
     """
 
     envelope: list[dict] = []
     for citation in citations:
         provenance = citation["provenance"]
         score = citation.get("score")
-        if provenance.get("source") == "okf-concept":
+        record = records.record_for(provenance)
+        if record is None:
+            continue
+        if _is_concept(provenance):
             envelope.append(
                 _okf_entry(
-                    provenance.get("concept_id"), provenance.get("repo_id"), provenance.get("bundle_version"), score
+                    provenance.get("concept_id"),
+                    provenance.get("repo_id"),
+                    provenance.get("bundle_version"),
+                    score,
+                    record,
                 )
             )
             continue
-        if not source_is_surfaceed(provenance, metadata):
-            continue
-        file_id = provenance.get("file_id")
-        envelope.append(_legacy_entry(file_id, score, metadata[file_id]))
+        envelope.append(_legacy_entry(provenance.get("file_id"), score, record))
     return envelope

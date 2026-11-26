@@ -24,6 +24,7 @@ import pytest
 from conftest import (
     ENDPOINT,
     AgentFakePort,
+    FakeConceptSource,
     FakeMetadataSource,
     PreparationFakeTransport,
     ScriptedLoopModel,
@@ -330,6 +331,7 @@ def _orchestrator(model, port, tmp_path, *, preparer_factory=None, config=None):
         model_client=model,
         port_factory=lambda context, bearer: port,
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
         preparer_factory=preparer_factory,
     )
 

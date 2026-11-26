@@ -19,6 +19,7 @@ import pytest
 from conftest import (
     REQUIRED_KNOBS,
     AgentFakePort,
+    FakeConceptSource,
     FakeMetadataSource,
     HangingLoopModel,
     ScriptedLoopModel,
@@ -68,6 +69,7 @@ def _orchestrator(model, port, lane_dir, *, config=None, slots=1):
             model_client=model,
             port_factory=port_factory,
             metadata_source=FakeMetadataSource(),
+            concept_source=FakeConceptSource(),
         ),
         port_calls,
         lane,
@@ -512,6 +514,7 @@ def test_a_port_factory_failure_answers_the_honest_terminal(tmp_path):
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
         port_factory=broken_factory,
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
@@ -575,6 +578,7 @@ def test_a_runtime_factory_failure_answers_the_honest_terminal(tmp_path):
         port_factory=lambda context, bearer: fake_port(),
         runtime_factory=broken_factory,
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
@@ -616,6 +620,7 @@ def test_a_runtime_that_does_not_satisfy_the_port_is_refused_with_the_honest_ter
         port_factory=lambda context, bearer: fake_port(),
         runtime_factory=lambda: _NotARuntime(),
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))
@@ -641,6 +646,7 @@ def test_a_custom_runtime_is_driven_and_named_in_the_execution_version_record(tm
         port_factory=lambda context, bearer: fake_port(),
         runtime_factory=lambda: runtime,
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
 
     record = asyncio.run(orchestrator.run(_request(), sink=events.append))

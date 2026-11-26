@@ -232,7 +232,11 @@ def build_pipeline():
     """
     sys.path.insert(0, AGENT_SERVICE_HOME)
     from agent.orchestrator import OrchestratorConfig
-    from assembly import build_metadata_source, build_search_capability
+    from assembly import (
+        build_concept_source,
+        build_metadata_source,
+        build_search_capability,
+    )
     from capabilities.adapters.httpx import HttpxTransport
     from lane import AdmissionLane
     from noagent.config import NoAgentConfig
@@ -246,6 +250,10 @@ def build_pipeline():
     transport = HttpxTransport(noagent_config.tls_verify)
     lane = AdmissionLane.from_config(noagent_config)
     metadata_source = build_metadata_source(env)
+    # The OKF server, through ITS port: the concepts' names are read from
+    # the card the server served, like the documents' names come from the
+    # document repository (ADR agentic-009, F5).
+    concept_source = build_concept_source(env)
 
     pipeline = NoAgentPipeline.create(
         noagent_config,
@@ -255,6 +263,7 @@ def build_pipeline():
         lane,
         env,
         metadata_source=metadata_source,
+        concept_source=concept_source,
     )
     generation = getattr(pipeline, "_generation", None)
     model_id = resolve_model_id(generation)

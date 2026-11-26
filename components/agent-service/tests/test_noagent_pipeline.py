@@ -19,8 +19,9 @@ import shutil
 import tempfile
 
 import pytest
-from conftest import VENDORED_REGISTRY_PATH, FakeMetadataSource, PreparationFakeTransport
+from conftest import VENDORED_REGISTRY_PATH, FakeConceptSource, FakeMetadataSource, PreparationFakeTransport
 
+from capabilities.citations import SourceRecords
 from capabilities.contract import (
     CallerContext,
     LegacyFileProvenance,
@@ -163,6 +164,7 @@ def _pipeline(
     translator=None,
     budget=BUDGET,
     metadata_source=None,
+    concept_source=None,
 ):
     config = config or NoAgentConfig.load(env={})
     counter = counter or FakeCounter()
@@ -176,6 +178,7 @@ def _pipeline(
         budget,
         translator,
         metadata_source=metadata_source if metadata_source is not None else FakeMetadataSource(),
+        concept_source=concept_source if concept_source is not None else FakeConceptSource(),
     )
 
 
@@ -218,6 +221,7 @@ def test_a_document_whose_metadata_did_not_resolve_is_not_cited_and_scores_nothi
         preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
         capability=FakeCapability(result=_search_result()),
         metadata_source=FakeMetadataSource(unresolved=("f1",)),
+        concept_source=FakeConceptSource(),
     )
 
     result = asyncio.run(pipeline.run(["USER: How does Geneva manage transport?"], _context()))
@@ -231,9 +235,76 @@ def test_a_document_whose_metadata_did_not_resolve_is_not_cited_and_scores_nothi
         preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
         capability=FakeCapability(result=_search_result(hits=(_search_result().hits[1],))),
         metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
     )
     single = asyncio.run(only_resolved.run(["USER: How does Geneva manage transport?"], _context()))
     assert result.metadata["retrieval_confidence_score"] == single.metadata["retrieval_confidence_score"]
+
+
+def test_a_concept_whose_card_did_not_resolve_is_not_cited_and_scores_nothing():
+    """The D1 rule, symmetric, in the lane that assembles the cards.
+
+    A concept the OKF server does not serve — a restricted repository, an
+    unpublished concept, the pillar down — must not become a citation card,
+    and its score must not reach the aggregate. The lane asks the OKF server
+    for the concept's name, exactly as it asks the document repository for
+    the document's.
+    """
+    hits = (
+        SearchHit(provenance=LegacyFileProvenance(file_id="f1"), text="doc one", score=0.9),
+        SearchHit(
+            provenance=OkfConceptProvenance(concept_id="c1", repo_id="repo-1", bundle_version=7),
+            text="concept one",
+            score=0.8,
+        ),
+    )
+    pipeline = _pipeline(
+        preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
+        capability=FakeCapability(result=_search_result(hits=hits)),
+        metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(unresolved=(("repo-1", "c1"),)),
+    )
+
+    result = asyncio.run(pipeline.run(["USER: How does Geneva manage transport?"], _context()))
+
+    # The concept is not cited, and its score does not reach the aggregate:
+    # the confidence is the one the SURVIVING document alone would give.
+    assert [entry["document_id"] for entry in result.source_documents] == ["f1"]
+    only_document = _pipeline(
+        preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
+        capability=FakeCapability(result=_search_result(hits=(hits[0],))),
+        metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
+    )
+    single = asyncio.run(only_document.run(["USER: How does Geneva manage transport?"], _context()))
+    assert result.metadata["retrieval_confidence_score"] == single.metadata["retrieval_confidence_score"]
+
+
+def test_a_concept_is_cited_with_the_name_the_okf_server_served():
+    """The lane's OKF branch: the concept's card is read through the OKF
+    port, and the citation card carries the card's title — the concept's
+    own name, never its id."""
+    hits = (
+        SearchHit(
+            provenance=OkfConceptProvenance(concept_id="c1", repo_id="repo-1", bundle_version=7),
+            text="concept one",
+            score=0.8,
+        ),
+    )
+    concepts = FakeConceptSource({("repo-1", "c1"): {"title": "Hangar Access Notes", "labels": []}})
+    pipeline = _pipeline(
+        preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
+        capability=FakeCapability(result=_search_result(hits=hits)),
+        metadata_source=FakeMetadataSource(),
+        concept_source=concepts,
+    )
+
+    result = asyncio.run(pipeline.run(["USER: How does Geneva manage transport?"], _context()))
+
+    [entry] = result.source_documents
+    assert entry["document_name"] == "Hangar Access Notes"
+    assert entry["source"] == "okf-concept"
+    assert concepts.requested == [("repo-1", "c1")]
 
 
 def test_prepared_translated_row_is_the_identical_flow():
@@ -617,7 +688,16 @@ def test_source_document_envelope_legacy_and_okf_shapes():
             provenance=OkfConceptProvenance(concept_id="c2", repo_id="repo-2", bundle_version=None), text="t", score=0.7
         ),
     )
-    envelope = source_document_envelope(hits, metadata={"f1": {"file_name": "f1 resolved.md", "labels": []}})
+    envelope = source_document_envelope(
+        hits,
+        records=SourceRecords(
+            documents={"f1": {"file_name": "f1 resolved.md", "labels": []}},
+            concepts={
+                ("repo-1", "c1"): {"title": "c1 resolved", "labels": []},
+                ("repo-2", "c2"): {"title": "c2 resolved", "labels": []},
+            },
+        ),
+    )
     legacy = envelope[0]
     assert legacy["document_id"] == "f1"
     assert "source" not in legacy  # the legacy branch: no marker
@@ -780,6 +860,7 @@ def test_the_factory_assembles_a_pipeline_that_resolves_its_documents():
         _default_lane(),
         env,
         metadata_source=source,
+        concept_source=FakeConceptSource(),
     )
 
     result = asyncio.run(pipeline.run([{"role": "user", "content": "How does Geneva manage transport?"}], _context()))

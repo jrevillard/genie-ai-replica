@@ -111,6 +111,19 @@ exists, skip `uv venv` and keep the `uv pip install` line: a venv whose
 answers "No module named pytest", which is a wiped environment, not a broken
 tree.
 
+Task 4's gate runs the CONFIG-VALIDATOR suite, and that suite drives the
+Playwright config's own ESLint — so the E2E tree's dependencies must be
+installed too, or the suite answers "tests/e2e deps missing on this checkout"
+and the gate's red is the environment's, not the plan's:
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/s3-tool-sources ] || { echo "not in the checkout that carries feat/agentic-foundations/s3-tool-sources"; exit 1; }
+cd tests/e2e && npm ci && cd ../config-validator && npm ci && npm test
+```
+
+The last command prints `22 passed, 22 total` suites and `734 passed` tests —
+the baseline that suite starts from.
+
 ---
 
 ### Task 1: The move — the document tools behind the port

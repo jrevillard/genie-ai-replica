@@ -21,13 +21,14 @@ from langdetect import DetectorFactory
 from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
 from agent.events import EventEmitter
-from agent.loop import AgentLoop, ModelTurn
+from agent.loop import AgentLoop
 from agent.orchestrator import OrchestratorConfig
 from agent.probe import PROBE_OPERATION_BUDGET, ProbeConfig
 from agent.toolset import document_toolset
 from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
 from capabilities.contract import CallerContext, OperationBudget, ReadSourceResult, SearchKnowledgeResult
+from capabilities.model import ModelTurn, ToolCallRequest
 
 
 class FakeTransport:
@@ -427,7 +428,6 @@ def multihop_turns(answer="the answer", judge_reply=None):
     is one aux model call the script must cover). The direct-loop suites
     (no pipeline) keep the three-turn script.
     """
-    from agent.loop import ModelTurn, ToolCallRequest
 
     turns = [
         ModelTurn(tool_calls=(ToolCallRequest(call_id="call-1", name="search_knowledge", arguments={"query": "q"}),)),

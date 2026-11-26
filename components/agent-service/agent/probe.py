@@ -51,6 +51,7 @@ from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.okf import OkfAdapter
 from capabilities.contract import AuthorizedRepo, CallerContext, DocumentCapabilityPort, OperationBudget
 from capabilities.executor import AuthorizedExecutor
+from capabilities.model import LoopModelClient, ModelTurn, ToolCallRequest
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from noagent.config import NoAgentConfig
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content, resolve_window_tokens
@@ -63,9 +64,6 @@ from .loop import (
     OUTCOME_ANSWERED,
     OUTCOME_CANCELLED,
     AgentLoop,
-    LoopModelClient,
-    ModelTurn,
-    ToolCallRequest,
 )
 
 # The registered toolset is a production surface, not a probe artifact — it

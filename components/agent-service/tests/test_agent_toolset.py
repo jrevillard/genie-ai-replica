@@ -37,7 +37,6 @@ import agent.probe
 import agent.toolset
 from agent.budget import RunBudgetMonitor
 from agent.events import AgentEvent
-from agent.loop import ModelTurn, ToolCallRequest
 from agent.orchestrator import (
     AgentRunRequest,
     BudgetedTranslationClient,
@@ -49,6 +48,7 @@ from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.toolset import document_toolset
 from agent.verification import INSUFFICIENCY_RESPONSE
 from capabilities.contract import CallerContext, OperationBudget, PreparedQuery, QueryPreparationStatus
+from capabilities.model import ModelTurn, ToolCallRequest
 from lane import AdmissionLane
 from preparation.config import PreparationConfig
 from preparation.prepare import PreparationResult, QueryPreparer
@@ -332,7 +332,6 @@ def test_the_run_record_carries_language_and_the_first_preparation_status(tmp_pa
     translator = RecordingTranslator(config, registry)
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
     english_search = multihop_turns(answer="the answer")
-    from agent.loop import ModelTurn, ToolCallRequest
 
     turns = (
         ModelTurn(
@@ -374,7 +373,6 @@ def test_a_model_query_in_the_users_language_is_still_translated(tmp_path):
     registry = LanguageRegistry(config.registry_path)
     translator = RecordingTranslator(config, registry)
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
-    from agent.loop import ModelTurn, ToolCallRequest
 
     first_search = multihop_turns(answer="the answer")
     turns = (

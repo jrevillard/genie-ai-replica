@@ -19,7 +19,6 @@ from conftest import (
 )
 
 from agent.events import AgentEvent
-from agent.loop import ModelTurn
 from agent.orchestrator import AgentRunRequest, RequestOrchestrator
 from agent.probe import ProbeConfig, ProbeModelClient, ProbeTransientError
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
@@ -32,6 +31,7 @@ from agent.version_record import (
     configuration_values,
     short_sha256,
 )
+from capabilities.model import ModelTurn
 from lane import AdmissionLane
 
 # ---------------------------------------------------------------------

@@ -17,6 +17,8 @@ renames it; nothing here ever speaks the BFF's client frame names. The
 (:mod:`capabilities.citations`) — both lanes import it from there.
 """
 
+from capabilities.model import LoopModelClient, ModelTurn, ToolCallRequest
+
 from .budget import BudgetExhausted, RunBudget, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
 from .events import BFF_FRAME_NAMES, AgentEvent, EventEmitter, EventKind, EventSink
@@ -26,10 +28,7 @@ from .loop import (
     OUTCOME_CANCELLED,
     OUTCOME_ERROR,
     AgentLoop,
-    LoopModelClient,
-    ModelTurn,
     RunResult,
-    ToolCallRequest,
 )
 from .probe import (
     PROBE_QUESTION,

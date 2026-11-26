@@ -21,7 +21,6 @@ import pytest
 from conftest import ScriptedLoopModel, run_budget
 
 from agent.budget import RunBudgetMonitor
-from agent.loop import ModelTurn
 from agent.verification import (
     JUDGE_OUTCOME_BUDGET_EXHAUSTED,
     JUDGE_OUTCOME_COMPLETED,
@@ -40,6 +39,7 @@ from agent.verification import (
     citation_identity,
     parse_judge_verdict,
 )
+from capabilities.model import ModelTurn
 
 LEGACY_HIT = {
     "provenance": {"file_id": "f-1"},

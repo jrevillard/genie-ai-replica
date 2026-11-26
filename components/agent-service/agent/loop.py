@@ -42,12 +42,12 @@ system + user, assistant tool-call turns, role-``tool`` results.
 import json
 import logging
 from dataclasses import dataclass
-from typing import Protocol
 
 from pydantic import ValidationError
 
 import tracing
 from capabilities.contract import CapabilityError
+from capabilities.model import LoopModelClient, ModelTurn, ToolCallRequest
 
 from .budget import BudgetExhausted, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
@@ -68,54 +68,6 @@ OUTCOME_BUDGET_EXHAUSTED = "budget_exhausted"
 OUTCOME_CANCELLED = "cancelled"
 
 MESSAGE_TRUNCATION = 200
-
-
-@dataclass(frozen=True)
-class ToolCallRequest:
-    """One tool call the model asked for: its wire id, name, arguments."""
-
-    call_id: str
-    name: str
-    arguments: dict
-
-
-@dataclass(frozen=True)
-class ModelTurn:
-    """One model call's outcome, in the loop's own shape.
-
-    ``content`` is the final text when the turn answers; ``tool_calls``
-    carries the requested dispatches when the turn works. Usage is the
-    token accounting as the endpoint served it (``None`` when the endpoint
-    discarded it) — the evidence record reports usage as served, never a
-    local estimate.
-    """
-
-    content: str | None = None
-    tool_calls: tuple[ToolCallRequest, ...] = ()
-    finish_reason: str | None = None
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-
-
-class LoopModelClient(Protocol):
-    """The model-call seam the loop drives — one non-streaming completion.
-
-    The concrete OpenAI-compatible client is the runtime's business (the
-    probe carries one, shared with the run surface); the loop depends on
-    this shape only, which is what keeps the loop runtime-swappable.
-    ``max_output_tokens`` is the remaining token allowance the monitor
-    hands the call — the token bound riding the request (``None`` when the
-    allowance is unknowable and the field must be omitted, the deployed
-    only-when-configured rule). The IMPLEMENTER caps the bound to what one
-    call can serve — ``min(bound, window room)``, omitting the field when
-    there is no room — because a cumulative RUN allowance may exceed the
-    endpoint's window, and an unanchored ``max_tokens`` is rejected
-    outright.
-    """
-
-    async def complete(
-        self, messages: list[dict], tool_definitions: tuple[dict, ...], *, max_output_tokens: int | None
-    ) -> ModelTurn: ...
 
 
 @dataclass(frozen=True)

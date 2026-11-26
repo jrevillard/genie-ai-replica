@@ -74,6 +74,7 @@ SERVICE_LAYOUT = Layout(
         "capabilities.executor",
         "capabilities.citations",
         "capabilities.identifiers",
+        "capabilities.model",
         "capabilities.sources",
     ),
     leaf_adapters="capabilities.adapters",
@@ -382,17 +383,18 @@ def test_the_rules_go_red_on_a_planted_violation(tmp_path: Path) -> None:
     layout = Layout(
         host=("app", "tracing", "lane"),
         core_packages=("core",),
-        core_modules=("contract",),
+        core_modules=("contract", "model"),
         leaf_adapters="adapters",
         capability="capability",
         measurement=("measure",),
     )
-    layers = {"ports": ("contract",), "leaf adapters": ("adapters",), "capability": ("capability",)}
+    layers = {"ports": ("contract", "model"), "leaf adapters": ("adapters",), "capability": ("capability",)}
     clean = {
         "app.py": "import fakepkg.adapters.x\nimport requests\n",
         "lane.py": '"""The host lane."""\n',
         "tracing.py": "import opentelemetry\n",
         "contract.py": "",
+        "model.py": "",
         "core/__init__.py": "",
         "core/clean.py": "import fakepkg.contract\n",
         "core/leaky.py": "import fakepkg.adapters.x\nimport httpx\n",

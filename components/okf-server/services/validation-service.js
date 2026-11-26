@@ -337,7 +337,7 @@ async function wireCitationHub(repo_id, { hub_concept_id, actor } = {}) {
     // #2198 — the response must distinguish {generated} / {using existing
     // 'X'} / {wired N} / {nothing to do}: a success-shaped no-op (wired 0,
     // nothing created, no hub named) is the defect that hid this bug.
-    let hubAlias = !hub_concept_id && !!(cit.hub_alias && cit.hub_concept_id);
+    const hubAlias = !hub_concept_id && !!(cit.hub_alias && cit.hub_concept_id);
     const hubTitle = hubAlias ? cit.hub_title : null;
 
     if (!hubId) {

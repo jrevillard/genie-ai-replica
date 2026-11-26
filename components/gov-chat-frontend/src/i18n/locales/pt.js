@@ -3624,6 +3624,17 @@ export default {
         colContent: 'Conteúdo do fragmento'
       }
     },
+    opwait: {
+      title: 'Trabalhando…',
+      cancel: 'Cancelar',
+      ops: {
+        conceptList: 'A carregar conceitos',
+        reposList: 'A carregar repositórios',
+        links: 'A carregar ligações',
+        ragas: 'A gerar o benchmark',
+        topicLinkStart: 'A iniciar a ligação de tópicos'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept} de {requested} perguntas ancoradas — {discarded} não puderam ser vinculadas ao corpus avaliado (novo pedido: {rounds} rodada(s))'

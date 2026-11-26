@@ -1753,6 +1753,12 @@
         @confirm="confirmDialogState.onConfirm"
         @cancel="confirmDialogState.onCancel"
       />
+
+      <!-- #2195 — the operation-wait overlay (fence-clean): the Studio's
+           long operations surface here instead of the browser's native busy
+           state. Rendered off the operations' data path; see
+           services/operationWaitService.js. -->
+      <OperationWaitOverlay />
     </div>
   </div>
 </template>
@@ -1769,6 +1775,7 @@ import UploadFilesDialog from './UploadFilesDialog.vue';
 import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
+import OperationWaitOverlay from './admin/OperationWaitOverlay.vue'; // #2195 — the Studio's operation-wait overlay
 import QueryInspector from './admin/QueryInspector/QueryInspector.vue';
 import AdminStatePanel from './admin/AdminStatePanel.vue';
 import DsButton from './ds/Button.vue';
@@ -1840,6 +1847,7 @@ export default {
     OkfArtifactsView,
     AdminStatePanel,
     ConfirmDialog,
+    OperationWaitOverlay,
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,

@@ -3640,6 +3640,17 @@ export default {
         colContent: 'Contenu du segment'
       }
     },
+    opwait: {
+      title: 'Traitement en cours…',
+      cancel: 'Annuler',
+      ops: {
+        conceptList: 'Chargement des concepts',
+        reposList: 'Chargement des dépôts',
+        links: 'Chargement des liens',
+        ragas: 'Génération du benchmark',
+        topicLinkStart: 'Démarrage de la liaison des sujets'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept} questions sur {requested} ancrées — {discarded} n’ont pas pu être rattachées au corpus évalué (relance : {rounds} tour(s))'

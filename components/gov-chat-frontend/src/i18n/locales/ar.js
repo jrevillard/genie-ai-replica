@@ -3551,6 +3551,17 @@ export default {
         colContent: 'محتوى المقطع'
       }
     },
+    opwait: {
+      title: 'جارٍ العمل…',
+      cancel: 'إلغاء',
+      ops: {
+        conceptList: 'جارٍ تحميل المفاهيم',
+        reposList: 'جارٍ تحميل المستودعات',
+        links: 'جارٍ تحميل الروابط',
+        ragas: 'جارٍ إنشاء المعيار',
+        topicLinkStart: 'جارٍ بدء ربط المواضيع'
+      }
+    },
     ragas: {
       grounding: {
         note: 'تم تثبيت {kept} من {requested} أسئلة — تعذّر ربط {discarded} بالمتن المُقيَّم (إعادة طلب: {rounds})'

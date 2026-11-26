@@ -369,6 +369,14 @@ export default {
       this.links = {};
       if (!this.repoId) return;
       const norm = (id) => String(id || '').replace(/^concepts\//, '');
+      // #2195 — the 1.6 MB links fetch (pre-slimming, see #2190) registers
+      // with the operation-wait overlay: this mount used to lock the tab
+      // with no app-level affordance.
+      const opWait = require('@/services/operationWaitService').default;
+      const wait = opWait.begin('links-fetch', {
+        label: 'Loading links',
+        labelKey: 'okf.opwait.ops.links'
+      });
       // PRIMARY — the LIVE meta projection (GET /:repo_id/links): available
       // from the first import and current through every edit (David's rule:
       // the editor graph is the markdown-link projection, never the ArangoDB
@@ -385,6 +393,7 @@ export default {
             (map[from] = map[from] || []).push({ to_concept_id: to, label: e.label || '' });
           }
           this.links = map;
+          wait.complete();
           return;
         }
       } catch {
@@ -400,9 +409,11 @@ export default {
           (map[from] = map[from] || []).push({ to_concept_id: to, label: l.label || '' });
         }
         this.links = map;
+        wait.complete();
       } catch {
         // not settled yet: nodes render, edges arrive at settle.
         this.links = {};
+        wait.complete();
       }
     },
     // ---- cytoscape browser -------------------------------------------------

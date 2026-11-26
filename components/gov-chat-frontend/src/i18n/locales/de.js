@@ -3653,6 +3653,17 @@ export default {
         colContent: 'Chunk-Inhalt'
       }
     },
+    opwait: {
+      title: 'Arbeit läuft…',
+      cancel: 'Abbrechen',
+      ops: {
+        conceptList: 'Konzepte werden geladen',
+        reposList: 'Repositorien werden geladen',
+        links: 'Links werden geladen',
+        ragas: 'Benchmark wird erzeugt',
+        topicLinkStart: 'Themenverknüpfung wird gestartet'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept} von {requested} Fragen verankert — {discarded} ließen sich nicht dem evaluierten Korpus zuordnen ({rounds} Nachfrage-Runde(n))'

@@ -3604,6 +3604,17 @@ export default {
         colContent: 'Isi potongan'
       }
     },
+    opwait: {
+      title: 'Sedang bekerja…',
+      cancel: 'Batal',
+      ops: {
+        conceptList: 'Memuat konsep',
+        reposList: 'Memuat repositori',
+        links: 'Memuat tautan',
+        ragas: 'Menghasilkan benchmark',
+        topicLinkStart: 'Memulai penautan topik'
+      }
+    },
     ragas: {
       grounding: {
         note: '{kept} dari {requested} pertanyaan ditanamkan — {discarded} tidak dapat dikaitkan ke korpus yang dievaluasi (minta ulang {rounds} putaran)'

@@ -250,6 +250,12 @@ function fakeRes() {
   res.setHeader = jest.fn((k, v) => {
     res.headers[k] = v;
   });
+  // #2190/#2191 — sendConditional stamps validators via res.set (the express
+  // alias for setHeader); the mock must carry it or the hot routes throw.
+  res.set = jest.fn((k, v) => {
+    res.headers[k.toLowerCase()] = v;
+    return res;
+  });
   res.send = jest.fn((b) => {
     res.body = b;
     return res;

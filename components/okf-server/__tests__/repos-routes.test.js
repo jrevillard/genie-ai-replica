@@ -772,6 +772,52 @@ describe('GET /api/okf/repos/:repo_id/links (editor graph projection)', () => {
     expect(res.status).toBe(200);
     expect(res.body.links).toEqual([]);
   });
+
+  // #2190 (2026-11-26, measured): the full edge list is 1,655,486 bytes on a
+  // dense repo — Kong spools it to a temp file and the panel waits. The
+  // route passes the slimming params through to the service.
+  test('summary=1 → the service is asked for counts only', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    conceptMetaService.getRepoLinks.mockResolvedValue({ repo_id: 'repoA', concept_count: 12, link_count: 34 });
+    const res = await request(createApp()).get('/api/okf/repos/repoA/links?summary=1').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ repo_id: 'repoA', concept_count: 12, link_count: 34 });
+    expect(conceptMetaService.getRepoLinks).toHaveBeenCalledWith('repoA', {
+      summary: true,
+      limit: undefined,
+      offset: undefined
+    });
+  });
+
+  test('limit/offset flow through as numbers', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    conceptMetaService.getRepoLinks.mockResolvedValue({ repo_id: 'repoA', links: [], concept_count: 2, link_count: 3 });
+    const res = await request(createApp())
+      .get('/api/okf/repos/repoA/links?limit=500&offset=1000')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(conceptMetaService.getRepoLinks).toHaveBeenCalledWith('repoA', { summary: false, limit: 500, offset: 1000 });
+  });
+
+  test('default (no params) → full graph, unchanged behavior', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    conceptMetaService.getRepoLinks.mockResolvedValue({
+      repo_id: 'repoA',
+      links: [{ from_concept_id: 'a', to_concept_id: 'b', label: '', source: 'author' }],
+      concept_count: 2
+    });
+    const res = await request(createApp()).get('/api/okf/repos/repoA/links').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(conceptMetaService.getRepoLinks).toHaveBeenCalledWith('repoA', {
+      summary: false,
+      limit: undefined,
+      offset: undefined
+    });
+    expect(res.body.links).toHaveLength(1);
+  });
 });
 
 describe('PATCH /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () => {

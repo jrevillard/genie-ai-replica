@@ -1355,3 +1355,50 @@ describe('#1647: countByIndexStatus ensures the repo_id read index', () => {
     expect(col.ensureIndex).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('getRepoLinks slimming (#2190 — 1.6 MB → counts/pages)', () => {
+  beforeEach(() => mockDb._reset());
+
+  const metaRows = (n, linksPer) =>
+    Array.from({ length: n }, (_, i) => ({
+      concept_id: `concepts/c${i}`,
+      links: Array.from({ length: linksPer }, (_, j) => ({ to_concept_id: `concepts/target-${j}`, label: '' }))
+    }));
+
+  test('summary=true → counts only, no edges leave the server', async () => {
+    mockDb.query.mockImplementationOnce(async () => ({
+      all: async () => [{ concept_count: 10, link_count: 40 }]
+    }));
+    const out = await conceptMeta.getRepoLinks('r1', { summary: true });
+    expect(out).toEqual({ repo_id: 'r1', concept_count: 10, link_count: 40 });
+    expect(out.links).toBeUndefined();
+    // The count query must not fetch the link bodies at all:
+    const q = String(mockDb.query.mock.calls[0][0]);
+    expect(q).not.toContain('KEEP(m,');
+    expect(q).not.toContain('"links"');
+  });
+
+  test('default → full edge list, unchanged shape', async () => {
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => metaRows(2, 2) }));
+    const out = await conceptMeta.getRepoLinks('r1');
+    expect(out.links).toHaveLength(4);
+    expect(out.concept_count).toBe(2);
+    expect(out.link_count).toBe(4);
+    expect(out.links[0]).toMatchObject({ from_concept_id: 'c0', to_concept_id: 'target-0', source: 'author' });
+  });
+
+  test('limit/offset paginate the edges; link_count stays the FULL count', async () => {
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => metaRows(3, 2) }));
+    const out = await conceptMeta.getRepoLinks('r1', { limit: 3, offset: 2 });
+    expect(out.links).toHaveLength(3);
+    expect(out.link_count).toBe(6);
+    expect(out.concept_count).toBe(3);
+  });
+
+  test('offset past the end → empty page, honest totals', async () => {
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => metaRows(2, 2) }));
+    const out = await conceptMeta.getRepoLinks('r1', { offset: 99 });
+    expect(out.links).toEqual([]);
+    expect(out.link_count).toBe(4);
+  });
+});

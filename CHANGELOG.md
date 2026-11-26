@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.1.0] - 2026-11-25
 
-**In one line: the OKF knowledge-base feature arrives — dark by default, a deployment enables it with `OKF_ENABLED=1` — Kubernetes becomes a deployment target alongside Compose and Swarm, the AMD ROCm / Strix Halo GPU path ships, and parse5 is patched against CVE-2026-133245.**
+**In one line: the OKF knowledge-base feature arrives — dark by default, a deployment enables it with `OKF_ENABLED=1` — Kubernetes becomes a deployment target alongside Compose and Swarm, the AMD ROCm / Strix Halo GPU path ships, and two CVEs are closed: CVE-2026-114938 (the Keycloak Java runtime, "Java4Shell") and CVE-2026-133245 (parse5).**
 
 **This release carries six breaking changes: read the [upgrade guide](https://opensource.unicc.org/un/itu/genie-ai/-/blob/v3.1.0/docs/UPGRADE.md) before deploying.** The image-tag variable is renamed (`GENIE_AI_GLOBAL_TAG` / `genie_ai_global_tag` → `GENIE_AI_IMAGE_TAG` / `genie_ai_image_tag`) and the Helm chart's per-service image tags ship empty with the stack version moving to `imageTag`; the Android application id becomes `com.itu.genieai*`, so an installed build cannot update in place; the translation-language env overrides are replaced by `LANGUAGE_REGISTRY_FILEPATH`; the OKF model-listing base must carry its version segment; and the Keycloak runtime moves to 26.8.2 — a deployment that pulled the `26.8.2` tag between 2026-11-05 and 2026-11-19 must re-pull it, because in that window the tag pointed at vulnerable builds. Every entry a deployer must act on is marked **Breaking** below, and the migration steps are in the guide.
 

@@ -1538,7 +1538,12 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # ARANGO_USERNAME=
 # AGENT_AUTHORIZED_GRAPHS=
 # AGENT_AUTHORIZED_REPOS=
-# AGENT_PROBE_BEARER=
+# AGENT_PROBE_BEARER:
+#   the bearer the corpus reads carry — the probe's own read, and the
+#   config-B evaluation leg's (it resolves the documents it cites through
+#   the document repository, and that read is authorized). Unset means no
+#   bearer: the document repository refuses the read, so the sources
+#   resolve to nothing and the leg reports itself ungrounded.
 # Query preparation (the preparation module, wired into the run surface): the
 # agent service consumes the SAME preparation knobs the deployed query
 # path reads (documented at their own sections above) — the translation

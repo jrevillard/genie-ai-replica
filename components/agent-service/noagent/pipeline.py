@@ -454,10 +454,13 @@ class NoAgentPipeline:
         surfaced = tuple(hit for hit in hits if source_is_surfaceed(hit.provenance, source_metadata))
         calibrate = self._score_calibrator
         envelope = source_document_envelope(surfaced, calibrate, metadata=source_metadata)
-        # The confidence aggregate runs over the FULL hit list — duplicates
+        # The confidence aggregate runs over the SURFACED hits — duplicates
         # included (deployed M3: a duplicate's score counts while the entry
-        # itself is not re-surfaced) — at confidence time, calibrated like the
-        # envelope scores.
+        # itself is not re-surfaced; the dedup is the envelope's) — at
+        # confidence time, calibrated like the envelope scores. A source
+        # whose metadata did not resolve is NOT in that list: the D1 rule
+        # keeps its score out of the aggregate, and a reader who restores
+        # the full hit list here re-poisons the confidence.
         scores = [calibrate(hit.score) if calibrate is not None else hit.score for hit in surfaced]
         confidence = _rank_weighted_confidence(scores, self._config.confidence_rank_decay)
         is_grounded = bool(surfaced) and not too_long_answer

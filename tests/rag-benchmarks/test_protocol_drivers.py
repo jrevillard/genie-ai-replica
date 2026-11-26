@@ -577,6 +577,10 @@ def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch
     contract)."""
     # The graph fallback reads the ambient env — pin the default shape.
     monkeypatch.delenv("EVAL_DEFAULT_GRAPH", raising=False)
+    # The corpus read is AUTHORIZED: the driver resolves the documents it
+    # cites through the document repository, and that read carries the
+    # deployment's bearer.
+    monkeypatch.setenv("AGENT_PROBE_BEARER", "the-corpus-token")
     import asyncio
 
     module = _load_driver("under_test")
@@ -599,10 +603,15 @@ def test_config_b_driver_helpers_consume_a_result_verbatim(tmp_path, monkeypatch
             source_language=None,
             target_language=None,
             user_context="",
+            bearer=None,
         ):
             assert history == [{"role": "user", "content": "q"}]
             assert context.user_id == "eval-config-b"
             assert context.authorized_graph_names == ("GRAPH",)
+            # The corpus read is authorized: without the bearer the
+            # document repository refuses the metadata read, the sources
+            # resolve to nothing, and the leg measures "B cites nothing".
+            assert bearer == "the-corpus-token"
             return FakeResult()
 
     class ExplodingPipeline:

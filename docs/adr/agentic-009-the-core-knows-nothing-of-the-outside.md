@@ -63,6 +63,11 @@ platform to exist is fetched from that platform, never derived from an identifie
    disappears; where the deployed path resolves metadata per answer, the agentic path resolves it
    through the same port the deployed path uses, and the D1 rule (a source whose metadata does not
    resolve is not surfaced, and contributes no score to the aggregate) holds.
+   **One exception, and it is the deployed path's own shape**: an OKF concept has no document to
+   fetch a name from, so the deployed path surfaces its id as the label
+   (`genieai_chatqna.py:3724`), and the agentic path keeps that fallback rather than inventing a
+   second one. The R4 ratchet lists that single finding, and the leak ledger names it — "F5 closed"
+   means closed for the **legacy** branch, not "the core never derives a name from an id".
 3. **The corpus leg is a label, not a database concept.** The core manipulates an opaque leg label;
    the adapter that serves a leg resolves it to the collection, the view and the identifier the
    platform uses. The core never validates a leg against a database's charset.
@@ -92,7 +97,7 @@ correction, or the correction is a guess about what "done" means.
 | Fix F1 | A document id in the doc-repo's own form reaches `read_source` | The guard accepts the token; the adapter validates the platform's form; `read_source` resolves the document |
 | Fix F2 | The capability no longer builds its own connector | `capabilities.search_knowledge` leaves `KNOWN_ADAPTER_IMPORTERS`; the host injects the connector the capability drives |
 | Fix F3 | A deployment misconfigures its corpus leg | The refusal names the deployment's configuration, not a database's charset; the core never sees the charset |
-| Fix F5 | An answer cites a legacy document | The citation card carries the document's **name** (resolved through the doc-repo port), not a deformed id; a source whose metadata does not resolve is not surfaced and contributes no score (D1) |
+| Fix F5 | An answer cites a legacy document | The citation card carries the document's **name** (resolved through the doc-repo port), not a deformed id; a source whose metadata does not resolve is not surfaced and contributes no score (D1). The OKF concept keeps the deployed path's id-derived label — see the decision's exception |
 
 ## Alternatives considered
 
@@ -115,7 +120,7 @@ without a rule is a leak that returns.
 | F2 | The **Arango adapter** imported by a core module | **R3** + **L2** — the capability leaves `KNOWN_ADAPTER_IMPORTERS` and reaches the corpus through the ports alone | closed (`a1c7e5c67`) |
 | F3 | The **charset of an Arango graph name** | **R6** — the core states no foreign system's acceptance rules | closed (`c68f856b4`) |
 | F4 | The **vocabulary of the OKF counterparty** | the port boundary itself — the core consumes the port's types and declares none of its own | verified, no change |
-| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed (`f8100fab9`) |
+| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed for the **legacy** branch (`f8100fab9`); the **OKF branch keeps the deployed path's own id-derived fallback** (an OKF concept has no name to fetch — `genieai_chatqna.py:3724` writes the same), and the R4 ratchet lists that one finding as accepted |
 
 **R6 is generic.** It reads the core's text for the SHAPE of an acceptance
 claim — a subject and an acceptance verb, or a `<name>-safe` compound — and
@@ -132,6 +137,34 @@ declares the OKF read, and the core consumes them from there — the executor
 imports the port's provenance type, the verification ledger reads the port's
 provenance fields. The core defines no identity model of its own, so there is
 nothing to move.
+
+## A recorded divergence from the deployed path — the OKF concept whose identity join degraded
+
+**What differs.** The deployed path recognises an OKF concept by the GRAPH
+NAME of the provenance (`graph_name.startswith("OKF_")`,
+`genieai_chatqna.py:3709`): a chunk the document repository cannot resolve
+(an OKF concept has no document) is still surfaced, as an OKF source, and its
+score counts. The agentic path recognises it by the **CAP-1 identity join**:
+`capabilities/search_knowledge.py` builds the OKF provenance only when the
+join resolved a `repo_id`. A chunk whose join degraded (`cap1_degraded`) is
+therefore carried as a LEGACY provenance, the document repository 404s its id
+by design, the D1 rule drops it — it is neither cited nor scored, and a corpus
+of only such chunks reports `is_grounded: false`.
+
+**Why the divergence stands here.** The deployed path's gate IS the
+counterparty's vocabulary — the `OKF_` prefix is the OKF pillar's naming, and
+reading it in the core is exactly what F4 forbids. The agentic path takes the
+identity from the join instead, so the core never learns a platform's marker.
+Closing the gap therefore means choosing between two costs: the core reads the
+`OKF_` marker (F4 returns), or the port's identity type makes `repo_id`
+optional and the per-citation authorization check
+(`agent/verification.py::check_reference_validity`) accepts an OKF citation
+whose repository is unknown — a change to the AUTHORIZATION semantics, on a
+path this slice cannot exercise (the laptop venue runs no OKF pillar).
+
+**Recorded, not decided here.** This slice carries the divergence as a known
+delta; the OKF pillar's own story owns the decision, with the pillar deployed
+and the degraded case reproducible.
 
 ## Consequences
 

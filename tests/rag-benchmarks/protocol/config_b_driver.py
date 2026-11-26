@@ -52,6 +52,15 @@ import time
 # The component root inside the serving image (the Dockerfile's WORKDIR).
 AGENT_SERVICE_HOME = os.environ.get("AGENT_SERVICE_HOME", "/app")
 
+# The bearer the corpus read carries. The driver resolves the documents it
+# cites through the document repository, and that read is AUTHORIZED: the
+# repository refuses an unauthenticated one, so an unauthenticated leg
+# resolves nothing, cites nothing and reports itself ungrounded — a false
+# quality regression, not a measurement. The knob is the deployment's own
+# (the probe's corpus bearer), read per case so a deployment change takes
+# effect without a re-import.
+BEARER_ENV_KEY = "AGENT_PROBE_BEARER"
+
 # The resolved-env keys the driver records in ``resolved`` — the noagent /
 # port knobs plus the eval knobs (EVAL_DEFAULT_GRAPH: the two legs'
 # graph agreement must be visible in the snapshot). The prefix list DOES
@@ -173,6 +182,7 @@ async def run_case(case: dict, pipeline) -> dict:
             history,
             context,
             target_language=case.get("language") or None,
+            bearer=os.environ.get(BEARER_ENV_KEY) or None,
         )
         wall_ms = (time.monotonic() - started) * 1000.0
         return row_from_result(case, result, wall_ms)

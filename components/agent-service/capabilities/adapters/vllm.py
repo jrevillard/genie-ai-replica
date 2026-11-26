@@ -129,8 +129,20 @@ class VllmModelClient:
         can serve: the run-level allowance may exceed the endpoint's
         window, and a ``max_tokens`` beyond the window makes vLLM reject
         the call outright — so the bound sent is the smaller of the
-        allowance and the window room. An oversized prompt (room <= 0)
-        omits the field and fails honestly on its own.
+        allowance and the window room.
+
+        An oversized prompt (room <= 0) OMITS the field, and the endpoint
+        then applies its own default output cap — it does not fail on its
+        own, and the call may well succeed (the estimate over-counted).
+        Two honest limits of that estimate: it counts FOUR CHARACTERS per
+        token, so a dense script (CJK — roughly one token per character)
+        is under-counted up to fourfold, and the room is then overstated;
+        and the house shares that heuristic (the deployed GPU translation
+        backend derives ``max_tokens`` from the same chars/4 rule), so
+        this is an inherited weakness, not one this adapter introduces.
+        A prompt that really overflows the window is rejected by the
+        endpoint, and the rejection surfaces as the typed transient
+        failure below.
         """
         model_id = await self._resolve_model_id()
         tools = {"tools": list(tool_definitions), "tool_choice": "auto"} if tool_definitions else {}

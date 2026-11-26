@@ -124,6 +124,35 @@ IO_LIBRARIES_NOT_YET_IMPORTED = (
 )
 TELEMETRY_SDK = "opentelemetry"
 
+# The libraries a core module may import, besides the standard library's
+# own shape: the modelling, the detection and the async plumbing. The I/O
+# list above names the ones it may NOT import; a library in neither list is
+# a leak the ratchet would not see — this whitelist is what makes the hole
+# visible.
+CORE_ALLOWED_LIBRARIES = ("anyio", "fastapi", "langdetect", "pydantic")
+
+# The standard-library modules a core module imports today. The list is
+# explicit: the standard library is a closed set for the pinned Python
+# (3.11), and naming it is what makes a NEW import (smtplib, ftplib, a
+# socket's own module) visible instead of invisible.
+CORE_ALLOWED_STDLIB = (
+    "asyncio",
+    "collections",
+    "contextlib",
+    "dataclasses",
+    "enum",
+    "hashlib",
+    "json",
+    "logging",
+    "math",
+    "os",
+    "pathlib",
+    "re",
+    "time",
+    "typing",
+    "uuid",
+)
+
 # R1 — (core module, library): the files that still import an I/O library.
 KNOWN_IO_VIOLATIONS: set[tuple[str, str]] = set()
 # R2 — (core module, module of another layer): the files that still reach another layer.
@@ -245,6 +274,12 @@ def _other_layers(layout: Layout) -> list[str]:
     ]
 
 
+def _external_modules(graph: EvaluableArchitecture) -> list[str]:
+    """The modules outside the service's own tree — the libraries it imports."""
+
+    return sorted(name for name in graph.modules if name != SERVICE.name and not _is_module(name, SERVICE.name + "."))
+
+
 def _present(graph: EvaluableArchitecture, library: str) -> bool:
     """True when the library is in the graph at all."""
 
@@ -329,6 +364,31 @@ def test_the_io_library_list_covers_the_tree(with_libraries: EvaluableArchitectu
 def test_core_modules_import_no_io_library(with_libraries: EvaluableArchitecture) -> None:
     core = _in_layers(_leaf_modules(_modules(with_libraries, SERVICE.name)), ("core",), SERVICE_LAYOUT)
     assert _io_violations(SERVICE.name, core, with_libraries) == KNOWN_IO_VIOLATIONS
+
+
+def test_the_core_imports_no_undeclared_library(with_libraries: EvaluableArchitecture) -> None:
+    """Every library the core reaches is named.
+
+    Rule R1 watches the libraries IO_LIBRARIES names; a core module that
+    starts importing a library nobody listed would slip past it. This test
+    closes the hole: the core's external imports are the named standard
+    library modules plus the named libraries, so a new one — a third-party
+    package or a standard-library module — turns this red.
+    """
+
+    core = _in_layers(_leaf_modules(_modules(with_libraries, SERVICE.name)), ("core",), SERVICE_LAYOUT)
+    undeclared = set()
+    for node in _external_modules(with_libraries):
+        library = node.split(".")[0]
+        if (
+            not library
+            or library == SERVICE.name  # the cache directories leave nodes behind
+            or library in CORE_ALLOWED_STDLIB
+            or library in CORE_ALLOWED_LIBRARIES
+        ):
+            continue
+        undeclared |= {name for _, name in _io_violations(SERVICE.name, core, with_libraries, (library,))}
+    assert undeclared == set()
 
 
 def test_core_modules_import_no_other_layer(internal: EvaluableArchitecture) -> None:

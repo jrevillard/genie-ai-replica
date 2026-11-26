@@ -592,8 +592,8 @@ def test_a_spent_fleet_budget_refuses_the_translation_before_any_call():
 
 def test_the_factory_builds_one_preparer_per_run():
     factory = build_preparer_factory(
+        PreparationFakeTransport(),
         env={"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"},
-        transport=PreparationFakeTransport(),
     )
     first = factory(RunBudgetMonitor(run_budget()))
     second = factory(RunBudgetMonitor(run_budget()))
@@ -617,8 +617,8 @@ def test_the_real_factory_counts_the_preparation_translation_on_the_usage_record
         }
     )
     factory = build_preparer_factory(
+        transport,
         env={"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"},
-        transport=transport,
     )
 
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())

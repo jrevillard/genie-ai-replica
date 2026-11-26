@@ -204,24 +204,31 @@ def build_pipeline():
     the lane from ``NoAgentConfig.load`` (the same ``AdmissionLane.from_config``
     the C seam builds), the budget from ``OrchestratorConfig.load`` (the same
     fail-closed read — the shared admission/budget policy of E02), and the
-    capability via ``SearchKnowledgeCapability.create`` — the SAME capability
-    object the governed run's port assembly wires (called directly by the
-    no-agent pipeline, whose own authorized-set check refuses an empty set
-    and validates graph names).
+    capability via the host's assembly — the SAME capability object the
+    governed run's port assembly wires (called directly by the no-agent
+    pipeline, whose own authorized-set check refuses an empty set and
+    validates graph names).
+
+    The core composes nothing: the transport, the lane and the capability
+    are supplied here, the way the composition root supplies them.
     """
     sys.path.insert(0, AGENT_SERVICE_HOME)
     from agent.orchestrator import OrchestratorConfig
-    from capabilities.search_knowledge import SearchKnowledgeCapability
+    from assembly import build_search_capability
+    from capabilities.adapters.httpx import HttpxTransport
+    from lane import AdmissionLane
     from noagent.config import NoAgentConfig
     from noagent.pipeline import NoAgentPipeline
 
     env = dict(os.environ)
     orchestrator_config = OrchestratorConfig.load(env)
     noagent_config = NoAgentConfig.load(env)
-    capability = SearchKnowledgeCapability.create(env)
+    capability = build_search_capability(env)
     budget = orchestrator_config.operation_budget
+    transport = HttpxTransport(noagent_config.tls_verify)
+    lane = AdmissionLane.from_config(noagent_config)
 
-    pipeline = NoAgentPipeline.create(noagent_config, capability, budget, env)
+    pipeline = NoAgentPipeline.create(noagent_config, capability, budget, transport, lane, env)
     generation = getattr(pipeline, "_generation", None)
     model_id = resolve_model_id(generation)
     return pipeline, model_id

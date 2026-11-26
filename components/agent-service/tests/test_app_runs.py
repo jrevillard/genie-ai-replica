@@ -277,7 +277,7 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
 
     preparer = ScriptedPreparer()
 
-    def fake_factory(env=None, transport=None):
+    def fake_factory(transport, env=None):
         return lambda monitor, language=None: preparer
 
     monkeypatch.setattr(app_module, "build_preparer_factory", fake_factory)

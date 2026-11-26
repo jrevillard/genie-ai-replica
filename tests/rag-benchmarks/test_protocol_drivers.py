@@ -1244,3 +1244,58 @@ def test_the_c_row_records_the_trace_id():
     stream = FakeRunStream(events=[])
     row = drivers.run_one_case_c({"id": "x", "query": "q"}, base_url="u", transport=FakeCTransport(stream))
     assert row["trace_id"] == stream.trace_id
+
+
+def test_the_config_b_driver_assembles_the_pipeline_it_ships(monkeypatch):
+    """The driver's in-container assembly works.
+
+    The driver is shipped into the container and executed there; nothing
+    else calls ``build_pipeline``. A wiring break there (a factory that
+    moved, a constructor that now demands a transport) leaves the whole
+    config-B evaluation path dead while every suite stays green — this
+    test is the guard for that.
+    """
+    from protocol import config_b_driver
+
+    service_home = str(Path(__file__).resolve().parents[2] / "components" / "agent-service")
+    # The driver reads the path at import time: the constant is the seam.
+    monkeypatch.setattr(config_b_driver, "AGENT_SERVICE_HOME", service_home)
+    for knob in (
+        "AGENT_RUN_MAX_STEPS",
+        "AGENT_RUN_MAX_MODEL_CALLS",
+        "AGENT_RUN_MAX_TOOL_CALLS",
+        "AGENT_RUN_MAX_TOTAL_TOKENS",
+        "AGENT_RUN_MAX_EVIDENCE_BYTES",
+        "AGENT_RUN_MAX_WALL_CLOCK_SECONDS",
+        "AGENT_TOOL_TIMEOUT_MS",
+        "AGENT_TOOL_MAX_RESULTS",
+        "AGENT_TOOL_MAX_RESULT_BYTES",
+        "AGENT_VERDICT_JUDGE_TIMEOUT_MS",
+    ):
+        monkeypatch.setenv(knob, "5000")
+    monkeypatch.setenv("VLLM_LLM_ENDPOINT", "http://llm.invalid")
+    # The model id is pinned: the assembly resolves it without a discovery
+    # call, so the test never reaches the network.
+    monkeypatch.setenv("VLLM_LLM_MODEL_ID", "served-model")
+    monkeypatch.setenv("TEI_EMBEDDING_ENDPOINT", "https://tei.invalid/embed")
+    monkeypatch.setenv("TEI_RERANKING_ENDPOINT", "https://tei.invalid")
+    monkeypatch.setenv("ARANGO_URL", "http://localhost:8529")
+    monkeypatch.setenv("ARANGO_DB", "_system")
+    monkeypatch.setenv("AGENT_LANE_LOCK_PATH", str(Path(__file__).resolve().parent / "lane.lock"))
+    # The Arango driver is never reached: the client is constructed, not
+    # called. The stub the protocol suite ships may shadow the library, so
+    # the attribute is set whatever the module carries.
+    monkeypatch.setattr(
+        "arango.ArangoClient",
+        lambda hosts: type("C", (), {"db": lambda self, *a, **k: None})(),
+        raising=False,
+    )
+
+    pipeline, model_id = config_b_driver.build_pipeline()
+
+    assert model_id == "served-model"
+    assert pipeline is not None
+    # The lane and the transport are wired, not None: the core composes
+    # nothing, so the driver supplies both.
+    assert getattr(pipeline, "_lane", None) is not None
+    assert getattr(pipeline, "_generation", None) is not None

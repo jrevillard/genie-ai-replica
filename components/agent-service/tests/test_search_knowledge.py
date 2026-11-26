@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from assembly import _build_search_capability
+from assembly import build_search_capability
 from capabilities.adapters.env_config import ArangoConfig, HybridConfig, RerankingConfig
 from capabilities.adapters.tei_embedding import EmbeddedQuery
 from capabilities.adapters.tei_reranking import RerankerInputTooLongError, RerankOutcome, ScoredCandidate
@@ -784,7 +784,7 @@ def test_embedding_budget_uses_the_embed_knobs_not_the_rerank_ones(monkeypatch):
         "arango.ArangoClient",
         lambda hosts: type("C", (), {"db": lambda self, *a, **k: None})(),
     )
-    capability = _build_search_capability(env)
+    capability = build_search_capability(env)
     assert capability._embedding._total_timeout == 123.0
     assert capability._embedding._connect_timeout == 30.0
 
@@ -797,10 +797,10 @@ def test_embedding_budget_uses_the_embed_knobs_not_the_rerank_ones(monkeypatch):
 def test_create_requires_both_model_endpoints():
     env = {"ARANGO_URL": "http://localhost:8529", "TEI_EMBEDDING_ENDPOINT": ""}
     with pytest.raises(ValueError, match="TEI_EMBEDDING_ENDPOINT"):
-        _build_search_capability(env)
+        build_search_capability(env)
     env = {"ARANGO_URL": "http://localhost:8529", "TEI_EMBEDDING_ENDPOINT": "https://tei/embed"}
     with pytest.raises(ValueError, match="TEI_RERANKING_ENDPOINT"):
-        _build_search_capability(env)
+        build_search_capability(env)
 
 
 def test_create_wires_the_contract_surface(monkeypatch):
@@ -816,7 +816,7 @@ def test_create_wires_the_contract_surface(monkeypatch):
         "arango.ArangoClient",
         lambda hosts: type("C", (), {"db": lambda self, *a, **k: None})(),
     )
-    capability = _build_search_capability(env)
+    capability = build_search_capability(env)
     assert capability.name == OperationName.SEARCH_KNOWLEDGE
     # The port interface is satisfied: search_knowledge(context, request, budget).
     import inspect

@@ -126,7 +126,7 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     # The preparation wiring (the preparation module): one per-run
     # preparer over the run's budget monitor; the discovery caches are
     # process-wide.
-    preparer_factory = build_preparer_factory(env, transport=transport)
+    preparer_factory = build_preparer_factory(transport, env=env)
 
     def port_factory(context: CallerContext, bearer: str | None):
         # Per request: one executor binds ONE trusted context to the

@@ -246,22 +246,24 @@ class NoAgentPipeline:
 
     @classmethod
     def create(
-        cls, config: NoAgentConfig, capability, budget: OperationBudget, env=None, transport=None, lane=None
+        cls, config: NoAgentConfig, capability, budget: OperationBudget, transport, lane, env=None
     ) -> "NoAgentPipeline":
-        """Assemble the default wiring: the preparer over the same env, the
-        generation client (whose transport the counter shares — one wiring
-        change lands once), the lane over the config, the answer translator
-        when the gate is on, and the score calibrator from the capability's
-        public ``score_calibrator`` surface (the capability's reranking
-        adapter is the single owner of the calibration knob — no second
-        reader that could drift). The translator owns its registry instance
-        (the same file, its own read-once cache) — the preparer's is private
-        to the preparer."""
-        preparer = QueryPreparer.create(env)
+        """Assemble the wiring the caller supplies: the preparer over the
+        same env, the generation client (whose transport the counter
+        shares — one wiring change lands once), the admission lane, the
+        answer translator when the gate is on, and the score calibrator
+        from the capability's public ``score_calibrator`` surface (the
+        capability's reranking adapter is the single owner of the
+        calibration knob — no second reader that could drift). The
+        translator owns its registry instance (the same file, its own
+        read-once cache) — the preparer's is private to the preparer.
+
+        The transport and the lane are REQUIRED: the core composes
+        nothing, so the caller supplies both. A missing one fails here,
+        where the wiring is, and not at the first call that needs it."""
+        preparer = QueryPreparer.create(transport, env)
         generation = GenerationClient.create(config, transport=transport)
         counter = TokenCounter(config, generation.model_id, generation.transport)
-        if lane is None:
-            raise ValueError("the pipeline needs an admission lane; the composition root builds it")
         translator = None
         if config.answer_translation_enabled:
             registry = LanguageRegistry(PreparationConfig.load(env).registry_path)

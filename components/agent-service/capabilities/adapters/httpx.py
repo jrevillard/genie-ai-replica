@@ -34,7 +34,7 @@ class HttpxTransport:
     def __init__(self, verify: bool):
         self._verify = verify
 
-    def _client(self, failure: Exception) -> None:
+    def _raise_transport_failure(self, failure: Exception) -> None:
         """Raise ``failure`` the way the core must read it.
 
         A timeout becomes the core's timeout type; anything else travels
@@ -49,7 +49,7 @@ class HttpxTransport:
             async with httpx.AsyncClient(timeout=timeout_s, verify=self._verify) as client:
                 response = await client.get(url, headers=headers)
         except httpx.TimeoutException as failure:
-            self._client(failure)
+            self._raise_transport_failure(failure)
         return response.status_code, response.json()
 
     async def post_json(self, url: str, headers: dict, payload: dict, timeout_s: float) -> tuple[int, Any]:
@@ -57,5 +57,5 @@ class HttpxTransport:
             async with httpx.AsyncClient(timeout=timeout_s, verify=self._verify) as client:
                 response = await client.post(url, headers=headers, json=payload)
         except httpx.TimeoutException as failure:
-            self._client(failure)
+            self._raise_transport_failure(failure)
         return response.status_code, response.json()

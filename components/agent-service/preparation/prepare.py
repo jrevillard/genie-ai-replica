@@ -112,11 +112,15 @@ class QueryPreparer:
         self._default_source_language = default_source_language
 
     @classmethod
-    def create(cls, env=None) -> "QueryPreparer":
-        """Assemble the default wiring from the environment."""
+    def create(cls, transport, env=None) -> "QueryPreparer":
+        """Assemble the default wiring from the environment.
+
+        The transport is required: a preparer with no transport fails at
+        its first translation, far from the wiring that forgot it.
+        """
         config = PreparationConfig.load(env)
         registry = LanguageRegistry(config.registry_path)
-        translator = TranslationClient(config, registry)
+        translator = TranslationClient(config, registry, transport)
         return cls(config, registry, translator)
 
     async def prepare(self, history: list | str, source_language=None) -> PreparationResult:

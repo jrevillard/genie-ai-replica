@@ -66,7 +66,7 @@ def test_create_wires_the_deployment_bearer_into_both_adapters(monkeypatch):
     adapters — dropping `bearer=endpoints.bearer` from one create() branch
     is exactly the regression this catches (the adapter-level tests above
     pin the header behavior; this one pins the wiring)."""
-    from assembly import _build_search_capability
+    from assembly import build_search_capability
 
     monkeypatch.setattr(
         "arango.ArangoClient",
@@ -78,6 +78,6 @@ def test_create_wires_the_deployment_bearer_into_both_adapters(monkeypatch):
         "TEI_RERANKING_ENDPOINT": "https://tei.invalid",
         "VLLM_API_KEY": "deployment-key",
     }
-    capability = _build_search_capability(env)
+    capability = build_search_capability(env)
     assert capability._embedding._bearer == "deployment-key"
     assert capability._reranking._bearer == "deployment-key"

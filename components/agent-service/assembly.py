@@ -71,7 +71,7 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     if not okf_url:
         raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
     arango_config = ArangoConfig.load(env)
-    search = _build_search_capability(env)
+    search = build_search_capability(env)
 
     # The ArangoDB driver stays a call-time import: it is the one heavy
     # dependency only a live assembly needs, and keeping it off the module
@@ -97,7 +97,7 @@ def build_stateless_adapters(env=None) -> StatelessAdapters:
     )
 
 
-def _build_search_capability(env=None):
+def build_search_capability(env=None):
     """The search capability's wiring: the retrieval driver, the embedding
     and reranking endpoints, and the graph's database.
 

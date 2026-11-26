@@ -5,7 +5,7 @@
 One instance of this class answers one HTTP run request end to end:
 
 * **admission** — the run passes through the flock slot pool
-  (:class:`noagent.lane.AdmissionLane`) BEFORE any work; a saturated lane is
+  (:class:`lane.AdmissionLane`) BEFORE any work; a saturated lane is
   a typed :class:`AdmissionRefused` the surface maps to the defined 429,
   never a queue. The pool is the slot FILES, so the run surface's lane and
   the no-agent pipeline's lane are one pool under the one-replica
@@ -288,7 +288,7 @@ class BudgetedTranslationClient(TranslationClient):
         return await super().translate_prompt(prompt, translategemma, model_id)
 
 
-def build_preparer_factory(env=None, transport=None):
+def build_preparer_factory(transport, env=None):
     """The per-run preparer factory the orchestrator wires.
 
     The expensive, stateless parts (the config, the language registry, the

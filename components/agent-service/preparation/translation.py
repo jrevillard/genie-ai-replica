@@ -207,6 +207,9 @@ def classify_transport_error(exc: Exception) -> TranslationFailedError:
         return TranslationInputTooLongError(
             f"translation request exceeds the translation window: {type(exc).__name__}: {str(exc)[:200]}"
         )
+    # A timeout is the builtin TimeoutError: the transport maps its own
+    # timeout type (the httpx adapter raises TransportTimeoutError), so
+    # the core names no HTTP library.
     if isinstance(exc, TimeoutError):
         return TranslationTimeoutError(f"translation timed out: {type(exc).__name__}: {str(exc)[:200]}")
     return TranslationFailedError(f"translation failed: {type(exc).__name__}: {str(exc)[:200]}")
@@ -216,8 +219,11 @@ class TranslationTransport(Protocol):
     """The transport seam: the two HTTP verbs the client needs.
 
     Implementations return ``(status, parsed body)`` or raise. Raw transport
-    exceptions (a timeout, connection errors, test doubles' arbitrary
-    exceptions) propagate to the client's classification.
+    exceptions (connection errors, test doubles' arbitrary exceptions)
+    propagate to the client's classification; a TIMEOUT arrives as the
+    builtin ``TimeoutError`` — an implementation maps its own timeout
+    type (the httpx adapter raises ``TransportTimeoutError``) because the
+    core may not name an HTTP library.
     """
 
     async def get_json(self, url: str, headers: dict, timeout_s: float) -> tuple[int, Any]: ...

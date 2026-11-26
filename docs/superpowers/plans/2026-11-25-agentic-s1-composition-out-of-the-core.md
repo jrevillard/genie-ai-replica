@@ -6,7 +6,7 @@
 
 **Architecture:** Two moves. (1) The model call's contract — `ModelTurn`, `ToolCallRequest`, the `LoopModelClient` protocol, the model's knobs and the model's request vocabulary — leaves the core for a port module (`capabilities/model.py`), because an adapter may not import the core. (2) The production model client becomes the vLLM adapter (`capabilities/adapters/vllm.py`): the config splits (the reading stays in the core, the shape travels with the adapter), the client is renamed after what it talks to, and the probe keeps only the measurement half.
 
-**What this plan does NOT do.** The adapter assembly and the search capability's factory leave the core in plan 5, not here: the probe (still in `agent/`) calls the assembly, and a core module may not import the host. The probe moves to the measurement package in plan 4; once it is there, the measurement may reach the host, and the composition's move becomes clean.
+**What this plan does NOT do.** The adapter assembly and the search capability's factory leave the core in plan 4 (task 2), not here: the probe (still in `agent/`) calls the assembly, and a core module may not import the host. The probe moves to the measurement package in plan 4 (task 1); once it is there, the measurement may reach the host, and the composition's move becomes clean.
 
 **Tech Stack:** Python 3.11, pytest 9.1.1, pytestarch 5.1.1 (the rules of plan 1), ruff 0.16.3.
 

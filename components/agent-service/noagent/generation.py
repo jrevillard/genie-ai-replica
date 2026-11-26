@@ -29,6 +29,12 @@ the tests drive the client without a network — the same seam
 import logging
 import time
 
+from capabilities.model import (
+    RECORDED_SAMPLING_PARAMS,
+    chat_choice,
+    chat_choice_content,
+    resolve_window_tokens,
+)
 from preparation.translation import (
     ModelEndpointCache,
     is_input_overflow,
@@ -49,14 +55,6 @@ class GenerationTransientError(RuntimeError):
     turn (503 llm_unavailable for a model/transport error, otherwise 500)
     and this pipeline fails it the same way, at the capability layer.
     """
-
-
-from capabilities.model import (  # noqa: E402
-    RECORDED_SAMPLING_PARAMS,
-    chat_choice,
-    chat_choice_content,
-    resolve_window_tokens,
-)
 
 
 def generation_payload(system_prompt: str, user_content: str, model_id: str | None, answer_tokens: int | None) -> dict:

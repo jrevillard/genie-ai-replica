@@ -233,12 +233,11 @@ class ProbeConfig:
 
     The model leg travels with the client that reads it
     (``capabilities.adapters.vllm.VllmModelConfig``); what stays here is
-    the assembly the probe performs: the corpus endpoints, the authorized
-    graphs and repos, and the caller's bearer.
+    what the probe's own assembly reads: the authorized graphs and repos,
+    and the caller's bearer. The corpus endpoints are the assembly's
+    business — the host reads them from the environment.
     """
 
-    docrepo_url: str
-    okf_url: str
     authorized_graphs: str
     authorized_repos: str
     user_bearer: str | None
@@ -247,8 +246,6 @@ class ProbeConfig:
     def load(cls, env=None) -> "ProbeConfig":
         source = os.environ if env is None else env
         return cls(
-            docrepo_url=str(source.get("AGENT_DOCREPO_URL", "")),
-            okf_url=str(source.get("AGENT_OKF_URL", "")),
             authorized_graphs=str(source.get("AGENT_AUTHORIZED_GRAPHS", "")),
             authorized_repos=str(source.get("AGENT_AUTHORIZED_REPOS", "")),
             user_bearer=source.get("AGENT_PROBE_BEARER"),

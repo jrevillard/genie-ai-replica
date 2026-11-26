@@ -226,7 +226,7 @@ export OPEA_SSL_SKIP_VERIFY=1
 export AGENT_VERIFICATION_VENUE="GPU node ai.assembly.govstack.global (V03 baseline venue), reached from the forge k3s dev cluster host"
 
 # the matrix + cancellation demos + plain control (exit 1: the 2 auto+streaming cells)
-cd components/agent-service && .venv/bin/python -m agent.v06_harness
+cd components/agent-service && .venv/bin/python -m measurement.v06_harness
 
 # the probe (as-found; + doc-repo/Arango via port-forward, TEI endpoints,
 # ARANGO_DB=_system, ARANGO_GRAPH_NAME=GRAPH, AGENT_AUTHORIZED_GRAPHS=GRAPH,

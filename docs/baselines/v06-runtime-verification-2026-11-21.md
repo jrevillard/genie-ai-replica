@@ -190,7 +190,7 @@ tool-call surface evidence lives in the matrix.
 
 ## The live probe record
 
-`python -m agent.probe` against the venue with the real port assembled
+`python -m measurement.probe` against the venue with the real port assembled
 (doc-repo and ArangoDB via port-forward, TEI embed on the GPU node,
 `ARANGO_DB=_system` / `GRAPH` as deployed):
 
@@ -519,12 +519,12 @@ cell identity — for length; every distinct message appears in full at least on
 ```bash
 # the matrix + cancellation demos (venue env: VLLM_LLM_ENDPOINT, VLLM_API_KEY,
 # OPEA_SSL_SKIP_VERIFY=1, optional AGENT_VERIFICATION_VENUE label)
-cd components/agent-service && python -m agent.v06_harness
+cd components/agent-service && python -m measurement.v06_harness
 
 # the probe (adds corpus knobs: TEI_EMBEDDING_ENDPOINT, TEI_RERANKING_ENDPOINT,
 # ARANGO_URL/ARANGO_PASSWORD/ARANGO_DB/ARANGO_GRAPH_NAME, AGENT_DOCREPO_URL,
 # AGENT_OKF_URL, AGENT_AUTHORIZED_GRAPHS)
-cd components/agent-service && python -m agent.probe
+cd components/agent-service && python -m measurement.probe
 
 # the license gate (offline)
 python scripts/dependencies/verify-dependency-licenses.py --verify \

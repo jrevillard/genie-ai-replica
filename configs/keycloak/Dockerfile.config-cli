@@ -21,6 +21,7 @@ USER root
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
     apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get install -y --no-install-recommends jq && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 USER 65534
 

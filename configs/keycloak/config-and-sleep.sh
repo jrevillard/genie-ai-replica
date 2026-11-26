@@ -89,31 +89,30 @@ while [ $attempt -lt $MAX_RETRIES ]; do
           case "$USER_JSON" in
             *'"okf_scopes"'*) return 0 ;; # already carries scopes — never overwrite finer grants
           esac
-          ATTRS=$(printf '%s' "$USER_JSON" | sed -n 's/.*"attributes"[[:space:]]*:[[:space:]]*\({[^}]*}\).*/\1/p')
-          if [ -n "$ATTRS" ] && [ "$ATTRS" != "{}" ] && [ "$ATTRS" != "null" ]; then
-            NEW_ATTRS=$(printf '%s' "$ATTRS" | sed 's/}$/,"okf_scopes":["okf:*:*:admin"]}/')
-          else
-            NEW_ATTRS='{"okf_scopes":["okf:*:*:admin"]}'
-          fi
           # PUT the FULL user representation with the scope merged into its
           # attributes. An attributes-only PUT REPLACES the payload, and the
           # profile fields it omits (email, firstName, lastName) are CLEARED —
-          # verified live on a scratch user: attributes-only wiped the
+          # verified live on scratch users: attributes-only wiped the
           # profile, full-JSON preserved it. The realm's user profile marks
-          # those fields required for role "user", so a wiped profile forced
-          # "Update Account Information" on every login (seen on genie-admin
-          # after the realm import re-armed the grant at a deploy).
-          if printf '%s' "$USER_JSON" | grep -q '"attributes"'; then
-            PAYLOAD=$(printf '%s' "$USER_JSON" |
-              sed "s/\"attributes\"[[:space:]]*:[[:space:]]*{[^}]*}/\"attributes\":${NEW_ATTRS}/")
-          else
-            PAYLOAD=$(printf '%s' "$USER_JSON" |
-              sed "s/}$/,\"attributes\":${NEW_ATTRS}}/")
-          fi
+          # those fields required for role "user", so a wiped profile forces
+          # "Update Account Information" on every login.
+          # The merge runs through jq (installed in the image for exactly
+          # this): attribute VALUES with sed-special characters (/ & } …)
+          # survive byte-for-byte, and the payload is guaranteed valid JSON
+          # — a brace-matching sed splice cannot promise either.
+          PAYLOAD=$(printf '%s' "$USER_JSON" |
+            jq --argjson s '["okf:*:*:admin"]' \
+              '.attributes = ((.attributes // {}) + {okf_scopes: $s})') || {
+            echo "WARN: could not build the merged payload for user ${USER_ID} — scope NOT granted" >&2
+            return 0
+          }
           curl -s -f -X PUT -H "$KAH" -H 'Content-Type: application/json' \
             -d "$PAYLOAD" \
-            "${KC_BASE}/admin/realms/${KC_REALM_NAME}/users/${USER_ID}" >/dev/null && \
-            echo "Granted okf wildcard scope to user ${USER_ID}."
+            "${KC_BASE}/admin/realms/${KC_REALM_NAME}/users/${USER_ID}" >/dev/null || {
+            echo "WARN: the scope PUT failed for user ${USER_ID} — scope NOT granted" >&2
+            return 0
+          }
+          echo "Granted okf wildcard scope to user ${USER_ID}."
         }
         ADMIN_ID=$(curl -s -f -H "$KAH" "${KC_BASE}/admin/realms/${KC_REALM_NAME}/users?username=$(urlencode "${GENIE_ADMIN_USERNAME:-genie-admin}")&exact=true" |
           sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n 1)

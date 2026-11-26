@@ -193,18 +193,24 @@ KNOWN_ADAPTER_IMPORTERS = {
 # platform (to explain it, to point at it) is documentation, not a
 # dependency. Only the code's own literals count.
 #
-# Each pattern is a platform's own vocabulary. A finding is
+# Each pattern is a platform's own vocabulary, and a finding is
 # ``(module, pattern)``: the file that carries it, and the literal found.
+# The patterns are REGEXES, because a leak is a SHAPE and not a spelling:
+# the id-derived display value written ``replace("_", " ")`` is caught, and
+# so is the same call written ``replace("_"," ")`` or with single quotes —
+# a grep for one exact spelling let the others through.
 PLATFORM_VOCABULARY = {
     # ArangoDB's collections (the corpus's own names).
-    "arango_collection": ("GRAPH_SOURCE", "GRAPH_ENTITY", "GRAPH_LINKS_TO"),
+    "arango_collection": (r"GRAPH_SOURCE", r"GRAPH_ENTITY", r"GRAPH_LINKS_TO"),
     # ArangoDB's configuration prefix.
-    "arango_env": ("ARANGO_",),
+    "arango_env": (r"ARANGO_",),
     # The document repository's own HTTP surface and its upload directory.
-    "docrepo_surface": ("/api/files", "uploaded_files"),
+    "docrepo_surface": (r"/api/files", r"uploaded_files"),
     # An identifier turned into a display value — the core deriving a name
-    # from a token it was handed.
-    "id_derived_value": ('replace("_", " ")',),
+    # from a token it was handed. The FIRST argument is the separator the
+    # token carries; the second is whatever display value it is turned
+    # into, and the rule does not care which (a space, a dash, a title).
+    "id_derived_value": (r"""replace\(\s*['"]_['"]\s*,""",),
 }
 
 # The leak set the core still carries. A fix removes one finding and shrinks
@@ -564,7 +570,7 @@ def _platform_vocabulary_findings() -> set[tuple[str, str]]:
         code = _code_text(path)
         for name, patterns in PLATFORM_VOCABULARY.items():
             for pattern in patterns:
-                if pattern in code:
+                if re.search(pattern, code):
                     findings.add((module, name))
     return findings
 
@@ -753,22 +759,72 @@ def test_no_identifier_guard_encodes_a_platform_form() -> None:
     with a platform's charset is caught here without anyone remembering to
     name it — the document-id leak was never one named guard's fault; it
     was a charset chosen once.
+
+    The sweep finds the guards by their SIGNATURE, not by a name prefix:
+    a prefix is a naming convention, and a guard whose name does not carry
+    it (``ensure_graph_name_config``) would never be swept — the sweep
+    would then report "no guard encodes a form" over a port whose second
+    guard was never looked at.
     """
 
     from capabilities import identifiers
     from capabilities.contract import OperationName
 
-    guards = sorted(name for name in dir(identifiers) if name.startswith("validate_"))
+    guards = _identifier_guards(identifiers)
     assert guards, "the identifiers port declares no guard: the sweep would prove nothing"
 
     general_tokens = ("a", "a-b_c", "1795706154681_2f1d1fc5", "12345", "X" * 60)
-    for name in guards:
-        guard = getattr(identifiers, name)
+    for name, guard in guards:
+        # A guard that names the operation gets it: the refusal's channel
+        # is part of what the guard is. One that does not (the
+        # deployment-configuration guard) is called with the value alone.
+        keywords = {"operation": OperationName.READ_SOURCE} if _takes_operation(guard) else {}
         for token in general_tokens:
-            assert guard(token, operation=OperationName.READ_SOURCE) == token, (
+            assert guard(token, **keywords) == token, (
                 f"{name} refused a safe token: a guard that encodes a platform's form "
                 "refuses the corpus the day the platform changes it"
             )
+
+
+def _identifier_guards(module) -> list[tuple[str, object]]:
+    """The port's public guards, found by SIGNATURE.
+
+    A guard is a public function of the port that takes an identifier and
+    returns it (or refuses it): one required positional parameter, and
+    nothing else that a caller must supply but the operation it names.
+    The module's own helpers are excluded by their leading underscore, and
+    the names it imports are excluded because they are not defined there.
+    """
+    import inspect
+
+    found = []
+    for name in sorted(dir(module)):
+        if name.startswith("_"):
+            continue
+        candidate = getattr(module, name)
+        if not inspect.isfunction(candidate):
+            continue
+        if getattr(candidate, "__module__", None) != module.__name__:
+            continue
+        parameters = inspect.signature(candidate).parameters
+        required = [
+            parameter
+            for parameter in parameters.values()
+            if parameter.default is inspect.Parameter.empty
+            and parameter.kind in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        if len(required) != 1:
+            continue
+        found.append((name, candidate))
+    return found
+
+
+def _takes_operation(guard) -> bool:
+    """True when the guard names the operation it refuses on."""
+
+    import inspect
+
+    return "operation" in inspect.signature(guard).parameters
 
 
 def test_leaf_adapters_access_only_the_ports(internal: EvaluableArchitecture) -> None:

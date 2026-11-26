@@ -282,6 +282,66 @@ describe('#2188 windowed concept-list crawl', () => {
     expect(store.state.okf.editor.loading).toBe(false);
   });
 
+  it('caps an oversized page at PAGE rows — a limit-ignoring response cannot corrupt the cursor', async () => {
+    const { store } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    // the page at offset 200 returns 300 rows — the server ignored the limit
+    // (or a fixed-response test fixture answered wide)
+    inFlight[1].resolve({ total: 2000, offset: 200, limit: 200, concepts: rows(200, 500) });
+    inFlight[2].resolve(page(2000, 400, 600));
+    inFlight[3].resolve(page(2000, 600, 800));
+    inFlight[4].resolve(page(2000, 800, 1000));
+    inFlight[5].resolve(page(2000, 1000, 1200));
+    await flush();
+    // the oversized page is trimmed to its own [200,400) range: no hole, no
+    // duplicate of [400,500), and wave 2 pins from the TRUE cursor (1200)
+    const list = store.state.okf.editor.conceptsByRepo.r1;
+    expect(list).toHaveLength(1200);
+    list.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+    const wave2 = conceptService.listForRepo.mock.calls.slice(6, 10).map(([, opts]) => opts.offset);
+    expect(wave2).toEqual([1200, 1400, 1600, 1800]);
+    inFlight[6].resolve(page(2000, 1200, 1400));
+    inFlight[7].resolve(page(2000, 1400, 1600));
+    inFlight[8].resolve(page(2000, 1600, 1800));
+    inFlight[9].resolve(page(2000, 1800, 2000));
+    const res = await t;
+    expect(res.ok).toBe(true);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(2000);
+    store.state.okf.editor.conceptsByRepo.r1.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+  });
+
+  it('a fully-answered-empty wave terminates the crawl WITHOUT a no-op commit (collection shrank below the offsets)', async () => {
+    const { store, commitCounts } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    // the drain emptied everything past row 200: every wave-1 page is empty,
+    // and each empty page leaves a hole before it — the refills answer empty
+    // too (the rows are gone)
+    inFlight.slice(1, 6).forEach((d) => d.resolve({ total: 2000, offset: 0, limit: 200, concepts: [] }));
+    await flush();
+    // the hole-refills run SEQUENTIALLY — each answers empty (the rows are
+    // gone), so each hole's refill loop breaks and the next hole is tried
+    expect(inFlight.length).toBe(7); // page 1 + 5 wave + the first refill
+    for (let refill = 6; refill <= 9; refill++) {
+      inFlight[refill].resolve({ total: 2000, offset: 0, limit: 200, concepts: [] });
+      await flush();
+    }
+    const res = await t;
+    expect(res.ok).toBe(true);
+    // the crawl ENDS (the old sequential loop would have spun forever), and
+    // the shutdown path does no no-op full-accumulator commit: page 1's
+    // commit is the only one
+    expect(commitCounts.setConcepts).toBe(1);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(200);
+    expect(store.state.okf.editor.loading).toBe(false);
+    expect(waitHandle().complete).toHaveBeenCalled();
+  });
+
   it('a wave failure keeps the last known list and reports FETCH_FAILED', async () => {
     const { store, commitCounts } = buildStore();
     const t = store.dispatch('okf/fetchConcepts', 'r1');

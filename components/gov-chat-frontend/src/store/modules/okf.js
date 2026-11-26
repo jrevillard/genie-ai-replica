@@ -956,7 +956,11 @@ const actions = {
         return { ok: true, concepts: first };
       }
       const total = (first && first.total) || 0;
-      let acc = (first && Array.isArray(first.concepts) ? first.concepts : []).slice();
+      // ONE shape normalizer for every response in this action (page 1,
+      // window pages, hole refills) — review round 2: a second inline copy of
+      // this ternary drifted from this one once already.
+      const asRows = (p) => (p && Array.isArray(p.concepts) ? p.concepts : Array.isArray(p) ? p : []);
+      let acc = asRows(first).slice();
       commit('setConcepts', { repoId, concepts: acc });
       const multiPage = total > PAGE;
       if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
@@ -969,7 +973,6 @@ const actions = {
       // between waves so the progress bar keeps painting.
       const CONCURRENCY = 5;
       const yieldToRenderer = () => new Promise((resolve) => setTimeout(resolve, 0));
-      const asRows = (p) => (p && Array.isArray(p.concepts) ? p.concepts : Array.isArray(p) ? p : []);
       let wave = 0;
       while (acc.length < total) {
         if (wave > 0) await yieldToRenderer();
@@ -1011,7 +1014,11 @@ const actions = {
         const holes = [];
         for (const { offset, p } of settled) {
           if (offset > cursor) holes.push([cursor, offset]);
-          const pageRows = asRows(p);
+          // review round 2: cap each page at its own range width — a response
+          // that ignored `limit` (or an oversized fixture) must not push the
+          // cursor past the next page's offset (that would duplicate its rows
+          // and skip a range). The refill path below already slices the same way.
+          const pageRows = asRows(p).slice(0, PAGE);
           if (pageRows.length > 0) parts.push({ offset, rows: pageRows });
           cursor = offset + pageRows.length;
         }
@@ -1031,12 +1038,15 @@ const actions = {
         }
         parts.sort((a, b) => a.offset - b.offset); // load-bearing: refills push out of order
         const rows = parts.flatMap((part) => part.rows);
+        // a wave that returned nothing can never reach total — break BEFORE
+        // the commits so the shutdown path does no no-op full-accumulator
+        // re-render (review round 2)
+        if (rows.length === 0) break;
         acc = acc.concat(rows);
         commit('setConcepts', { repoId, concepts: acc });
         if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
         wait.setProgress(acc.length, total);
         wave += 1;
-        if (rows.length === 0) break; // a wave that returned nothing can never reach total
       }
       // TAIL GUARD (round 20b, #80862): the natural-completion arm needs the
       // same predicate as the in-loop guard — a fetch superseded while its

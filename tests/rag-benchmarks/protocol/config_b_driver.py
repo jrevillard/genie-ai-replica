@@ -58,7 +58,14 @@ AGENT_SERVICE_HOME = os.environ.get("AGENT_SERVICE_HOME", "/app")
 # capture credential-named keys (VLLM_API_KEY rides VLLM_): the harness
 # redacts credential-named keys at the rows-file write (the protocol's
 # redaction rule) — this snapshot is never trusted secret-free.
-RESOLVED_ENV_PREFIXES = ("AGENT_", "NOAGENT_", "RERANKER_", "EMBEDDING_", "VLLM_", "EVAL_")
+RESOLVED_ENV_PREFIXES = (
+    "AGENT_",
+    "NOAGENT_",
+    "RERANKER_",
+    "EMBEDDING_",
+    "VLLM_",
+    "EVAL_",
+)
 
 _ERROR_PREVIEW_CHARS = 300
 
@@ -228,7 +235,9 @@ def build_pipeline():
     transport = HttpxTransport(noagent_config.tls_verify)
     lane = AdmissionLane.from_config(noagent_config)
 
-    pipeline = NoAgentPipeline.create(noagent_config, capability, budget, transport, lane, env)
+    pipeline = NoAgentPipeline.create(
+        noagent_config, capability, budget, transport, lane, env
+    )
     generation = getattr(pipeline, "_generation", None)
     model_id = resolve_model_id(generation)
     return pipeline, model_id
@@ -258,7 +267,9 @@ def main(argv: list[str] | None = None) -> int:
     pipeline, model_id = build_pipeline()
     rows = run_cases(cases, pipeline)
 
-    atomic_write_json(rows_path, {"cases": rows, "resolved": resolved_snapshot(model_id)})
+    atomic_write_json(
+        rows_path, {"cases": rows, "resolved": resolved_snapshot(model_id)}
+    )
     print(f"config B rows → {rows_path} ({len(rows)} case(s))", file=sys.stderr)
     return 0
 

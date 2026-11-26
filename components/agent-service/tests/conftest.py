@@ -382,12 +382,22 @@ class AgentFakePort:
 
     An exception instance as a canned result makes the port raise it, so a
     suite can drive the port's raised carriers; any other value (``None``
-    included) is returned as-is.
+    included) is returned as-is. ``sink_reason`` (optional) makes the port
+    fire the caller's ``abstention_sink`` with that typed reason on every
+    search — the inner capability's recording behavior, mirrored the way
+    the noagent pipeline's fake mirrors it (it fires ONLY when the caller
+    supplied a sink, which is the contract).
     """
 
-    def __init__(self, search_result: SearchKnowledgeResult | None = None, read_result: ReadSourceResult | None = None):
+    def __init__(
+        self,
+        search_result: SearchKnowledgeResult | None = None,
+        read_result: ReadSourceResult | None = None,
+        sink_reason: str | None = None,
+    ):
         self.search_result = search_result
         self.read_result = read_result
+        self.sink_reason = sink_reason
         self.search_calls: list[dict] = []
         self.read_calls: list[dict] = []
 
@@ -397,6 +407,8 @@ class AgentFakePort:
         )
         if isinstance(self.search_result, Exception):
             raise self.search_result
+        if self.sink_reason is not None and abstention_sink is not None:
+            abstention_sink(self.sink_reason)
         return self.search_result
 
     async def read_source(self, context, request, budget) -> ReadSourceResult:

@@ -280,7 +280,7 @@ document ids — never from passages.
 
 | surface | which cases | measured by |
 |---|---|---|
-| `retrieval` | answerable / citation_check / representative_language, public access, no security scenario | the config-A anchor (chunk-level gold) |
+| `retrieval` | the RETRIEVAL_CLASSES (`protocol/evalset.py`: answerable / citation_check / representative_language / multi_hop / ambiguous), public access, no security scenario | the config-A anchor (chunk-level gold) |
 | `outcome` | unanswerable / failure / cancellation | the recorded outcome (abstention, typed failure, cancellation) |
 | `security` | any case with a `security_scenario` | the verdict layer, on the pair's B/C legs |
 | `restricted_access` | retrieval-class cases whose sources live in a restricted graph | the B/C document-level surface (config A has no authorization surface, so such a case is an authorization case, never a chunk-level one there) |

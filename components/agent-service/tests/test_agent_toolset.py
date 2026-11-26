@@ -47,7 +47,13 @@ from agent.orchestrator import (
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.toolset import document_toolset
 from agent.verification import INSUFFICIENCY_RESPONSE
-from capabilities.contract import CallerContext, OperationBudget, PreparedQuery, QueryPreparationStatus
+from capabilities.contract import (
+    CallerContext,
+    OperationBudget,
+    OutcomeCode,
+    PreparedQuery,
+    QueryPreparationStatus,
+)
 from capabilities.model import ModelTurn, ToolCallRequest
 from lane import AdmissionLane
 from measurement.probe import PROBE_SYSTEM_PROMPT
@@ -273,6 +279,43 @@ def test_a_missing_or_blank_query_is_the_same_structured_refusal_on_both_paths(p
     assert port.search_calls == []
     if preparer is not None:
         assert preparer.calls == []  # the refusal precedes preparation too
+
+
+# ---------------------------------------------------------------------
+# The abstention sink: the run's per-call hook rides the toolset call
+# ---------------------------------------------------------------------
+
+
+def test_the_run_abstention_sink_rides_the_toolset_call_to_the_port():
+    """The recording list the caller supplies (the run's) is kept at the
+    search dispatch's recorded reason, and the port receives the per-call
+    hook — the agent-path counterpart of the noagent pipeline's
+    direct-call recording."""
+    reasons: list[str] = []
+    port = AgentFakePort(
+        search_result=canned_search_result(hits=(), outcome=OutcomeCode.INSUFFICIENT_EVIDENCE),
+        sink_reason="no_documents_retrieved",
+    )
+    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, abstention_sink=reasons)
+
+    result = asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
+
+    assert result["outcome"] == "insufficient_evidence"
+    assert reasons == ["no_documents_retrieved"]
+    assert port.search_calls[0]["abstention_sink"] is not None
+
+
+def test_an_absent_abstention_sink_passes_none_to_the_port():
+    """No sink supplied (the probe path, any caller that does not want the
+    reason): the port call carries ``abstention_sink=None`` — the contract's
+    optional hook stays optional, no behavior change."""
+    port = AgentFakePort(search_result=canned_search_result())
+    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget)
+
+    result = asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
+
+    assert result["outcome"] == "success"
+    assert port.search_calls[0]["abstention_sink"] is None
 
 
 # ---------------------------------------------------------------------

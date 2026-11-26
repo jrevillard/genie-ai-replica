@@ -244,7 +244,23 @@ def test_the_ci_job_watches_every_gate_input():
             for entry in changes
         )
 
-    gate_inputs = [GRADED_SET, INHERITED_SOURCE, *GOLD_SOURCE_FIXTURES.values()]
+    # The graded gate's inputs, plus the protocol suite's other artifact
+    # gates that share this job (the #2146 candidate gate, the coexistence
+    # draft tests and the extended-vocabulary guards): every file the suite
+    # reads from the artifact trees must be watched.
+    CANDIDATE_DIR = ARTIFACT_DIR.parent / "assessment-set-candidate-2026-11-25"
+    DRAFT_DIR = ARTIFACT_DIR.parent / "coexistence-limits-draft-2026-11-25"
+    FINAL_A_DIR = ARTIFACT_DIR.parent / "e01-final-reference-2026-11-24"
+    gate_inputs = [
+        GRADED_SET,
+        INHERITED_SOURCE,
+        *GOLD_SOURCE_FIXTURES.values(),
+        CANDIDATE_DIR / "assessment-set.json",
+        CANDIDATE_DIR / "build-candidate-2146.py",
+        DRAFT_DIR / "legacy-limits.draft.json",
+        FINAL_A_DIR / "assessment-set.json",
+        FINAL_A_DIR / "reference.manifest.json",
+    ]
     unwatched = [
         p.relative_to(REPO_ROOT).as_posix() for p in gate_inputs if not watched(p)
     ]

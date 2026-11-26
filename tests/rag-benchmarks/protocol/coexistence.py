@@ -17,7 +17,9 @@ CONTROLLED COMPARISON, not a sentence in a report:
 The honesty rules are the point:
 
 * a limit nobody agreed makes the verdict BLOCKED — never a pass, never a
-  default limit;
+  default limit; a limits artifact carrying a status that is not ``agreed``
+  is refused outright — a draft is the derivation's proposal for the
+  operator's agreement, never an agreed limit;
 * a limit whose metric the measurement does not carry is NOT MEASURABLE — it
   blocks the verdict, it never passes it;
 * a regression nobody agreed a tolerance for is NOT MEASURABLE — the
@@ -250,8 +252,9 @@ def _apply_limits(limits: dict | None, loaded_metrics: dict) -> dict:
         operator, threshold = bound_fields(bound)
         measured = loaded_metrics.get(name)
         if operator is None:
-            outcome, reason = LIMIT_UNINTERPRETABLE, (
-                "the limit carries no comparable direction — recorded, never guessed"
+            outcome, reason = (
+                LIMIT_UNINTERPRETABLE,
+                ("the limit carries no comparable direction — recorded, never guessed"),
             )
             comparison = None
         elif name not in LEGACY_METRICS or measured is None:
@@ -352,7 +355,11 @@ def _apply_regression(limits: dict | None, regression: dict, *, same_mix: bool) 
                 }
             )
             continue
-        tolerance = _numeric(bound.get("max_delta")) if isinstance(bound, dict) else _numeric(bound)
+        tolerance = (
+            _numeric(bound.get("max_delta"))
+            if isinstance(bound, dict)
+            else _numeric(bound)
+        )
         observed = regression.get(name) or {}
         control = observed.get("control")
         loaded = observed.get("loaded")
@@ -503,7 +510,9 @@ def _agent_load_summary(agent_load: dict) -> dict:
         n_refusals = max(n_refusals, tally_refusals)
     usage_records = agent_load.get("usage_records") or []
     if not isinstance(usage_records, list):
-        raise CoexistenceRefusal("invalid_measurement", "the agentic load's usage_records are not a list")
+        raise CoexistenceRefusal(
+            "invalid_measurement", "the agentic load's usage_records are not a list"
+        )
     # One pass over the records, inner loop over the counters: the numeric +
     # bool-excluded guard is written ONCE (the bool-rejection rule's single
     # home on this surface), not twice per counter.
@@ -524,9 +533,7 @@ def _agent_load_summary(agent_load: dict) -> dict:
         "outcomes": outcomes,
         "n_admission_refusals": n_refusals,
         "admission_refusal_rate": (
-            (n_refusals / n_requests)
-            if n_requests and requests_recorded
-            else None
+            (n_refusals / n_requests) if n_requests and requests_recorded else None
         ),
         "admission_refusal_rate_note": (
             None
@@ -623,6 +630,24 @@ def build_coexistence_report(
         )
 
     if limits is not None:
+        # The status whitelist: the vocabulary is draft → agreed (the
+        # agreement act is the flip), so a status that is PRESENT and not
+        # agreed — a draft, a typo'd flip ("agree"), any pending-ish word —
+        # is refused: an un-agreed artifact must never open a verdict. A
+        # case variant of "agreed" itself ("Agreed", "AGREED") applies: the
+        # flip's intent is unambiguous. An artifact carrying NO status (no
+        # key or a JSON null) is the pre-existing shape (a bare operator
+        # artifact) and applies unchanged.
+        status = limits.get("status")
+        if status is not None and str(status).lower() != "agreed":
+            raise CoexistenceRefusal(
+                "unagreed_limits",
+                f"the legacy limits artifact carries status {str(status)!r} — an artifact that"
+                " is not agreed is never applied: the criterion applies the operator's agreed"
+                " limits only (record the agreement by setting the status to 'agreed', then"
+                " re-run)",
+            )
+
         for key in ("corpus_fingerprint", "assessment_set_sha256"):
             declared = limits.get(key)
             if declared is None:
@@ -660,7 +685,9 @@ def build_coexistence_report(
         regression[name] = {
             "control": before,
             "loaded": after,
-            "delta": (after - before) if isinstance(before, (int, float)) and isinstance(after, (int, float)) else None,
+            "delta": (after - before)
+            if isinstance(before, (int, float)) and isinstance(after, (int, float))
+            else None,
         }
     # The two phases must cover the SAME request mix: a comparison over two
     # different populations is not a comparison — and the regression is the
@@ -676,13 +703,19 @@ def build_coexistence_report(
     # queues it. A request that reached no terminal outcome is a silent
     # failure and fails the criterion on its own.
     saturation_checked = bool(load_summary["saturation_check_available"])
-    saturation_ok = bool(load_summary["every_request_reached_a_terminal_outcome"]) and saturation_checked
+    saturation_ok = (
+        bool(load_summary["every_request_reached_a_terminal_outcome"])
+        and saturation_checked
+    )
 
     # The verdict's composition, in order: a MEASURED breach is a FAIL; a
     # check nobody could make is a BLOCK (never a silent pass); a measured
     # request that reached no terminal outcome is a FAIL.
     verdict = applied["verdict"]
-    if applied["verdict"] == VERDICT_FAIL or applied_regression["verdict"] == VERDICT_FAIL:
+    if (
+        applied["verdict"] == VERDICT_FAIL
+        or applied_regression["verdict"] == VERDICT_FAIL
+    ):
         verdict = VERDICT_FAIL
     elif not saturation_checked:
         verdict = VERDICT_BLOCKED
@@ -762,7 +795,9 @@ def build_coexistence_report(
         "saturation": {
             "defined_response": DEFINED_ADMISSION_RESPONSE,
             "observed_response": load_summary["observed_admission_response"],
-            "every_request_reached_a_terminal_outcome": load_summary["every_request_reached_a_terminal_outcome"],
+            "every_request_reached_a_terminal_outcome": load_summary[
+                "every_request_reached_a_terminal_outcome"
+            ],
             "check_available": saturation_checked,
             "n_without_terminal_outcome": load_summary["n_without_terminal_outcome"],
         },

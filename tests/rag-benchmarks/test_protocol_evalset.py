@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from protocol import evalset as es
 from protocol.run_protocol import cmd_validate_set
 
@@ -101,7 +100,13 @@ def test_multiturn_shape_errors_are_typed():
     data = {
         "_meta": {"provenance": "tuning"},
         "entries": [
-            {"id": "not-a-list", "case_class": "answerable", "provenance": "tuning", "language": "en", "turns": "nope"},
+            {
+                "id": "not-a-list",
+                "case_class": "answerable",
+                "provenance": "tuning",
+                "language": "en",
+                "turns": "nope",
+            },
             {
                 "id": "empty",
                 "case_class": "answerable",
@@ -130,7 +135,9 @@ def test_multiturn_shape_errors_are_typed():
     assert "turn 1 must carry query text" in joined
     assert "turn 2 is not an object" in joined
     assert "turn 1 context, when present, must be an object" in joined
-    assert not any("query must carry text" in e for e in es.validate_set(data, "tuning"))
+    assert not any(
+        "query must carry text" in e for e in es.validate_set(data, "tuning")
+    )
 
 
 def test_single_turn_case_still_requires_query():
@@ -156,7 +163,9 @@ def test_turn_entries_expands_with_indexed_ids_and_drops_the_block():
     assert [e["turn"] for e in entries] == [1, 2]
     assert [e["query"] for e in entries] == ["t1", "t2"]
     assert entries[0]["context"] == {"authorized_source_ids": ["a"]}
-    assert entries[0]["security_scenario"] == "permission_change"  # case fields carry over
+    assert (
+        entries[0]["security_scenario"] == "permission_change"
+    )  # case fields carry over
     assert all("turns" not in e for e in entries)
     assert es.turn_entries({"id": "s1", "query": "q"}) == [{"id": "s1", "query": "q"}]
 
@@ -167,7 +176,9 @@ def test_tuning_sample_validates_and_separates():
 
 
 def test_missing_class_fails_naming_class_and_minimum(assessment_data):
-    assessment_data["entries"] = [c for c in assessment_data["entries"] if c["case_class"] != "cancellation"]
+    assessment_data["entries"] = [
+        c for c in assessment_data["entries"] if c["case_class"] != "cancellation"
+    ]
     with pytest.raises(es.SetValidationError) as failed:
         es.validate_set_or_raise(assessment_data, "assessment")
     joined = "; ".join(failed.value.errors)
@@ -222,8 +233,18 @@ def test_schema_errors_name_the_case():
     data = {
         "_meta": {"provenance": "tuning"},
         "entries": [
-            {"id": "x", "query": "q", "case_class": "not-a-class", "provenance": "tuning"},
-            {"id": "x", "query": "q", "case_class": "answerable", "provenance": "tuning"},
+            {
+                "id": "x",
+                "query": "q",
+                "case_class": "not-a-class",
+                "provenance": "tuning",
+            },
+            {
+                "id": "x",
+                "query": "q",
+                "case_class": "answerable",
+                "provenance": "tuning",
+            },
             {"query": "no id", "case_class": "answerable", "provenance": "tuning"},
         ],
     }
@@ -265,7 +286,9 @@ def test_unknown_minimums_key_is_reported(assessment_data):
 
 
 def test_empty_or_missing_entries_is_invalid():
-    assert es.validate_set({"_meta": {"provenance": "assessment"}, "entries": []}, "assessment")
+    assert es.validate_set(
+        {"_meta": {"provenance": "assessment"}, "entries": []}, "assessment"
+    )
     assert es.validate_set({"_meta": {"provenance": "assessment"}}, "assessment")
 
 
@@ -292,7 +315,9 @@ def test_case_is_non_latin_explicit_script_override_wins():
 
 
 def test_cli_validate_set_ok_on_sample(capsys):
-    rc = cmd_validate_set(type("Args", (), {"set_path": str(ASSESSMENT_SAMPLE), "kind": "assessment"}))
+    rc = cmd_validate_set(
+        type("Args", (), {"set_path": str(ASSESSMENT_SAMPLE), "kind": "assessment"})
+    )
     assert rc == 0
     assert "OK" in capsys.readouterr().out
 
@@ -302,7 +327,9 @@ def test_cli_validate_set_names_errors_and_exits_nonzero(tmp_path, capsys):
     data["entries"] = [c for c in data["entries"] if c["case_class"] != "cancellation"]
     broken = tmp_path / "broken.json"
     broken.write_text(json.dumps(data), encoding="utf-8")
-    rc = cmd_validate_set(type("Args", (), {"set_path": str(broken), "kind": "assessment"}))
+    rc = cmd_validate_set(
+        type("Args", (), {"set_path": str(broken), "kind": "assessment"})
+    )
     assert rc == 1
     err = capsys.readouterr().err
     assert "INVALID" in err
@@ -312,7 +339,14 @@ def test_cli_validate_set_names_errors_and_exits_nonzero(tmp_path, capsys):
 def test_cli_validate_set_via_subprocess():
     """The driver-side entry stays importable as a plain script (stdlib-only)."""
     result = subprocess.run(
-        [sys.executable, str(PROTOCOL_DIR / "run_protocol.py"), "validate-set", str(TUNING_SAMPLE), "--kind", "tuning"],
+        [
+            sys.executable,
+            str(PROTOCOL_DIR / "run_protocol.py"),
+            "validate-set",
+            str(TUNING_SAMPLE),
+            "--kind",
+            "tuning",
+        ],
         capture_output=True,
         text=True,
         timeout=60,
@@ -352,17 +386,36 @@ def test_evaluation_surface_names_the_surface_per_case_shape():
     restricted-access case's passages are unreachable on config A, and the
     rest are the chunk-level retrieval surface — the only one that consumes
     gold."""
-    assert es.evaluation_surface({"security_scenario": "restricted_repo", "case_class": "answerable"}) == "security"
+    assert (
+        es.evaluation_surface(
+            {"security_scenario": "restricted_repo", "case_class": "answerable"}
+        )
+        == "security"
+    )
     assert es.evaluation_surface({"case_class": "unanswerable"}) == "outcome"
     assert es.evaluation_surface({"case_class": "failure"}) == "outcome"
     assert es.evaluation_surface({"case_class": "cancellation"}) == "outcome"
     assert (
-        es.evaluation_surface({"case_class": "answerable", "access_scenario": "restricted"}) == "restricted_access"
+        es.evaluation_surface(
+            {"case_class": "answerable", "access_scenario": "restricted"}
+        )
+        == "restricted_access"
     )
-    assert es.evaluation_surface({"case_class": "answerable", "access_scenario": "public"}) == "retrieval"
-    assert es.evaluation_surface({"case_class": "citation_check", "access_scenario": "public"}) == "retrieval"
     assert (
-        es.evaluation_surface({"case_class": "representative_language", "access_scenario": "public"}) == "retrieval"
+        es.evaluation_surface({"case_class": "answerable", "access_scenario": "public"})
+        == "retrieval"
+    )
+    assert (
+        es.evaluation_surface(
+            {"case_class": "citation_check", "access_scenario": "public"}
+        )
+        == "retrieval"
+    )
+    assert (
+        es.evaluation_surface(
+            {"case_class": "representative_language", "access_scenario": "public"}
+        )
+        == "retrieval"
     )
     assert es.evaluation_surface({"case_class": "not-a-class"}) == "unknown"
 
@@ -383,10 +436,10 @@ def test_coverage_census_counts_every_case_on_its_surface(assessment_data):
     """The census is the set's coverage statement: every case lands on exactly
     one surface, and a valid set has a resolved surface for all of them."""
     census = es.coverage_census(assessment_data["entries"])
-    assert census["n_set_cases"] == 16
+    assert census["n_set_cases"] == 20
     assert census["n_cases_with_a_resolved_surface"] == census["n_set_cases"]
     assert census["retrieval_cases_without_gold"] == []
-    assert census["by_surface"]["retrieval"] == 4
+    assert census["by_surface"]["retrieval"] == 8
     assert census["by_surface"]["restricted_access"] == 2
     assert census["by_surface"]["outcome"] == 3
     assert census["by_surface"]["security"] == 7
@@ -409,7 +462,9 @@ def test_the_two_class_partitions_cover_the_composition_classes():
     """The retrieval classes and the outcome classes partition the composition
     classes — a new class lands on exactly one surface, never silently on
     "unknown"."""
-    assert set(es.RETRIEVAL_CLASSES) | set(es.OUTCOME_CLASSES) == set(es.COMPOSITION_CLASSES)
+    assert set(es.RETRIEVAL_CLASSES) | set(es.OUTCOME_CLASSES) == set(
+        es.COMPOSITION_CLASSES
+    )
     assert not set(es.RETRIEVAL_CLASSES) & set(es.OUTCOME_CLASSES)
 
 
@@ -436,7 +491,11 @@ def test_validator_refuses_a_contradicting_outcome_expectation():
     another is refused at the set boundary — the surface says 'judged from
     the recorded outcome' while the expectation names a different outcome,
     and the two layers would read it differently."""
-    data = json.loads((Path(es.__file__).parent / "sets" / "assessment.sample.json").read_text(encoding="utf-8"))
+    data = json.loads(
+        (Path(es.__file__).parent / "sets" / "assessment.sample.json").read_text(
+            encoding="utf-8"
+        )
+    )
     for case in data["entries"]:
         if case.get("case_class") == "unanswerable":
             case["expectations"] = {"expect_cancelled": True}
@@ -451,10 +510,138 @@ def test_validator_refuses_a_denial_expectation_on_an_outcome_case():
     """expect_denied is the SECURITY surface's expectation (an authorization
     case wants the refusal) — an outcome-class case carrying it claims a
     surface its class does not name."""
-    data = json.loads((Path(es.__file__).parent / "sets" / "assessment.sample.json").read_text(encoding="utf-8"))
+    data = json.loads(
+        (Path(es.__file__).parent / "sets" / "assessment.sample.json").read_text(
+            encoding="utf-8"
+        )
+    )
     for case in data["entries"]:
         if case.get("case_class") == "cancellation":
             case["expectations"] = {"expect_denied": True}
     with pytest.raises(es.SetValidationError) as failed:
         es.validate_set_or_raise(data, "assessment")
     assert any("expect_denied" in e for e in failed.value.errors)
+
+
+# ---------------------------------------------------------------------------
+# The post-signature classes (multi_hop, ambiguous) — issue #2146 blocker 3
+# ---------------------------------------------------------------------------
+
+SIGNED_REFERENCE_SET = (
+    Path(__file__).resolve().parent.parent.parent
+    / "_bmad-output"
+    / "implementation-artifacts"
+    / "e01-final-reference-2026-11-24"
+    / "assessment-set.json"
+)
+
+
+def test_multi_hop_and_ambiguous_are_valid_case_classes():
+    """The PRD §4.1 classes are first-class vocabulary: a case whose class is
+    multi_hop or ambiguous validates — the extension blocker 3 asks for, so a
+    set can carry the classes the gains layer reports per class."""
+    base = {
+        "id": "x",
+        "query": "q",
+        "language": "en",
+        "access_scenario": "public",
+        "provenance": "tuning",
+    }
+    for case_class in ("multi_hop", "ambiguous"):
+        data = {
+            "_meta": {"provenance": "tuning"},
+            "entries": [{**base, "case_class": case_class}],
+        }
+        assert es.validate_set(data, "tuning") == []
+
+
+def test_new_classes_land_on_the_retrieval_surface():
+    """Each new class lands on exactly ONE surface: both are gold-carrying
+    retrieval classes — a multi-hop query joins facts across documents, an
+    ambiguous query spans the interpretations' sources — so the anchor
+    measures them. (The partition's totality is owned by
+    test_the_two_class_partitions_cover_the_composition_classes.)"""
+    assert (
+        es.evaluation_surface({"case_class": "multi_hop", "access_scenario": "public"})
+        == "retrieval"
+    )
+    assert (
+        es.evaluation_surface(
+            {"case_class": "multi_hop", "access_scenario": "restricted"}
+        )
+        == "restricted_access"
+    )
+    assert (
+        es.evaluation_surface({"case_class": "ambiguous", "access_scenario": "public"})
+        == "retrieval"
+    )
+
+
+def test_the_new_classes_carry_an_optional_floor(assessment_data):
+    """The post-signature classes default to minimum 0: a floor of 1 would
+    retroactively refuse every pre-extension set — including the signed FINAL
+    A reference set whose digest the signed thresholds bind to — at every
+    driver's re-validation. A set that wants them REQUIRED raises them
+    through _meta.minimums (the candidate set does); the re-signature on a
+    digest carrying the classes is the operator's later step (#2146)."""
+    data = assessment_data
+    data["_meta"]["minimums"] = {"multi_hop": 4, "ambiguous": 4}
+    errors = es.validate_set(data, "assessment")
+    assert any("multi_hop" in e and "4 required" in e for e in errors)
+    assert any("ambiguous" in e and "4 required" in e for e in errors)
+    for case_class, n in (("multi_hop", 2), ("ambiguous", 2)):
+        for i in range(n):
+            data["entries"].append(
+                {
+                    "id": f"added-{case_class}-{i}",
+                    "query": "q",
+                    "language": "en",
+                    "reference_answer": "",
+                    "expected_chunks": [
+                        {"chunk_key": "k", "content_hash": "h", "preview": "p"}
+                    ],
+                    "case_class": case_class,
+                    "access_scenario": "public",
+                    "provenance": "assessment",
+                }
+            )
+    assert es.validate_set(data, "assessment") == []
+
+
+def test_an_explicit_zero_stays_optional_for_the_post_signature_classes(
+    assessment_data,
+):
+    """{multi_hop: 0} states the optional floor explicitly — it never
+    becomes a required floor of 1: the clamp's 'never lower below 1' guards
+    a REQUIRED class's presence, and these classes' presence invariant is
+    the default 0."""
+    data = assessment_data
+    data["_meta"]["minimums"] = {"multi_hop": 0, "ambiguous": 0}
+    data["entries"] = [
+        case
+        for case in data["entries"]
+        if case.get("case_class") not in ("multi_hop", "ambiguous")
+    ]
+    assert es.validate_set(data, "assessment") == []
+
+
+def test_an_explicit_zero_on_a_required_class_still_floors_to_one(assessment_data):
+    """The 'never lower below 1' invariant is untouched for the required
+    classes: a zero override on a class whose default is >= 1 floors to the
+    presence invariant, never to an optional class."""
+    data = assessment_data
+    data["_meta"]["minimums"] = {"cancellation": 0}
+    data["entries"] = [
+        case for case in data["entries"] if case.get("case_class") != "cancellation"
+    ]
+    errors = es.validate_set(data, "assessment")
+    assert any("cancellation" in e and "1 required" in e for e in errors)
+
+
+def test_signed_reference_set_still_validates_under_the_extended_floor():
+    """The FINAL A reference set — the digest the signed thresholds bind to —
+    keeps validating under the extended vocabulary: the semantic half of
+    'the signed set digest must not be touched'."""
+    _, entries = es.load_set(SIGNED_REFERENCE_SET, "assessment")
+    assert len(entries) == 67
+    assert not any(c.get("case_class") in ("multi_hop", "ambiguous") for c in entries)

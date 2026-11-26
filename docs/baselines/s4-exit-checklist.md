@@ -40,7 +40,7 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 | The gated config-B and config-C legs | `_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/config-b.gate-refusal.txt`, `config-c.gate-refusal.txt` | **OPEN** — refused by the gate (the same `missing_thresholds`: the reference exists, no signed thresholds file references it) |
 | The E02 join | `_bmad-output/implementation-artifacts/e02-attempt-2026-11-24/e02.refusal.txt` | **OPEN** — refused (`missing_artifact`: the B leg's gated manifest does not exist) |
 | The E02 report (`e02.report.json`) | — | **OPEN** — unreachable before the gated legs run |
-| The multi-hop / ambiguous gains | the assessment set carries no case of those classes (`tests/rag-benchmarks/protocol/evalset.py`'s composition classes do not include them) | **OPEN** — the agentic benefit the PRD §4.1 note describes stays a HYPOTHESIS; the set is frozen at the digest the signed thresholds bind to, so it cannot be extended without invalidating the signature |
+| The multi-hop / ambiguous gains | the vocabulary carries the classes (`tests/rag-benchmarks/protocol/evalset.py`), and a CANDIDATE assessment set extends the signed reference by addition only (`_bmad-output/implementation-artifacts/assessment-set-candidate-2026-11-25/`) | **OPEN** — the agentic benefit the PRD §4.1 note describes stays a HYPOTHESIS: the candidate set is a proposal, and the path to measured evidence is the operator's — agree the set, re-sign the thresholds onto its digest, then re-run the legs |
 | The gold annotations the C verdict needs | 10 of the assessment set's cases carry no gold annotation (empty gold), 7 of them answerable-class — issue #2145 | **OPEN** — a C verdict must not be composed before #2145 is handled: the agent's answers on the unannotable cases are not judgeable, and scoring them as if they were would massage the result |
 
 ## Check 3 — Bounded execution (V06)
@@ -63,7 +63,7 @@ So the two gated legs (config B for E01, config B + config C for E02) and the jo
 | Evidence | Artifact | State |
 |---|---|---|
 | The controlled comparison (legacy-only vs legacy-under-agent-load), the agreed-limits application, the saturation/admission response and the computed verdict | `tests/rag-benchmarks/protocol/coexistence.py` + `run_protocol.py coexistence` | Green (story 4.5) |
-| The live comparison on the venue | — | **OPEN** — needs the agentic path deployed on the venue and the operator's limits artifact: the absolute legacy limits (M-4 is absent; error/availability have no dimension of their own) AND the regression tolerance between the two phases (the controlled comparison's own question — did the legacy path degrade under the agentic load? — cannot be scored without one) → the verdict is BLOCKED, never a pass |
+| The live comparison on the venue | — | **OPEN** — needs the agentic path deployed on the venue and the operator's AGREED limits artifact. A DRAFT exists (`_bmad-output/implementation-artifacts/coexistence-limits-draft-2026-11-25/` — absolute limits + regression tolerance derived from the FINAL A/#2118 references, method documented); the harness refuses a draft artifact, so the verdict stays BLOCKED until the operator flips its status at agreement |
 | The agentic load's saturation response (the admission lane refuses a saturated run with a 429 + `Retry-After`; it never queues) | `components/agent-service/noagent/lane.py` (`AdmissionLane` / `LaneBusyError`) | Recorded (the mechanism); the observed rate is part of the live comparison |
 
 ## Exit condition
@@ -73,6 +73,6 @@ S4 exits when checks 1–5 are green with their evidence recorded. Today:
 - check 3 (V06) and check 4 (V08) are recorded;
 - check 1 (E01) is OPEN on one predecessor — the signed thresholds artifact, which needs M-2..M-5 agreed (the operator's decision);
 - check 2 (E02) is OPEN on THREE distinct predecessors: the same signed thresholds artifact, the multi-hop/ambiguous assessment set (the gains the PRD §4.1 note describes are otherwise not measurable), and the #2145 gold annotations (a C verdict must not be composed while 10 of the set's cases carry no gold, 7 of them answerable-class);
-- check 5 (coexistence) is OPEN on the live comparison and on the operator's limits artifact — the absolute legacy limits (M-4 is absent; error/availability have no dimension of their own) AND the regression tolerance between the two phases.
+- check 5 (coexistence) is OPEN on the live comparison and on the operator's AGREED limits artifact — the draft (`_bmad-output/implementation-artifacts/coexistence-limits-draft-2026-11-25/`) proposes both halves (the absolute legacy limits AND the regression tolerance between the two phases) and the harness applies nothing until the operator agrees it.
 
 The S4 exit is therefore **blocked on operator decisions, not on missing machinery**: the machinery (the E01 layer, the E02 layer, the coexistence criterion, the threshold registry) is delivered and green, and every gate that is still closed says which artifact is missing and who owns it. Nothing here is absorbed silently.

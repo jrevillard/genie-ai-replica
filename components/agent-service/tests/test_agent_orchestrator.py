@@ -18,9 +18,12 @@ from dataclasses import replace
 import pytest
 from conftest import (
     REQUIRED_KNOBS,
+    AgentFakePort,
     FakeMetadataSource,
     HangingLoopModel,
     ScriptedLoopModel,
+    canned_read_result,
+    canned_search_result,
     fake_port,
     multihop_turns,
     orchestrator_config,
@@ -39,8 +42,8 @@ from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.runtime import OUTCOME_ANSWERED, OUTCOME_CANCELLED, OUTCOME_ERROR, RunResult
 from agent.verification import VERDICT_POLICY_KNOB, VERDICT_UNVERIFIED
 from agent.version_record import RUNTIME_UNRESOLVED
-from capabilities.contract import CallerContext, OperationBudget
-from capabilities.model import ModelTurn
+from capabilities.contract import CallerContext, OperationBudget, OutcomeCode
+from capabilities.model import ModelTurn, ToolCallRequest
 from lane import AdmissionLane
 from measurement.probe import PROBE_SYSTEM_PROMPT
 
@@ -293,6 +296,7 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
     assert (record.prompt_tokens, record.completion_tokens) == (40, 20)
     assert record.wall_clock_seconds >= 0
     assert record.error is None
+    assert record.abstention_reason is None
     assert record.as_dict().keys() == {
         "run_id",
         "outcome",
@@ -307,6 +311,7 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
         "error",
         "language",
         "preparation_status",
+        "abstention_reason",
         "injection_findings",
     }
     assert [event.kind.value for event in events][-1] == "run_finished"
@@ -319,6 +324,69 @@ def test_a_completed_run_answers_the_usage_record_of_the_shared_counters(tmp_pat
     for event in events:
         assert event.run_id == record.run_id
         assert event.kind.value not in BFF_FRAME_NAMES
+
+
+def test_an_insufficiency_through_the_governed_run_records_its_reason(tmp_path):
+    """The agent-path counterpart of the noagent pipeline's sink recording:
+    the search dispatch carries the run's sink, and the typed reason the
+    port fires through it (no_documents_retrieved here) lands on the
+    terminal usage record — the reason survives the executor boundary on
+    the agent path instead of dying past the toolset call."""
+    port = AgentFakePort(
+        search_result=canned_search_result(hits=(), outcome=OutcomeCode.INSUFFICIENT_EVIDENCE),
+        read_result=canned_read_result(),
+        sink_reason="no_documents_retrieved",
+    )
+    orchestrator, _, _ = _orchestrator(
+        ScriptedLoopModel(multihop_turns(judge_reply='{"verdict": "ungrounded"}')), port, tmp_path
+    )
+
+    record = asyncio.run(orchestrator.run(_request()))
+
+    assert record.outcome == OUTCOME_ANSWERED
+    assert record.abstention_reason == "no_documents_retrieved"
+    assert port.search_calls[0]["abstention_sink"] is not None
+
+
+def test_a_successful_retry_after_an_insufficient_hop_records_no_reason(tmp_path):
+    """A multi-hop run that answers from later evidence carries no
+    abstention reason: the toolset forwards only the latest dispatch's
+    recording to the run, so the first hop's insufficiency cannot ride a
+    record whose search succeeded — the config-B attribution semantics
+    (a reason only while the insufficiency stands), not first-hop residue."""
+
+    class TwoHopPort:
+        """Search 1 insufficient (its sink fires), search 2 successful."""
+
+        def __init__(self):
+            self.search_calls: list[dict] = []
+
+        async def search_knowledge(self, context, request, budget, abstention_sink=None):
+            self.search_calls.append({"abstention_sink": abstention_sink})
+            if len(self.search_calls) == 1 and abstention_sink is not None:
+                abstention_sink("no_documents_retrieved")
+                return canned_search_result(hits=(), outcome=OutcomeCode.INSUFFICIENT_EVIDENCE)
+            return canned_search_result()
+
+        async def read_source(self, context, request, budget):
+            return canned_read_result()
+
+    port = TwoHopPort()
+
+    turns = (
+        ModelTurn(tool_calls=(ToolCallRequest(call_id="call-1", name="search_knowledge", arguments={"query": "q1"}),)),
+        ModelTurn(tool_calls=(ToolCallRequest(call_id="call-2", name="search_knowledge", arguments={"query": "q2"}),)),
+        ModelTurn(content="the answer"),
+        ModelTurn(content='{"verdict": "grounded"}'),
+    )
+    orchestrator, _, _ = _orchestrator(ScriptedLoopModel(turns), port, tmp_path)
+
+    record = asyncio.run(orchestrator.run(_request()))
+
+    assert record.outcome == OUTCOME_ANSWERED
+    assert record.abstention_reason is None
+    assert len(port.search_calls) == 2
+    assert all(call["abstention_sink"] is not None for call in port.search_calls)
 
 
 def test_the_executor_is_built_per_request_with_the_request_context_and_bearer(tmp_path):

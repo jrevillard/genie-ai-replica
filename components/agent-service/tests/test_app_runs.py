@@ -221,6 +221,7 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
         "error",
         "language",
         "preparation_status",
+        "abstention_reason",
         "injection_findings",
     }
     assert usage["outcome"] == "answered"
@@ -228,6 +229,7 @@ def test_the_stream_carries_the_seam_envelope_then_the_usage_record(tmp_path, mo
     assert usage["aux_model_calls"] == 1  # the grounding judge, tallied separately
     assert usage["language"] == "fr"  # the request's UI locale rides the record
     assert usage["injection_findings"] == 0  # a clean run records no attempt
+    assert usage["abstention_reason"] is None  # a successful search fires no sink
 
 
 def test_the_verdict_projects_citations_onto_the_frontend_source_documents_shape(tmp_path, monkeypatch):

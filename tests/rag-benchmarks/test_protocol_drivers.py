@@ -73,6 +73,10 @@ def test_config_a_runs_the_anchor_pattern_and_records_the_report(tmp_path):
         "sample-cite-pub-1",
         "sample-lang-ru-1",
         "sample-lang-es-1",
+        "sample-mh-pub-1",
+        "sample-mh-pub-2",
+        "sample-amb-pub-1",
+        "sample-amb-pub-2",
     }
     assert result["report"]["aggregate"]["recall"] == 0.9
     assert Path(result["report_path"]).exists()
@@ -231,6 +235,10 @@ def test_config_a_records_the_identity_of_the_anchor_input(tmp_path):
         "sample-cite-pub-1",
         "sample-lang-ru-1",
         "sample-lang-es-1",
+        "sample-mh-pub-1",
+        "sample-mh-pub-2",
+        "sample-amb-pub-1",
+        "sample-amb-pub-2",
     }
     assert rows["coverage"]["by_surface"]["retrieval"] == len(anchored)
 

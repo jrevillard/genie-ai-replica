@@ -163,13 +163,16 @@ describe('#2188 windowed concept-list crawl', () => {
     expect(store.state.okf.editor.loadProgress).toBeNull();
   });
 
-  it('orders a wave by offset before committing — arrival order never leaks', async () => {
+  it('assembles a wave in dispatch order — Promise.all preserves input order, so rows land offset-ascending', async () => {
     const { store } = buildStore();
     const t = store.dispatch('okf/fetchConcepts', 'r1');
     await flush();
     inFlight[0].resolve(page(1200, 0, 200));
     await flush();
-    // resolve the first wave completely out of order
+    // RESOLVE the first wave out of order — this changes only WHEN each page
+    // settles, never the ORDER of Promise.all's results (input order). The
+    // pin: the assembly must not re-sort by arrival, and must not depend on
+    // resolution timing for correctness.
     inFlight[5].resolve(page(1200, 1000, 1200));
     inFlight[4].resolve(page(1200, 800, 1000));
     inFlight[3].resolve(page(1200, 600, 800));
@@ -182,7 +185,7 @@ describe('#2188 windowed concept-list crawl', () => {
     await t;
   });
 
-  it('recomputes wave offsets from acc.length — a ragged page never skips rows', async () => {
+  it('refills a ragged page hole at the exact offset — no skipped rows, no duplicates', async () => {
     const { store } = buildStore();
     const t = store.dispatch('okf/fetchConcepts', 'r1');
     await flush();
@@ -190,17 +193,35 @@ describe('#2188 windowed concept-list crawl', () => {
     await flush();
     const wave1Offsets = [200, 400, 600, 800, 1000];
     inFlight.slice(1, 6).forEach((d, i) => {
-      // the page at offset 400 comes back ragged: 150 rows, not 200
+      // the page at offset 400 comes back ragged: 150 rows, not 200 — the
+      // collection mutated mid-crawl (a drain or reingest during the browse)
       d.resolve(i === 1 ? page(2000, 400, 550) : page(2000, wave1Offsets[i], wave1Offsets[i] + 200));
     });
     await flush();
-    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(1150); // 200 + (200+150+200+200+200)
-    // wave 2 must pin its offsets from acc.length = 1150 — not from 400+PAGE steps
+    // the wave has NOT committed yet: the hole [550,600) must be refilled first
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(200);
+    // the refill fetches the hole's exact width at the exact offset — never a
+    // full PAGE, so it cannot overlap the page that follows the hole
+    expect(inFlight.length).toBe(7); // page 1 + 5 wave pages + 1 refill
+    expect(conceptService.listForRepo.mock.calls[6][1]).toMatchObject({ offset: 550, limit: 50 });
+    inFlight[6].resolve(page(2000, 550, 600));
+    await flush();
+    // rows 550-599 present exactly once; the rail holds 1200 contiguous rows
+    const list = store.state.okf.editor.conceptsByRepo.r1;
+    expect(list).toHaveLength(1200);
+    list.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+    // wave 2 starts from the TRUE cursor (1200) — no overlap with page@1000
     expect(inFlight.length).toBe(11);
-    const wave2 = conceptService.listForRepo.mock.calls.slice(6, 11).map(([, opts]) => opts.offset);
-    expect(wave2).toEqual([1150, 1350, 1550, 1750, 1950]);
-    inFlight.slice(6).forEach((d) => d.resolve(page(2000, 0, 200)));
-    await t;
+    const wave2 = conceptService.listForRepo.mock.calls.slice(7, 11).map(([, opts]) => opts.offset);
+    expect(wave2).toEqual([1200, 1400, 1600, 1800]);
+    inFlight[7].resolve(page(2000, 1200, 1400));
+    inFlight[8].resolve(page(2000, 1400, 1600));
+    inFlight[9].resolve(page(2000, 1600, 1800));
+    inFlight[10].resolve(page(2000, 1800, 2000));
+    const res = await t;
+    expect(res.ok).toBe(true);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(2000);
+    store.state.okf.editor.conceptsByRepo.r1.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
   });
 
   it('a superseded fetch commits nothing further and leaves the flags to the newer fetch', async () => {
@@ -253,8 +274,10 @@ describe('#2188 windowed concept-list crawl', () => {
     // keep-last-known: the committed rows stay; no blanking
     expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(200);
     expect(commitCounts.setConcepts).toBe(1);
-    // a deliberate cancel is not an error: the op settles complete, never fail
-    expect(waitHandle().complete).toHaveBeenCalled();
+    // a deliberate cancel is not an error: the registry's cancel() already
+    // retired the entry, so nothing settles it here — and fail() must never
+    // fire (a cancel is not a failure)
+    expect(waitHandle().complete).not.toHaveBeenCalled();
     expect(waitHandle().fail).not.toHaveBeenCalled();
     expect(store.state.okf.editor.loading).toBe(false);
   });

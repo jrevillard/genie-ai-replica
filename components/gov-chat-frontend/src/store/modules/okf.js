@@ -964,12 +964,12 @@ const actions = {
       // #2188 — pages 2..N fetch in WINDOWS of five concurrent requests.
       // The old loop was sequential "by design — each offset needs the
       // previous count", a false premise: only page 1's `total` is needed.
-      // Each wave pins its offsets from acc.length AT WAVE START (so a
-      // ragged page never causes skipped rows), commits once per wave
-      // instead of once per page, and yields to the renderer between waves
-      // so the progress bar keeps painting.
+      // Each wave pins its offsets from acc.length AT WAVE START, commits
+      // once per wave instead of once per page, and yields to the renderer
+      // between waves so the progress bar keeps painting.
       const CONCURRENCY = 5;
       const yieldToRenderer = () => new Promise((resolve) => setTimeout(resolve, 0));
+      const asRows = (p) => (p && Array.isArray(p.concepts) ? p.concepts : Array.isArray(p) ? p : []);
       let wave = 0;
       while (acc.length < total) {
         if (wave > 0) await yieldToRenderer();
@@ -998,9 +998,39 @@ const actions = {
           wait.complete();
           return { ok: true, concepts: acc, stale: true };
         }
-        const rows = settled
-          .sort((a, b) => a.offset - b.offset)
-          .flatMap(({ p }) => (p && Array.isArray(p.concepts) ? p.concepts : Array.isArray(p) ? p : []));
+        // Promise.all preserves input order — `settled` is already
+        // offset-ascending; no sort. A page that returned FEWER rows than
+        // its range covers (the collection mutated mid-crawl — a drain or
+        // reingest during the browse) leaves a HOLE between the running
+        // cursor and the next page's offset. Refill holes sequentially at
+        // their exact offset+width so a refill cannot overlap the page that
+        // follows it — the self-correcting property the sequential loop got
+        // from offset=acc.length, kept only for the mutation case.
+        const parts = [];
+        let cursor = waveOffsets[0];
+        const holes = [];
+        for (const { offset, p } of settled) {
+          if (offset > cursor) holes.push([cursor, offset]);
+          const pageRows = asRows(p);
+          if (pageRows.length > 0) parts.push({ offset, rows: pageRows });
+          cursor = offset + pageRows.length;
+        }
+        for (const [from, to] of holes) {
+          let holeCursor = from;
+          while (holeCursor < to) {
+            const p = await conceptService.listForRepo(repoId, {
+              limit: to - holeCursor,
+              offset: holeCursor,
+              signal: controller.signal
+            });
+            const holeRows = asRows(p).slice(0, to - holeCursor);
+            if (holeRows.length === 0) break; // the rows are gone (mutation) — assembly ends at the cursor
+            parts.push({ offset: holeCursor, rows: holeRows });
+            holeCursor += holeRows.length;
+          }
+        }
+        parts.sort((a, b) => a.offset - b.offset); // load-bearing: refills push out of order
+        const rows = parts.flatMap((part) => part.rows);
         acc = acc.concat(rows);
         commit('setConcepts', { repoId, concepts: acc });
         if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
@@ -1028,13 +1058,16 @@ const actions = {
       wait.complete();
       return { ok: true, concepts: acc };
     } catch (err) {
-      // #2188 — a deliberate Cancel is not an error: the op settles complete
-      // (the overlay shows its cancelled state), the committed rows stay
-      // (keep-last-known), and the caller learns ABORTED.
+      // #2188 — a deliberate Cancel is not an error: the registry's cancel()
+      // has already retired the entry and fired onCancel (→ abort), so there
+      // is no op left to settle here. The committed rows stay
+      // (keep-last-known) and the caller learns ABORTED. Surfaces that must
+      // judge data completeness (the PII review's fail-closed verdict) still
+      // see ok:false — that is the honest state for a cancelled, partial
+      // read.
       if (controller.signal.aborted) {
         if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
         if (myGen === fetchGeneration) commit('setConceptsLoadProgress', null);
-        wait.complete();
         return { ok: false, code: 'ABORTED', message: 'concept fetch cancelled' };
       }
       commit('setError', err.message || 'fetchConcepts failed');

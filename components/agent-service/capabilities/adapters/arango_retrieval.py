@@ -47,8 +47,8 @@ stops at the stages above).
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
 
+from ..retrieval import RetrievedChunk
 from .env_config import ArangoConfig, HybridConfig
 
 logger = logging.getLogger(__name__)
@@ -182,31 +182,6 @@ def rrf_fuse(dense, bm25, k=60, dense_weight=1.0, lexical_weight=1.0):
     return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
 
 
-@dataclass
-class RetrievedChunk:
-    """One retrieval candidate as the adapters pass it around.
-
-    ``chunk_labels`` mirrors what the recorded channels carry: the BM25 leg
-    returns the chunk's labels (the view indexes them); the dense leg's
-    results carry NO labels (the recorded empty-metadata quirk), which is
-    why a label filter drops every dense result — the post-filter sees
-    ``None`` where a filter is active.
-    """
-
-    key: str
-    text: str
-    score: float
-    chunk_labels: list | None = None
-    file_ids: list = field(default_factory=list)
-    repo_id: str | None = None
-    bundle_version: int | None = None
-    graph_name: str | None = None
-    # The chunk's stored vector, carried only by the dense leg (the BM25 view
-    # does not return it). Feeds the adaptive selection's validity check
-    # exactly as the deployed propagation chain does.
-    embedding: list | None = None
-
-
 class ArangoRetrievalAdapter:
     """Runs the recorded retrieval stages against one ArangoDB database.
 
@@ -304,6 +279,7 @@ class ArangoRetrievalAdapter:
                         text=row.get("text") or "",
                         score=score,
                         embedding=row.get("embedding"),
+                        graph_name=self.graph_name,
                     ),
                     "score": score,
                 }
@@ -401,6 +377,7 @@ class ArangoRetrievalAdapter:
                     text=row.get("text") or "",
                     score=float(row.get("score") or 0.0),
                     chunk_labels=chunk_labels,
+                    graph_name=self.graph_name,
                 )
                 results.append({"doc": doc, "score": float(row.get("score") or 0.0)})
         except Exception as e:

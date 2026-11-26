@@ -559,7 +559,7 @@ def test_reranker_down_failure_modes_map_as_recorded():
         return httpx.Response(422, json={"error": "Given: 9999; the input is too long", "error_type": "Validation"})
 
     too_long_adapter = make_reranker(handler=too_long)
-    from capabilities.adapters.tei_reranking import RerankerInputTooLongError
+    from capabilities.retrieval import RerankerInputTooLongError
 
     with pytest.raises(RerankerInputTooLongError):
         asyncio.run(too_long_adapter.rerank("q", texts))

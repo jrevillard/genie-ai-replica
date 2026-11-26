@@ -393,7 +393,7 @@ def test_post_filter_semantics():
 
 
 def _chunk(key, text="t"):
-    from capabilities.adapters.arango_retrieval import RetrievedChunk
+    from capabilities.retrieval import RetrievedChunk
 
     return RetrievedChunk(key=key, text=text, score=0.9)
 

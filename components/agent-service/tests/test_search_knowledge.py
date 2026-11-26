@@ -16,9 +16,8 @@ import pytest
 from pydantic import ValidationError
 
 from assembly import build_search_capability
+from capabilities.adapters.arango_retrieval import ArangoRetrievalAdapter
 from capabilities.adapters.env_config import ArangoConfig, HybridConfig, RerankingConfig
-from capabilities.adapters.tei_embedding import EmbeddedQuery
-from capabilities.adapters.tei_reranking import RerankerInputTooLongError, RerankOutcome, ScoredCandidate
 from capabilities.contract import (
     AuthorizationError,
     CallerContext,
@@ -32,6 +31,7 @@ from capabilities.contract import (
     SearchKnowledgeInput,
     TransientError,
 )
+from capabilities.retrieval import EmbeddedQuery, RerankerInputTooLongError, RerankOutcome, ScoredCandidate
 from capabilities.search_knowledge import SearchKnowledgeCapability
 
 BUDGET = OperationBudget(timeout_ms=5000, max_results=5, max_result_bytes=1_000_000)
@@ -82,6 +82,39 @@ class FakeReranking:
 
     def calibrate(self, score):
         return score  # the none calibration: the raw score, like the real adapter's default
+
+
+class FakeRetrieverFactory:
+    """The host's retriever factory, over the fake corpus.
+
+    The capability drives the retriever it is HANDED; the host decides which
+    connector serves which leg. The test plays the host here — the port the
+    capability drives is the same one the assembly wires in production.
+    """
+
+    def __init__(self, db_factory, arango_config, hybrid_config):
+        self.db_factory = db_factory
+        self.arango_config = arango_config
+        self.hybrid_config = hybrid_config
+
+    def for_leg(self, leg):
+        return ArangoRetrievalAdapter(
+            self.db_factory(leg),
+            self.arango_config,
+            self.hybrid_config,
+            graph_name=leg,
+        )
+
+
+def _with_db(capability, db_factory):
+    """Point the capability's retriever factory at another database.
+
+    The capability drives the retriever the host injected; the host decides
+    which connector serves a leg. Overriding the factory's database keeps
+    the deployment posture (the config) the capability was wired with.
+    """
+    factory = capability._retrievers
+    capability._retrievers = FakeRetrieverFactory(db_factory, factory.arango_config, factory.hybrid_config)
 
 
 class FakeDbFactory:
@@ -143,6 +176,38 @@ def _split_db(rows_file_id, rows_identity):
     return SplitDb()
 
 
+def test_the_capability_drives_the_retriever_the_host_injected():
+    """The capability asks the injected factory for the retriever of each leg.
+
+    The host decides which connector serves a corpus leg; the capability
+    drives what it is handed. A capability that built its own connector would
+    never ask the factory — which is what ADR agentic-009 (F2) closed.
+    """
+    asked: list[str] = []
+
+    class FakeRetriever:
+        bm25_degraded = False
+        cap1_degraded = False
+
+        async def fused_candidates(self, embedding, raw_query, labels_to_filter):
+            return []
+
+    class RecordingFactory:
+        def for_leg(self, leg):
+            asked.append(leg)
+            return FakeRetriever()
+
+    capability = SearchKnowledgeCapability(
+        FakeEmbedding(),
+        FakeReranking(outcome=RerankOutcome(selection=())),
+        RecordingFactory(),
+    )
+    result = asyncio.run(capability.search_knowledge(context(graphs=("GRAPH", "OTHER_g")), prepared(), BUDGET))
+
+    assert asked == ["GRAPH", "OTHER_g"]
+    assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
+
+
 def make_capability(embedding=None, reranking=None, rows=None):
     """A search capability over the fake seams.
 
@@ -158,15 +223,17 @@ def make_capability(embedding=None, reranking=None, rows=None):
     capability = SearchKnowledgeCapability(
         embedding,
         reranking,
-        db_factory,
-        ArangoConfig.load(
-            {
-                "ARANGO_GRAPH_NAME": "GRAPH",
-                "ARANGO_DB": "_system",
-                "OKF_ENABLED": "1",
-            }
+        FakeRetrieverFactory(
+            db_factory,
+            ArangoConfig.load(
+                {
+                    "ARANGO_GRAPH_NAME": "GRAPH",
+                    "ARANGO_DB": "_system",
+                    "OKF_ENABLED": "1",
+                }
+            ),
+            HybridConfig.load({}),
         ),
-        HybridConfig.load({}),
     )
     return capability, embedding, reranking, db_factory
 
@@ -278,7 +345,7 @@ def test_cap1_resolved_candidate_carries_okf_provenance_and_unresolved_carries_l
     )
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking)
-    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
+    _with_db(capability, lambda graph: _split_db(rows_file_id, rows_identity))
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     assert isinstance(result.hits[0].provenance, OkfConceptProvenance)
     assert result.hits[0].provenance.concept_id == "f1"
@@ -324,7 +391,7 @@ def test_okf_candidate_with_unresolvable_file_id_is_skipped_not_cited_with_an_em
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking)
-    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
+    _with_db(capability, lambda graph: _split_db(rows_file_id, rows_identity))
     reasons = []
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=reasons.append))
     assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
@@ -365,7 +432,7 @@ def test_a_drifted_identity_payload_is_a_transient_failure_not_a_raw_validation_
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking)
-    capability._db_factory = lambda graph: _split_db(rows_file_id, rows_identity)
+    _with_db(capability, lambda graph: _split_db(rows_file_id, rows_identity))
     with pytest.raises(TransientError, match="hit that does not match the contract"):
         asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
 
@@ -446,7 +513,7 @@ def test_multi_graph_search_addresses_every_authorized_graph_and_merges_candidat
     )
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, db_factory = make_capability(reranking=reranking)
-    capability._db_factory = lambda graph: GraphDb(graph)
+    _with_db(capability, lambda graph: GraphDb(graph))
     result = asyncio.run(capability.search_knowledge(context(graphs=("GRAPH", "OKF_gov_v1")), prepared(), BUDGET))
     assert GraphRecordingAql.searched == {"GRAPH", "OKF_gov_v1"}  # BOTH collections queried
     assert len(result.hits) == 2  # one hit per graph — no duplicated chunk
@@ -489,7 +556,7 @@ def test_second_authorized_graph_gets_its_own_view_and_join_names():
     selection = (ScoredCandidate(text="t", score=0.7, position=0),)
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking, rows=[{"key": "c1", "text": "t", "score": 0.9}])
-    capability._db_factory = make_db
+    _with_db(capability, make_db)
     asyncio.run(capability.search_knowledge(context(graphs=("GRAPH", "OTHER_g")), prepared(), BUDGET))
     view_queries = [aql for aql, _ in seen if "BM25_VIEW" in aql]
     assert len(view_queries) == 2
@@ -599,9 +666,7 @@ def _capability_with_okf_posture(enabled: bool, db_factory):
     return SearchKnowledgeCapability(
         FakeEmbedding(),
         FakeReranking(outcome=RerankOutcome(selection=selection)),
-        db_factory,
-        arango_config,
-        HybridConfig.load({}),
+        FakeRetrieverFactory(db_factory, arango_config, HybridConfig.load({})),
     )
 
 
@@ -676,7 +741,7 @@ def test_file_id_enrichment_failure_is_transient():
             return [{"name": "GRAPH_BM25_VIEW"}]
 
     capability, _e, _r, _f = make_capability()
-    capability._db_factory = lambda graph: Db()
+    _with_db(capability, lambda graph: Db())
     with pytest.raises(TransientError):
         asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
 
@@ -874,7 +939,7 @@ def test_bm25_view_cache_spans_requests():
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
     known_views = set()
-    capability._db_factory = lambda graph: CacheDb(known_views)
+    _with_db(capability, lambda graph: CacheDb(known_views))
     asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     # The view is created once across the two requests, never twice.

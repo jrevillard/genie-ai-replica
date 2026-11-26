@@ -14,10 +14,10 @@ import pytest
 
 from capabilities.adapters.env_config import AdaptiveConfig, RerankingConfig
 from capabilities.adapters.tei_reranking import (
-    RerankerInputTooLongError,
     TeiRerankingAdapter,
     adaptive_context_selection,
 )
+from capabilities.retrieval import RerankerInputTooLongError
 
 # TEI answers score-descending [{index, score}].
 TEI_RESPONSE = [

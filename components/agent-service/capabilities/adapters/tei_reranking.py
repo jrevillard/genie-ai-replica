@@ -24,58 +24,15 @@ import logging
 import math
 import re
 import statistics
-from dataclasses import dataclass
 
 import httpx
 import numpy as np
 from kneed import KneeLocator
 
+from ..retrieval import RerankerInputTooLongError, RerankOutcome, ScoredCandidate
 from .env_config import AdaptiveConfig, RerankingConfig
 
 logger = logging.getLogger(__name__)
-
-
-class RerankerInputTooLongError(Exception):
-    """TEI rejected the input as too long (HTTP 422 + Validation error_type).
-
-    The recorded outcome is an ABSTENTION (``reranker_input_too_long``), not
-    a failure: the caller maps this type onto an insufficiency answer.
-    """
-
-
-@dataclass(frozen=True)
-class ScoredCandidate:
-    """One candidate text with its reranker score, in selection order.
-
-    ``position`` is the candidate's index in the text list the adapter was
-    called with — TEI reports indices into that list, and the selection keeps
-    them so the caller can address its own candidate list positionally.
-    """
-
-    text: str
-    score: float
-    position: int
-
-
-@dataclass(frozen=True)
-class RerankOutcome:
-    """The selection result, with the recorded empty-selection outcomes kept distinct.
-
-    ``selection`` carries the selected candidates in TEI's score-descending
-    order, each with its POSITION in the input text list
-    (``ScoredCandidate.position``) so the caller maps selections back to
-    enriched candidates even when several candidates share a text.
-    ``selected_nothing`` distinguishes a reranker that selected nothing from
-    a non-selection outcome (an input-too-long abstention raises
-    ``RerankerInputTooLongError`` instead; transport and protocol failures
-    raise, and the caller turns them into a transient failure).
-    """
-
-    selection: tuple[ScoredCandidate, ...]
-
-    @property
-    def selected_nothing(self) -> bool:
-        return not self.selection
 
 
 def _safe_get_text(texts: list[str], tei_index: int) -> str | None:

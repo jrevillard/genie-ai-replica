@@ -11,6 +11,7 @@ governed run and the probe read the same corpus.
 import os
 from dataclasses import dataclass
 
+from capabilities.adapters.arango_retrieval import ArangoRetrievalAdapter
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
 from capabilities.adapters.env_config import (
@@ -54,6 +55,22 @@ class StatelessAdapters:
             chunks=self.chunks,
             search_port=self.search_port,
         )
+
+
+class _LegRetrieverFactory:
+    """The host's retriever factory: it hands the capability the connector
+    that serves one corpus leg.
+
+    The leg label is opaque to the capability and resolved here — the host
+    is the side that knows the corpus platform's collections, views and
+    identifiers (ADR agentic-009, F3).
+    """
+
+    def __init__(self, for_leg):
+        self._for_leg = for_leg
+
+    def for_leg(self, leg: str):
+        return self._for_leg(leg)
 
 
 class _PillarNotDeployed:
@@ -174,4 +191,23 @@ def build_search_capability(env=None, db_factory=None, arango_config=None):
     reranking = TeiRerankingAdapter(
         endpoints.tei_reranking_endpoint, reranking_config, tls_verify=endpoints.tls_verify, bearer=endpoints.bearer
     )
-    return SearchKnowledgeCapability(embedding, reranking, db_factory, arango_config, hybrid_config)
+
+    # The retriever factory is the HOST's: it is the side that knows which
+    # connector serves which corpus leg. The capability asks it per leg and
+    # drives what it gets back — the code that decides never builds the
+    # connector that reaches (ADR agentic-009, F2).
+    #
+    # The ensured-BM25-view cache spans the legs and the requests: the
+    # retriever instance is per leg, the cache is the factory's.
+    ensured_bm25_views: set[str] = set()
+
+    def for_leg(leg: str) -> ArangoRetrievalAdapter:
+        return ArangoRetrievalAdapter(
+            db_factory(leg),
+            arango_config,
+            hybrid_config,
+            graph_name=leg,
+            ensured_bm25_views=ensured_bm25_views,
+        )
+
+    return SearchKnowledgeCapability(embedding, reranking, _LegRetrieverFactory(for_leg))

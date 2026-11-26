@@ -21,7 +21,9 @@ Seven rules keep the layers apart:
 * **R3** — the modules that import the leaf adapters are a listed set.
 * **T** — the telemetry SDK is imported by ``tracing`` and by nothing else.
 * **L1**, **L2** — a leaf adapter accesses only the ports it implements; the
-  capability accesses only the ports and the leaf adapters.
+  capability accesses only the ports. The host injects the connectors the
+  capability drives (ADR agentic-009, F2), so the code that decides never
+  imports the code that reaches.
 
 Three more rules read the code's TEXT rather than its imports: **R4** (the
 deciding modules carry no platform vocabulary), **R5** (the identifier guards
@@ -84,6 +86,7 @@ SERVICE_LAYOUT = Layout(
         "capabilities.executor",
         "capabilities.citations",
         "capabilities.identifiers",
+        "capabilities.retrieval",
         "capabilities.model",
         "capabilities.sources",
     ),
@@ -96,7 +99,13 @@ SERVICE_LAYOUT = Layout(
 # the only one allowed to import the telemetry SDK.
 TELEMETRY_FACADE = "tracing"
 # What the core and the adapters exchange.
-PORTS = ("capabilities.contract", "capabilities.identifiers", "capabilities.model", "capabilities.sources")
+PORTS = (
+    "capabilities.contract",
+    "capabilities.identifiers",
+    "capabilities.model",
+    "capabilities.retrieval",
+    "capabilities.sources",
+)
 # The import names a core module never imports. The list names PACKAGES, so
 # ``from urllib import request`` is caught as the import of ``urllib``.
 IO_LIBRARIES = (
@@ -171,7 +180,6 @@ KNOWN_INTERNAL_VIOLATIONS: set[tuple[str, str]] = set()
 KNOWN_ADAPTER_IMPORTERS = {
     "assembly",  # assembly.py: the host builds the corpus adapters
     "app",  # app.py: the composition root builds the transport adapter
-    "capabilities.search_knowledge",  # the capability builds its own adapters
 }
 
 # R4 — the platform vocabulary the core's TEXT carries.
@@ -751,8 +759,18 @@ def test_leaf_adapters_access_only_the_ports(internal: EvaluableArchitecture) ->
     _accesses_only(SERVICE.name, "leaf adapters", ["ports"], LAYERS).assert_applies(internal)
 
 
-def test_the_capability_accesses_only_ports_and_leaf_adapters(internal: EvaluableArchitecture) -> None:
-    _accesses_only(SERVICE.name, "capability", ["ports", "leaf adapters"], LAYERS).assert_applies(internal)
+def test_the_capability_accesses_only_ports(internal: EvaluableArchitecture) -> None:
+    """L2 — the capability reaches the corpus through the ports only.
+
+    The capability USED to build its own connectors: it imported the Arango
+    retrieval adapter, the config that carries the knobs and the two TEI
+    adapters, and assembled a connector per leg. The host injects the
+    connector the capability drives now (ADR agentic-009, F2), so the rule
+    tightens with the fix: the capability that DECIDES never imports the
+    connector that REACHES.
+    """
+
+    _accesses_only(SERVICE.name, "capability", ["ports"], LAYERS).assert_applies(internal)
 
 
 def _plant(package: Path, relative: str, source: str) -> None:

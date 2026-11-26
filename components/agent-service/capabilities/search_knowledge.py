@@ -46,10 +46,6 @@ from collections.abc import Callable
 
 from pydantic import ValidationError
 
-from .adapters.arango_retrieval import ArangoRetrievalAdapter
-from .adapters.env_config import ArangoConfig, HybridConfig
-from .adapters.tei_embedding import TeiEmbeddingAdapter
-from .adapters.tei_reranking import RerankerInputTooLongError, TeiRerankingAdapter
 from .contract import (
     RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT,
     AuthorizationError,
@@ -65,6 +61,12 @@ from .contract import (
     TransientError,
 )
 from .identifiers import validate_graph_name
+from .retrieval import (
+    EmbeddingSource,
+    LegRetrieverFactory,
+    RerankerInputTooLongError,
+    RerankingSource,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +74,13 @@ logger = logging.getLogger(__name__)
 class SearchKnowledgeCapability:
     """The port implementation the agent loop talks to.
 
-    The adapters are constructor-injected; ``create()`` assembles the default
-    wiring from the environment (the recorded knobs) and a live ArangoDB
-    client. The service builds this once at startup — a misconfigured knob
-    fails the service at boot, the same crash-loop pattern the deployed
-    retriever exhibits at import.
+    Everything the capability reaches the corpus through is constructor-
+    injected: the embedding, the reranking, and the factory that hands it
+    the retriever serving one corpus leg. The host builds the connectors and
+    injects them — the capability that DECIDES never builds the connector
+    that REACHES (ADR agentic-009, F2). The service builds this once at
+    startup, and a misconfigured knob fails the service at boot, the same
+    crash-loop pattern the deployed retriever exhibits at import.
     """
 
     name = OperationName.SEARCH_KNOWLEDGE
@@ -93,23 +97,15 @@ class SearchKnowledgeCapability:
 
     def __init__(
         self,
-        embedding: TeiEmbeddingAdapter,
-        reranking: TeiRerankingAdapter,
-        db_factory,
-        arango_config: ArangoConfig,
-        hybrid_config: HybridConfig,
+        embedding: EmbeddingSource,
+        reranking: RerankingSource,
+        retrievers: LegRetrieverFactory,
     ):
         self._embedding = embedding
         self._reranking = reranking
-        # ``db_factory(graph_name)`` returns a database handle for one
-        # authorized graph (the driver connection is shared; the handle is
-        # the same database object — graph names only select collections).
-        self._db_factory = db_factory
-        self._arango_config = arango_config
-        self._hybrid_config = hybrid_config
-        # The ensured-BM25-view cache spans the legs of every request: the
-        # adapter instance is per leg, the cache is the capability's.
-        self._ensured_bm25_views: set[str] = set()
+        # The factory is the HOST's: it knows which connector serves which
+        # leg. The capability asks it per leg and drives what it gets back.
+        self._retrievers = retrievers
 
     async def search_knowledge(
         self,
@@ -174,20 +170,13 @@ class SearchKnowledgeCapability:
         candidates: list[dict] = []
         degraded = False
         for graph_name in context.authorized_graph_names:
-            db = self._db_factory(graph_name)
-            # The leg's graph drives the whole adapter: collection, BM25 view
-            # and the CAP-1 join's bind all derive from the CONTEXT's graph
-            # name, never from the env default (the env name is only the
-            # single-graph deployment's default).
-            adapter = ArangoRetrievalAdapter(
-                db,
-                self._arango_config,
-                self._hybrid_config,
-                graph_name=graph_name,
-                ensured_bm25_views=self._ensured_bm25_views,
-            )
+            # The leg's label is opaque here: the retriever the host injected
+            # resolves it to the collection, the BM25 view and the CAP-1
+            # join's bind, and stamps the chunks it serves with the leg they
+            # came from.
+            retriever = self._retrievers.for_leg(graph_name)
             try:
-                leg_results = await adapter.fused_candidates(embedded.embedding, embedded.raw_text, labels)
+                leg_results = await retriever.fused_candidates(embedded.embedding, embedded.raw_text, labels)
             except Exception as e:
                 # Only the file_id-enrichment leg raises (its AQL runs
                 # unguarded, as recorded); the dense and BM25 legs swallow
@@ -198,10 +187,8 @@ class SearchKnowledgeCapability:
                     f"the retrieval stage failed on graph {graph_name!r}: {e}",
                     operation=OperationName.SEARCH_KNOWLEDGE,
                 ) from e
-            if adapter.bm25_degraded or adapter.cap1_degraded:
+            if retriever.bm25_degraded or retriever.cap1_degraded:
                 degraded = True
-            for item in leg_results:
-                item["doc"].graph_name = graph_name
             candidates.extend(leg_results)
 
         if not candidates:

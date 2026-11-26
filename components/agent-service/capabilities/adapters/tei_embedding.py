@@ -10,22 +10,13 @@ caller for the BM25 leg.
 """
 
 import logging
-from dataclasses import dataclass
 
 import httpx
 
+from ..retrieval import EmbeddedQuery
 from .query_instruction import get_query_instruction, resolve_embed_model
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class EmbeddedQuery:
-    """The prefixed query, its embedding, and the raw text the BM25 leg needs."""
-
-    raw_text: str
-    prefixed_text: str
-    embedding: list[float]
 
 
 class TeiEmbeddingAdapter:

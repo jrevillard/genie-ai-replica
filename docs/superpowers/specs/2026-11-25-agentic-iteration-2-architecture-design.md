@@ -614,7 +614,9 @@ Smallest first. Each slice is one implementation plan with its own gate.
 | S6 | Scheduler mock MCP server; `McpToolSource`; `UserCredentials`; write path with pause; client frame; decision endpoint; approval on web and mobile | pause round-trip; BFF contract tests; end to end |
 | S7 | pydantic-ai spike, out of tree | spike report |
 
-S1 is delivered as three plans, each landing on its own: the architecture tests and the two leaks that need no code to move; composition out of the core, which closes the rest; migration step 1.
+S1 is delivered as six plans, each landing on its own: the architecture rules (and the two leaks that need no code to move); the transport and the admission lane leaving the core; the model call's contract becoming a port; the measurement surfaces moving; the composition leaving the core; the runtime port (the loop behind `RuntimeDriver`, the governance in the core) and the wire contract.
+
+**S2 came with S1.** The runtime-port plan delivered migration step 2 whole: the dispatcher left the runtime for the core's `ToolDispatcher`, and the lifecycle events, the delivered text and the verdict moved to the orchestrator. S2's own gate (the contract suite green with one violator per rule, the stream identical) is S1's last plan's gate — there is nothing left for a separate S2 to deliver.
 
 New deployment knobs go into the `env` template and the config validator's coverage.
 

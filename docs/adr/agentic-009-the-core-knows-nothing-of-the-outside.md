@@ -113,7 +113,7 @@ without a rule is a leak that returns.
 | F2 | The **Arango adapter** imported by a core module | **R3** + **L2** — the capability leaves `KNOWN_ADAPTER_IMPORTERS` and reaches the corpus through the ports alone | closed (`a1c7e5c67`) |
 | F3 | The **charset of an Arango graph name** | **R6** — the core states no foreign system's acceptance rules | closed (`c68f856b4`) |
 | F4 | The **vocabulary of the OKF counterparty** | the port boundary itself — the core consumes the port's types and declares none of its own | verified, no change |
-| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed (F5) |
+| F5 | A **display name derived from an id** | **R4** — the deciding modules carry no platform vocabulary | closed (`f8100fab9`) |
 
 **R6 is generic.** It reads the core's text for the SHAPE of an acceptance
 claim — a subject and an acceptance verb, or a `<name>-safe` compound — and

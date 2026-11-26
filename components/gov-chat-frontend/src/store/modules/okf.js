@@ -973,9 +973,7 @@ const actions = {
       // between waves so the progress bar keeps painting.
       const CONCURRENCY = 5;
       const yieldToRenderer = () => new Promise((resolve) => setTimeout(resolve, 0));
-      let wave = 0;
       while (acc.length < total) {
-        if (wave > 0) await yieldToRenderer();
         const waveOffsets = [];
         for (let k = 0; k < CONCURRENCY && acc.length + k * PAGE < total; k++) {
           waveOffsets.push(acc.length + k * PAGE);
@@ -1001,43 +999,36 @@ const actions = {
           wait.complete();
           return { ok: true, concepts: acc, stale: true };
         }
-        // Promise.all preserves input order — `settled` is already
-        // offset-ascending; no sort. A page that returned FEWER rows than
-        // its range covers (the collection mutated mid-crawl — a drain or
-        // reingest during the browse) leaves a HOLE between the running
-        // cursor and the next page's offset. Refill holes sequentially at
-        // their exact offset+width so a refill cannot overlap the page that
-        // follows it — the self-correcting property the sequential loop got
-        // from offset=acc.length, kept only for the mutation case.
-        const parts = [];
+        // Promise.all preserves input order, so `settled` is offset-ascending
+        // and this scan assembles the wave in dispatch order. A page that
+        // returned FEWER rows than its range covers (the collection mutated
+        // mid-crawl — a drain or reingest during the browse) leaves a HOLE
+        // between the running cursor and the next page's offset: refill it
+        // INLINE, at the hole's exact offset+width, before that page's rows —
+        // the self-correcting property the sequential loop got from
+        // offset=acc.length, kept only for the mutation case. A refill is
+        // width-capped so it cannot overlap the page that follows, and the
+        // assembled array therefore needs no re-sort.
+        const rows = [];
         let cursor = waveOffsets[0];
-        const holes = [];
         for (const { offset, p } of settled) {
-          if (offset > cursor) holes.push([cursor, offset]);
-          // review round 2: cap each page at its own range width — a response
-          // that ignored `limit` (or an oversized fixture) must not push the
-          // cursor past the next page's offset (that would duplicate its rows
-          // and skip a range). The refill path below already slices the same way.
-          const pageRows = asRows(p).slice(0, PAGE);
-          if (pageRows.length > 0) parts.push({ offset, rows: pageRows });
-          cursor = offset + pageRows.length;
-        }
-        for (const [from, to] of holes) {
-          let holeCursor = from;
-          while (holeCursor < to) {
-            const p = await conceptService.listForRepo(repoId, {
-              limit: to - holeCursor,
-              offset: holeCursor,
+          while (offset > cursor) {
+            const refill = await conceptService.listForRepo(repoId, {
+              limit: offset - cursor,
+              offset: cursor,
               signal: controller.signal
             });
-            const holeRows = asRows(p).slice(0, to - holeCursor);
-            if (holeRows.length === 0) break; // the rows are gone (mutation) — assembly ends at the cursor
-            parts.push({ offset: holeCursor, rows: holeRows });
-            holeCursor += holeRows.length;
+            const holeRows = asRows(refill).slice(0, offset - cursor);
+            if (holeRows.length === 0) break; // the rows are gone (mutation)
+            rows.push(...holeRows);
+            cursor += holeRows.length;
           }
+          // a page that ignored `limit` (or an oversized fixture) is capped at
+          // its own range width so it cannot overshoot the next page's offset
+          const pageRows = asRows(p).slice(0, PAGE);
+          if (pageRows.length > 0) rows.push(...pageRows);
+          cursor = offset + pageRows.length;
         }
-        parts.sort((a, b) => a.offset - b.offset); // load-bearing: refills push out of order
-        const rows = parts.flatMap((part) => part.rows);
         // a wave that returned nothing can never reach total — break BEFORE
         // the commits so the shutdown path does no no-op full-accumulator
         // re-render (review round 2)
@@ -1046,7 +1037,9 @@ const actions = {
         commit('setConcepts', { repoId, concepts: acc });
         if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
         wait.setProgress(acc.length, total);
-        wave += 1;
+        // yield between waves so the progress bar keeps painting; the final
+        // wave's trailing yield is one harmless 0 ms timeout (/simplify)
+        await yieldToRenderer();
       }
       // TAIL GUARD (round 20b, #80862): the natural-completion arm needs the
       // same predicate as the in-loop guard — a fetch superseded while its
@@ -1068,25 +1061,24 @@ const actions = {
       wait.complete();
       return { ok: true, concepts: acc };
     } catch (err) {
+      // KEEP THE LAST KNOWN LIST (round 20, #80803) — shared by both failure
+      // arms below: the already-loaded rows are known-good data — one gateway
+      // 502 (or a failed page N of the crawl) must not blank the rail to
+      // "0 concepts" and destroy the curator's context; the editor re-fetches
+      // on the next concept click anyway. Empty the list only when none was
+      // ever loaded here.
+      if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
       // #2188 — a deliberate Cancel is not an error: the registry's cancel()
       // has already retired the entry and fired onCancel (→ abort), so there
-      // is no op left to settle here. The committed rows stay
-      // (keep-last-known) and the caller learns ABORTED. Surfaces that must
-      // judge data completeness (the PII review's fail-closed verdict) still
-      // see ok:false — that is the honest state for a cancelled, partial
-      // read.
+      // is no op left to settle here. The caller learns ABORTED. Surfaces
+      // that must judge data completeness (the PII review's fail-closed
+      // verdict) still see ok:false — that is the honest state for a
+      // cancelled, partial read.
       if (controller.signal.aborted) {
-        if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
         if (myGen === fetchGeneration) commit('setConceptsLoadProgress', null);
         return { ok: false, code: 'ABORTED', message: 'concept fetch cancelled' };
       }
       commit('setError', err.message || 'fetchConcepts failed');
-      // KEEP THE LAST KNOWN LIST (round 20, #80803): the already-loaded rows
-      // are known-good data — one gateway 502 (or a failed page N of the
-      // paging loop) must not blank the rail to "0 concepts" and destroy
-      // the curator's context; the editor re-fetches on the next concept
-      // click anyway. Empty the list only when none was ever loaded here.
-      if (!state.editor.conceptsByRepo[repoId]) commit('setConcepts', { repoId, concepts: [] });
       commit('setConceptsLoadProgress', null);
       wait.fail(err.message || 'fetchConcepts failed');
       return { ok: false, code: 'FETCH_FAILED', message: err.message };

@@ -32,6 +32,41 @@ describe('operationWaitService', () => {
     unsubscribe();
   });
 
+  test('cancellation is OPT-IN: no wired onCancel means NO Cancel affordance (fake-affordance kill)', () => {
+    // Code review !1094: begin() defaulted cancellable to TRUE, so five of
+    // six registration sites rendered a Cancel button that cancelled
+    // nothing. The default is now OFF — an op shows Cancel only when it
+    // wires a real onCancel abort.
+    const bare = opWait.begin('repos-list', { label: 'Loading repositories' });
+    expect(bare.state).toBe('active');
+    expect(opWait.getSnapshot().operations[0].cancellable).toBe(false);
+
+    const withRealAbort = opWait.begin('ragas-generate', {
+      label: 'Generating benchmark',
+      cancellable: true,
+      onCancel: () => {}
+    });
+    expect(opWait.getSnapshot().operations[1].cancellable).toBe(true);
+    expect(withRealAbort.state).toBe('active');
+
+    // cancellable:true WITHOUT onCancel is still not cancellable — the flag
+    // alone must never summon the button.
+    const flagged = opWait.begin('links-fetch', { label: 'Loading links', cancellable: true });
+    expect(opWait.getSnapshot().operations[2].cancellable).toBe(false);
+    expect(flagged.state).toBe('active');
+  });
+
+  test('a NEW operation supersedes the previous failure — the stale red line never resurfaces', () => {
+    const a = opWait.begin('concept-list-fetch', { label: 'Loading concepts' });
+    a.fail('gateway 502');
+    expect(opWait.getSnapshot().lastFailure).toMatchObject({ name: 'concept-list-fetch' });
+
+    // The next operation clears the old failure (code review !1094: it used
+    // to reappear atop unrelated later work — module state nothing cleared).
+    opWait.begin('repos-list', { label: 'Loading repositories' });
+    expect(opWait.getSnapshot().lastFailure).toBeNull();
+  });
+
   test('setProgress updates the snapshot and notifies subscribers', () => {
     const handle = opWait.begin('links-fetch', { label: 'Loading links', total: 4 });
     const seen = [];

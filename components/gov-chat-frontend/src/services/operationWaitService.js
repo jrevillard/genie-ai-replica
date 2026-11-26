@@ -85,9 +85,15 @@ function begin(name, opts = {}) {
     done: 0,
     total: opts.total === undefined ? null : opts.total,
     state: 'active',
-    cancellable: opts.cancellable !== false,
+    // OPT-IN (code review !1094 round 1): a Cancel button that cancels
+    // nothing is the fake affordance this system exists to kill — an
+    // operation shows Cancel ONLY when it wires a real onCancel abort.
+    cancellable: opts.cancellable === true && typeof opts.onCancel === 'function',
     startedAt: Date.now()
   };
+  // A NEW operation supersedes the previous failure: the stale red line must
+  // not reappear atop unrelated later work (code review !1094 round 1).
+  lastFailure = null;
   operations.set(id, op);
   notify();
 

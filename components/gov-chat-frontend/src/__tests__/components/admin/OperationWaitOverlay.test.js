@@ -22,9 +22,10 @@ describe('OperationWaitOverlay', () => {
     OperationWaitOverlay = require('@/components/admin/OperationWaitOverlay.vue').default;
     wrapper = mount(OperationWaitOverlay, {
       global: {
-        mocks: {
-          translate: (key, fallback) => fallback || key
-        },
+        // NO translate mock: the component carries the REAL translateMixin
+        // (code review !1094: the mock hid that the shipped component lacked
+        // the method — the mocked-boundary trap). Without $i18n the mixin
+        // returns the fallback, which is exactly what these assertions want.
         // House convention (ragas-panel): DS primitives are stubbed — the
         // real nested SFC children are heavy for unit assertions. The button
         // stub keeps the real element shape the overlay styles and selects.
@@ -69,10 +70,15 @@ describe('OperationWaitOverlay', () => {
   });
 
   test('the cancel affordance cancels the operation through the service', async () => {
-    const handle = opWait.begin('pii-scan', { label: 'Scanning for PII', cancellable: true });
+    // Opt-in contract: the button exists only when a real onCancel abort is
+    // wired (code review !1094).
+    const handle = opWait.begin('pii-scan', {
+      label: 'Scanning for PII',
+      cancellable: true,
+      onCancel: () => {}
+    });
     await wrapper.vm.$nextTick();
 
-    await wrapper.vm.$nextTick();
     await wrapper.find('.op-wait button').trigger('click');
     await wrapper.vm.$nextTick();
 
@@ -96,15 +102,20 @@ describe('OperationWaitOverlay', () => {
     expect(wrapper.find('.op-wait__failure').text()).toContain('validation endpoint unreachable');
   });
 
-  test('a labelKey operation renders through translate — the store has no i18n context', async () => {
+  test('a labelKey operation resolves through the REAL translateMixin and $i18n', async () => {
     // The store modules register ops with i18n KEYS (see okf.js header:
-    // "the store has no translate context"); the overlay owns the lookup.
-    // The mock translates exactly the opwait key, so a raw-label render
-    // (the regression this pins) shows the fallback string instead.
+    // "the store has no translate context"); the overlay's translateMixin
+    // owns the lookup. This drives the mixin's RAW message tree (its
+    // documented $t-bypass) with a minimal $i18n — no translate mock.
     const w2 = mount(OperationWaitOverlay, {
       global: {
         mocks: {
-          translate: (key, fallback) => (key === 'okf.opwait.ops.conceptList' ? 'KONZEPTE-LADEN' : fallback)
+          $i18n: {
+            locale: 'en',
+            messages: {
+              en: { okf: { opwait: { ops: { conceptList: 'KONZEPTE-LADEN' } } } }
+            }
+          }
         },
         stubs: {
           DsButton: { template: '<button class="ds-btn"><slot /></button>' },
@@ -118,8 +129,30 @@ describe('OperationWaitOverlay', () => {
     await w2.vm.$nextTick();
 
     const labels = w2.findAll('.op-wait__label').map((n) => n.text());
-    expect(labels).toContain('KONZEPTE-LADEN'); // labelKey went through translate
+    expect(labels).toContain('KONZEPTE-LADEN'); // labelKey resolved via the mixin + $i18n
     expect(labels).toContain('Loading links'); // plain label renders as given
     w2.unmount();
+  });
+
+  test('a completing row keeps NO live Cancel during its min-visible window', async () => {
+    // Code review !1094: the Cancel button gated only on op.cancellable, so
+    // a finished-but-still-listed op offered a working Cancel — clicking it
+    // fired the server cancel for a job that already ended.
+    const handle = opWait.begin('ragas-generate', {
+      label: 'Generating benchmark',
+      cancellable: true,
+      onCancel: () => {}
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.findAll('.op-wait button')).toHaveLength(1); // active: cancel visible
+
+    handle.complete();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.op-wait').exists()).toBe(true); // min-visible window
+    expect(wrapper.findAll('.op-wait button')).toHaveLength(0); // no live Cancel
+
+    jest.advanceTimersByTime(1000);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.op-wait').exists()).toBe(false);
   });
 });

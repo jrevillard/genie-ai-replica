@@ -1829,26 +1829,21 @@ const actions = {
       // The server NEVER kills a healthy long job (David 2026-10-18: never
       // trash running work) — the 24h UI horizon only bounds a left-open
       // dialog; the job keeps running server-side and the timeout says so.
+      const tap = (base) => (doc) => {
+        // #2195 — ride the operation-wait panel's progress from the SAME doc
+        // the component callback sees (one tap, both consumers).
+        const prog = doc && doc.progress;
+        if (wait && prog && typeof prog.done === 'number' && typeof prog.total === 'number') {
+          wait.setProgress(prog.done, prog.total);
+        }
+        if (typeof base === 'function') base(doc);
+      };
       const result = await pollJob({
         fetchDoc: () => ragasService.getSuite(repoId, started.suite_key),
         pollMs: 2500,
         signal,
         isRunning: (doc) => !doc || doc.status === 'generating',
-        onProgress:
-          typeof onProgress === 'function'
-            ? (doc) => {
-                const prog = doc && doc.progress;
-                if (wait && prog && typeof prog.done === 'number' && typeof prog.total === 'number') {
-                  wait.setProgress(prog.done, prog.total);
-                }
-                onProgress(doc);
-              }
-            : (doc) => {
-                const prog = doc && doc.progress;
-                if (wait && prog && typeof prog.done === 'number' && typeof prog.total === 'number') {
-                  wait.setProgress(prog.done, prog.total);
-                }
-              },
+        onProgress: tap(onProgress),
         timeout: {
           code: 'GENERATION_TIMEOUT',
           message: LAB_ERROR_KEYS.generationTimeout
@@ -1856,7 +1851,10 @@ const actions = {
         failed: { code: 'GENERATION_FAILED', message: LAB_ERROR_KEYS.generationFailed },
         done: (doc) => ({ ok: true, result: doc })
       });
-      if (result && result.ok) wait.complete();
+      // POLL_ABORTED is a DESIGNED stop (the curator closed the Lab or the
+      // panel's own stop ran) — not a failure: the panel must not paint a
+      // red banner for an intentional action (code review !1094 round 1).
+      if (result && (result.ok || result.code === 'POLL_ABORTED')) wait.complete();
       else wait.fail((result && result.message) || 'benchmark generation failed');
       return result;
     } catch (err) {

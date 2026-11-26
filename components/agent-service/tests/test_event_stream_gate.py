@@ -8,10 +8,21 @@ something it was not supposed to change. This test drives the ORCHESTRATOR
 — the same path the run surface drives — captures the stream and compares
 it with the recorded fixture.
 
-The fixture is the REFERENCE, not a by-product: it was recorded from the
-code BEFORE the port existed, and a change to it is a change to the wire.
-A wire change belongs to the wire-freeze step, where it is deliberate and
-recorded; it never rides in on a refactor.
+The fixture is the REFERENCE, not a by-product: it is the frozen wire,
+and a change to it is a change to the wire. A wire change belongs to the
+wire-freeze step, where it is deliberate and recorded in an ADR; it never
+rides in on a refactor.
+
+**The pre-port baseline.** The fixture was recorded from the code BEFORE
+the port existed — and it was re-recorded twice after, for two wire
+changes that were each RECORDED (ADR agentic-004's runtime axis, ADR
+agentic-009's F5 name). A reference that moves with the code cannot hold
+the code: the gate would follow it. So the pre-port bytes stay in the
+repository as an immutable baseline
+(``orchestrated_run.pre-port.json``), and the second test below asserts
+that the frozen fixture is EXACTLY that baseline plus the recorded
+deltas — nothing else. A wire change that is not one of the recorded
+ones reds there, whatever the fixture says.
 
 The only field left out of the comparison is the ``run_id``: it is minted
 per run by design (a uuid) and carries no behaviour. Everything else — the
@@ -47,6 +58,10 @@ from capabilities.contract import CallerContext
 from lane import AdmissionLane
 
 FIXTURE = Path(__file__).parent / "fixtures" / "event_stream" / "orchestrated_run.json"
+# The PRE-PORT recording: the bytes the port's migration had to leave
+# alone. Immutable — a change here is a change to the migration's
+# reference, and it is reviewed as one.
+BASELINE = Path(__file__).parent / "fixtures" / "event_stream" / "orchestrated_run.pre-port.json"
 RECORD = os.environ.get("AGENT_RECORD_EVENT_STREAM") == "1"
 
 CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
@@ -90,3 +105,37 @@ def test_the_orchestrated_event_stream_is_byte_identical_to_the_recorded_one(tmp
 
     assert FIXTURE.exists(), "the recorded fixture is missing — record it deliberately"
     assert captured == FIXTURE.read_text(encoding="utf-8")
+
+
+def test_the_frozen_stream_is_the_pre_port_baseline_plus_the_recorded_deltas():
+    """The fixture moved only by the wire changes that were RECORDED.
+
+    The pre-port bytes are the migration's reference; the frozen fixture
+    is that reference plus the wire changes an ADR carries. This test
+    states the delta set explicitly and CLOSED: a wire change that is
+    not one of these reds here — the gate above would have followed it,
+    because the fixture moves with the code.
+    """
+
+    assert BASELINE.exists(), "the pre-port baseline is missing — the migration's reference"
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+
+    # Delta 1 — the execution-version record gained a ``runtime`` axis:
+    # the runtime that served the run is part of the record (ADR
+    # agentic-004).
+    for record in baseline:
+        versions = record.get("payload", {}).get("execution_versions")
+        if isinstance(versions, dict):
+            versions["runtime"] = {"id": "custom-minimal-loop"}
+
+    # Delta 2 — the citation card carries the source's own NAME instead
+    # of a label derived from its id (ADR agentic-009's F5).
+    for record in baseline:
+        for card in record.get("payload", {}).get("source_documents", []) or []:
+            if card.get("document_id") == "f-1":
+                card["document_name"] = "f-1 resolved.md"
+
+    assert _canonical(baseline) == FIXTURE.read_text(encoding="utf-8"), (
+        "the frozen stream is not the pre-port recording plus the recorded deltas: "
+        "the wire moved by something no ADR carries"
+    )

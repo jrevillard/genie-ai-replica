@@ -66,9 +66,8 @@ the objects it is given.**
    given, bounded by the monitor through a core-owned decorator around that client; it
    dispatches tools only through the dispatcher; it returns the drafted text and its
    `RunResult`; it lets `CancelledError` propagate. It never emits a lifecycle or verdict
-   event, never decides the delivered
-   text, never verifies, scans or keeps anything between two runs, and never knows a BFF
-   frame name.
+   event, never decides the delivered text, never verifies, scans or keeps anything
+   between two runs, and never knows a BFF frame name.
 3. **`ToolDispatcher`** is the body of the current `_dispatch_tool`, moved, not rewritten:
    budget and token checks, `tool_call_started`, execution through the registry, declared
    errors mapped to data, evidence-ledger feed, injection scan, `tool_call_finished`.

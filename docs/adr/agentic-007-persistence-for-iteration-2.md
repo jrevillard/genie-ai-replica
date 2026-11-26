@@ -36,8 +36,8 @@ rollback continuity or adds an migration burden ». Its scope is iteration 1.
 
 Iteration 2 adds state the record does not cover: a pending pause with its continuation,
 a tool-call audit trail, and conversation context — the run receives one `question`
-today, while the legacy path condenses up to eight prior message
-segments — four exchanges (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`).
+today, while the legacy path condenses up to eight prior message segments — four
+exchanges (`MULTI_TURN_CONDENSE_HISTORY_TURNS = 8`).
 
 Read from the documentation of six runtimes on 2026-11-25, the prevailing pattern is that
 storage belongs to the application behind an interface, and that a pause is a serialized

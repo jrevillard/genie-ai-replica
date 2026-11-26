@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The last of the design's leaks close: the probe stops hosting the production model client and the adapter assembly, and the composition moves to the host. The core names only the shapes it exchanges; the host builds the implementations.
+**Goal:** The probe stops hosting the production model client: the model call's contract becomes a port, and the client becomes an adapter that names only the ports. The core names only the shapes it exchanges; the host builds the implementations.
 
-**Architecture:** Three moves, in this order. (1) The model call's contract — `ModelTurn`, `ToolCallRequest` and the `LoopModelClient` protocol — leaves the core's `agent/loop.py` for a port module (`capabilities/model.py`), because an adapter may not import the core. (2) The production model client becomes the vLLM adapter (`capabilities/adapters/vllm.py`): the config splits, the client is renamed after what it talks to, and the probe keeps only the measurement half. (3) The adapter assembly and the search capability's factory move to the host, which composes. The ratchets end empty, except rule R3's set, which is the composition root and the capability.
+**Architecture:** Two moves. (1) The model call's contract — `ModelTurn`, `ToolCallRequest`, the `LoopModelClient` protocol, the model's knobs and the model's request vocabulary — leaves the core for a port module (`capabilities/model.py`), because an adapter may not import the core. (2) The production model client becomes the vLLM adapter (`capabilities/adapters/vllm.py`): the config splits (the reading stays in the core, the shape travels with the adapter), the client is renamed after what it talks to, and the probe keeps only the measurement half.
+
+**What this plan does NOT do.** The adapter assembly and the search capability's factory leave the core in plan 5, not here: the probe (still in `agent/`) calls the assembly, and a core module may not import the host. The probe moves to the measurement package in plan 4; once it is there, the measurement may reach the host, and the composition's move becomes clean.
 
 **Tech Stack:** Python 3.11, pytest 9.1.1, pytestarch 5.1.1 (the rules of plan 1), ruff 0.16.3.
 
@@ -45,7 +47,8 @@ Slice S1 is delivered as five plans. This is the third.
 | Plan 2 — transport and lane | the HTTP transport and the admission lane leave the core | two I/O violations and two cross-layer violations listed |
 | **This one** | the model call's contract, the production client and the assembly leave the core | one I/O violation and one cross-layer violation listed |
 | Plan 4 — the measurement surfaces | the probe and the harness move to their own package | no listed violation; rule R3's set is the composition root and the capability |
-| Plan 5 — the runtime port, step 1 | `RuntimeDriver` extraction behind a byte-identical event stream | stream gate recorded |
+| Plan 5 — the composition | the adapter assembly and the capability's factory leave the core | the core composes nothing |
+| Plan 6 — the runtime port, step 1 | `RuntimeDriver` extraction behind a byte-identical event stream | stream gate recorded |
 
 The ratchets of plan 1 (`KNOWN_IO_VIOLATIONS`, `KNOWN_INTERNAL_VIOLATIONS`, `KNOWN_ADAPTER_IMPORTERS` in `components/agent-service/tests/test_architecture.py`) list, after this plan:
 
@@ -54,6 +57,8 @@ The ratchets of plan 1 (`KNOWN_IO_VIOLATIONS`, `KNOWN_INTERNAL_VIOLATIONS`, `KNO
 | R1 | `("agent.probe", "arango")` | plan 4 (the probe leaves the core) |
 | R2 | `("agent.probe", "capabilities.adapters")` | plan 4 (the probe leaves the core) |
 | R2 | `("agent.probe", "capabilities.search_knowledge")` | plan 4 (the probe leaves the core) |
+
+Plan 3 does not move these: the probe still reaches the adapters (the client's module is one of them) and still imports `arango` inside the assembly it hosts.
 
 ## File map
 
@@ -75,7 +80,8 @@ Each was checked against the code before being written here.
 
 - **The model call's contract becomes a port.** The vLLM client returns a `ModelTurn` and parses `ToolCallRequest`s; those two dataclasses and the `LoopModelClient` protocol live in `agent/loop.py` (the core). An adapter may not import the core — rule L1 binds the leaf adapters to the ports — so the contract moves to `capabilities/model.py` and joins `PORTS`. The core keeps using the same names, from the new home.
 - **The client is renamed after what it talks to.** `ProbeModelClient` is the PRODUCTION model client (the run surface reuses it); in the adapters package the name would lie. It becomes `VllmModelClient`, its error `VllmTransientError` and its config `VllmModelConfig`.
-- **The config splits.** `ProbeConfig` carried the model leg (endpoint, model id, bearer, discovery bearer, TLS posture, timeouts, window tiers) and the measurement leg (the port assembly's URLs, the authorized graphs and repos, the caller's bearer). The model leg travels with the client; the measurement leg stays with the probe.
+- **The config splits, but the reading does not.** `ProbeConfig` carried the model leg (endpoint, model id, bearer, discovery bearer, TLS posture, timeouts, window tiers) and the measurement leg (the port assembly's URLs, the authorized graphs and repos, the caller's bearer). The model leg becomes the PORT's shape (`VllmModelConfig`, a pure dataclass); the deployed knob surface is still read in ONE place — the core's `NoAgentConfig.load` — which builds the port's shape in one method. The measurement leg stays with the probe.
+- **The model's vocabulary moves to the port.** The identity sources (`MODEL_SOURCE_*`), the recorded sampling params, the two choice readers, the prompt-size estimate and the numeric coercion are read by the adapter and by the core: they are the model's request and response vocabulary, so they live in the port, and the core imports them from there.
 - **The assembly lives in the host, not in the adapters.** `build_stateless_adapters` imports the capability, and rule L1 binds the leaf adapters to the ports — an assembly module in the adapters package would break it. The host owns composition: `assembly.py`, beside `app.py`.
 - **The capability's factory leaves the capability.** `SearchKnowledgeCapability.create()` assembles four adapters from the environment: composition, not capability. The host calls the constructor instead.
 
@@ -120,8 +126,42 @@ import the core (rule L1 binds the leaf adapters to the ports). The core
 and the adapters exchange these shapes, so they are a port.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Protocol
+
+# The model identity's vocabulary: where the served model id came from.
+MODEL_SOURCE_OVERRIDE = "override"
+MODEL_SOURCE_DISCOVERED = "discovered"
+MODEL_SOURCE_UNRESOLVED = "unresolved"
+
+# The recorded request-level sampling params, shared by every
+# chat/completions consumer in the component — one home, so a change to the
+# deployed convention cannot leave one consumer measuring a different
+# request than the others.
+RECORDED_SAMPLING_PARAMS = {"temperature": 0.01, "top_p": 0.95, "frequency_penalty": 0.0, "stream": False}
+
+# The prompt-size estimate the per-call output bound is computed against:
+# the characters per token, the prompt offset the estimate carries, and the
+# safety room the bound keeps for the endpoint's own framing.
+MODEL_CHARS_PER_TOKEN_ESTIMATE = 4
+MODEL_PROMPT_OFFSET_TOKENS = 20
+MODEL_INPUT_SAFETY_TOKENS = 128
+
+
+def chat_choice(body: dict) -> tuple[dict | None, str | None]:
+    """The first choice and its finish reason out of an OpenAI-shaped chat
+    response — the ONE shape reader for every chat/completions consumer in
+    the no-agent package (the generation client and the answer translator;
+    each maps the outcome to its own failure style)."""
+    choices = body.get("choices") or []
+    choice = choices[0] if choices and isinstance(choices[0], dict) else None
+    return choice, (choice or {}).get("finish_reason")
+
+
+def chat_choice_content(choice: dict):
+    """The message content of one choice (None when the shape carries none)."""
+    return (choice.get("message") or {}).get("content")
 
 
 @dataclass(frozen=True)
@@ -155,21 +195,100 @@ class LoopModelClient(Protocol):
     """The model-call seam the loop drives — one non-streaming completion.
 
     The concrete OpenAI-compatible client is the runtime's business (the
-    vLLM adapter carries one, shared with the run surface); the loop
-    depends on this shape only, which is what keeps the loop
-    runtime-swappable. ``max_output_tokens`` is the remaining token
-    allowance the monitor hands the call — the token bound riding the
-    request (``None`` when the allowance is unknowable and the field must
-    be omitted, the deployed only-when-configured rule). The IMPLEMENTER
-    caps the bound to what one call can serve — ``min(bound, window room)``,
-    omitting the field when there is no room — because a cumulative RUN
-    allowance may exceed the endpoint's window, and an unanchored
-    ``max_tokens`` is rejected outright.
+    probe carries one, shared with the run surface); the loop depends on
+    this shape only, which is what keeps the loop runtime-swappable.
+    ``max_output_tokens`` is the remaining token allowance the monitor
+    hands the call — the token bound riding the request (``None`` when the
+    allowance is unknowable and the field must be omitted, the deployed
+    only-when-configured rule). The IMPLEMENTER caps the bound to what one
+    call can serve — ``min(bound, window room)``, omitting the field when
+    there is no room — because a cumulative RUN allowance may exceed the
+    endpoint's window, and an unanchored ``max_tokens`` is rejected
+    outright.
     """
 
     async def complete(
-        self, messages: tuple, tools: tuple, max_output_tokens: int | None = None
+        self, messages: list[dict], tool_definitions: tuple[dict, ...], *, max_output_tokens: int | None
     ) -> ModelTurn: ...
+
+
+def resolve_window_tokens(config, detected: int | None) -> int:
+    """The usable context window in tokens, in the deployed three tiers: an
+    explicit consumer-side cap (``AGENT_WINDOW_OVERRIDE_TOKENS``), then the
+    probed ``max_model_len``, then the configured fallback
+    (``MAX_MODEL_LEN_TEXTGEN``). Pure — the caller supplies the probed
+    value (the ``ModelEndpointCache`` here, the vLLM client's own single
+    discovery) so both consumers share one tier home.
+    """
+    if config.window_override_tokens > 0:
+        return config.window_override_tokens
+    if detected:
+        return detected
+    return config.fallback_window_tokens
+
+
+def coerce_int(value) -> int | None:
+    """Coerce a JSON scalar to ``int``: bools rejected, digit strings accepted.
+
+    Shared stance for every numeric field read out of a model-server payload
+    (context windows, tokenize counts): proxies serialize numbers as digit
+    strings, and a boolean is never a count.
+
+    A digit string is a plain run of ASCII decimal digits. The ``int()``
+    builtin is looser — it also accepts PEP 515 underscore separators
+    (``"1_0"`` becomes 10), a leading sign (``"+5"``) and non-ASCII decimal
+    digits (``"١٢٣"`` becomes 123) — and a mangled count silently
+    miscounts the served tokens.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        # 12.0 is a serialization of 12; 12.5 is garbage.
+        return int(value) if math.isfinite(value) and int(value) == value else None
+    if isinstance(value, str):
+        text = value.strip()
+        return int(text) if text.isascii() and text.isdecimal() else None
+    return None
+
+
+def coerce_sane_int(value) -> int | None:
+    """Coerce a JSON scalar to an int inside the sane token bound, or None.
+
+    The one home for the coercion-then-bound predicate every numeric field
+    read out of a model-server payload applies (served context windows,
+    usage counts): the coercion is :func:`coerce_int`, and a value past
+    ``MAX_SANE_TOKENS`` (or not positive) is dropped — an absurd value
+    would silently disable the overflow guard it feeds.
+    """
+    coerced = coerce_int(value)
+    if coerced is not None and 0 < coerced <= MAX_SANE_TOKENS:
+        return coerced
+    return None
+
+
+MAX_SANE_TOKENS = 10_000_000
+
+
+@dataclass(frozen=True)
+class VllmModelConfig:
+    """The model leg's knobs — the endpoint, the model, the postures.
+
+    A pure shape: the deployed knob surface is read by the core's config
+    (``NoAgentConfig``), which builds this one — one home for the reading
+    rules, one home for the shape the adapter takes.
+    """
+
+    generation_endpoint: str
+    model_id_override: str
+    bearer: str | None
+    discovery_bearer: str | None
+    tls_verify: bool
+    llm_timeout_seconds: float
+    discovery_timeout_seconds: float
+    window_override_tokens: int
+    fallback_window_tokens: int
 ```
 
 - [ ] **Step 2: The loop names the port**
@@ -377,7 +496,7 @@ git commit -m "refactor(agent-service): the model call's contract is a port"
 **Interfaces:**
 - Consumes: `capabilities.model.ModelTurn` from Task 1.
 - Produces:
-  - `capabilities.adapters.vllm.VllmModelConfig` — the model leg: `generation_endpoint`, `model_id_override`, `bearer`, `discovery_bearer`, `tls_verify`, `llm_timeout_seconds`, `discovery_timeout_seconds`, `window_override_tokens`, `fallback_window_tokens`; `VllmModelConfig.load(env=None)`.
+  - `capabilities.model.VllmModelConfig` — the model leg as a PURE shape: `generation_endpoint`, `model_id_override`, `bearer`, `discovery_bearer`, `tls_verify`, `llm_timeout_seconds`, `discovery_timeout_seconds`, `window_override_tokens`, `fallback_window_tokens`. The reading of the deployed knobs stays in the core's config (`NoAgentConfig.load`), which builds this shape in one method (`NoAgentConfig.model_config()`) — one home for the reading rules, one home for the shape the adapter takes. The port module also carries the model's vocabulary: the identity sources, the recorded sampling params, the choice readers, the prompt-size estimate and the numeric coercion (`coerce_int`, `coerce_sane_int`, `MAX_SANE_TOKENS`) — everything the adapter needs and may not read from the core.
   - `capabilities.adapters.vllm.VllmModelClient(config, transport)` — the OpenAI-compatible client.
   - `capabilities.adapters.vllm.VllmTransientError` — the typed transient failure.
 
@@ -803,8 +922,7 @@ Expected:
 ### What it leaves open
 
 - Three listed violations, closed by plan 4 (the probe and the harness leave `agent/`).
-- The capability's own factory is gone, but the capability still builds nothing — it is handed its wiring ✓.
-- The probe still hosts the port assembly call: it calls the host's assembly, which is the measurement reading the same corpus the run reads.
+- The adapter assembly and the capability's factory stay where they are: plan 5 moves them, once the probe is out of the core and may reach the host.
 
 ## Landing
 

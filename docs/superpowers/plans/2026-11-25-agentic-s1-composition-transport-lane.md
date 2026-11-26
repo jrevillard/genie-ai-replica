@@ -43,7 +43,9 @@ Slice S1 is delivered as four plans. This is the second.
 | Plan 1 — architecture rules | the rules; leak 4 (the executor) and the constant of leak 5 | four I/O violations and two cross-layer violations listed |
 | **This one** | the HTTP transport and the admission lane leave the core | two I/O violations and two cross-layer violations listed |
 | Plan 3 — the probe and the harness | the measurement surfaces and the core's factories leave | no listed violation; rule R3's set is the composition root and the capability |
-| Plan 4 — the runtime port, step 1 | `RuntimeDriver` extraction behind a byte-identical event stream | stream gate recorded |
+| Plan 4 — the measurement surfaces | the probe and the harness move to their own package | no listed violation; rule R3's set is the composition root and the capability |
+| Plan 5 — the composition | the adapter assembly and the capability's factory leave the core | the core composes nothing |
+| Plan 6 — the runtime port, step 1 | `RuntimeDriver` extraction behind a byte-identical event stream | stream gate recorded |
 
 The two ratchets of plan 1 (`KNOWN_IO_VIOLATIONS`, `KNOWN_INTERNAL_VIOLATIONS` in `components/agent-service/tests/test_architecture.py`) list, after this plan:
 

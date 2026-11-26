@@ -4507,12 +4507,14 @@ test:rag-benchmarks:
   stage: test
   interruptible: true
   before_script:
-    # pydantic + requests: the import closure the config-B driver consumption
-    # test needs — importing capabilities.contract executes capabilities/
-    # __init__, which pulls .contract (pydantic) and .executor → adapters
-    # .chunks/.docrepo/.okf → adapters/http (requests). The search capability's
-    # numpy/kneed live only in the in-container driver assembly, never in CI.
-    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests pyyaml
+    # pydantic + requests + httpx: the import closure the config-B driver
+    # consumption test needs — importing capabilities.contract executes
+    # capabilities/__init__, which pulls .contract (pydantic) and .executor →
+    # adapters .chunks/.docrepo/.okf → adapters/http (requests); the assembly
+    # the driver consumes reaches adapters/tei_embedding (httpx). The search
+    # capability's numpy/kneed live only in the in-container driver assembly,
+    # never in CI.
+    - pip install --cache-dir .cache/pip pytest openpyxl pydantic requests pyyaml httpx==0.28.1
   cache:
     - key: test-rag-benchmarks
       paths:

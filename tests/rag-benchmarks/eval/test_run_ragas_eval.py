@@ -210,8 +210,11 @@ def _install_langchain_fakes():
     fake_ragas_llms.LangchainLLMWrapper = _FakeLangchainLLMWrapper
 
     # httpx is imported inside _build_judge for the SSL-bypass clients; the
-    # test env has no httpx. Fake it with trivial stand-ins — the test only
-    # asserts on the judge wrapper's inner chat model, not on the clients.
+    # test env may have no httpx. Fake it with trivial stand-ins — the test
+    # only asserts on the judge wrapper's inner chat model, not on the
+    # clients. The fake is installed ONLY when httpx is absent: a fake that
+    # outlives its module poisons every later import in the same session
+    # (the protocol suite's driver consumption needs the real httpx).
     fake_httpx = types.ModuleType("httpx")
 
     class _FakeHttpxClient:
@@ -231,7 +234,10 @@ def _install_langchain_fakes():
     sys.modules["langchain_core.messages"] = fake_messages
     sys.modules["ragas"] = fake_ragas
     sys.modules["ragas.llms"] = fake_ragas_llms
-    sys.modules["httpx"] = fake_httpx
+    try:
+        import httpx  # noqa: F401 — its presence means the real client is used
+    except ImportError:
+        sys.modules["httpx"] = fake_httpx
 
 
 # Install fakes ONCE at import time, BEFORE run_ragas_eval is imported, so

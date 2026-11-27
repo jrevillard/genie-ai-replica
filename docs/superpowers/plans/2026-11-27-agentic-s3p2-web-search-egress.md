@@ -74,7 +74,7 @@ Each encodes an owner decision (D1–D9 of the S3-plan-2 brief) or fills a corne
 - **D6 — the event-stream gate stays document-only.** Its own two-tool catalog, its fixture, and the four shipped-catalog sites (`test_app_runs` ×2 after Task 1's collapse, `test_version_record` ×1, `test_event_stream_gate` ×1) keep loading the shipped file with the document source declared — untouched by Task 3 (they build their own `DeclaredSource` tuples; they never call `app._build_orchestrator`).
 - **D7 — the budget pin.** The web_search definition JOINS the existing ≤4096 pin (`test_the_declared_definitions_stay_within_their_prompt_allowance`): the declared definitions' total — all THREE — stays ≤ **4096** characters (today ≈ 1.0 KB). Spec §13.3: "count them in the budget tests; bound the catalog" — the bound is `MAX_CATALOG_ENTRIES` (already landed in plan 1).
 - **D8 — the deployment gates mirror plan-1's Task 4 pattern:** env template (the knob pair + `AGENT_WEB_SEARCH_ENABLED` + the derived-flag note), compose, ansible (`agent_web_search_enabled` group var, the env.j2 render + derivation, `_deploy_files` seeding the settings file), config-validator jest gates with the anchored style (the `_deploy_files` assertion reads the task's `vars:` mapping, not a substring) + the CONSISTENCY gate: if the catalog declares a `web_search` entry, the compose carries the searxng service and the env documents the knobs.
-- **D9 — the runtime gate is exercised by THIS MR's pipeline.** The compose change rides the `e2e_merge_train_changes` anchor (it lists `docker-compose.yaml` and `env`), so a merge train's `e2e:integration` (`.e2e_integration_base`) runs `bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"` against the candidate stack (`.gitlab-ci.yml:459`). The gate table names that mechanism; the local run is named in Task 5.
+- **D9 — the runtime gate's CI executor is OFF; the LOCAL run is the mandatory executor, with a named fallback owner.** The compose change rides the `e2e_merge_train_changes` anchor (it lists `docker-compose.yaml` and `env`), so a merge train's `e2e:integration` (`.e2e_integration_base`) WOULD run `bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"` against the candidate stack (`.gitlab-ci.yml:459`) — but the job is OFF in this project TODAY: it requires the project variable `E2E_ENABLED=1` (absent — the project-variable API answers 404, verified 2026-11-27) and runs `allow_failure: true`, so no train exercises the gate. The LOCAL runtime-gate run is therefore the gate's mandatory executor; the laptop has no compose stack tonight, so the local executor lands with the VENUE-VALIDATION SESSION — the named fallback owner: it runs this gate against a converged stack BEFORE validating anything on the new compose, so the gate has no vacuum. The gate table names that mechanism; the local run is named in Task 5.
 - **The mechanical budget hand-off is MANDATORY, not opt-out** (the owner's two first-class tasks): `build_tool_source_factory` reads `budget_overrides(catalog)` ONCE and hands the map to every `declared.build(bundle, budgets)` — the signature carries it, so a declared source cannot forget it. **`conftest.document_source_factory` keeps its bypass** (option 2's alternative): it is NOT a `DeclaredSource` — the mechanical pass cannot reach a direct `tool_source_factory` — and its docstring now says so explicitly: it forwards no budgets, which is the FORGETTING path the mechanical signature closed, kept alive as the suite's demonstration. Pinned from both sides: the catalogued-budget pin goes through `_declared` + the factory alone (deleting the hand-off reds it), and the source-level pin (`test_a_tighter_per_tool_budget_reaches_the_executor`, untouched) builds the source directly.
 - **`from_bundle` is per-class, not a shared base.** The two classes forward different bundle wiring (the document source carries the preparation leg and the two sinks; the web source carries none), so each class carries its own five-line `from_bundle` — a shared base class would be machinery for one shared pattern. Both have the SAME signature: `from_bundle(port_factory, bundle, *, budgets=None)`.
 - **The web errors carry `operation=None`.** `OperationName` is the DOCUMENT capability's enum ("the agent-facing document operations"); adding a web entry to it would put a non-document operation in a document enum for a field the dispatcher tolerates being `None` (the argument-validation path already ships `operation: null`). The adapter's message names the web search instead.
@@ -124,7 +124,7 @@ Zero behaviour: the forwarding lambdas collapse into one construction home per c
 
 **Interfaces:**
 - Consumes: `DocumentToolSource(port_factory, operation_budget, *, budgets, preparer, on_preparation_status, abstention_sink)` (existing constructor, unchanged); `budget_overrides(catalog) -> dict[str, OperationBudget]` (existing, unchanged); `DeclaredSource(source_id, served_tool_names, build)` (existing record — its `build` field's callable SHAPE changes).
-- Produces: `DocumentToolSource.from_bundle(port_factory, bundle, *, budgets=None) -> DocumentToolSource` — the ONE construction home later tasks use (the web source gets its own identical-shape `from_bundle` in Task 2). `DeclaredSource.build` is now called `build(bundle, budgets)` by `build_tool_source_factory` — a `functools.partial(DocumentToolSource.from_bundle, <port_factory>)` satisfies it as-is. The orchestrator-facing factory signature is UNCHANGED (`factory(bundle)`).
+- Produces: `DocumentToolSource.from_bundle(port_factory, bundle, *, budgets=None) -> DocumentToolSource` — the ONE construction home later tasks use (the web source gets its own identical-shape `from_bundle` in Task 2). `DeclaredSource.build` is now called `build(bundle, budgets=<the catalog's map>)` by `build_tool_source_factory` — the map rides the KEYWORD (both `from_bundle`s declare `budgets` keyword-only; a positional pass is a `TypeError`), so a `functools.partial(DocumentToolSource.from_bundle, <port_factory>)` satisfies it as-is. The orchestrator-facing factory signature is UNCHANGED (`factory(bundle)`).
 
 - [ ] **Step 1: Write the failing test — the mechanical hand-off**
 
@@ -197,7 +197,7 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_tool_catalog.py -q -p no:cacheprovider
 ```
 
-Expected: FAIL. Two possible reds, both the RIGHT red: before `from_bundle` exists, the collection fails with `AttributeError: type object 'DocumentToolSource' has no attribute 'from_bundle'`; once the classmethod exists but the factory still passes no budgets, the test fails with `assert 30000 == 1000` — the catalogued budget was silently dropped, which is exactly the forgetting the mechanical pass closes. If you see the collection error first, that is the red this step needs; the budget-value red is the one the implementation step closes.
+Expected: FAIL. Two possible reds, both the RIGHT red: before `from_bundle` exists, the AttributeError fires at test RUNTIME, not at collection — the `partial(DocumentToolSource.from_bundle, ...)` expression inside `_declared` is evaluated when the helper is CALLED, so the file collects fine and then RUNS red: every registry-building test errors with `AttributeError: type object 'DocumentToolSource' has no attribute 'from_bundle'`; once the classmethod exists but the factory still passes no budgets, the test fails with `assert 30000 == 1000` — the catalogued budget was silently dropped, which is exactly the forgetting the mechanical pass closes. The runtime AttributeError is the red this step needs; the budget-value red is the one the implementation step closes.
 
 - [ ] **Step 3: The minimal implementation — `from_bundle` and the mechanical pass**
 
@@ -237,14 +237,22 @@ In `components/agent-service/tool_catalog.py`:
     build: Callable[[ToolSourceContext, dict[str, OperationBudget]], ToolSource]
 ```
 
-and the class docstring's last paragraph becomes:
+and the class docstring's last paragraph. The file's last two lines read, EXACTLY (wrapped as the file wraps them):
 
 ```python
-    ``build`` is the per-request builder, called ``build(bundle, budgets)``:
-    the factory hands the catalog's budget map to EVERY declared source
-    MECHANICALLY — a source cannot forget the override map, because the
-    signature carries it. The source is built per request because the
-    budget, the preparation leg and the sinks are the run's.
+    ``build`` is the per-request builder: the source is built per request
+    because the budget, the preparation leg and the sinks are the run's.
+```
+
+They become:
+
+```python
+    ``build`` is the per-request builder, called ``build(bundle,
+    budgets=<the catalog's map>)`` — the map rides the KEYWORD. The
+    factory hands it to EVERY declared source MECHANICALLY — a source
+    cannot forget the override map, because the signature carries it.
+    The source is built per request because the budget, the preparation
+    leg and the sinks are the run's.
 ```
 
 2. `build_tool_source_factory` — compute the map once, hand it to every build:
@@ -265,7 +273,7 @@ and the class docstring's last paragraph becomes:
     def factory(bundle: ToolSourceContext) -> tuple[tuple[ToolDefinition, ToolExecutor], ...]:
         offered: list[tuple[ToolDefinition, ToolExecutor]] = []
         for declared in declared_sources:
-            source = declared.build(bundle, catalog_budgets)
+            source = declared.build(bundle, budgets=catalog_budgets)
             for definition, executor in source.tools(bundle.context, bundle.bearer):
                 entry = catalog.entry(definition.name)
                 if entry is None or not entry.allow:
@@ -278,7 +286,7 @@ and the class docstring's last paragraph becomes:
     return factory
 ```
 
-(everything else in the function — the docstring head, the filter body — stays as it is; only the `catalog_budgets` line before `factory` and the `declared.build(bundle, catalog_budgets)` line change).
+(everything else in the function — the docstring head, the filter body — stays as it is; only the `catalog_budgets` line before `factory` and the `declared.build(bundle, budgets=catalog_budgets)` line change).
 
 In `components/agent-service/app.py`: the build lambda collapses and the assembly's own `catalog_budgets` local dies (the factory owns the map now):
 
@@ -360,7 +368,7 @@ with the same `from functools import partial` addition to its stdlib from-group.
                     build=partial(DocumentToolSource.from_bundle, lambda context, bearer: fake_port()),
 ```
 
-with the same import addition (its stdlib from-group is `from pathlib import Path`; `from functools import partial` goes directly after it).
+with the same import addition (its stdlib from-group is `from pathlib import Path`; `from functools import partial` joins IN SORTED POSITION — directly BEFORE it: `functools` sorts before `pathlib`, and placing it after is I001).
 
 - [ ] **Step 5: Run the FULL suite and make sure it passes**
 
@@ -440,6 +448,7 @@ from agent.registry import build_registry
 from agent.sources import WEB_SEARCH_DEFINITION, ToolSourceContext, WebSearchToolSource
 from agent.taint import scan_tool_result
 from agent.verification import RetrievalLedger, retrieved_texts
+from capabilities.adapters.httpx import TransportTimeoutError
 from capabilities.adapters.web_search import WebSearchAdapter
 from capabilities.contract import (
     WEB_SEARCH_SOURCE,
@@ -526,13 +535,15 @@ def test_the_port_declares_one_search_method():
 
 def test_the_scan_precedes_the_search_and_the_redacted_text_is_what_leaves():
     transport = ScriptedTransport()
-    result = asyncio.run(adapter(transport).search("my phone is 555-0100 raw", CEILING))
+    asyncio.run(adapter(transport).search("my phone is 555-0100 raw", CEILING))
 
     assert transport.calls[0]["verb"] == "post"
     assert transport.calls[0]["url"] == PII_URL
-    assert transport.calls[0]["payload"] == {"texts": [{"id": "query", "text": "my phone is 555-0100 raw", "language": "en"}]}
+    assert transport.calls[0]["payload"] == {
+        "texts": [{"id": "query", "text": "my phone is 555-0100 raw", "language": "en"}]
+    }
     assert transport.calls[1]["verb"] == "get"
-    assert transport.calls[1]["url"].startswith(f"{SEARXNG_BASE}/search?q=the+redacted+query")
+    assert transport.calls[1]["url"].startswith(f"{SEARXNG_BASE}/search?q=the%20redacted%20query")
     assert transport.calls[1]["url"].endswith("&format=json")
     # The scan's answer, not the raw query, is what the search carried.
     assert "555-0100" not in transport.calls[1]["url"]
@@ -591,13 +602,18 @@ def test_a_scan_failure_fails_closed_before_anything_leaves(pii):
         asyncio.run(adapter(transport).search("the raw query", CEILING))
 
     # FAIL-CLOSED, observed: the ONLY call is the scan — the search
-    # endpoint was never dialled, so the raw query never left.
+    # endpoint was never dialled, so nothing left for the web at all.
+    # (The scan payload's text IS the raw query by design; the raw query
+    # absent from the SEARCH leg is the success-path pin's assertion.)
     assert [call["verb"] for call in transport.calls] == ["post"]
-    assert "the raw query" not in str(transport.calls[0]["payload"])
 
 
 def test_a_scan_timeout_is_transient():
-    transport = ScriptedTransport(pii=TimeoutError("hung"))
+    # The adapter's OWN carrier, not the builtin TimeoutError: the adapter
+    # catches TransportTimeoutError specifically (the generic-Exception
+    # branch would answer "the pii scan failed: TimeoutError: hung", and
+    # the match below would fail on it).
+    transport = ScriptedTransport(pii=TransportTimeoutError("hung"))
     with pytest.raises(TransientError, match="timed out"):
         asyncio.run(adapter(transport).search("q", CEILING))
     assert [call["verb"] for call in transport.calls] == ["post"]
@@ -651,7 +667,7 @@ In `components/agent-service/capabilities/contract.py`, add the marker directly 
 WEB_SEARCH_SOURCE = "web"
 ```
 
-and the protocol after `DocumentCapabilityPort`'s `read_source` declaration (before `class CompatibilityRules`):
+and the protocol after `DocumentCapabilityPort`'s `read_source` declaration — anchor the insertion on the DECORATOR line `@dataclass(frozen=True)` that decorates `CompatibilityRules` (insert BEFORE the decorator; anchoring on the class line would land the protocol BETWEEN the decorator and the class, `CompatibilityRules` would lose its `@dataclass(frozen=True)`, and the contract module would TypeError at import):
 
 ```python
 class WebSearchPort(Protocol):
@@ -713,7 +729,7 @@ truncates one hit's text (the read path's per-result byte cut).
 from urllib.parse import quote
 
 from capabilities.adapters.httpx import HttpxTransport, TransportTimeoutError
-from capabilities.contract import OperationBudget, OutcomeCode, TransientError, WEB_SEARCH_SOURCE
+from capabilities.contract import WEB_SEARCH_SOURCE, OperationBudget, OutcomeCode, TransientError
 
 # The scan request's language: the sidecar's only supported one. A constant,
 # so the pin and the payload cannot drift apart.
@@ -816,13 +832,7 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_web_search.py -q -p no:cacheprovider
 ```
 
-Expected: collection still FAILS on the same `ImportError` (`WEB_SEARCH_DEFINITION` from `agent.sources` — the source half of the suite is written but not implemented), because the import error kills the whole module's collection. To see the ADAPTER pins green in isolation, run the adapter pins by name:
-
-```bash
-/tmp/genie-agent-service-venv/bin/python -m pytest "tests/test_web_search.py::test_the_scan_precedes_the_search_and_the_redacted_text_is_what_leaves" "tests/test_web_search.py::test_the_search_result_maps_onto_ledger_triples" "tests/test_web_search.py::test_the_operation_budget_bounds_each_leg_and_the_hits" "tests/test_web_search.py::test_an_oversized_snippet_is_truncated_at_the_result_budget" "tests/test_web_search.py::test_a_scan_failure_fails_closed_before_anything_leaves" "tests/test_web_search.py::test_a_scan_timeout_is_transient" "tests/test_web_search.py::test_a_search_failure_is_transient_too" "tests/test_web_search.py::test_no_identity_leaves_the_process" "tests/test_web_search.py::test_the_web_marker_is_the_contract_constant" "tests/test_web_search.py::test_the_port_declares_one_search_method" -q -p no:cacheprovider
-```
-
-Expected: `10 passed` — the whole adapter half is green; the file-level red is now ONLY the not-yet-written source half.
+Expected: collection still FAILS on the same `ImportError` (`WEB_SEARCH_DEFINITION` from `agent.sources` — the source half of the suite is written but not implemented). A module-level ImportError kills collection for EVERY node id in the file, so no by-name run can bypass it: the adapter pins CANNOT be observed green at this step, whatever the invocation. (The named run would cover 16 items — 10 tests, the scan-failure one parametrized 5-way and the search-failure one 3-way — but the items are unreachable while the import fails.) The adapter half turns green in Step 8's run, once the source names exist; what this step proves is only that the red is still the ImportError and not a syntax error in the new pins — a syntax error would surface as a DIFFERENT failure.
 
 - [ ] **Step 5: Write the failing tests — the source pins (and extend the budget pin)**
 
@@ -867,13 +877,26 @@ def canned_web_result():
     }
 ```
 
-(the row becomes `from capabilities.contract import WEB_SEARCH_SOURCE, CallerContext, OperationBudget, ReadSourceResult, SearchKnowledgeResult`).
+(the row becomes the WRAPPED form — one line would be 124 chars, over the 120 gate:
+
+```python
+from capabilities.contract import (
+    WEB_SEARCH_SOURCE,
+    CallerContext,
+    OperationBudget,
+    ReadSourceResult,
+    SearchKnowledgeResult,
+)
+```
+).
 
 In `components/agent-service/tests/test_web_search.py`: add the conftest row to the third-party import group (ruff files `conftest` as third-party — putting it in the first-party group reds `I001`; plan 1 measured this), directly after `import pytest`:
 
 ```python
-from conftest import FakeWebSearchPort, canned_web_result
+from conftest import FakeWebSearchPort
 ```
+
+(`FakeWebSearchPort` ONLY at this step: `canned_web_result` is unused until Task 3's registry pin, and importing it here is an F401 the lint gate eats — its import joins in Task 3, when the first use lands.)
 
 Then append the source pins to the same file:
 
@@ -911,7 +934,7 @@ def test_the_web_definition_is_the_model_facing_contract():
 def test_the_tools_pair_carries_the_definition_and_a_bound_executor():
     source = WebSearchToolSource(lambda context, bearer: FakeWebSearchPort(), CEILING)
     pairs = source.tools(CONTEXT, None)
-    [definition, executor] = pairs
+    [(definition, executor)] = pairs
     assert definition is WEB_SEARCH_DEFINITION
     assert callable(executor)
 
@@ -1067,7 +1090,7 @@ class WebSearchToolSource:
     raw query.
     """
 
-    source_id = "web"
+    source_id = WEB_SEARCH_SOURCE
     served_tool_names = frozenset({"web_search"})
 
     def __init__(
@@ -1172,7 +1195,7 @@ def test_a_web_citation_is_delivered_but_not_projected():
     assert envelope == []  # the projection keeps web out, in THIS plan
 ```
 
-Check the file's existing imports first: `check_reference_validity` and `SourceRecords` may not be imported there — if absent, add them to the existing `from capabilities.citations import (...)` row (constants first, then classes: e.g. `..., SourceRecords, check_reference_validity, provenance_identity, source_documents_from_citations` ordered by isort's rules — run the lint step if unsure, it names the exact order).
+Check the file's existing imports first (verified against the file at plan-review time): `SourceRecords` and `source_documents_from_citations` are ALREADY in its `from capabilities.citations import (...)` row — `provenance_identity` JOINS that row (alphabetical among the functions: `SourceRecords, provenance_identity, resolve_source_records, source_document_envelope, source_documents_from_citations`). `check_reference_validity` lives in `agent.verification`, NOT in citations — and the file carries no `agent.*` row today — so it takes its OWN row: `from agent.verification import check_reference_validity`, sorted with the first-party group (before the `capabilities.*` rows).
 
 - [ ] **Step 10: Run the citation pins and watch them fail**
 
@@ -1182,13 +1205,13 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_agent_citations.py -k "web" -q -p no:cacheprovider
 ```
 
-Expected: FAIL — `test_the_web_provenances_identity_is_the_url_tagged_by_the_source` reds with `assert (None, 'https://example.invalid/a') == ('web', 'https://example.invalid/a')` (the legacy branch swallows the web dict — the exact dedup-to-one defect D5 names). The projection pin may already pass (the D1 drop is incidental today) — its job is to STAY true when S3-plan-3 adds the variant.
+Expected: FAIL — `test_the_web_provenances_identity_is_the_url_tagged_by_the_source` reds with `assert (None, None) == ('web', 'https://example.invalid/a')` (the legacy branch swallows the web dict; a web dict carries no file_id, so the legacy identity collapses to `(None, None)` and every web entry would dedup into ONE bucket — the exact defect D5 names). The projection pin may already pass (the D1 drop is incidental today) — its job is to STAY true when S3-plan-3 adds the variant.
 
 - [ ] **Step 11: The minimal implementation — the web branch in `provenance_identity`**
 
 In `components/agent-service/capabilities/citations.py`:
 
-1. The import row: `from .contract import OKF_CONCEPT_SOURCE, OkfConceptProvenance, WEB_SEARCH_SOURCE` (constants first, then classes).
+1. The import row: `from .contract import OKF_CONCEPT_SOURCE, WEB_SEARCH_SOURCE, OkfConceptProvenance` (the two CONSTANTS first, then the class — a constant at the end is I001 under `order-by-type`).
 
 2. `provenance_identity` — the web branch between the concept branch and the legacy fallback, and the docstring's identity list:
 
@@ -1538,33 +1561,71 @@ def test_a_declared_open_web_tool_is_listed_and_dispatchable(tmp_path):
     assert port.calls[0]["query"] == "the model query"
 ```
 
-The file's import rows gain what the new tests use (`from functools import partial` is ALREADY in this file — Task 1 added it): `WebSearchToolSource` joins the `from agent.sources import (...)` row (constants first, then classes: `DocumentToolSource, ToolSourceContext, WebSearchToolSource` — check the row you find; `ToolSourceContext` is already there), and `FakeWebSearchPort, canned_web_result` join the `from conftest import (...)` row — isort's order-by-type sorts CONSTANTS first, then CamelCase classes, then lowercase functions: `SHIPPED_CATALOG, AgentFakePort, FakeWebSearchPort, canned_search_result, canned_web_result`.
+The file's import rows gain what the new tests use (`from functools import partial` is ALREADY in this file — Task 1 added it): `WebSearchToolSource` joins the `from agent.sources import (...)` row (constants first, then classes: `DocumentToolSource, ToolSourceContext, WebSearchToolSource` — check the row you find; `ToolSourceContext` is already there), and `FakeWebSearchPort, canned_web_result` join the `from conftest import (...)` row — isort's order-by-type sorts CONSTANTS first, then CamelCase classes, then lowercase functions: `SHIPPED_CATALOG, AgentFakePort, FakeWebSearchPort, canned_search_result, canned_web_result`. ALSO here: `tests/test_web_search.py`'s conftest row gains its second name — `from conftest import FakeWebSearchPort` becomes `from conftest import FakeWebSearchPort, canned_web_result` (the first use of `canned_web_result` is this task's registry pin; the Task 2 step deliberately deferred it).
 
 - [ ] **Step 2: Write the failing tests — the host pins**
 
 In `components/agent-service/tests/test_app_runs.py`, append (the file's helpers `_frames`, `BODY`, and the monkeypatching pattern of `test_the_app_assembly_wires_preparation_into_the_run_surface` are reused verbatim):
 
 ```python
+def _catalog_entry(name, source, egress):
+    """One catalog entry of the shipped shape — the tmp catalog's builder."""
+    return {
+        "name": name,
+        "source": source,
+        "server": None,
+        "tool": None,
+        "allow": True,
+        "risk": "read",
+        "requires_approval": False,
+        "egress": egress,
+        "scopes": [],
+    }
+
+
 def _assembled_app(monkeypatch, tmp_path, *, web_pair=False):
     """The real `_build_orchestrator` over fakes, with (or without) the
     web-search knob pair set. Returns the ScriptedLoopModel so the test can
     read the tool definitions the model was told."""
     for knob in REQUIRED_KNOBS:
         monkeypatch.setenv(knob, "5000")
-    monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
     if web_pair:
+        # The THREE-entry catalog is the test's OWN tmp file — NEVER the
+        # shipped one (it is frozen at two tools; D4/G4): the knob points
+        # at the copy this test wrote.
+        catalog_path = tmp_path / "tool-catalog-web.json"
+        catalog_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "tools": [
+                        _catalog_entry("search_knowledge", "document", "internal"),
+                        _catalog_entry("read_source", "document", "internal"),
+                        _catalog_entry("web_search", "web", "open_web"),
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(catalog_path))
         monkeypatch.setenv("AGENT_SEARXNG_URL", "http://searxng:8080")
         monkeypatch.setenv("PII_SERVICE_URL", "http://pii-service:8000")
+    else:
+        monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
     model = ScriptedLoopModel(multihop_turns(answer="the answer", judge_reply='{"verdict": "grounded"}'))
-    monkeypatch.setattr(app_module, "build_stateless_adapters", lambda config, env=None: type(
-        "Adapters",
-        (),
-        {
-            "bind_executor": staticmethod(lambda context, bearer: fake_port()),
-            "docrepo": FakeMetadataSource(),
-            "okf": FakeConceptSource(),
-        },
-    )())
+    monkeypatch.setattr(
+        app_module,
+        "build_stateless_adapters",
+        lambda config, env=None: type(
+            "Adapters",
+            (),
+            {
+                "bind_executor": staticmethod(lambda context, bearer: fake_port()),
+                "docrepo": FakeMetadataSource(),
+                "okf": FakeConceptSource(),
+            },
+        )(),
+    )
     monkeypatch.setattr(
         app_module,
         "VllmModelClient",
@@ -1611,15 +1672,19 @@ def test_a_half_wired_web_pair_answers_503_naming_the_missing_knob(monkeypatch):
     monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
     monkeypatch.setenv("AGENT_SEARXNG_URL", "http://searxng:8080")
     monkeypatch.delenv("PII_SERVICE_URL", raising=False)
-    monkeypatch.setattr(app_module, "build_stateless_adapters", lambda config, env=None: type(
-        "Adapters",
-        (),
-        {
-            "bind_executor": staticmethod(lambda context, bearer: fake_port()),
-            "docrepo": FakeMetadataSource(),
-            "okf": FakeConceptSource(),
-        },
-    )())
+    monkeypatch.setattr(
+        app_module,
+        "build_stateless_adapters",
+        lambda config, env=None: type(
+            "Adapters",
+            (),
+            {
+                "bind_executor": staticmethod(lambda context, bearer: fake_port()),
+                "docrepo": FakeMetadataSource(),
+                "okf": FakeConceptSource(),
+            },
+        )(),
+    )
     monkeypatch.setattr(app_module, "_RUNTIME", None)
     with TestClient(app_module.app) as client:
         response = client.post("/v1/runs", json=BODY)
@@ -1638,7 +1703,7 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_tool_catalog.py::test_an_open_web_entry_on_a_declared_source_is_carried tests/test_tool_catalog.py::test_a_declared_open_web_tool_is_listed_and_dispatchable tests/test_app_runs.py -k "web" -q -p no:cacheprovider
 ```
 
-Expected: FAIL, each pin for the RIGHT reason — the two catalog pins red on the LOADER's refusal (`assert catalog.entry("web_search") is not None` → `assert None is not None`: the egress clause still refuses the entry) and on the registry (`UnregisteredToolError: tool 'web_search' is not registered`: the refused entry never reached the registry); the pair-set app pin reds on `assert names == ['search_knowledge', 'read_source', 'web_search']` → the third name missing (the host declares no web source yet); the shipped-posture pin PASSES (it pins today's behaviour); the half-wired pin reds with a 200-vs-503 mismatch (`assert 200 == 503` — nothing reads the pair yet).
+Expected: FAIL, each pin for the RIGHT reason — the two catalog pins red on the LOADER's refusal (`assert catalog.entry("web_search") is not None` → `assert None is not None`: the egress clause still refuses the entry) and on the registry (`UnregisteredToolError: tool 'web_search' is not registered`: the refused entry never reached the registry); the pair-set app pin reds on `assert names == ['search_knowledge', 'read_source', 'web_search']` → the third name missing (the host declares no web source yet); the shipped-posture pin PASSES (it pins today's behaviour); the registry pin (`test_a_declared_open_web_tool_is_listed_and_dispatchable`) reds at the NAMES pin — `assert registry.names() == ('web_search',)` sees `()`, a plain tuple mismatch, NOT an `UnregisteredToolError` (the refused entry never reached the registry, so there is nothing to dispatch against); the half-wired pin reds with a 200-vs-503 mismatch (`assert 200 == 503` — nothing reads the pair yet).
 
 - [ ] **Step 4: The implementation — the refusal's retirement, the assembly, the app**
 
@@ -1646,9 +1711,49 @@ Expected: FAIL, each pin for the RIGHT reason — the two catalog pins red on th
 
 1. `components/agent-service/tool_catalog.py` — the retirement:
 
-   - The module docstring's second paragraph: replace `a write risk or an approval (no approval path yet), an open-web egress (no PII egress path yet). A catalog that declared one of those and was silently unenforced would be a lie the deployment believes.` with `a write risk or an approval (no approval path yet). A catalog that declared one of those and was silently unenforced would be a lie the deployment believes. (An open-web egress WAS on this list until the PII egress landed: the rule now lives in the leaf adapter — the query passes the pii-service or the call fails closed — so an open_web entry on a DECLARED source is carried, and one on an UNDECLARED source still takes the undeclared-source refusal below.)`
+   - The module docstring's second paragraph. Its last five lines read, EXACTLY (wrapped as the file wraps them):
+
+     ```python
+     Everything the catalog declares that this deployment cannot HONOUR is
+     refused at startup rather than ignored: a required scope (the
+     enforcement lands with the identity slice), a write risk or an approval
+     (no approval path yet), an open-web egress (no PII egress path yet). A
+     catalog that declared one of those and was silently unenforced would be
+     a lie the deployment believes.
+     ```
+
+     They become:
+
+     ```python
+     Everything the catalog declares that this deployment cannot HONOUR is
+     refused at startup rather than ignored: a required scope (the
+     enforcement lands with the identity slice), a write risk or an approval
+     (no approval path yet). A catalog that declared one of those and was
+     silently unenforced would be a lie the deployment believes. (An
+     open-web egress WAS on this list until the PII egress landed: the rule
+     now lives in the leaf adapter — the query passes the pii-service or
+     the call fails closed — so an open_web entry on a DECLARED source is
+     carried, and one on an UNDECLARED source still takes the
+     undeclared-source refusal below.)
+     ```
    - DELETE the `EGRESS_OPEN_WEB = "open_web"` constant line (after the clause removal it has no reader — dead code; the schema's `Literal["internal", "open_web"]` stays).
-   - `load_catalog`'s docstring: in the EVERY-per-entry-defect list, drop `an open-web egress,` (the list reads `an undeclared source, a server-scoped tool, a required scope, a write, an approval, and a budget that would WIDEN the ceiling`).
+   - `load_catalog`'s docstring: in the EVERY-per-entry-defect list, drop `an open-web egress,`. The list's four lines read, EXACTLY:
+
+     ```python
+         EVERY per-entry defect costs the ENTRY, not the catalog: an
+         undeclared source, a server-scoped tool, a required scope, a write,
+         an approval, an open-web egress, and a budget that would WIDEN the
+         ceiling — a loud startup ERROR names each and the tool is absent.
+     ```
+
+     They become:
+
+     ```python
+         EVERY per-entry defect costs the ENTRY, not the catalog: an
+         undeclared source, a server-scoped tool, a required scope, a write,
+         an approval, and a budget that would WIDEN the ceiling — a loud
+         startup ERROR names each and the tool is absent.
+     ```
    - `_refusal`: delete the branch
 
 ```python
@@ -1656,7 +1761,29 @@ Expected: FAIL, each pin for the RIGHT reason — the two catalog pins red on th
         return "it has an open-web egress: no PII egress path is deployed yet"
 ```
 
-   and update its docstring's enumeration the same way (drop `an open-web egress (no PII egress path yet)`; the sentence now ends `... a write or an approval (no approval path yet). The tool is ABSENT rather than served unenforced.` — and note the egress rule's new home: `An open_web entry is honoured when its source is declared (the adapter carries the Server-Side Tools rule) and refused by the undeclared-source check when it is not.`).
+   and update its docstring's enumeration the same way. The docstring's middle lines read, EXACTLY:
+
+     ```python
+         Every reason is a fact about THIS deployment's capabilities, not about
+         the file's shape: an entry that names a source this deployment does
+         not declare, a server-scoped tool (no MCP source yet), a required
+         scope (the enforcement lands with the identity slice), a write or an
+         approval (no approval path yet), an open-web egress (no PII egress
+         path yet). The tool is ABSENT rather than served unenforced.
+     ```
+
+     They become:
+
+     ```python
+         Every reason is a fact about THIS deployment's capabilities, not about
+         the file's shape: an entry that names a source this deployment does
+         not declare, a server-scoped tool (no MCP source yet), a required
+         scope (the enforcement lands with the identity slice), a write or an
+         approval (no approval path yet). The tool is ABSENT rather than
+         served unenforced. An open_web entry is honoured when its source is
+         declared (the adapter carries the Server-Side Tools rule) and
+         refused by the undeclared-source check when it is not.
+     ```
 
 2. `components/agent-service/assembly.py` — the knob pair, after `build_concept_source`:
 
@@ -1784,10 +1911,11 @@ The compose file gains the searxng service (unmodified image, pinned, DARK pair)
 - Modify: `env` (the knob pair, the two activation flags, the deployment-contract note)
 - Modify: `deploy/ansible/templates/env.j2`, `deploy/ansible/group_vars/all.yml`, `deploy/ansible/deploy.yml`
 - Test: `tests/config-validator/__tests__/agent-service.test.js`
+- Modify: `tests/config-validator/__tests__/config-validation.test.js` (AC9's pii-service pins — the profiles widen, the replicas gate becomes the DERIVED flag; without this edit `npm test` green is unreachable)
 
 **Interfaces:**
 - Consumes: Task 3's `build_web_search_port` (the knobs it names: `PII_SERVICE_URL`, `AGENT_SEARXNG_URL`); the compose block conventions (the DARK pair, `genieai_network`, cap_drop/no-new-privileges).
-- Produces: `AGENT_SEARXNG_URL`, `PII_SERVICE_URL`, `AGENT_WEB_SEARCH_ENABLED`, `PII_SERVICE_ENABLED` — documented in `env`, rendered by `env.j2` (`PII_SERVICE_ENABLED` DERIVED there), forwarded to the agent-service container (the URL pair only — the two flags are compose/ansible reads, no container code reads them); the searxng service block (mounting `configs/agent/searxng-settings.yml` read-only at `/etc/searxng/settings.yml`); the ansible seeding of that file gated on `agent_web_search_enabled`.
+- Produces: `AGENT_SEARXNG_URL`, `PII_SERVICE_URL`, `AGENT_WEB_SEARCH_ENABLED`, `PII_SERVICE_ENABLED` — documented in `env`; `AGENT_SEARXNG_URL`, `AGENT_WEB_SEARCH_ENABLED`, `PII_SERVICE_ENABLED` rendered by `env.j2` (`PII_SERVICE_ENABLED` DERIVED there) — **`PII_SERVICE_URL` is NOT re-rendered**: env.j2 line 294 already renders it for the okf-server (`| default('http://pii-service:8000')`), and compose interpolation carries that rendered value to the agent-service container; forwarded to the agent-service container (the URL pair only — the two flags are compose/ansible reads, no container code reads them); the searxng service block (mounting `configs/agent/searxng-settings.yml` read-only at `/etc/searxng/settings.yml`); the ansible seeding of that file gated on `agent_web_search_enabled`.
 
 - [ ] **Step 1: Write the failing tests — the deployment gates**
 
@@ -1805,7 +1933,7 @@ describe('the web-search egress is deployed behind the pii service', () => {
   beforeAll(() => {
     composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
     searxngBlock = parseComposeServiceBlock(composeText, 'searxng');
-    const contracts = parseComposeServiceContracts(composeText);
+    const contracts = parseComposeServiceContracts(COMPOSE_PATH);
     searxngContract = contracts.find((entry) => entry.service === 'searxng');
     piiContract = contracts.find((entry) => entry.service === 'pii-service');
     agentBlock = parseComposeServiceBlock(composeText, 'agent-service');
@@ -1854,7 +1982,7 @@ describe('the web-search egress is deployed behind the pii service', () => {
   test('the env template documents the knob pair and the two activation flags', () => {
     const pair = Object.fromEntries(['AGENT_SEARXNG_URL', 'PII_SERVICE_URL', 'AGENT_WEB_SEARCH_ENABLED', 'PII_SERVICE_ENABLED'].map((name) => [name, envDocumented.find((entry) => entry.name === name)]));
     for (const name of Object.keys(pair)) {
-      expect(pair[name], name).toBeDefined();
+      expect(pair[name]).toBeDefined();
     }
     expect(pair.AGENT_SEARXNG_URL.value).toBe('http://searxng:8080');
     expect(pair.PII_SERVICE_URL.value).toBe('http://pii-service:8000');
@@ -1872,7 +2000,11 @@ describe('the web-search egress is deployed behind the pii service', () => {
   test('the ansible deployment renders the knobs, derives the flag and seeds the settings file', () => {
     const envJ2 = fs.readFileSync(ENV_J2_PATH, 'utf-8');
     expect(envJ2).toMatch(/AGENT_SEARXNG_URL=\{\{ agent_searxng_url \| default\(''\) \}\}/);
-    expect(envJ2).toMatch(/PII_SERVICE_URL=\{\{ pii_service_url \| default\(''\) \}\}/);
+    // The ONE PII_SERVICE_URL render is the okf-server's line 294, UNCHANGED —
+    // the agent container drinks it through compose interpolation. A second
+    // render with default('') (or a pii_service_url group var at "") would
+    // flip this line to EMPTY (jinja's default fires on undefined only).
+    expect(envJ2).toMatch(/PII_SERVICE_URL=\{\{ pii_service_url \| default\('http:\/\/pii-service:8000'\) \}\}/);
     expect(envJ2).toMatch(/AGENT_WEB_SEARCH_ENABLED=\{\{ agent_web_search_enabled \| default\('0'\) \}\}/);
     // The DERIVATION, not a passthrough: the pii service runs when EITHER
     // consumer needs it — the OKF pillar or the agent's web search.
@@ -1883,7 +2015,9 @@ describe('the web-search egress is deployed behind the pii service', () => {
     const groupVars = fs.readFileSync(GROUP_VARS_PATH, 'utf-8');
     expect(groupVars).toMatch(/^agent_web_search_enabled: "0"$/m);
     expect(groupVars).toMatch(/^agent_searxng_url: ""$/m);
-    expect(groupVars).toMatch(/^pii_service_url: ""$/m);
+    // pii_service_url is deliberately ABSENT from group_vars — a definition,
+    // even at "", would flip env.j2 line 294's default to an empty render.
+    expect(groupVars).not.toMatch(/^pii_service_url:/m);
 
     // The seeded file, ANCHORED (the tool-catalog gate's pattern): the var
     // must be defined INSIDE the "Define deploy files" task's vars: mapping
@@ -1921,6 +2055,8 @@ describe('the web-search egress is deployed behind the pii service', () => {
   });
 });
 ```
+
+In `tests/config-validator/__tests__/config-validation.test.js`, AC9's `every OKF container scales on OKF_ENABLED with default 0` test loops over `['okf-server:', 'pii-service:', 'ragas-service:']` asserting `profiles: ["okf"]` + `replicas: ${OKF_ENABLED:-0}` on every block — this plan breaks BOTH pins for `pii-service` alone. Split it out of the loop: `okf-server` and `ragas-service` keep the loop's assertions unchanged; `pii-service` gets its own assertions in the same test — `expect(block).toMatch(/profiles: \["okf", "agent"\]/)` and `expect(block).toMatch(/replicas: \$\{PII_SERVICE_ENABLED:-0\}/)` (the derived flag; the derivation itself is asserted by the agent-service suite's ansible gate above). The other two AC9 tests are untouched — `pii-service` is not among their subjects.
 
 - [ ] **Step 2: Run the config-validator suite and watch it fail**
 
@@ -2070,6 +2206,8 @@ shipped limitation): non-English queries are scanned best-effort.
         max_attempts: 10
 ```
 
+   **Verify the healthcheck route on the first pull — it is NOT verifiable offline.** The `/health` route above is written from the pinned build's upstream docs; whether THAT image serves `/health` or `/healthz` cannot be checked without pulling it, and a wrong route means a PERMANENTLY unhealthy sidecar (every probe 404s while the search endpoint itself works — on Swarm, a task that restarts forever). On the first enabled deployment: `docker exec <searxng-container> wget -q --spider http://127.0.0.1:8080/health && echo OK` — if it fails, probe `/healthz` and fix this route BEFORE setting `AGENT_WEB_SEARCH_ENABLED=1`.
+
 2. The pii-service block — three edits:
    - the profile line: `profiles: ["okf"]` → `profiles: ["okf", "agent"]`
    - the block's leading comment: `# OKF feature flag: parked with the okf-server (see okf-server block).` → `# Parked by default; its TWO consumers are the OKF pillar (the okf profile) and the agent's web search (the agent profile — the egress rule scans every outbound query).`
@@ -2105,7 +2243,7 @@ shipped limitation): non-English queries are scanned best-effort.
 
 - [ ] **Step 5: The env template**
 
-In `env`, in the AGENT section, directly after the `# AGENT_DOCREPO_URL=` / `# AGENT_OKF_URL=` lines (the port-assembly knobs comment block), append:
+In `env`, in the AGENT section, directly after the `# AGENT_DOCREPO_URL=` / `# AGENT_OKF_URL=` lines (the port-assembly knobs comment block), append (NOTE: `PII_SERVICE_URL` is ALREADY documented in `env`'s OKF section at ~line 2050 — the AGENT-section copy below is a DELIBERATE duplicate: the knob pair's documentation travels together, and both lines are comments, so no parser sees two competing entries; verified benign — do not "deduplicate" it):
 
 ```
 # Web search behind the outbound PII egress (the Server-Side Tools rule):
@@ -2130,13 +2268,17 @@ In `env`, in the AGENT section, directly after the `# AGENT_DOCREPO_URL=` / `# A
 #     profile, like AGENT_ENABLED above.
 #   PII_SERVICE_ENABLED — 1 runs the pii-service, 0 (the default) parks it.
 #     DEPLOYMENT CONTRACT (changed 2026-11): the compose default is 0 — a
-#     plain-compose deployment that runs the OKF pillar MUST set
-#     PII_SERVICE_ENABLED=1 here (the ansible path derives it from
-#     okf_enabled OR agent_web_search_enabled, so ansible deployments set
-#     nothing). Until this knob existed the pii-service tracked OKF_ENABLED
-#     directly; a raw-compose OKF deployment that skips the line parks the
-#     sidecar and every OKF publish fails closed (pii_state='error' →
-#     publish blocked).
+#     plain-compose deployment that runs the OKF pillar must set the
+#     variable PII_SERVICE_ENABLED=1 here (the ansible path derives it
+#     from okf_enabled OR agent_web_search_enabled, so ansible deployments
+#     set nothing). Until this knob existed the pii-service tracked
+#     OKF_ENABLED directly; a raw-compose OKF deployment that skips the
+#     line parks the sidecar and every OKF publish fails closed
+#     (pii_state='error' → publish blocked). WRAPPING NOTE: the prose
+#     lines of this block must never read `# NAME=VALUE` at line start —
+#     parse-env.js's documented-entry regex matches that shape, and a
+#     prose line that fits it plants a garbage entry the gates' `.find()`
+#     would pick up. Put a lowercase word before the variable name.
 # AGENT_WEB_SEARCH_ENABLED=1
 # PII_SERVICE_ENABLED=1
 ```
@@ -2149,8 +2291,14 @@ In `env`, in the AGENT section, directly after the `# AGENT_DOCREPO_URL=` / `# A
 # The web-search knob pair (read fail-closed as a PAIR at assembly — the
 # web source is declared only when both are set; the query is redacted
 # through the pii-service before the meta-search call, failing closed).
+# PII_SERVICE_URL itself is NOT rendered here: the okf-server's line 294
+# above already renders it (| default('http://pii-service:8000')), and
+# compose interpolation carries that value into the agent-service
+# container. A second render with default('') — or a pii_service_url
+# group var defaulting to "" — would flip line 294's render to EMPTY
+# (jinja's default fires on undefined ONLY), killing the okf-server's
+# working endpoint behind a silent falsy fallback in config.js.
 AGENT_SEARXNG_URL={{ agent_searxng_url | default('') }}
-PII_SERVICE_URL={{ pii_service_url | default('') }}
 # The searxng activation flag (0 parks it); it ALSO drives the derived
 # PII_SERVICE_ENABLED below on this render path.
 AGENT_WEB_SEARCH_ENABLED={{ agent_web_search_enabled | default('0') }}
@@ -2166,9 +2314,11 @@ PII_SERVICE_ENABLED={{ '1' if (okf_enabled | default('0') == '1') or (agent_web_
 # The web-search knob pair: the agent declares the web source only when
 # BOTH are set (the query is redacted through the pii-service before the
 # meta-search call, failing closed). Empty = no web source (the shipped
-# posture).
+# posture). pii_service_url is deliberately ABSENT here: env.j2 line 294
+# renders it with | default('http://pii-service:8000') — a group-var
+# definition, even at "", would flip that render to EMPTY (jinja's
+# default fires on undefined only).
 agent_searxng_url: ""
-pii_service_url: ""
 # The searxng activation flag: 1 runs it (and drives the PII_SERVICE_ENABLED
 # derivation in env.j2 — the pii-service runs when okf_enabled OR this is 1).
 agent_web_search_enabled: "0"
@@ -2201,11 +2351,11 @@ Expected: the suite green, the new describe block included. Also render the ansi
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/s3-tool-sources ] || { echo "not in the checkout that carries feat/agentic-foundations/s3-tool-sources"; exit 1; }
-python3 tests/config-validator/tools/render_env_template.py deploy/ansible/templates/env.j2 /tmp/env-render-check.env
+python3 tests/config-validator/tools/render_env_template.py nvidia > /tmp/env-render-check.env
 grep -n "PII_SERVICE_ENABLED\|AGENT_WEB_SEARCH_ENABLED\|AGENT_SEARXNG_URL\|PII_SERVICE_URL" /tmp/env-render-check.env
 ```
 
-Expected: the render succeeds (exit 0) and the four lines print, with `PII_SERVICE_ENABLED=0` under the defaults (okf_enabled/agent_web_search_enabled both default "0"). If the render script's argument order differs from the call above, read `tests/config-validator/tools/render_env_template.py` first and adapt the invocation — the CHECK is the render, not the exact argv.
+(The script's argv is a CASE name — `nvidia` | `rocm-local` | `rocm-remote` — and it prints the render to STDOUT: a template path as argv[0] exits 1 immediately.) Expected: the render succeeds (exit 0) and the four lines print, with `PII_SERVICE_ENABLED=0` under the defaults (okf_enabled/agent_web_search_enabled both default "0") and `AGENT_SEARXNG_URL=` EMPTY (agent_searxng_url defaults to "" — the shipped no-web posture). If the render script's interface differs from the call above, read `tests/config-validator/tools/render_env_template.py` first and adapt the invocation — the CHECK is the render, not the exact argv.
 
 - [ ] **Step 8: Commit**
 
@@ -2272,7 +2422,7 @@ cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" 
 ./tests/compose-non-root/check-runtime.sh <compose-project>
 ```
 
-Expected: exit 0 — the no-root contract holds (searxng runs as the image's own non-root user; the compose change is one of the three triggers the repo's rule names: a new service + a volume). **The CI mechanism (D9):** this plan touches `docker-compose.yaml` and `env`, both listed in the `.e2e_merge_train_changes` anchor — so a merge train's `e2e:integration` (`.e2e_integration_base`, `.gitlab-ci.yml:459`) runs `bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"` against the candidate stack. The MR's pipeline is where the gate is EXERCISED; the local run is the pre-push check when a stack exists. No stack available → say so explicitly and rely on the train's run; never claim the local gate ran when it did not.
+Expected: exit 0 — the no-root contract holds (searxng runs as the image's own non-root user; the compose change is one of the three triggers the repo's rule names: a new service + a volume). **The CI executor is OFF (D9):** the train's `e2e:integration` (`.e2e_integration_base`, `.gitlab-ci.yml:459`) would run `bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"` against the candidate stack (this plan touches `docker-compose.yaml` and `env`, both in the `.e2e_merge_train_changes` anchor), but the job requires the project variable `E2E_ENABLED=1` (absent — verified 2026-11-27) and runs `allow_failure: true` — no train exercises the gate today. The LOCAL run is therefore MANDATORY, not a pre-push nicety. No stack available tonight → the gate's executor is the VENUE-VALIDATION SESSION (named in D9): it runs this gate against a converged stack BEFORE validating anything on the new compose. Never claim the gate ran when it did not; a gate no executor has run is reported UNRUN, not passed.
 
 - [ ] **Step 5: Report the gate table**
 
@@ -2284,7 +2434,7 @@ Expected: exit 0 — the no-root contract holds (searxng runs as the image's own
 | G4 | the frozen fixture + the shipped catalog + no new dependency | the Step-2 diffs | all SILENT — the wire, the two-tool catalog and the pinned dependency tree did not move |
 | G5 | lint | `uvx ruff@0.16.3 check --no-cache …` and `… format --no-cache --check …` | silent |
 | G6 | the deployment gates | `cd tests/config-validator && npm test` | green — the knob pair, the derived flag, the DARK pair, the settings mount, the seeding and the consistency gate |
-| G7 | the runtime gate (spec §10.9, §11) | `tests/compose-non-root/check-runtime.sh <project>` locally when a stack exists; CI: the merge train's `e2e:integration` (`.e2e_integration_base`) runs it against the candidate stack (the compose change rides `e2e_merge_train_changes`) | exit 0 — the no-root contract holds over the new service and its mount |
+| G7 | the runtime gate (spec §10.9, §11) | `tests/compose-non-root/check-runtime.sh <project>` — the CI executor is OFF (`E2E_ENABLED=1` absent, `allow_failure: true`), so the LOCAL run against a converged stack is mandatory; with no stack tonight the executor is the venue-validation session (D9) | exit 0 — the no-root contract holds over the new service and its mount; reported UNRUN until an executor has actually run it |
 
 A difference in G2 is a STOP: something moved that was not supposed to move.
 

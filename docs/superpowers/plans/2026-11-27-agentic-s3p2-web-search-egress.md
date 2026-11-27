@@ -75,7 +75,7 @@ Each encodes an owner decision (D1–D9 of the S3-plan-2 brief) or fills a corne
 - **D7 — the budget pin.** The web_search definition JOINS the existing ≤4096 pin (`test_the_declared_definitions_stay_within_their_prompt_allowance`): the declared definitions' total — all THREE — stays ≤ **4096** characters (today ≈ 1.0 KB). Spec §13.3: "count them in the budget tests; bound the catalog" — the bound is `MAX_CATALOG_ENTRIES` (already landed in plan 1).
 - **D8 — the deployment gates mirror plan-1's Task 4 pattern:** env template (the knob pair + `AGENT_WEB_SEARCH_ENABLED` + the derived-flag note), compose, ansible (`agent_web_search_enabled` group var, the env.j2 render + derivation, `_deploy_files` seeding the settings file), config-validator jest gates with the anchored style (the `_deploy_files` assertion reads the task's `vars:` mapping, not a substring) + the CONSISTENCY gate: if the catalog declares a `web_search` entry, the compose carries the searxng service and the env documents the knobs.
 - **D9 — the runtime gate's CI executor is OFF; the LOCAL run is the mandatory executor, with a named fallback owner.** The compose change rides the `e2e_merge_train_changes` anchor (it lists `docker-compose.yaml` and `env`), so a merge train's `e2e:integration` (`.e2e_integration_base`) WOULD run `bash tests/compose-non-root/check-runtime.sh "ci-${CI_PIPELINE_ID}"` against the candidate stack (`.gitlab-ci.yml:459`) — but the job is OFF in this project TODAY: it requires the project variable `E2E_ENABLED=1` (absent — the project-variable API answers 404, verified 2026-11-27) and runs `allow_failure: true`, so no train exercises the gate. The LOCAL runtime-gate run is therefore the gate's mandatory executor; the laptop has no compose stack tonight, so the local executor lands with the VENUE-VALIDATION SESSION — the named fallback owner: it runs this gate against a converged stack BEFORE validating anything on the new compose, so the gate has no vacuum. The gate table names that mechanism; the local run is named in Task 5.
-- **The mechanical budget hand-off is MANDATORY, not opt-out** (the owner's two first-class tasks): `build_tool_source_factory` reads `budget_overrides(catalog)` ONCE and hands the map to every `declared.build(bundle, budgets)` — the signature carries it, so a declared source cannot forget it. **`conftest.document_source_factory` keeps its bypass** (option 2's alternative): it is NOT a `DeclaredSource` — the mechanical pass cannot reach a direct `tool_source_factory` — and its docstring now says so explicitly: it forwards no budgets, which is the FORGETTING path the mechanical signature closed, kept alive as the suite's demonstration. Pinned from both sides: the catalogued-budget pin goes through `_declared` + the factory alone (deleting the hand-off reds it), and the source-level pin (`test_a_tighter_per_tool_budget_reaches_the_executor`, untouched) builds the source directly.
+- **The mechanical budget hand-off is MANDATORY, not opt-out** (the owner's two first-class tasks): `build_tool_source_factory` reads `budget_overrides(catalog)` ONCE and hands the map to every `declared.build(bundle, budgets=...)` — the signature carries it, so a declared source cannot forget it. **`conftest.document_source_factory` keeps its bypass** (option 2's alternative): it is NOT a `DeclaredSource` — the mechanical pass cannot reach a direct `tool_source_factory` — and its docstring now says so explicitly: it forwards no budgets, which is the FORGETTING path the mechanical signature closed, kept alive as the suite's demonstration. Pinned from both sides: the catalogued-budget pin goes through `_declared` + the factory alone (deleting the hand-off reds it), and the source-level pin (`test_a_tighter_per_tool_budget_reaches_the_executor`, untouched) builds the source directly.
 - **`from_bundle` is per-class, not a shared base.** The two classes forward different bundle wiring (the document source carries the preparation leg and the two sinks; the web source carries none), so each class carries its own five-line `from_bundle` — a shared base class would be machinery for one shared pattern. Both have the SAME signature: `from_bundle(port_factory, bundle, *, budgets=None)`.
 - **The web errors carry `operation=None`.** `OperationName` is the DOCUMENT capability's enum ("the agent-facing document operations"); adding a web entry to it would put a non-document operation in a document enum for a field the dispatcher tolerates being `None` (the argument-validation path already ships `operation: null`). The adapter's message names the web search instead.
 - **Each web leg is bounded at `budget.timeout_ms`.** The contract's timeout reading is per operation (one `LimitDeclaration` per operation); the two upstream calls are the operation's legs and each carries the declared bound. An operator who needs a tighter web budget tightens the entry's `budget` (the catalog's tightening rule, already landed).
@@ -237,7 +237,7 @@ In `components/agent-service/tool_catalog.py`:
     build: Callable[[ToolSourceContext, dict[str, OperationBudget]], ToolSource]
 ```
 
-and the class docstring's last paragraph. The file's last two lines read, EXACTLY (wrapped as the file wraps them):
+and the class docstring's last paragraph. The DeclaredSource docstring's last two lines read, EXACTLY (wrapped as the file wraps them):
 
 ```python
     ``build`` is the per-request builder: the source is built per request
@@ -331,7 +331,7 @@ def document_source_factory(port_factory):
     is the suite's declaration. It is the host's factory's SHAPE, not its
     wiring — and it is deliberately NOT a ``DeclaredSource``: the host's
     ``build_tool_source_factory`` hands the catalog's per-tool budgets to
-    every declared source MECHANICALLY (``build(bundle, budgets)``), so a
+    every declared source MECHANICALLY (``build(bundle, budgets=...)``), so a
     declared source cannot forget the override map. This helper bypasses
     that hand-off — it forwards none, so a suite-built orchestrator runs
     under the ceiling — which is the FORGETTING path the mechanical
@@ -1425,7 +1425,7 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_web_search.py tests/test_agent_citations.py -q -p no:cacheprovider
 ```
 
-Expected: `30 passed` (28 web + 2 citation). The pipeline pin (Step 17) is the last one before the commit.
+Expected: `47 passed` (28 web + 19 citations). The pipeline pin (Step 17) is the last one before the commit.
 
 - [ ] **Step 17: The pipeline-level pin — the judge sees web text, the projection stays empty**
 
@@ -1561,7 +1561,6 @@ def test_a_declared_open_web_tool_is_listed_and_dispatchable(tmp_path):
     assert port.calls[0]["query"] == "the model query"
 ```
 
-The file's import rows gain what the new tests use (`from functools import partial` is ALREADY in this file — Task 1 added it): `WebSearchToolSource` joins the `from agent.sources import (...)` row (constants first, then classes: `DocumentToolSource, ToolSourceContext, WebSearchToolSource` — check the row you find; `ToolSourceContext` is already there), and `FakeWebSearchPort, canned_web_result` join the `from conftest import (...)` row — isort's order-by-type sorts CONSTANTS first, then CamelCase classes, then lowercase functions: `SHIPPED_CATALOG, AgentFakePort, FakeWebSearchPort, canned_search_result, canned_web_result`. ALSO here: `tests/test_web_search.py`'s conftest row gains its second name — `from conftest import FakeWebSearchPort` becomes `from conftest import FakeWebSearchPort, canned_web_result` (the first use of `canned_web_result` is this task's registry pin; the Task 2 step deliberately deferred it).
 
 - [ ] **Step 2: Write the failing tests — the host pins**
 

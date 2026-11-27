@@ -24,7 +24,9 @@ infrastructure messaging, not retrieved content.
 
 import re
 
-from .verification import citation_identity, retrieved_texts
+from capabilities.citations import provenance_identity
+
+from .verification import retrieved_texts
 
 # (marker name, pattern) — the curated instruction-pattern list. Case-
 # insensitive; whitespace runs are collapsed by the patterns themselves.
@@ -89,7 +91,7 @@ def scan_tool_result(name: str, payload: dict) -> tuple[dict, ...]:
                     "tool": name,
                     "markers": list(markers),
                     "source": "search_hit" if name == "search_knowledge" else "read_content",
-                    "identity": list(citation_identity(provenance)),
+                    "identity": list(provenance_identity(provenance)),
                 }
             )
     return tuple(findings)

@@ -296,6 +296,24 @@ def test_a_card_without_a_name_is_not_a_resolved_name():
     assert records.record_for(OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)) is None
 
 
+def test_a_document_without_a_name_is_not_a_resolved_name():
+    """The legacy branch reads the rule SYMMETRICALLY: a metadata record
+    that resolves the file's identity but carries no usable name did not
+    resolve the NAME — and an unresolved name is as fatal as an unresolved
+    identity. A citation card with an empty ``document_name`` must not
+    exist.
+    """
+    records = asyncio.run(
+        resolve_source_records(
+            [LegacyFileProvenance(file_id="f-1")],
+            document_source=FakeMetadataSource({"f-1": {"labels": [], "author": "user", "source_url": ""}}),
+            concept_source=FakeConceptSource(),
+            bearer=None,
+        )
+    )
+    assert records.record_for(LegacyFileProvenance(file_id="f-1")) is None
+
+
 # ---------------------------------------------------------------------
 # The extraction is a move: the no-agent lane re-imports the same objects
 # ---------------------------------------------------------------------

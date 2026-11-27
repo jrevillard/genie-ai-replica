@@ -952,7 +952,7 @@ def test_the_full_record_assembles_and_round_trips_json():
             venue="unit-test",
         )
     )
-    assert evidence.producer == "agent.v06_harness"
+    assert evidence.producer == "measurement.v06_harness"
     assert evidence.venue == "unit-test"
     assert evidence.identity.model_id == "served-model"
     assert len(evidence.cells) == 12
@@ -989,7 +989,7 @@ def _passing_evidence() -> VerificationEvidence:
         for streaming in (False, True)
     )
     return VerificationEvidence(
-        producer="agent.v06_harness",
+        producer="measurement.v06_harness",
         venue="test",
         captured_at_utc="2026-11-21T00:00:00+00:00",
         identity=EndpointIdentity(
@@ -1157,7 +1157,7 @@ def test_the_live_entry_prints_a_json_error_record_never_a_traceback(monkeypatch
     record = json.loads(capsys.readouterr().out)
     assert record["status"] == "failed"
     assert "the model discovery failed" in record["error"]
-    assert record["producer"] == "agent.v06_harness"
+    assert record["producer"] == "measurement.v06_harness"
 
 
 def test_parser_flag_rejections_are_summarized_in_the_notes():

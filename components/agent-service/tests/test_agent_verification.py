@@ -36,9 +36,9 @@ from agent.verification import (
     RetrievalLedger,
     VerificationPipeline,
     check_reference_validity,
-    citation_identity,
     parse_judge_verdict,
 )
+from capabilities.citations import provenance_identity
 from capabilities.model import ModelTurn
 
 LEGACY_HIT = {
@@ -133,7 +133,7 @@ def test_the_ledger_dedups_by_the_stable_identity():
     ledger = RetrievalLedger()
     ledger.record("search_knowledge", _search_payload([OKF_HIT, dict(OKF_HIT, text="the same concept again")]))
 
-    assert [citation_identity(entry["provenance"]) for entry in ledger.entries] == [("r-1", "c-1")]
+    assert [provenance_identity(entry["provenance"]) for entry in ledger.entries] == [("r-1", "c-1")]
 
 
 def test_a_read_without_resolved_provenance_cites_nothing():

@@ -20,7 +20,7 @@ command after any remediation below lands.
   `genieai`, chart `genieai-umbrella` 0.2.182 (V03 record attests identity)
 - **V03 baseline:** `docs/baselines/v03-deployed-baseline-2026-11-19.md`
 - **Producer:** `agent.v06_harness` + `agent.probe`, on the shipped pins
-> Renamed from `agent.verification` to `agent.v06_harness` in the story-2.6 merge resolution (!1006); the captured evidence below predates the rename and keeps the old producer string verbatim — a re-run now emits `agent.v06_harness`.
+> Renamed from `agent.verification` to `agent.v06_harness` in the story-2.6 merge resolution (!1006); the captured evidence below predates the rename and keeps the old producer string verbatim. The module later moved to `measurement/` (the S1 measurement-surfaces slice), and a re-run now emits `measurement.v06_harness` — see the 2026-11-27 note on the 2026-11-24 record.
   (httpx 0.28.1, pydantic 2.14.4, stdlib only — no new dependency)
 - **Volume:** 12 matrix completions + 2 cancellation-demonstration calls +
   1 plain (no-tools) control call + 1 probe run, all serial, read-only; no

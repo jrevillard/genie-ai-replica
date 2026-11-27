@@ -37,10 +37,11 @@ confidence poison") — the deployed rule, kept here: a deleted document, a
 document repository that is down, a concept the repository's fence refuses,
 must not become a citation card. The rule is SYMMETRIC: each branch asks its
 own platform, and an unresolved name is as fatal as an unresolved identity.
-:meth:`SourceRecords.record_for` is the ONE place that rule lives — it
-returns the record a source's own platform resolved, and ``None`` when it
-resolved none — so the projection and the aggregate can never disagree about
-it.
+:meth:`SourceRecords.record_for` is the one place the rule's TEST lives —
+it returns the record a source's own platform resolved, and ``None`` when it
+resolved none — and :func:`surfaced_hits` is the one place the rule's
+FILTER lives: the aggregate consumes exactly the list that helper selected,
+so the projection and the aggregate can never disagree about it.
 """
 
 import asyncio
@@ -81,7 +82,7 @@ class SourceRecords:
         ONE rule.
         """
 
-        if _is_concept(provenance):
+        if is_concept_provenance(provenance):
             return self.concepts.get(_concept_address(provenance))
         file_id = _legacy_file_id(provenance)
         if file_id is None:
@@ -89,13 +90,17 @@ class SourceRecords:
         return self.documents.get(file_id)
 
 
-def _is_concept(provenance) -> bool:
+def is_concept_provenance(provenance) -> bool:
     """Is this provenance an OKF concept's?
 
     The marker is the port's own vocabulary (``source``/``repo_id``/
     ``concept_id``), the counterparty's data model — naming it in a PORT is
     the port's job: the core CONSUMES the port's shape, it does not invent
     one, and it never learns a platform's identifier FORM.
+
+    Public because the discrimination is the PORT's rule and the ledger
+    asks it too: a reader that decides the branch in two modules is a
+    reader that can disagree with itself.
     """
 
     if isinstance(provenance, dict):
@@ -128,6 +133,19 @@ def _concept_version(provenance) -> int | None:
     return getattr(provenance, "bundle_version", None)
 
 
+def surfaced_hits(hits, records: SourceRecords) -> tuple:
+    """The hits whose source's own platform resolved a record — the D1
+    rule's filter, in ONE place.
+
+    The confidence aggregate and the citation projection must select the
+    SAME sources: a filter spelled twice is two filters that can drift, and
+    the drift is the confidence poison the rule exists to keep out. Both
+    consumers call this.
+    """
+
+    return tuple(hit for hit in hits if records.record_for(hit.provenance) is not None)
+
+
 async def resolve_source_records(
     provenances, *, document_source: DocumentMetadataSource, concept_source: ConceptSource, bearer: str | None
 ) -> SourceRecords:
@@ -147,13 +165,11 @@ async def resolve_source_records(
     file_ids: list[str] = []
     addresses: list[tuple[str, str]] = []
     for provenance in provenances:
-        if _is_concept(provenance):
-            address = _concept_address(provenance)
-            if address not in addresses:
-                addresses.append(address)
+        if is_concept_provenance(provenance):
+            addresses.append(_concept_address(provenance))
             continue
         file_id = _legacy_file_id(provenance)
-        if file_id and file_id not in file_ids:
+        if file_id:
             file_ids.append(file_id)
     documents, concepts = await asyncio.gather(
         _resolve_documents(file_ids, document_source, bearer),
@@ -168,15 +184,21 @@ async def _resolve_documents(file_ids, source: DocumentMetadataSource, bearer: s
 
     A resolution that FAILED (a deleted document, a repository that is down)
     is a resolution that did not happen: it never fails the answer, and the
-    source it belonged to is not surfaced.
+    source it belonged to is not surfaced. The rule reads SYMMETRICALLY to
+    the concepts' branch: a record that carries no usable name resolved the
+    file's identity, not its NAME — and an unresolved name is as fatal as an
+    unresolved identity, here as on the concept cards.
     """
 
     async def _one(file_id: str) -> dict | None:
         try:
-            return await source.fetch_metadata(file_id, bearer)
+            record = await source.fetch_metadata(file_id, bearer)
         except Exception as failure:  # noqa: BLE001 — a failed lookup is an unresolved source
             logger.warning("source metadata did not resolve: the source is not surfaced (%s)", type(failure).__name__)
             return None
+        if not isinstance(record, dict) or not str(record.get("file_name") or "").strip():
+            return None
+        return record
 
     unique = list(dict.fromkeys(file_ids))
     records = await asyncio.gather(*(_one(file_id) for file_id in unique))
@@ -213,6 +235,21 @@ async def _resolve_concepts(addresses, source: ConceptSource, bearer: str | None
     return {address: card for address, card in zip(unique, cards, strict=True) if card}
 
 
+def provenance_identity(provenance) -> tuple:
+    """The identity tuple of one provenance — the port's own convention.
+
+    ``(repo_id, concept_id)`` for an OKF concept, ``(None, file_id)`` for a
+    legacy file. The reader is shape-agnostic: the contract's object and
+    the ledger's dict carry the same identity in two shapes, and ONE reader
+    reads both — so the dedup key of the no-agent lane and the dedup key of
+    the governed ledger cannot drift apart.
+    """
+
+    if is_concept_provenance(provenance):
+        return _concept_address(provenance)
+    return (None, _legacy_file_id(provenance))
+
+
 def hit_identity(hit) -> tuple[str, str] | None:
     """The dedup identity of one hit's source: ``(repo_id, concept_id)`` for
     an OKF concept, ``(None, file_id)`` for a legacy file. Deployed keys the
@@ -222,13 +259,13 @@ def hit_identity(hit) -> tuple[str, str] | None:
     the deployed path but not here; the pair identity is the stricter,
     namespace-safe variant, and the collision is theoretical (E01's corpus
     is legacy-only)."""
-    provenance = hit.provenance
-    if _is_concept(provenance):
-        return _concept_address(provenance)
-    file_id = _legacy_file_id(provenance)
-    if file_id is None:
+    identity = provenance_identity(hit.provenance)
+    if identity == (None, None):
+        # A legacy source with no file id has NO identity — the dedup key
+        # would be a constant, and every such source would collide with
+        # every other.
         return None
-    return (None, file_id)
+    return identity
 
 
 def _crawled_url(record: dict) -> str:
@@ -317,7 +354,7 @@ def source_document_envelope(hits, score_calibrator=None, *, records: SourceReco
             # The D1 rule: a source whose record did not resolve is not
             # surfaced (and contributes no score to the aggregate).
             continue
-        if _is_concept(provenance):
+        if is_concept_provenance(provenance):
             # The shape-agnostic read: a provenance reaches this projection
             # in either shape (the contract's object, the ledger's dict),
             # and the variant is decided the same way in both.
@@ -353,7 +390,7 @@ def source_documents_from_citations(citations, *, records: SourceRecords) -> lis
         record = records.record_for(provenance)
         if record is None:
             continue
-        if _is_concept(provenance):
+        if is_concept_provenance(provenance):
             envelope.append(
                 _okf_entry(
                     provenance.get("concept_id"),

@@ -76,7 +76,7 @@ from noagent.config import NoAgentConfig
 
 logger = logging.getLogger(__name__)
 
-PRODUCER_ID = "agent.v06_harness"
+PRODUCER_ID = "measurement.v06_harness"
 
 TOOL_NAME = "search_knowledge"
 """The matrix registers ONE tool under the seam's working name: every cell

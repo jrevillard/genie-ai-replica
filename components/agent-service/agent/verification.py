@@ -80,8 +80,13 @@ import logging
 from dataclasses import dataclass, field
 
 import tracing
-from capabilities.citations import SourceRecords, resolve_source_records, source_documents_from_citations
-from capabilities.contract import OKF_CONCEPT_SOURCE
+from capabilities.citations import (
+    SourceRecords,
+    is_concept_provenance,
+    provenance_identity,
+    resolve_source_records,
+    source_documents_from_citations,
+)
 
 from .budget import BudgetExhausted, RunBudgetMonitor
 
@@ -128,15 +133,6 @@ INSUFFICIENCY_RESPONSE = "I could not find supporting evidence in the knowledge 
 # search or read ever succeeded.
 REASON_DEGRADED_RETRIEVAL = "degraded_availability"
 REASON_NO_SUCCESSFUL_RETRIEVAL = "no_successful_retrieval"
-
-
-def citation_identity(provenance: dict) -> tuple:
-    """The stable identity key of one provenance dict — the no-agent
-    dedup's convention: ``(repo_id, concept_id)`` for an OKF concept,
-    ``(None, file_id)`` for a legacy file."""
-    if provenance.get("source") == OKF_CONCEPT_SOURCE:
-        return (provenance.get("repo_id"), provenance.get("concept_id"))
-    return (None, provenance.get("file_id"))
 
 
 class RetrievalLedger:
@@ -225,7 +221,7 @@ class RetrievalLedger:
         self._findings.append(dict(finding))
 
     def _add(self, entry: dict) -> None:
-        identity = citation_identity(entry["provenance"])
+        identity = provenance_identity(entry["provenance"])
         if identity in self._seen:
             return
         self._seen.add(identity)
@@ -290,7 +286,7 @@ def check_reference_validity(entries: list[dict], authorized_repos: frozenset[st
     for entry in entries:
         provenance = entry["provenance"]
         repo_id = provenance.get("repo_id")
-        if provenance.get("source") == OKF_CONCEPT_SOURCE and repo_id not in authorized_repos:
+        if is_concept_provenance(provenance) and repo_id not in authorized_repos:
             invalid.append({"provenance": provenance, "reason": "unauthorized_repo"})
             continue
         delivered.append(entry)

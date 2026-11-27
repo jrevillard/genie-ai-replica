@@ -61,6 +61,7 @@ from capabilities.citations import (
     SourceRecords,
     resolve_source_records,
     source_document_envelope,
+    surfaced_hits,
 )
 from capabilities.contract import (
     CallerContext,
@@ -70,7 +71,15 @@ from capabilities.contract import (
     SearchKnowledgeInput,
     SearchKnowledgeResult,
 )
-from capabilities.model import chat_auth_headers, chat_choice, chat_choice_content, chat_completions_url
+from capabilities.model import (
+    MODEL_CHARS_PER_TOKEN_ESTIMATE,
+    MODEL_INPUT_SAFETY_TOKENS,
+    MODEL_PROMPT_OFFSET_TOKENS,
+    chat_auth_headers,
+    chat_choice,
+    chat_choice_content,
+    chat_completions_url,
+)
 from capabilities.sources import ConceptSource, DocumentMetadataSource
 from preparation import PreparationConfig, QueryPreparer
 from preparation.registry import LanguageRegistry
@@ -92,13 +101,13 @@ PREPARATION_DEGRADED = "preparation_degraded"
 # The rank-decay confidence default (deployed CONFIDENCE_RANK_DECAY).
 DEFAULT_CONFIDENCE_RANK_DECAY = 0.5
 
-# The answer-translation budget's constants (deployed gpu-translate-backend:
-# the prompt-offset tokens, the safety margin, the refusal floor and the
-# need bound).
-_TRANSLATION_PROMPT_OFFSET_TOKENS = 20
-_TRANSLATION_INPUT_SAFETY_TOKENS = 128
+# The answer-translation budget's refusal floor (deployed
+# gpu-translate-backend). The three numbers that SIZE a prompt against the
+# endpoint's window are NOT declared here: the translation endpoint is a
+# chat endpoint like any other, and the port owns that estimate
+# (``capabilities.model``'s ``MODEL_*`` constants) — one home for the
+# heuristic, so it cannot be retuned in one place and not the other.
 _TRANSLATION_MIN_OUTPUT_BUDGET = 256
-_TRANSLATION_CHARS_PER_TOKEN = 4
 
 
 def _rank_weighted_confidence(scores: list[float], decay: float) -> float:
@@ -178,9 +187,9 @@ class AnswerTranslator:
             # inside the division it would contribute only 5. It stays out
             # of the need bound too: the scaffolding around the prompt
             # produces no output, so it does not multiply into the cap.
-            estimated_tokens = math.ceil(len(answer_prompt) / _TRANSLATION_CHARS_PER_TOKEN)
-            input_tokens = estimated_tokens + _TRANSLATION_PROMPT_OFFSET_TOKENS
-            room = window - input_tokens - _TRANSLATION_INPUT_SAFETY_TOKENS
+            estimated_tokens = math.ceil(len(answer_prompt) / MODEL_CHARS_PER_TOKEN_ESTIMATE)
+            input_tokens = estimated_tokens + MODEL_PROMPT_OFFSET_TOKENS
+            room = window - input_tokens - MODEL_INPUT_SAFETY_TOKENS
             if room < _TRANSLATION_MIN_OUTPUT_BUDGET:
                 logger.warning(f"Answer translation refused: the prompt leaves {room} of {window} tokens.")
                 return text, "failed"
@@ -324,8 +333,19 @@ class NoAgentPipeline:
         refuses before preparation touches anything.
 
         ``bearer`` is the caller's token: the metadata read the citations
-        need is authorized (the deployed path passes its own).
+        need is authorized (the deployed path passes its own). A run
+        without one is not refused — some deployments read a repository
+        that requires none — but it is not SILENT either: a repository
+        that does require auth resolves nothing, the D1 rule then surfaces
+        no source, and the answer would read as a quality regression. The
+        warning is what makes the two distinguishable.
         """
+        if not (bearer or "").strip():
+            logger.warning(
+                "no caller token on this run: the source-metadata reads carry "
+                "no credentials, so a repository that authenticates resolves "
+                "nothing and no source is surfaced (the D1 rule)"
+            )
         async with self._lane.acquire():
             return await self._run(history, context, source_language, target_language, user_context, bearer)
 
@@ -471,10 +491,11 @@ class NoAgentPipeline:
     ) -> NoAgentResult:
         hits = tuple(search_result.hits) if search_result else ()
         # The SURFACED hits: a source whose record did not resolve is not
-        # cited and contributes no score (the D1 rule). One rule, in
-        # the citations module — the projection and the aggregate cannot
-        # disagree about it.
-        surfaced = tuple(hit for hit in hits if source_records.record_for(hit.provenance) is not None)
+        # cited and contributes no score (the D1 rule). The filter is the
+        # citations module's own (surfaced_hits) — the projection and the
+        # aggregate consume the same selection, not two filters that must
+        # agree by convention.
+        surfaced = surfaced_hits(hits, source_records)
         calibrate = self._score_calibrator
         envelope = source_document_envelope(surfaced, calibrate, records=source_records)
         # The confidence aggregate runs over the SURFACED hits — duplicates

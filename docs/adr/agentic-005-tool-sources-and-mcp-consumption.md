@@ -31,8 +31,8 @@ use case (the agent must reach tools beyond the corpus — building-block APIs s
 
 ## Context
 
-The agentic path registers two document tools in `document_toolset`
-(`components/agent-service/agent/toolset.py`). Issue #603 planned GovStack building-block
+The agentic path registers two document tools behind the `ToolSource` port
+(`components/agent-service/agent/sources.py`). Issue #603 planned GovStack building-block
 APIs as standalone MCP servers (Auth, Payments, Scheduler, Registration), « mock for now »,
 through the `mcpo` proxy. A later, merged decision dropped the proxy: « `mcpo` is not used —
 the MCP SDK client replaces it » and « GENIE owns the MCP client ». The Server-Side Tools
@@ -128,5 +128,5 @@ the request.**
 - Design: `docs/superpowers/specs/2026-11-25-agentic-iteration-2-architecture-design.md` (§4, §9)
 - Issue #603; the Server-Side Tools record: MR !279 and its ADR 0002 (read at `013c3e72`), disposition in `docs/adr/agentic-008-server-side-tools-disposition.md`
 - `_bmad-output/archived/opea-1.5-upgrade/planning-artifacts/OPEA-1.5-upgrade-analysis.md` (« `mcpo` is not used »)
-- `components/agent-service/agent/registry.py`, `components/agent-service/agent/toolset.py`, `components/agent-service/capabilities/contract.py`
+- `components/agent-service/agent/registry.py`, `components/agent-service/agent/sources.py`, `components/agent-service/capabilities/contract.py`
 - Model Context Protocol specification, revision 2026-07-28; Python SDK `mcp` 2.3.0 (PyPI)

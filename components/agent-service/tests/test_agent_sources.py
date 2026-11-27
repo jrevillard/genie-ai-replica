@@ -1,10 +1,11 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The production toolset home and the preparation leg in the governed run.
+"""The production document source and the preparation leg in the governed run.
 
-Mutation-sensitive pins: the registered toolset lives in ``agent.toolset``
-and the probe RE-IMPORTS it (the same function object — a move, not a
-copy); the probe path (``preparer=None``) keeps the pre-move builder's
+Mutation-sensitive pins: the registered toolset is built over
+``agent.sources``' source and the suites reach the shared helper in
+``conftest`` (the probe does NOT re-export a builder); the probe path
+(``preparer=None``) keeps the pre-move builder's
 behavior except a missing or blank query, now refused before the port (a
 valid query rides ``passthrough_english``); a wired preparer
 feeds the PREPARED query to the port (never the raw text) and reports its
@@ -19,6 +20,7 @@ refuses it before any call.
 """
 
 import asyncio
+import json
 
 import pytest
 from conftest import (
@@ -30,12 +32,13 @@ from conftest import (
     ScriptedLoopModel,
     canned_read_result,
     canned_search_result,
+    document_registry,
     multihop_turns,
     orchestrator_config,
     run_budget,
 )
 
-import agent.toolset
+import agent.sources
 import measurement.probe
 from agent.budget import RunBudgetMonitor
 from agent.events import AgentEvent
@@ -46,7 +49,8 @@ from agent.orchestrator import (
     build_preparer_factory,
 )
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
-from agent.toolset import document_toolset
+from agent.registry import build_registry
+from agent.sources import READ_SOURCE_DEFINITION, SEARCH_KNOWLEDGE_DEFINITION, DocumentToolSource
 from agent.verification import INSUFFICIENCY_RESPONSE
 from capabilities.contract import (
     CallerContext,
@@ -94,12 +98,12 @@ def _judge_turn():
 
 
 # ---------------------------------------------------------------------
-# The toolset home: the registered toolset left the probe module
+# The document source: the registered toolset left the probe module
 # ---------------------------------------------------------------------
 
 
-def test_the_probe_reimports_the_moved_builder():
-    assert measurement.probe.document_toolset is agent.toolset.document_toolset
+def test_the_probe_reimports_the_moved_source():
+    assert measurement.probe.DocumentToolSource is agent.sources.DocumentToolSource
     # The probe module keeps its own prompt; the governed default is the
     # production one (the orchestrator's default, not the harness's).
     assert PROBE_SYSTEM_PROMPT != PRODUCTION_SYSTEM_PROMPT
@@ -107,7 +111,7 @@ def test_the_probe_reimports_the_moved_builder():
 
 def test_the_probe_path_is_unchanged_passthrough():
     port = AgentFakePort(search_result=canned_search_result())
-    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget)
+    registry = document_registry(port, CONTEXT, orchestrator_config().operation_budget)
     assert registry.names() == ("search_knowledge", "read_source")
 
     result = asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
@@ -120,6 +124,123 @@ def test_the_probe_path_is_unchanged_passthrough():
     assert call["request"].query.preparation_status == QueryPreparationStatus.PASSTHROUGH_ENGLISH
 
 
+def test_the_executor_carries_the_identity_of_the_call_not_of_the_construction():
+    """The narrowing travels in the context, never in the arguments.
+
+    The source is built ONCE; the caller's identity arrives with the
+    CALL. Two calls on one source must reach two different ports — the
+    one each call's identity bound — and the executor must keep that
+    binding for the whole life of the pair it returned.
+    """
+    served: list[tuple[CallerContext, str | None]] = []
+    ports: dict[str, AgentFakePort] = {}
+
+    def port_factory(context, bearer):
+        served.append((context, bearer))
+        port = AgentFakePort(search_result=canned_search_result())
+        ports[bearer] = port
+        return port
+
+    source = DocumentToolSource(port_factory, orchestrator_config().operation_budget)
+    first = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
+    second = CallerContext(user_id="u-2", authorized_graph_names=("GRAPH",))
+
+    build_registry(source.tools(first, "bearer-1"))
+    second_registry = build_registry(source.tools(second, "bearer-2"))
+
+    # The identity travelled with the CALL, not with the construction.
+    assert served == [(first, "bearer-1"), (second, "bearer-2")]
+
+    # The SECOND registry's executor answers through the SECOND call's
+    # port, with the SECOND call's context — the narrowing is the
+    # context's, and it never reaches the arguments.
+    asyncio.run(second_registry.dispatch("search_knowledge", {"query": "the model query"}))
+    assert len(served) == 2, "the executor re-bound the port at dispatch time"
+    [call] = ports["bearer-2"].search_calls
+    assert call["context"] is second
+
+
+def test_a_tighter_per_tool_budget_reaches_the_executor():
+    """The ``budgets=`` override is a real wiring, not decoration: the
+    budget the source hands the executor for a NAMED tool is the
+    OVERRIDE — the ceiling stays for every tool the map does not name."""
+    override = OperationBudget(timeout_ms=1000, max_results=1, max_result_bytes=1024)
+    port = AgentFakePort(search_result=canned_search_result())
+    source = DocumentToolSource(
+        lambda context, bearer: port,
+        orchestrator_config().operation_budget,
+        budgets={"search_knowledge": override},
+    )
+    registry = build_registry(source.tools(CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",)), None))
+    asyncio.run(registry.dispatch("search_knowledge", {"query": "q"}))
+    # The fake records the budget every call carries: the override rode.
+    assert port.search_calls[0]["budget"] is override
+
+
+def test_the_request_bundle_carries_the_call_s_full_identity():
+    """``ToolSourceContext`` is the per-request bundle: the context, the
+    bearer and the operation budget travel together to the port."""
+    context = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
+    budget = orchestrator_config().operation_budget  # ONE call: the config is a factory
+    bundle = agent.sources.ToolSourceContext(context=context, bearer="tok-1", operation_budget=budget)
+    assert bundle.context is context
+    assert bundle.bearer == "tok-1"
+    assert bundle.operation_budget is budget
+
+
+def test_the_tool_definitions_move_verbatim():
+    """The model-facing contract moves byte for byte.
+
+    The definitions are what the model is told: the name, the
+    description and the parameter schema. Nothing else in the tree pins
+    them (the recorded event stream carries the CALLS, not the
+    definitions), so a drifted description or a dropped ``required`` key
+    would pass every other gate of this plan. This pin is the witness.
+    The names ride the suite's import row (Step 7's table) — no local
+    import: a second one reds F811 against it.
+    """
+
+    assert SEARCH_KNOWLEDGE_DEFINITION.name == "search_knowledge"
+    assert SEARCH_KNOWLEDGE_DEFINITION.description == (
+        "Search the authorized knowledge corpus. Returns ranked passages with their provenance, "
+        "or an explicit insufficient-evidence outcome."
+    )
+    assert SEARCH_KNOWLEDGE_DEFINITION.parameters == {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "The English search query."},
+        },
+        "required": ["query"],
+    }
+    assert READ_SOURCE_DEFINITION.name == "read_source"
+    assert READ_SOURCE_DEFINITION.description == (
+        "Read one source the search results pointed at. A legacy document is addressed by its "
+        'file_id ("target": {"file_id": ...}); an OKF concept by repo_id and concept_id '
+        '("target": {"repo_id": ..., "concept_id": ...}).'
+    )
+    assert READ_SOURCE_DEFINITION.parameters == {
+        "type": "object",
+        "properties": {
+            "target": {
+                "type": "object",
+                "description": 'Either {"file_id": ...} or {"repo_id": ..., "concept_id": ...}.',
+            },
+        },
+        "required": ["target"],
+    }
+
+
+def test_the_declared_definitions_stay_within_their_prompt_allowance():
+    """The two definitions ride EVERY model call's prompt: their size is
+    a budget fact, pinned where the definitions live. When the budget
+    slice (S4) wires the prompt accounting it reads THIS number — a
+    definition that grows silently moves it."""
+    import dataclasses
+
+    payload = json.dumps([dataclasses.asdict(d) for d in (SEARCH_KNOWLEDGE_DEFINITION, READ_SOURCE_DEFINITION)])
+    assert len(payload) <= 4096
+
+
 # ---------------------------------------------------------------------
 # The preparation leg: the prepared query feeds the search
 # ---------------------------------------------------------------------
@@ -129,7 +250,7 @@ def test_a_wired_preparer_feeds_the_prepared_query_to_the_port():
     preparer = FakePreparer(_preparation_result(QueryPreparationStatus.TRANSLATED, "the english query"))
     statuses: list[str] = []
     port = AgentFakePort(search_result=canned_search_result())
-    registry = document_toolset(
+    registry = document_registry(
         port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer, on_preparation_status=statuses.append
     )
 
@@ -148,7 +269,7 @@ def test_an_unprepared_preparation_answers_insufficiency_and_never_touches_the_p
     preparer = FakePreparer(_preparation_result(QueryPreparationStatus.FALLBACK_TIMEOUT))
     statuses: list[str] = []
     port = AgentFakePort(search_result=canned_search_result())
-    registry = document_toolset(
+    registry = document_registry(
         port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer, on_preparation_status=statuses.append
     )
 
@@ -185,7 +306,7 @@ def test_an_unclassifiable_query_rides_the_locale_and_never_claims_english():
     preparer = QueryPreparer(config, registry, translator, default_source_language=None)
     statuses: list[str] = []
     port = AgentFakePort(search_result=canned_search_result())
-    registry_tools = document_toolset(
+    registry_tools = document_registry(
         port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer, on_preparation_status=statuses.append
     )
     result = asyncio.run(registry_tools.dispatch("search_knowledge", {"query": "???"}))
@@ -203,7 +324,7 @@ def test_an_unclassifiable_query_rides_the_locale_and_never_claims_english():
     translator = RecordingTranslator(config, registry)
     preparer = QueryPreparer(config, registry, translator, default_source_language="fr")
     port = AgentFakePort(search_result=canned_search_result())
-    registry_tools = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
+    registry_tools = document_registry(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
     result = asyncio.run(registry_tools.dispatch("search_knowledge", {"query": "???"}))
     assert result["outcome"] == "success"
     assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.TRANSLATED
@@ -219,7 +340,7 @@ def test_an_over_budget_query_is_the_contract_transient_carrier():
 
     preparer = FakePreparer(TranslationInputTooLongError("the query exceeds the translation budget"))
     port = AgentFakePort(search_result=canned_search_result())
-    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
+    registry = document_registry(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
 
     with pytest.raises(TransientError, match="translation budget"):
         asyncio.run(registry.dispatch("search_knowledge", {"query": "trop long"}))
@@ -240,7 +361,7 @@ def test_a_hanging_preparation_is_bounded_at_the_operation_budget():
 
     statuses: list[str] = []
     port = AgentFakePort(search_result=canned_search_result())
-    registry = document_toolset(
+    registry = document_registry(
         port,
         CONTEXT,
         OperationBudget(timeout_ms=50, max_results=8, max_result_bytes=65536),
@@ -271,7 +392,7 @@ def test_a_missing_or_blank_query_is_the_same_structured_refusal_on_both_paths(p
     port = AgentFakePort(search_result=canned_search_result())
     prepared = _preparation_result(QueryPreparationStatus.TRANSLATED, "unused")
     preparer = FakePreparer(prepared) if preparer_wired else None
-    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
+    registry = document_registry(port, CONTEXT, orchestrator_config().operation_budget, preparer=preparer)
 
     for bad_arguments in ({}, {"query": None}, {"query": "   "}):
         with pytest.raises(ValidationError):
@@ -297,7 +418,7 @@ def test_the_run_abstention_sink_rides_the_toolset_call_to_the_port():
         search_result=canned_search_result(hits=(), outcome=OutcomeCode.INSUFFICIENT_EVIDENCE),
         sink_reason="no_documents_retrieved",
     )
-    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget, abstention_sink=reasons)
+    registry = document_registry(port, CONTEXT, orchestrator_config().operation_budget, abstention_sink=reasons)
 
     result = asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
 
@@ -311,7 +432,7 @@ def test_an_absent_abstention_sink_passes_none_to_the_port():
     reason): the port call carries ``abstention_sink=None`` — the contract's
     optional hook stays optional, no behavior change."""
     port = AgentFakePort(search_result=canned_search_result())
-    registry = document_toolset(port, CONTEXT, orchestrator_config().operation_budget)
+    registry = document_registry(port, CONTEXT, orchestrator_config().operation_budget)
 
     result = asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
 

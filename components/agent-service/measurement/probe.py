@@ -48,17 +48,19 @@ from agent.cancellation import CancellationToken
 from agent.events import EventEmitter
 from agent.governance import governed_run
 from agent.loop import AgentLoop
+
+# The document source is a production surface, not a probe artifact — it
+# lives in :mod:`agent.sources`; the probe imports the source and the
+# registry builder, and the suites reach the shared helper in
+# `tests/conftest.py`.
+from agent.registry import build_registry
 from agent.runtime import (
     OUTCOME_ANSWERED,
     OUTCOME_CANCELLED,
     RunResult,
     build_run_inputs,
 )
-
-# The registered toolset is a production surface, not a probe artifact — it
-# lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
-# name stays importable from here for the probe harness and its suites.
-from agent.toolset import document_toolset
+from agent.sources import DocumentToolSource
 from assembly import build_stateless_adapters
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
@@ -186,7 +188,7 @@ async def run_probe(
     """
     monitor = RunBudgetMonitor(run_budget)
     token = token if token is not None else CancellationToken()
-    registry = document_toolset(port, context, operation_budget)
+    registry = build_registry(DocumentToolSource(lambda _context, _bearer: port, operation_budget).tools(context, None))
     emitter = EventEmitter(run_id=f"probe-{uuid.uuid4().hex}")
     loop = AgentLoop()
     # The run's inputs are assembled by the OWN builder

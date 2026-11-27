@@ -24,8 +24,9 @@ from agent.events import EventEmitter
 from agent.governance import governed_run
 from agent.loop import AgentLoop
 from agent.orchestrator import OrchestratorConfig
+from agent.registry import build_registry
 from agent.runtime import build_run_inputs
-from agent.toolset import document_toolset
+from agent.sources import DocumentToolSource
 from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
 from capabilities.adapters.vllm import VllmModelConfig
@@ -340,7 +341,7 @@ def _governed_loop(
     runner = LoopRunner(
         runtime if runtime is not None else AgentLoop(),
         model=model,
-        registry=document_toolset(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
+        registry=document_registry(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
         token=token,
         emitter=emitter,
@@ -661,6 +662,18 @@ def orchestrator_config(**overrides) -> OrchestratorConfig:
         judge_timeout_ms=5000,
     )
     return OrchestratorConfig(**{**values, **overrides})
+
+
+def document_registry(port, context, budget=None, **wiring):
+    """The registry the document source offers, over one port.
+
+    ONE helper for the suites: the source builds its pairs per call and
+    the registry is the authorization surface. The budget defaults to the
+    orchestrator's own; a suite that runs under another budget passes it.
+    """
+    budget = budget if budget is not None else orchestrator_config().operation_budget
+    source = DocumentToolSource(lambda _context, _bearer: port, budget, **wiring)
+    return build_registry(source.tools(context, None))
 
 
 def fake_port() -> AgentFakePort:

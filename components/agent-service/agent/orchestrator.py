@@ -63,6 +63,7 @@ from .events import MESSAGE_TRUNCATION, EventEmitter, EventKind, EventSink, run_
 from .governance import governed_run
 from .loop import AgentLoop
 from .prompt import PRODUCTION_SYSTEM_PROMPT
+from .registry import build_registry
 from .runtime import (
     OUTCOME_CANCELLED,
     OUTCOME_ERROR,
@@ -70,7 +71,7 @@ from .runtime import (
     RuntimeDriver,
     build_run_inputs,
 )
-from .toolset import document_toolset
+from .sources import DocumentToolSource
 from .verification import (
     IMPLEMENTED_POLICIES,
     JUDGE_TIMEOUT_KNOB,
@@ -477,13 +478,14 @@ class RequestOrchestrator:
             # that already started. The runtime's own failures never get
             # here: the core catches them and returns them as its result.
             preparer = self._preparer_factory(monitor, request.language) if self._preparer_factory is not None else None
-            registry = document_toolset(
-                self._port_factory(request.context, request.bearer),
-                request.context,
-                self._config.operation_budget,
-                preparer=preparer,
-                on_preparation_status=preparation_statuses.append,
-                abstention_sink=abstention_reasons,
+            registry = build_registry(
+                DocumentToolSource(
+                    self._port_factory,
+                    self._config.operation_budget,
+                    preparer=preparer,
+                    on_preparation_status=preparation_statuses.append,
+                    abstention_sink=abstention_reasons,
+                ).tools(request.context, request.bearer)
             )
             verifier = VerificationPipeline(
                 policy=self._config.verdict_policy,

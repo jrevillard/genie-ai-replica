@@ -26,6 +26,7 @@ from conftest import (
     cancel_when_started,
     canned_read_result,
     canned_search_result,
+    document_registry,
     hang_until_cancelled,
     run_budget,
 )
@@ -43,7 +44,7 @@ from capabilities.contract import (
     OutcomeCode,
 )
 from capabilities.model import ModelTurn, ToolCallRequest
-from measurement.probe import PROBE_OPERATION_BUDGET, document_toolset
+from measurement.probe import PROBE_OPERATION_BUDGET
 
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 
@@ -104,7 +105,7 @@ def _verifying_loop(model, judge_turns=(), budget=None, token=None):
     runner = LoopRunner(
         AgentLoop(),
         model=model,
-        registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
+        registry=document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
         token=token,
         emitter=EventEmitter(run_id="run-1", sink=collector.append),
@@ -118,7 +119,7 @@ def _loop(model, port=None, budget=None, token=None, registry=None, verifier=Non
     collector: list[AgentEvent] = []
     token = token if token is not None else CancellationToken()
     if registry is None:
-        registry = document_toolset(port if port is not None else _port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
+        registry = document_registry(port if port is not None else _port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     monitor = RunBudgetMonitor(budget or DEFAULT_BUDGET)
     runner = LoopRunner(
         AgentLoop(),
@@ -653,7 +654,7 @@ def test_the_judge_runs_after_the_text_events_never_before_the_first_chunk():
     runner = LoopRunner(
         AgentLoop(),
         model=ScriptedLoopModel(MULTI_HOP_TURNS),
-        registry=document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
+        registry=document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET),
         monitor=monitor,
         token=CancellationToken(),
         emitter=EventEmitter(run_id="run-1", sink=lambda event: sequence.append(event.kind.value)),
@@ -702,7 +703,7 @@ def test_a_missing_query_argument_is_structured_tool_feedback_on_both_toolset_pa
                 )
             ),
             port=port,
-            registry=document_toolset(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET, preparer=preparer),
+            registry=document_registry(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET, preparer=preparer),
         )
         result = asyncio.run(loop.run("q"))
 

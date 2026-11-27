@@ -8,7 +8,7 @@ vocabulary (:mod:`.events`), the server-side tool registry that is the
 authorization surface (:mod:`.registry`), the run budget and its monitor
 (:mod:`.budget`), the cancellation hook (:mod:`.cancellation`), the
 provisional custom minimal loop (:mod:`.loop`), the governed production
-prompt (:mod:`.prompt`), the registered toolset (:mod:`.toolset`), the
+prompt (:mod:`.prompt`), the tool sources (:mod:`.sources`), the
 taint scan (:mod:`.taint`), the citation verification pipeline
 (:mod:`.verification`), the runtime port and its bounded model client
 (:mod:`.runtime`), the tool dispatcher (:mod:`.dispatcher`) and the core's
@@ -41,7 +41,7 @@ from .runtime import (
     RunResult,
     RuntimeDriver,
 )
-from .toolset import document_toolset
+from .sources import DocumentToolSource, ToolSource, ToolSourceContext
 
 __all__ = [
     "BFF_FRAME_NAMES",
@@ -55,6 +55,7 @@ __all__ = [
     "BoundedModelClient",
     "BudgetExhausted",
     "CancellationToken",
+    "DocumentToolSource",
     "EventEmitter",
     "EventKind",
     "EventSink",
@@ -70,8 +71,9 @@ __all__ = [
     "ToolDispatcher",
     "ToolExecutor",
     "ToolRegistry",
+    "ToolSource",
+    "ToolSourceContext",
     "UnregisteredToolError",
-    "document_toolset",
     "governed_run",
     "run_cancellable",
 ]

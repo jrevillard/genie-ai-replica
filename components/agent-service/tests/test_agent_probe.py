@@ -26,6 +26,7 @@ from conftest import (
     cancel_when_started,
     canned_read_result,
     canned_search_result,
+    document_registry,
     multihop_turns,
     preparation_model_entry,
     run_budget,
@@ -49,7 +50,6 @@ from measurement.probe import (
     TOOLSET,
     ProbeConfig,
     build_port,
-    document_toolset,
     run_probe,
 )
 from noagent.config import NoAgentConfig
@@ -76,14 +76,14 @@ def _turns(content="the answer"):
 
 
 def test_the_toolset_is_exactly_the_two_document_tools():
-    registry = document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
+    registry = document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     assert registry.names() == ("search_knowledge", "read_source")
     assert [definition["function"]["name"] for definition in registry.definitions()] == list(TOOLSET)
 
 
 def test_the_search_executor_adapts_arguments_into_the_contract_types():
     port = _port()
-    registry = document_toolset(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
+    registry = document_registry(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     result = asyncio.run(registry.dispatch("search_knowledge", {"query": "complaint handling"}))
 
     call = port.search_calls[0]
@@ -98,7 +98,7 @@ def test_the_search_executor_adapts_arguments_into_the_contract_types():
 
 def test_the_read_executor_resolves_both_source_ref_variants():
     port = _port()
-    registry = document_toolset(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
+    registry = document_registry(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     legacy = asyncio.run(registry.dispatch("read_source", {"target": {"file_id": "f-1"}}))
     okf = asyncio.run(registry.dispatch("read_source", {"target": {"repo_id": "r-1", "concept_id": "c-1"}}))
 
@@ -110,7 +110,7 @@ def test_the_read_executor_resolves_both_source_ref_variants():
 
 
 def test_the_contract_refuses_malformed_arguments_and_smuggled_target_fields():
-    registry = document_toolset(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
+    registry = document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
@@ -128,7 +128,7 @@ def test_smuggled_argument_fields_change_nothing_the_port_sees():
     # scope field in the arguments is dead weight — the narrowing travels
     # in the fixed context, never in the arguments.
     port = _port()
-    registry = document_toolset(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
+    registry = document_registry(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET)
     asyncio.run(registry.dispatch("search_knowledge", {"query": "q", "graph_name": "other", "user_id": "attacker"}))
     call = port.search_calls[0]
     assert call["request"].query.text == "q"

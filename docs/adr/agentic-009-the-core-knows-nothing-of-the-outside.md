@@ -170,7 +170,7 @@ is for. Two limits are named here so no reader mistakes it for more:
 **The measurement surface owns its own tool contract.** The v06 matrix measures how an
 endpoint behaves under DIFFERENT tool declarations — a strict schema, a permissive one — so
 its schemas are the matrix's subject, not a copy of the product's. The product's
-declarations live with the product (`agent/toolset.py`), and the matrix's live with the
+declarations live with the product (`agent/sources.py`), and the matrix's live with the
 matrix (`measurement/v06_harness.py`); the two are meant to differ, and the matrix's
 verdicts describe the contract it declared. The registry's model-facing JSON schema is the
 DECLARATION the model is told; the contract's typed input is the ENFORCEMENT (ADR

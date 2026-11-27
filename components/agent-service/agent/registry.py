@@ -18,6 +18,7 @@ DECLARATION the model is told, and the typed input is the ENFORCEMENT. The
 two are kept in step by the equivalence suite, not by one code path.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -117,3 +118,24 @@ class ToolRegistry:
             raise UnregisteredToolError(name)
         result = await registered.executor(dict(arguments))
         return result
+
+
+def build_registry(pairs: Iterable[tuple[ToolDefinition, ToolExecutor]]) -> ToolRegistry:
+    """The registry of one run: the pairs the declared sources offered.
+
+    One door, still: every pair goes through :meth:`ToolRegistry.register`,
+    so a duplicate exposed name is refused exactly as it was when the
+    orchestrator registered the tools itself. Each definition's
+    ``parameters`` dict is COPIED at registration: the definitions are
+    module-level constants now (built once, shared by every request), and
+    ``ToolDefinition.parameters`` is a mutable dict — a copy at the door
+    means one request cannot mutate what every request is told, and the
+    wire stays a plain JSON-serializable dict.
+    """
+    registry = ToolRegistry()
+    for definition, executor in pairs:
+        copied = ToolDefinition(
+            name=definition.name, description=definition.description, parameters=dict(definition.parameters)
+        )
+        registry.register(copied, executor)
+    return registry

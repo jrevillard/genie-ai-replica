@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 920" role="img" aria-label="Belarus rushnik corner ornament">
+  <defs>
+    <g id="bc-diamond">
+      <rect x="-13" y="-13" width="26" height="26" transform="rotate(45)" fill="#4a6fd8"/>
+      <rect x="-6.5" y="-6.5" width="13" height="13" transform="rotate(45)" fill="#ffffff"/>
+      <rect x="-3.5" y="-3.5" width="7" height="7" transform="rotate(45)" fill="#d3455b"/>
+    </g>
+    <g id="bc-hook">
+      <path d="M0 0 Q 22 -26 44 0 Q 22 -10 0 0 Z" fill="#9db8f0"/>
+    </g>
+  </defs>
+  <g opacity="0.95">
+    <use href="#bc-diamond" transform="translate(300 90)"/>
+    <use href="#bc-diamond" transform="translate(210 190) scale(0.8)"/>
+    <use href="#bc-diamond" transform="translate(390 190) scale(0.8)"/>
+    <use href="#bc-diamond" transform="translate(120 290) scale(0.65)"/>
+    <use href="#bc-diamond" transform="translate(300 290) scale(0.65)"/>
+    <use href="#bc-diamond" transform="translate(480 290) scale(0.65)"/>
+    <use href="#bc-diamond" transform="translate(210 390) scale(0.5)"/>
+    <use href="#bc-diamond" transform="translate(390 390) scale(0.5)"/>
+    <use href="#bc-diamond" transform="translate(300 470) scale(0.4)"/>
+  </g>
+  <g opacity="0.8">
+    <use href="#bc-hook" transform="translate(300 130)"/>
+    <use href="#bc-hook" transform="translate(300 130) scale(-1 1)"/>
+    <use href="#bc-hook" transform="translate(256 240) scale(0.8)"/>
+    <use href="#bc-hook" transform="translate(344 240) scale(-0.8 0.8)"/>
+    <use href="#bc-hook" transform="translate(300 350) scale(0.6)"/>
+    <use href="#bc-hook" transform="translate(300 350) scale(-0.6 0.6)"/>
+  </g>
+  <g stroke="#4a6fd8" stroke-width="3" opacity="0.5" fill="none">
+    <path d="M300 30 L 300 560" stroke-dasharray="2 14"/>
+  </g>
+</svg>

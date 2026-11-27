@@ -1,0 +1,63 @@
+/* GENIE.AI Belarus Keycloak Login Theme — Light Mode
+ * Overrides parent genie theme tokens for the belarus deployment.
+ *
+ * Palette (cornflower / rushnik):
+ *   brand        #4A6FD8
+ *   brand hover  #3A5CC4
+ *   brand active #2E4FA3
+ *   secondary    #7EA3F2
+ *   ornament     #D3455B (rushnik red accents)
+ *   text         #22303F
+ *   bg           #F4F8FF
+ */
+
+:root {
+  /* Primary */
+  --pf-v5-global--primary-color--100: #4a6fd8;
+  --pf-v5-global--primary-color--200: #3a5cc4;
+
+  /* Link */
+  --pf-v5-global--link--Color: #4a6fd8;
+  --pf-v5-global--link--Color--hover: #3a5cc4;
+
+  /* Buttons */
+  --pf-v5-c-button--m-primary--BackgroundColor: #4a6fd8;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #3a5cc4;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #2e4fa3;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: #4a6fd8;
+  --pf-v5-c-button--m-secondary--BorderColor: #4a6fd8;
+  --pf-v5-c-button--m-secondary--Color: #4a6fd8;
+
+  /* Form focus */
+  --pf-v5-c-form-control--focus--BorderColor: #4a6fd8;
+  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(74, 111, 216, 0.25);
+
+  /* Login header */
+  --pf-v5-c-login__main-header--BorderTopColor: #4a6fd8;
+}
+
+#kc-header-wrapper {
+  color: #4a6fd8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Collapse the raw "genie" text node rendered after the <img> in the
+     parent template; the logo carries the brand. font-size:0 hides the
+     text node (unwrappable by selectors) while leaving the <img> size
+     unaffected. */
+  font-size: 0;
+}
+#kc-header-wrapper img {
+  width: 320px;
+  max-width: 90%;
+  height: auto;
+  margin-bottom: 1rem;
+}
+
+/* Login ground — cornflower sky gradient over rushnik-tinted base, with the
+   belarus wave band anchored bottom. */
+.login-pf-page {
+  background:
+    url('../img/belarus-bottom-waves.svg') no-repeat center bottom / 100% auto,
+    linear-gradient(160deg, #f4f8ff 0%, #dfeaff 55%, #c7daff 100%);
+}

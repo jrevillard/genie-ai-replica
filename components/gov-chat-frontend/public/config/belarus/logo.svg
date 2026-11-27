@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="GENIE.AI Belarus cornflower emblem">
+  <defs>
+    <linearGradient id="cw-grad" x1="256" y1="84" x2="256" y2="252" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7ea3f2"/>
+      <stop offset="1" stop-color="#2e4fa3"/>
+    </linearGradient>
+    <path id="cw-petal" d="M256 252 L232 132 Q228 106 240 84 Q248 74 256 88 Q264 74 272 84 Q284 106 280 132 Z"/>
+  </defs>
+  <g>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(0 256 256)"/>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(45 256 256)"/>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(90 256 256)"/>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(135 256 256)"/>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(180 256 256)"/>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(225 256 256)"/>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(270 256 256)"/>
+    <use href="#cw-petal" fill="url(#cw-grad)" transform="rotate(315 256 256)"/>
+  </g>
+  <g transform="rotate(22.5 256 256)" fill="#3b5bc4">
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256)"/>
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256) rotate(45 256 256)"/>
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256) rotate(90 256 256)"/>
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256) rotate(135 256 256)"/>
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256) rotate(180 256 256)"/>
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256) rotate(225 256 256)"/>
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256) rotate(270 256 256)"/>
+    <use href="#cw-petal" transform="translate(256 256) scale(0.62) translate(-256 -256) rotate(315 256 256)"/>
+  </g>
+  <circle cx="256" cy="256" r="34" fill="#16255f"/>
+  <g fill="#8fb2f7">
+    <circle cx="270.1" cy="241.9" r="4.5"/>
+    <circle cx="270.1" cy="258.1" r="4.5"/>
+    <circle cx="258.1" cy="270.1" r="4.5"/>
+    <circle cx="241.9" cy="270.1" r="4.5"/>
+    <circle cx="241.9" cy="258.1" r="4.5"/>
+    <circle cx="241.9" cy="241.9" r="4.5"/>
+    <circle cx="253.9" cy="239.9" r="4.5"/>
+    <circle cx="253.9" cy="260.1" r="4.5"/>
+  </g>
+  <circle cx="256" cy="256" r="7" fill="#8fb2f7"/>
+</svg>

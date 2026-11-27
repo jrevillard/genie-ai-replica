@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 164 1800 356" role="img" aria-label="Belarus bottom waves">
+  <defs>
+    <linearGradient id="bkw-front" x1="0" y1="380" x2="1800" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a6fd8"/>
+      <stop offset="1" stop-color="#2e4fa3"/>
+    </linearGradient>
+    <linearGradient id="bkw-mid" x1="0" y1="240" x2="1800" y2="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9db8f0"/>
+      <stop offset="1" stop-color="#6c8de6"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#bkw-mid)" opacity="0.75" d="M0 380 C 260 300 560 300 880 380 C 1200 460 1480 460 1800 350 L 1800 520 L 0 520 Z"/>
+  <path fill="url(#bkw-front)" d="M0 460 C 320 390 640 390 960 460 C 1280 530 1520 520 1800 440 L 1800 520 L 0 520 Z"/>
+</svg>

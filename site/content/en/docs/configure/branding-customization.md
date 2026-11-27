@@ -258,7 +258,7 @@ The web app already splits the same way: hashed assets get `immutable`, the runt
 
 The runtime mount delivers **the whole `themes/` directory** to Keycloak (`/opt/keycloak/themes`), not a single theme. This matters in two ways:
 
-- **Extra themes work.** You can ship additional themes next to `genie` — for example `genie-el-salvador/`, whose `theme.properties` declares `parent=genie`. Such a parent reference only resolves when both directory names exist under the mounted directory. (Mounting one theme under a fixed name would make it inherit from itself and hang Keycloak's theme resolver — which is why the mount is the themes root.)
+- **Extra themes work.** You can ship additional themes next to `genie` — for example `genie-el-salvador/` (El Salvador deployment) or `genie-belarus/` (Belarus deployment: cornflower-and-rushnik palette, stork splash), whose `theme.properties` declares `parent=genie`. Such a parent reference only resolves when both directory names exist under the mounted directory. (Mounting one theme under a fixed name would make it inherit from itself and hang Keycloak's theme resolver — which is why the mount is the themes root.)
 - **The active theme is a setting, not the mount.** All four surfaces follow the `KEYCLOAK_THEME` environment variable at realm-import time (`configs/keycloak/genie-realm.yaml`). Default: `genie`. To activate another theme:
 
 ```bash

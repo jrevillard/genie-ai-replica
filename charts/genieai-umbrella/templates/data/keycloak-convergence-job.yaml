@@ -341,10 +341,11 @@ spec:
             - name: KEYCLOAK_PASSWORD_POLICY
               value: {{ $keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
             - name: KEYCLOAK_THEME
-              # Same fallback as the Keycloak CR's theme mount path: the
-              # tarball's only root is themes/genie, so "keycloak" (the
-              # upstream default) resolves to a directory that exists
-              # nowhere — an unthemed login page with no error anywhere.
+              # Same fallback as the Keycloak CR's theme mount path and its
+              # initContainer extraction (themes/<this value>): "keycloak"
+              # (the upstream default) names no shipped theme, so it would
+              # resolve to a directory that exists nowhere — an unthemed
+              # login page with no error anywhere.
               value: {{ $keycloak.theme | default "genie" | quote }}
             - name: KEYCLOAK_I18N_ENABLED
               value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.internationalizationEnabled "default" true)) "true" | quote }}

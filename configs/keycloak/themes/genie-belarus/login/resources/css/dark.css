@@ -1,0 +1,65 @@
+/* GENIE.AI Belarus Keycloak Login Theme — Dark Mode
+ * Activated by upstream keycloak.v2 darkMode=true.
+ *
+ * Palette:
+ *   accent       #7EA3F2 (bright cornflower for dark surfaces)
+ *   accent hover #8FB2F7
+ *   accent-2     #4A6FD8 (primary in dark mode)
+ *   fg           #EEF2FB (cool off-white)
+ *   border       #2A3A5E
+ *   bg           #0E1424
+ *   surface      #141D33
+ */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Primary (bright on dark) */
+    --pf-v5-global--primary-color--100: #7ea3f2;
+    --pf-v5-global--primary-color--200: #6c8de6;
+    --pf-v5-global--primary-color--300: #8fb2f7;
+
+    /* Background */
+    --pf-v5-global--BackgroundColor--100: #0e1424;
+    --pf-v5-global--BackgroundColor--200: #141d33;
+
+    /* Text */
+    --pf-v5-global--Color--100: #eef2fb;
+    --pf-v5-global--Color--200: #9ca3af;
+    --pf-v5-global--Color--300: #6b7280;
+
+    /* Borders */
+    --pf-v5-global--BorderColor--100: #2a3a5e;
+    --pf-v5-global--BorderColor--200: #1f2b47;
+
+    /* Link */
+    --pf-v5-global--link--Color: #7ea3f2;
+    --pf-v5-global--link--Color--hover: #8fb2f7;
+
+    /* Login-specific */
+    --pf-v5-c-login__main-header--BorderTopColor: #7ea3f2;
+    --pf-v5-c-login__main-body--BackgroundColor: #141d33;
+    --pf-v5-c-login__main-header--BackgroundColor: #141d33;
+
+    /* Buttons */
+    --pf-v5-c-button--m-primary--BackgroundColor: #4a6fd8;
+    --pf-v5-c-button--m-primary--hover--BackgroundColor: #5b7fd9;
+    --pf-v5-c-button--m-primary--active--BackgroundColor: #3a5cc4;
+    --pf-v5-c-button--m-primary--focus--BackgroundColor: #4a6fd8;
+    --pf-v5-c-button--m-secondary--BorderColor: #7ea3f2;
+    --pf-v5-c-button--m-secondary--Color: #7ea3f2;
+
+    /* Form control */
+    --pf-v5-c-form-control--BackgroundColor: #141d33;
+    --pf-v5-c-form-control--BorderColor: #2a3a5e;
+    --pf-v5-c-form-control--Color: #eef2fb;
+    --pf-v5-c-form-control--focus--BorderColor: #7ea3f2;
+    --pf-v5-c-form-control--focus--BoxShadowColor: rgba(126, 163, 242, 0.25);
+  }
+
+  /* Dark ground: night sky over the same wave band. */
+  .login-pf-page {
+    background:
+      url('../img/belarus-bottom-waves.svg') no-repeat center bottom / 100% auto,
+      linear-gradient(160deg, #0e1424 0%, #131c33 55%, #1a2745 100%);
+  }
+}

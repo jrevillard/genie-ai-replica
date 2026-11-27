@@ -141,9 +141,14 @@ spec:
             command:
               - sh
               - -c
-              # tarball root is themes/<theme>/: strip 2 so the tree lands
-              # directly at the emptyDir root (= /opt/keycloak/themes/<theme>)
-              - tar -xzf /src/keycloak-themes.tgz -C /theme --strip-components=2
+              # tarball root is themes/<theme>/ (one member per shipped
+              # theme): extract ONLY the configured theme and strip 2 so its
+              # tree lands directly at the emptyDir root
+              # (= /opt/keycloak/themes/<theme>). The emptyDir must stay a
+              # SUBDIR of /opt/keycloak/themes — mounting the themes root
+              # itself would shadow the image's stock parent themes
+              # (keycloak.v2/keycloak.v3) and break every parent= resolution.
+              - tar -xzf /src/keycloak-themes.tgz -C /theme --strip-components=2 themes/{{ $kc.theme | default "genie" }}
             volumeMounts:
               - name: keycloak-themes-src
                 mountPath: /src

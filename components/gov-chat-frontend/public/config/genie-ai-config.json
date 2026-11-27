@@ -19,10 +19,7 @@
           "properties": {
             "type": {
               "type": "string",
-              "enum": [
-                "file",
-                "inline"
-              ],
+              "enum": ["file", "inline"],
               "description": "Type of icon source",
               "default": "file"
             },
@@ -31,10 +28,7 @@
               "description": "Path to SVG file (for 'file') or inline SVG content (for 'inline')"
             }
           },
-          "required": [
-            "type",
-            "value"
-          ]
+          "required": ["type", "value"]
         },
         "splash": {
           "type": "object",
@@ -42,9 +36,7 @@
           "properties": {
             "type": {
               "type": "string",
-              "enum": [
-                "file"
-              ],
+              "enum": ["file"],
               "description": "Splash images are file references; inline content is not supported",
               "default": "file"
             },
@@ -53,16 +45,10 @@
               "description": "Path to the splash image, served from the /config/ directory"
             }
           },
-          "required": [
-            "type",
-            "value"
-          ]
+          "required": ["type", "value"]
         }
       },
-      "required": [
-        "title",
-        "icon"
-      ]
+      "required": ["title", "icon"]
     },
     "theme": {
       "type": "object",
@@ -169,9 +155,7 @@
           }
         }
       },
-      "required": [
-        "brandColor"
-      ]
+      "required": ["brandColor"]
     },
     "features": {
       "type": "object",
@@ -222,10 +206,7 @@
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "file",
-                              "inline"
-                            ],
+                            "enum": ["file", "inline"],
                             "description": "Type of icon source"
                           },
                           "value": {
@@ -233,16 +214,10 @@
                             "description": "Path to SVG file or inline SVG content"
                           }
                         },
-                        "required": [
-                          "type",
-                          "value"
-                        ]
+                        "required": ["type", "value"]
                       },
                       "category": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "ENGLISH name of the category the button scopes to, as the live hierarchy publishes it (e.g. \"Taxes & Revenue\"); null for general. The hierarchy's database key is accepted too, for configurations written before this spelling."
                       },
                       "action": {
@@ -266,10 +241,7 @@
                             ]
                           }
                         },
-                        "required": [
-                          "visibleText",
-                          "hiddenPrompt"
-                        ]
+                        "required": ["visibleText", "hiddenPrompt"]
                       },
                       "styles": {
                         "type": "object",
@@ -288,35 +260,20 @@
                             "description": "Border/outline color"
                           }
                         },
-                        "required": [
-                          "backgroundColor",
-                          "hoverColor",
-                          "outlineColor"
-                        ]
+                        "required": ["backgroundColor", "hoverColor", "outlineColor"]
                       },
                       "placement": {
                         "type": "string",
-                        "enum": [
-                          "tile",
-                          "composer"
-                        ],
+                        "enum": ["tile", "composer"],
                         "default": "tile",
                         "description": "How the entry is rendered: a tile in the welcome grid, or the composer that replaces the Just Chat action."
                       }
                     },
-                    "required": [
-                      "id",
-                      "title",
-                      "icon",
-                      "category",
-                      "styles"
-                    ]
+                    "required": ["id", "title", "icon", "category", "styles"]
                   }
                 }
               },
-              "required": [
-                "buttons"
-              ]
+              "required": ["buttons"]
             }
           }
         }
@@ -328,30 +285,27 @@
       "additionalProperties": true
     }
   },
-  "required": [
-    "app",
-    "theme"
-  ],
+  "required": ["app", "theme"],
   "app": {
     "title": "GENIE.AI",
     "icon": {
       "type": "file",
-      "value": "/config/logo-genie-ai.jpeg"
+      "value": "/config/belarus/logo.png"
     },
     "splash": {
       "type": "file",
-      "value": "/config/splash-living-intelligence.png"
+      "value": "/config/belarus/splash.png"
     }
   },
   "theme": {
-    "brandColor": "#4071cb",
+    "brandColor": "#4a6fd8",
     "visual": {
       "enabled": true,
       "assets": {
-        "hero": "/config/genie-visual/assets/genie-hero-transparent.png",
-        "waves": "/config/genie-visual/assets/genie-bottom-waves.svg",
-        "mesh": "/config/genie-visual/assets/genie-dot-mesh.svg",
-        "corner": "/config/genie-visual/assets/genie-corner-network.svg"
+        "hero": "/config/belarus/hero-banner.png",
+        "waves": "/config/belarus/waves.svg",
+        "mesh": "/config/belarus/mesh.svg",
+        "corner": "/config/belarus/corner.svg"
       }
     }
   },

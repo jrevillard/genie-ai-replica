@@ -1,0 +1,17 @@
+/* GENIE.AI Belarus Account Console — Light Mode
+ * Palette-only override of the parent genie theme (cornflower / rushnik).
+ */
+
+:root {
+  --pf-v5-global--primary-color--100: #4a6fd8;
+  --pf-v5-global--primary-color--200: #3a5cc4;
+  --pf-v5-global--link--Color: #4a6fd8;
+  --pf-v5-global--link--Color--hover: #3a5cc4;
+  --pf-v5-c-button--m-primary--BackgroundColor: #4a6fd8;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #3a5cc4;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #2e4fa3;
+  --pf-v5-c-button--m-secondary--BorderColor: #4a6fd8;
+  --pf-v5-c-button--m-secondary--Color: #4a6fd8;
+  --pf-v5-c-form-control--focus--BorderColor: #4a6fd8;
+  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(74, 111, 216, 0.25);
+}

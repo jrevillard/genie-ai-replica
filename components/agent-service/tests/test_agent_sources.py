@@ -182,6 +182,7 @@ def test_a_tighter_per_tool_budget_reaches_the_executor():
 # the governed-run suite proves preparer/status/abstention ride it (population).
 # A direct constructor pin would restate dataclass semantics.
 
+
 def test_the_tool_definitions_move_verbatim():
     """The model-facing contract moves byte for byte.
 
@@ -223,6 +224,7 @@ def test_the_tool_definitions_move_verbatim():
         "required": ["target"],
     }
 
+
 def test_the_registry_hands_out_copies_the_constants_do_not_bleed_into():
     """``build_registry`` deep-copies each schema at registration: the
     definitions are module-level constants shared by every request, and a
@@ -239,7 +241,6 @@ def test_the_registry_hands_out_copies_the_constants_do_not_bleed_into():
     handed_out = registry.definitions()[0]["function"]["parameters"]
     handed_out.setdefault("properties", {})["injected"] = {"type": "string"}
     assert SEARCH_KNOWLEDGE_DEFINITION.parameters == before, "the mutation reached the constant"
-
 
 
 def test_the_declared_definitions_stay_within_their_prompt_allowance():

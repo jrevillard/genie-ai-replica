@@ -16,6 +16,10 @@
 /// The marker chatqna puts on an OKF-sourced citation.
 const String okfConceptSource = 'okf-concept';
 
+/// The marker the BFF's projection puts on a web-sourced citation
+/// (the url as its identity: document_id IS the url).
+const String webSource = 'web';
+
 String? _pick(Map doc, List<String> keys) {
   for (final key in keys) {
     final value = doc[key];
@@ -37,6 +41,10 @@ bool isOkfConceptSource(Map? doc) {
   // on plain document rows too (the web predicate does the same).
   return _pick(doc, const ['concept_id', 'conceptId']) != null;
 }
+
+/// Whether a citation is a WEB result (a web_search tool hit the BFF
+/// projects with the url as its identity).
+bool isWebSource(Map doc) => doc['source'] == webSource;
 
 /// Whether a citation row carries the BROWSE identity — a WORKING
 /// okf-concept row WITH repo identity. A row that names a concept but lost
@@ -67,11 +75,15 @@ String? sourceTitle(Map doc) =>
 /// An OKF concept has no file extension and no size — the extension
 /// fallback would render the first characters of its name ("HADI" for
 /// "hadith nawawi 36"). The badge names the FAMILY instead (web parity:
-/// OKF/accent). Documents badge by their extension, upper-cased; an
-/// extensionless document gets a generic FILE badge.
+/// OKF/accent). A web citation names its own medium (web parity: WEB/info).
+/// Documents badge by their extension, upper-cased; an extensionless
+/// document gets a generic FILE badge.
 ({String label, String tone}) sourceBadge(Map doc) {
   if (isOkfConceptSource(doc)) {
     return (label: 'OKF', tone: 'accent');
+  }
+  if (isWebSource(doc)) {
+    return (label: 'WEB', tone: 'info');
   }
   final name = sourceTitle(doc) ?? '';
   final dot = name.lastIndexOf('.');

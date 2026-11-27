@@ -258,6 +258,10 @@ class WebSearchToolSource:
 
     source_id = WEB_SEARCH_SOURCE
     served_tool_names = frozenset({"web_search"})
+    # The source DECLARES the PII egress path it implements: the query
+    # passes the pii-service, or the call fails closed. The catalog
+    # carries an open-web entry only for a source that declares it.
+    honours_open_web_egress = True
 
     def __init__(
         self,

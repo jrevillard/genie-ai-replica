@@ -181,6 +181,11 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
                     source_id=WebSearchToolSource.source_id,
                     served_tool_names=WebSearchToolSource.served_tool_names,
                     build=partial(WebSearchToolSource.from_bundle, lambda context, bearer: web_port),
+                    # The source DECLARES the PII egress path it implements
+                    # (the query passes the pii-service, or the call fails
+                    # closed) — the catalog carries an open-web entry only
+                    # for a source that declares it.
+                    honours_open_web_egress=WebSearchToolSource.honours_open_web_egress,
                 ),
             )
         return sources
@@ -190,6 +195,7 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         catalog_path,
         served_names={source.source_id: source.served_tool_names for source in sources},
         ceiling=orchestrator_config.operation_budget,
+        egress_capable_sources=frozenset(source.source_id for source in sources if source.honours_open_web_egress),
     )
     tool_source_factory = build_tool_source_factory(catalog=catalog, declared_sources=sources)
 

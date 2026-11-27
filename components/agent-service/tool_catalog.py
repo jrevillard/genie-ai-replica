@@ -19,13 +19,11 @@ The rules (the design's §4.4):
 Everything the catalog declares that this deployment cannot HONOUR is
 refused at startup rather than ignored: a required scope (the
 enforcement lands with the identity slice), a write risk or an approval
-(no approval path yet). A catalog that declared one of those and was
-silently unenforced would be a lie the deployment believes. (An
-open-web egress WAS on this list until the PII egress landed: the rule
-now lives in the leaf adapter — the query passes the pii-service or
-the call fails closed — so an open_web entry on a DECLARED source is
-carried, and one on an UNDECLARED source still takes the
-undeclared-source refusal below.)
+(no approval path yet), and an open-web egress whose source does not
+DECLARE the PII egress path (the query must pass the pii-service or the
+call fails closed — a source that declares no such path cannot honour
+it). A catalog that declared one of those and was silently unenforced
+would be a lie the deployment believes.
 """
 
 import json
@@ -46,6 +44,7 @@ logger = logging.getLogger(__name__)
 RISK_READ = "read"
 RISK_WRITE = "write"
 EGRESS_INTERNAL = "internal"
+EGRESS_OPEN_WEB = "open_web"
 
 
 class CatalogError(ValueError):
@@ -126,6 +125,11 @@ class DeclaredSource:
     cannot forget the override map, because the signature carries it.
     The source is built per request because the budget, the preparation
     leg and the sinks are the run's.
+
+    ``honours_open_web_egress`` is the source's own DECLARATION that it
+    implements the PII egress path: an open-web entry is carried only
+    when the source it names declares that path (the query passes the
+    pii-service, or the call fails closed).
     """
 
     source_id: str
@@ -135,6 +139,7 @@ class DeclaredSource:
     # positional annotation would describe a call the source's keyword-only
     # signature refuses.
     build: Callable[..., ToolSource]
+    honours_open_web_egress: bool = False
 
 
 class ToolCatalog:
@@ -158,12 +163,15 @@ def load_catalog(
     *,
     served_names: Mapping[str, frozenset[str]],
     ceiling: OperationBudget,
+    egress_capable_sources: frozenset[str] = frozenset(),
 ) -> ToolCatalog:
     """The catalog at ``path``, validated against the declared sources.
 
     ``served_names`` maps every declared source's id to the names it
     serves — the host's declaration. ``ceiling`` is the deployment's
     budget ceiling: an entry's budget may TIGHTEN it, never widen it.
+    ``egress_capable_sources`` names the sources that DECLARE the PII
+    egress path — an open-web entry on any other source is refused.
 
     Raises :class:`CatalogError` for the defects that fail the whole
     file: a duplicate exposed name (the model would see an ambiguity)
@@ -171,8 +179,9 @@ def load_catalog(
 
     EVERY per-entry defect costs the ENTRY, not the catalog: an
     undeclared source, a server-scoped tool, a required scope, a write,
-    an approval, and a budget that would WIDEN the ceiling — a loud
-    startup ERROR names each and the tool is absent.
+    an approval, an open-web egress whose source declares no PII egress
+    path, and a budget that would WIDEN the ceiling — a loud startup
+    ERROR names each and the tool is absent.
     The catalog still loads, and the deployment's other tools keep
     working.
 
@@ -202,7 +211,7 @@ def load_catalog(
                 "a duplicate exposed name is a startup error"
             )
         seen.add(entry.name)
-        refusal = _refusal(entry, served_names)
+        refusal = _refusal(entry, served_names, egress_capable_sources)
         if refusal is None and entry.budget is not None:
             refusal = _check_budget(entry, ceiling)
         if refusal is not None:
@@ -230,17 +239,23 @@ def load_catalog(
     return ToolCatalog(tuple(usable))
 
 
-def _refusal(entry: CatalogEntry, served_names: Mapping[str, frozenset[str]]) -> str | None:
+def _refusal(
+    entry: CatalogEntry,
+    served_names: Mapping[str, frozenset[str]],
+    egress_capable_sources: frozenset[str],
+) -> str | None:
     """Why this entry cannot be served HERE, or ``None`` when it can.
 
     Every reason is a fact about THIS deployment's capabilities, not about
     the file's shape: an entry that names a source this deployment does
     not declare, a server-scoped tool (no MCP source yet), a required
     scope (the enforcement lands with the identity slice), a write or an
-    approval (no approval path yet). The tool is ABSENT rather than
-    served unenforced. An open_web entry is honoured when its source is
-    declared (the adapter carries the Server-Side Tools rule) and
-    refused by the undeclared-source check when it is not.
+    approval (no approval path yet), and an open-web egress whose source
+    does not DECLARE the PII egress path. The tool is ABSENT rather than
+    served unenforced. An open_web entry is honoured only when its source
+    declares that path (the adapter carries the Server-Side Tools rule);
+    a source that declares none is refused here, and an UNDECLARED source
+    takes the undeclared-source refusal above.
     """
     if entry.source not in served_names:
         return (
@@ -256,6 +271,11 @@ def _refusal(entry: CatalogEntry, served_names: Mapping[str, frozenset[str]]) ->
         )
     if entry.risk == RISK_WRITE or entry.requires_approval:
         return "it is a write or an approval tool: no approval path is deployed yet"
+    if entry.egress == EGRESS_OPEN_WEB and entry.source not in egress_capable_sources:
+        return (
+            "it has an open-web egress and its source declares no PII egress path: "
+            "the deployment cannot honour the Server-Side Tools rule for it"
+        )
     return None
 
 

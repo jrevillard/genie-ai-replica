@@ -135,42 +135,46 @@ def test_a_write_tool_is_refused_until_the_approval_path_lands(tmp_path, caplog)
     assert catalog.entry("search_knowledge") is None
 
 
-def test_an_open_web_entry_on_a_declared_source_is_carried(tmp_path):
-    """The egress refusal is RETIRED: the Server-Side Tools rule lives in
-    the leaf adapter now (the query passes the pii-service or the call
-    fails closed), so an open_web entry whose source the deployment
-    declares is HONOURED — carried into the catalog. The entry whose source
-    is NOT declared takes the undeclared-source refusal above (pinned there
-    with ``source="web"`` exactly for this case)."""
-    catalog = load_catalog(
-        _write(tmp_path, [_entry(name="web_search", source="web", egress="open_web")]),
-        served_names={"web": frozenset({"web_search"})},
-        ceiling=CEILING,
-    )
-    assert catalog.entry("web_search") is not None
-    assert catalog.entry("web_search").egress == "open_web"
+def test_an_open_web_entry_whose_source_declares_no_pii_egress_path_is_refused(tmp_path, caplog):
+    """The egress guarantee is the SOURCE'S OWN DECLARATION: an open_web
+    entry is carried only when the source it names declares that it
+    implements the PII egress path (the query passes the pii-service or the
+    call fails closed). A source that declares no such path is REFUSED —
+    the tool is absent rather than served without the redaction."""
+    with caplog.at_level(logging.ERROR):
+        catalog = load_catalog(
+            _write(tmp_path, [_entry(name="web_search", source="web", egress="open_web")]),
+            served_names={"web": frozenset({"web_search"})},
+            ceiling=CEILING,
+        )
+    assert "PII egress path" in caplog.text
+    assert catalog.entry("web_search") is None
 
 
 def test_a_declared_open_web_tool_is_listed_and_dispatchable(tmp_path):
-    """The honouring reaches the RUN: the catalogued open_web entry on the
-    declared web source is offered by the source's pair (the model sees the
-    definition) and dispatchable (the registry carries it) — the loader's
-    refusal was the only thing between the declaration and the run."""
+    """The honouring reaches the RUN: the catalogued open_web entry on a
+    source that DECLARES the PII egress path is carried, offered by the
+    source's pair (the model sees the definition) and dispatchable (the
+    registry carries it) — the loader's refusal was the only thing between
+    the declaration and the run."""
+    port = FakeWebSearchPort(canned_web_result())
+    declared = (
+        DeclaredSource(
+            source_id=WebSearchToolSource.source_id,
+            served_tool_names=WebSearchToolSource.served_tool_names,
+            build=partial(WebSearchToolSource.from_bundle, lambda _context, _bearer: port),
+            honours_open_web_egress=True,
+        ),
+    )
     catalog = load_catalog(
         _write(tmp_path, [_entry(name="web_search", source="web", egress="open_web")]),
         served_names={"web": frozenset({"web_search"})},
         ceiling=CEILING,
+        egress_capable_sources=frozenset(source.source_id for source in declared if source.honours_open_web_egress),
     )
-    port = FakeWebSearchPort(canned_web_result())
     factory = build_tool_source_factory(
         catalog=catalog,
-        declared_sources=(
-            DeclaredSource(
-                source_id=WebSearchToolSource.source_id,
-                served_tool_names=WebSearchToolSource.served_tool_names,
-                build=partial(WebSearchToolSource.from_bundle, lambda _context, _bearer: port),
-            ),
-        ),
+        declared_sources=declared,
     )
     registry = build_registry(factory(_bundle()))
 

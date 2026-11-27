@@ -222,6 +222,12 @@ class RetrievalLedger:
 
     def _add(self, entry: dict) -> None:
         identity = provenance_identity(entry["provenance"])
+        if identity is None:
+            # No identity, no entry — a web provenance without a url (a
+            # legacy source without a file id carries (None, file_id), never
+            # bare None): a None key would let the FIRST identity-less entry
+            # in and swallow the rest.
+            return
         if identity in self._seen:
             return
         self._seen.add(identity)

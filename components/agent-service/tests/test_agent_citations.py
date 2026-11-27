@@ -480,3 +480,61 @@ def test_the_ledger_dedup_survives_the_projection_url_keyed_first_served():
     assert len(envelope) == 1
     assert envelope[0]["document_id"] == "https://example.invalid/a"
     assert envelope[0]["document_name"] == "Page A"
+
+
+def test_a_web_score_that_is_not_a_readable_number_carries_none():
+    """The ledger's one score rule applies to the web entry too: an
+    unreadable score is ``None``, never guessed into a number — and a
+    ``bool`` IS an ``int`` in Python, so ``True``/``False`` are unreadable
+    here, not numbers."""
+    entries = source_documents_from_citations(
+        [
+            {
+                "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
+                "text": "t",
+                "score": True,
+            },
+            {
+                "provenance": {"source": "web", "url": "https://example.invalid/b", "title": "Page B"},
+                "text": "t",
+                "score": "0.9",
+            },
+        ],
+        records=SourceRecords(),
+    )
+    assert [entry["score"] for entry in entries] == [None, None]
+
+
+def test_a_web_provenance_without_a_url_has_no_identity_and_projects_nothing():
+    """The url IS the web identity (ADR agentic-009): a provenance without
+    one has NO identity — ``None``, like a legacy source without a file id —
+    so it neither dedups against anything (a constant key would let the
+    first url-less hit swallow the rest) nor projects an empty row."""
+    assert provenance_identity({"source": "web", "title": "no url"}) is None
+    assert provenance_identity({"source": "web", "url": "https://x", "title": "t"}) == ("web", "https://x")
+
+    envelope = source_document_envelope(
+        [
+            SimpleNamespace(
+                provenance={"source": "web", "title": "no url"},
+                text="t",
+                score=1.0,
+            ),
+            SimpleNamespace(
+                provenance={"source": "web", "url": "https://example.invalid/real", "title": "The real one"},
+                text="t",
+                score=2.0,
+            ),
+            SimpleNamespace(
+                provenance={"source": "web", "title": "also no url"},
+                text="t",
+                score=3.0,
+            ),
+        ],
+        records=SourceRecords(),
+    )
+    # the url-less rows are skipped outright — no empty-titled card, no
+    # swallowed neighbour.
+    assert [(e["document_id"], e["document_name"]) for e in envelope] == [
+        ("https://example.invalid/real", "The real one")
+    ]

@@ -773,6 +773,26 @@ describe('CAP-3 okf concept sources', () => {
     expect(row.title).toBe('The policy');
   });
 
+  it('a non-object row in source_documents is filtered, not fatal', () => {
+    // The payload forwards verbatim now (the BFF maps nothing): a broken or
+    // older payload can carry null/string rows — they drop, the real rows
+    // still map, and the metadata handling never throws.
+    const rows = translateSources([
+      null,
+      'a string row',
+      ['nested', 'array'],
+      {
+        document_id: 'https://example.gov/policy',
+        document_name: 'The policy',
+        url: 'https://example.gov/policy',
+        score: null,
+        source: 'web'
+      }
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source).toBe('web');
+  });
+
   it('rehydrate grafts okf identity onto persisted concept rows and clears the dead URL', () => {
     sessionStorage.setItem(
       STORAGE_KEY,

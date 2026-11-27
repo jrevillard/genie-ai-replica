@@ -16,8 +16,9 @@
 /// The marker chatqna puts on an OKF-sourced citation.
 const String okfConceptSource = 'okf-concept';
 
-/// The marker the BFF's projection puts on a web-sourced citation
-/// (the url as its identity: document_id IS the url).
+/// The marker the agent service's projection puts on a web-sourced citation
+/// (capabilities/citations.py — the BFF forwards it verbatim; the url is the
+/// identity: document_id IS the url).
 const String webSource = 'web';
 
 String? _pick(Map doc, List<String> keys) {

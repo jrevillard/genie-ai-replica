@@ -262,23 +262,29 @@ async def _resolve_concepts(addresses, source: ConceptSource, bearer: str | None
     return {address: card for address, card in zip(unique, cards, strict=True) if card}
 
 
-def provenance_identity(provenance) -> tuple:
+def provenance_identity(provenance) -> tuple | None:
     """The identity tuple of one provenance — the port's own convention.
 
     ``(repo_id, concept_id)`` for an OKF concept, ``(None, file_id)`` for a
     legacy file, ``(source, url)`` for a web result (url-keyed, tagged by
     the marker — without the branch every web entry would dedup to the
-    legacy ``(None, None)`` and one result would swallow the rest). The
-    reader is shape-agnostic: the contract's object and the ledger's dict
-    carry the same identity in two shapes, and ONE reader reads both — so
-    the dedup key of the no-agent lane and the dedup key of the governed
-    ledger cannot drift apart.
+    legacy ``(None, None)`` and one result would swallow the rest). A web
+    provenance with NO url has no identity — ``None``, the same answer a
+    legacy source without a file id gets: a constant key would make the
+    first url-less hit swallow every other. The reader is shape-agnostic:
+    the contract's object and the ledger's dict carry the same identity in
+    two shapes, and ONE reader reads both — so the dedup key of the
+    no-agent lane and the dedup key of the governed ledger cannot drift
+    apart.
     """
 
     if is_concept_provenance(provenance):
         return _concept_address(provenance)
     if _is_web_provenance(provenance):
-        return (WEB_SEARCH_SOURCE, str(provenance.get("url") or ""))
+        url = str(provenance.get("url") or "")
+        if not url:
+            return None
+        return (WEB_SEARCH_SOURCE, url)
     return (None, _legacy_file_id(provenance))
 
 
@@ -346,7 +352,10 @@ def _web_entry(provenance, score=None) -> dict:
     corpus-retrieval scores, and a web relevance score is a different scale."""
     url = str(provenance.get("url") or "")
     title = str(provenance.get("title") or "").strip() or url
-    readable = isinstance(score, (int, float))
+    # bool IS an int in Python — a True/False score is not a readable number,
+    # it is a broken one; the ledger's rule (an unreadable score is None,
+    # never guessed into a number) applies.
+    readable = isinstance(score, (int, float)) and not isinstance(score, bool)
     return {
         "document_id": url,
         "document_name": title,
@@ -398,6 +407,12 @@ def source_document_envelope(hits, score_calibrator=None, *, records: SourceReco
     for hit in hits:
         provenance = hit.provenance
         identity = hit_identity(hit)
+        if identity is None:
+            # No identity, no row: the legacy source without a file id and
+            # the web result without a url are both skipped BEFORE the dedup
+            # key — a None key in ``seen`` would let the FIRST identity-less
+            # hit project and swallow the rest.
+            continue
         if identity in seen:
             continue
         seen.add(identity)

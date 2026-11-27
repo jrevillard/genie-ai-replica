@@ -442,7 +442,10 @@ export default {
 
     async openDocument(doc) {
       if (isExternalHref(doc.url)) {
-        window.open(doc.url, '_blank');
+        // 'noopener' — the external page must not hold a window.opener to
+        // the app tab (reverse tabnabbing; the chat card's openSourceDocument
+        // carries it too).
+        window.open(doc.url, '_blank', 'noopener');
         this.$emit('open-document', doc);
         return;
       }

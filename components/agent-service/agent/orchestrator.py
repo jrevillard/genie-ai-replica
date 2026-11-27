@@ -33,10 +33,10 @@ One instance of this class answers one HTTP run request end to end:
   finding count.
 
 The orchestrator is transport-free: it holds the lane, the config, the
-model client, a port FACTORY (the surface builds the stateless adapters
-once and the executor per request) and a preparer FACTORY (one preparation
-entry per run, sharing the process-wide discovery caches), so the same
-class serves the run surface and the tests unchanged.
+model client, a tool-source FACTORY (the deployment's declared sources,
+built per request) and a preparer FACTORY (one preparation entry per run,
+sharing the process-wide discovery caches), so the same class serves the
+run surface and the tests unchanged.
 """
 
 import asyncio
@@ -71,7 +71,7 @@ from .runtime import (
     RuntimeDriver,
     build_run_inputs,
 )
-from .sources import DocumentToolSource
+from .sources import ToolSourceContext
 from .verification import (
     IMPLEMENTED_POLICIES,
     JUDGE_TIMEOUT_KNOB,
@@ -366,7 +366,7 @@ class RequestOrchestrator:
         config: OrchestratorConfig,
         lane: Lane,
         model_client: LoopModelClient,
-        port_factory,
+        tool_source_factory,
         metadata_source,
         concept_source,
         preparer_factory=None,
@@ -375,7 +375,12 @@ class RequestOrchestrator:
         self._config = config
         self._lane = lane
         self._model_client = model_client
-        self._port_factory = port_factory
+        # The SOURCES: the deployment's declared tool sources, built per
+        # request (the core composes nothing — the host declares which
+        # sources a deployment runs and how). The factory receives the
+        # request's bundle — the caller's identity, the operation budget
+        # and the run's own sinks — and answers the pairs to register.
+        self._tool_source_factory = tool_source_factory
         # The document repository, through the port: the verdict's citation
         # cards carry the documents' names (ADR agentic-009, F5).
         self._metadata_source = metadata_source
@@ -478,15 +483,15 @@ class RequestOrchestrator:
             # that already started. The runtime's own failures never get
             # here: the core catches them and returns them as its result.
             preparer = self._preparer_factory(monitor, request.language) if self._preparer_factory is not None else None
-            registry = build_registry(
-                DocumentToolSource(
-                    self._port_factory,
-                    self._config.operation_budget,
-                    preparer=preparer,
-                    on_preparation_status=preparation_statuses.append,
-                    abstention_sink=abstention_reasons,
-                ).tools(request.context, request.bearer)
+            bundle = ToolSourceContext(
+                context=request.context,
+                bearer=request.bearer,
+                operation_budget=self._config.operation_budget,
+                preparer=preparer,
+                on_preparation_status=preparation_statuses.append,
+                abstention_sink=abstention_reasons,
             )
+            registry = build_registry(self._tool_source_factory(bundle))
             verifier = VerificationPipeline(
                 policy=self._config.verdict_policy,
                 judge_timeout_ms=self._config.judge_timeout_ms,

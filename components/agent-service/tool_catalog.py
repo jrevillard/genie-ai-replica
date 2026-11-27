@@ -26,13 +26,14 @@ a lie the deployment believes.
 
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from agent.registry import ToolDefinition, ToolExecutor
 from agent.sources import ToolSource, ToolSourceContext
 from capabilities.contract import OperationBudget
 
@@ -282,3 +283,36 @@ def budget_overrides(catalog: ToolCatalog) -> dict[str, OperationBudget]:
     through untouched.
     """
     return {entry.name: entry.budget for entry in catalog.entries if entry.budget is not None}
+
+
+def build_tool_source_factory(
+    *,
+    catalog: ToolCatalog,
+    declared_sources: Sequence[DeclaredSource],
+) -> Callable[[ToolSourceContext], tuple[tuple[ToolDefinition, ToolExecutor], ...]]:
+    """The host's per-request factory: the declared sources, filtered by the catalog.
+
+    The DECLARATION lives with the host — it names the sources a
+    deployment runs, and how each is built. The core asks this factory,
+    per request, for the pairs to register.
+
+    The catalog filters what the sources offer: a tool the catalog does
+    not name, does not allow, or names on another source is not offered
+    at all — so the registry never carries it, the model never sees it,
+    and the dispatcher refuses it by name.
+    """
+
+    def factory(bundle: ToolSourceContext) -> tuple[tuple[ToolDefinition, ToolExecutor], ...]:
+        offered: list[tuple[ToolDefinition, ToolExecutor]] = []
+        for declared in declared_sources:
+            source = declared.build(bundle)
+            for definition, executor in source.tools(bundle.context, bundle.bearer):
+                entry = catalog.entry(definition.name)
+                if entry is None or not entry.allow:
+                    continue
+                if entry.source != declared.source_id:
+                    continue
+                offered.append((definition, executor))
+        return tuple(offered)
+
+    return factory

@@ -14,6 +14,7 @@ event and releases the lane slot.
 import asyncio
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from conftest import (
@@ -32,9 +33,11 @@ from fastapi.testclient import TestClient
 import app as app_module
 from agent.events import BFF_FRAME_NAMES
 from agent.orchestrator import AdmissionRefused, RequestOrchestrator
+from agent.sources import DocumentToolSource
 from capabilities.contract import CallerContext, PreparedQuery, QueryPreparationStatus
 from lane import AdmissionLane
 from preparation.prepare import PreparationResult
+from tool_catalog import DeclaredSource, build_tool_source_factory, load_catalog
 
 CONTEXT = {"user_id": "u-1", "authorized_graph_names": ["GRAPH"]}
 BODY = {"question": "How are complaints handled?", "deadline_ms": 5000, "context": CONTEXT, "language": "fr"}
@@ -44,11 +47,31 @@ def _runtime(model, tmp_path):
     """The app under test assembled over fakes: _RUNTIME carries the
     orchestrator itself (the module-level lazy singleton)."""
     lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
+    catalog = load_catalog(
+        Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
+        served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
+        ceiling=orchestrator_config().operation_budget,
+    )
     return RequestOrchestrator(
         config=orchestrator_config(),
         lane=lane,
         model_client=model,
-        port_factory=lambda context, bearer: fake_port(),
+        tool_source_factory=build_tool_source_factory(
+            catalog=catalog,
+            declared_sources=(
+                DeclaredSource(
+                    source_id=DocumentToolSource.source_id,
+                    served_tool_names=DocumentToolSource.served_tool_names,
+                    build=lambda bundle: DocumentToolSource(
+                        lambda context, bearer: fake_port(),
+                        bundle.operation_budget,
+                        preparer=bundle.preparer,
+                        on_preparation_status=bundle.on_preparation_status,
+                        abstention_sink=bundle.abstention_sink,
+                    ),
+                ),
+            ),
+        ),
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),
     )
@@ -270,6 +293,10 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
     status — deleting the wiring reds here, not silently."""
     for knob in REQUIRED_KNOBS:
         monkeypatch.setenv(knob, "5000")
+    monkeypatch.setenv(
+        "AGENT_TOOL_CATALOG_PATH",
+        str(Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json"),
+    )
 
     class ScriptedPreparer:
         def __init__(self):
@@ -340,6 +367,11 @@ def test_a_whitespace_only_language_records_none(tmp_path, monkeypatch):
 def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, monkeypatch):
     exhausted = replace(orchestrator_config(), max_model_calls=1)
     lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
+    catalog = load_catalog(
+        Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
+        served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
+        ceiling=exhausted.operation_budget,
+    )
     monkeypatch.setattr(
         app_module,
         "_RUNTIME",
@@ -347,7 +379,22 @@ def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, mon
             config=exhausted,
             lane=lane,
             model_client=ScriptedLoopModel(multihop_turns(answer="a fabricated answer")),
-            port_factory=lambda context, bearer: fake_port(),
+            tool_source_factory=build_tool_source_factory(
+                catalog=catalog,
+                declared_sources=(
+                    DeclaredSource(
+                        source_id=DocumentToolSource.source_id,
+                        served_tool_names=DocumentToolSource.served_tool_names,
+                        build=lambda bundle: DocumentToolSource(
+                            lambda context, bearer: fake_port(),
+                            bundle.operation_budget,
+                            preparer=bundle.preparer,
+                            on_preparation_status=bundle.on_preparation_status,
+                            abstention_sink=bundle.abstention_sink,
+                        ),
+                    ),
+                ),
+            ),
             metadata_source=FakeMetadataSource(),
             concept_source=FakeConceptSource(),
         ),

@@ -54,8 +54,10 @@ from conftest import (
 
 from agent.events import AgentEvent
 from agent.orchestrator import AgentRunRequest, RequestOrchestrator
+from agent.sources import DocumentToolSource
 from capabilities.contract import CallerContext
 from lane import AdmissionLane
+from tool_catalog import DeclaredSource, build_tool_source_factory, load_catalog
 
 FIXTURE = Path(__file__).parent / "fixtures" / "event_stream" / "orchestrated_run.json"
 # The PRE-PORT recording: the bytes the port's migration had to leave
@@ -73,11 +75,40 @@ def _capture(lane_dir: Path) -> list[dict]:
 
     collector: list[AgentEvent] = []
     model = ScriptedLoopModel(multihop_turns(answer="the answer", judge_reply='{"verdict": "grounded"}'))
+    catalog_path = lane_dir / "tool-catalog.json"
+    catalog_path.parent.mkdir(parents=True, exist_ok=True)  # the lane creates its dir later
+    catalog_document = {
+        "tools": [
+            {"source": "document", "name": "search_knowledge"},
+            {"source": "document", "name": "read_source"},
+        ]
+    }
+    catalog_path.write_text(json.dumps(catalog_document), encoding="utf-8")
+    catalog = load_catalog(
+        catalog_path,
+        served_names={"document": frozenset({"search_knowledge", "read_source"})},
+        ceiling=orchestrator_config().operation_budget,
+    )
     orchestrator = RequestOrchestrator(
         config=orchestrator_config(),
         lane=AdmissionLane(1, str(lane_dir)),
         model_client=model,
-        port_factory=lambda context, bearer: fake_port(),
+        tool_source_factory=build_tool_source_factory(
+            catalog=catalog,
+            declared_sources=(
+                DeclaredSource(
+                    source_id=DocumentToolSource.source_id,
+                    served_tool_names=DocumentToolSource.served_tool_names,
+                    build=lambda bundle: DocumentToolSource(
+                        lambda context, bearer: fake_port(),
+                        bundle.operation_budget,
+                        preparer=bundle.preparer,
+                        on_preparation_status=bundle.on_preparation_status,
+                        abstention_sink=bundle.abstention_sink,
+                    ),
+                ),
+            ),
+        ),
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),
     )

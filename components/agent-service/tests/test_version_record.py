@@ -9,6 +9,7 @@ pre-loop failure path alike."""
 import asyncio
 import json
 import re
+from pathlib import Path
 
 from conftest import (
     FakeConceptSource,
@@ -23,6 +24,7 @@ from conftest import (
 from agent.events import AgentEvent
 from agent.orchestrator import AgentRunRequest, RequestOrchestrator
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
+from agent.sources import DocumentToolSource
 from agent.version_record import (
     IMPLEMENTATION_VERSION,
     PROMPT_OVERRIDE_VERSION,
@@ -36,6 +38,7 @@ from capabilities.adapters.vllm import VllmModelClient, VllmTransientError
 from capabilities.model import ModelTurn
 from lane import AdmissionLane
 from noagent.config import NoAgentConfig
+from tool_catalog import DeclaredSource, build_tool_source_factory, load_catalog
 
 # ---------------------------------------------------------------------
 # The builder: fields, hash stability, the no-secrets invariant
@@ -207,11 +210,31 @@ class _IdentityModel(ScriptedLoopModel):
 
 
 def _orchestrator_with(model, port, tmp_path):
+    catalog = load_catalog(
+        Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
+        served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
+        ceiling=orchestrator_config().operation_budget,
+    )
     return RequestOrchestrator(
         config=orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=model,
-        port_factory=lambda context, bearer: port,
+        tool_source_factory=build_tool_source_factory(
+            catalog=catalog,
+            declared_sources=(
+                DeclaredSource(
+                    source_id=DocumentToolSource.source_id,
+                    served_tool_names=DocumentToolSource.served_tool_names,
+                    build=lambda bundle: DocumentToolSource(
+                        lambda context, bearer: port,
+                        bundle.operation_budget,
+                        preparer=bundle.preparer,
+                        on_preparation_status=bundle.on_preparation_status,
+                        abstention_sink=bundle.abstention_sink,
+                    ),
+                ),
+            ),
+        ),
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),
     )
@@ -277,14 +300,14 @@ def test_the_pre_loop_failure_path_emits_the_record(tmp_path):
     rides THAT emission too, so even a run that never entered the loop is
     attributable at start."""
 
-    def broken_factory(context, bearer):
+    def broken_factory(bundle):
         raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
 
     orchestrator = RequestOrchestrator(
         config=orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
-        port_factory=broken_factory,
+        tool_source_factory=broken_factory,
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),
     )

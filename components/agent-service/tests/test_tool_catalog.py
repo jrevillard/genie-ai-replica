@@ -11,14 +11,25 @@ These pins are about the LOADER's verdicts, so a mutation that turns a
 refusal into a pass — or a warning into silence — turns them red.
 """
 
+import asyncio
 import json
 import logging
 from pathlib import Path
 
 import pytest
+from conftest import AgentFakePort, canned_search_result
 
+from agent.registry import UnregisteredToolError, build_registry
+from agent.sources import DocumentToolSource, ToolSourceContext
 from capabilities.contract import CallerContext, OperationBudget
-from tool_catalog import MAX_CATALOG_ENTRIES, CatalogError, load_catalog
+from tool_catalog import (
+    MAX_CATALOG_ENTRIES,
+    CatalogError,
+    DeclaredSource,
+    budget_overrides,
+    build_tool_source_factory,
+    load_catalog,
+)
 
 CEILING = OperationBudget(timeout_ms=30000, max_results=10, max_result_bytes=262144)
 SERVED = {"document": frozenset({"search_knowledge", "read_source"})}
@@ -179,3 +190,92 @@ def test_a_broken_file_is_a_startup_error(tmp_path):
     with pytest.raises(CatalogError) as refusal:
         load_catalog(path, served_names=SERVED, ceiling=CEILING)
     assert "JSON" in str(refusal.value)
+
+
+def _bundle(context=CONTEXT):
+    return ToolSourceContext(
+        context=context,
+        bearer=None,
+        operation_budget=CEILING,
+    )
+
+
+def _declared(catalog, port):
+    """The suite's declaration of the document source — the host's shape."""
+    return (
+        DeclaredSource(
+            source_id=DocumentToolSource.source_id,
+            served_tool_names=DocumentToolSource.served_tool_names,
+            build=lambda bundle: DocumentToolSource(
+                lambda _context, _bearer: port,
+                bundle.operation_budget,
+                budgets=budget_overrides(catalog),
+                preparer=bundle.preparer,
+                on_preparation_status=bundle.on_preparation_status,
+                abstention_sink=bundle.abstention_sink,
+            ),
+        ),
+    )
+
+
+def _registry(catalog, port):
+    factory = build_tool_source_factory(catalog=catalog, declared_sources=_declared(catalog, port))
+    return build_registry(factory(_bundle()))
+
+
+def test_a_tool_the_catalog_does_not_name_is_neither_listed_nor_dispatchable(tmp_path):
+    catalog = load_catalog(_write(tmp_path, [_entry(name="read_source")]), served_names=SERVED, ceiling=CEILING)
+    port = AgentFakePort(search_result=canned_search_result())
+    registry = _registry(catalog, port)
+
+    assert registry.names() == ("read_source",)
+    assert [definition["function"]["name"] for definition in registry.definitions()] == ["read_source"]
+    with pytest.raises(UnregisteredToolError):
+        asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
+
+
+def test_a_tool_the_catalog_switches_off_is_neither_listed_nor_dispatchable(tmp_path):
+    catalog = load_catalog(
+        _write(tmp_path, [_entry(name="search_knowledge", allow=False), _entry(name="read_source")]),
+        served_names=SERVED,
+        ceiling=CEILING,
+    )
+    registry = _registry(catalog, AgentFakePort(search_result=canned_search_result()))
+
+    assert registry.names() == ("read_source",)
+    with pytest.raises(UnregisteredToolError):
+        asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
+
+
+def test_a_tool_the_catalog_names_on_another_source_is_not_offered(tmp_path):
+    # The catalog names ``read_source`` on the OTHER declared source, so
+    # the document source's pair is not the catalogued one and must not be
+    # offered (the source that serves it is not deployed yet).
+    catalog = load_catalog(
+        _write(
+            tmp_path,
+            [_entry(name="search_knowledge", source="document"), _entry(name="read_source", source="web")],
+        ),
+        served_names={"document": SERVED["document"], "web": frozenset()},
+        ceiling=CEILING,
+    )
+    registry = _registry(catalog, AgentFakePort(search_result=canned_search_result()))
+
+    assert registry.names() == ("search_knowledge",)
+
+
+def test_a_catalogued_budget_is_the_one_the_executor_runs_under(tmp_path):
+    catalog = load_catalog(
+        _write(
+            tmp_path,
+            [_entry(name="search_knowledge", budget={"timeout_ms": 1000, "max_results": 3, "max_result_bytes": 1024})],
+        ),
+        served_names=SERVED,
+        ceiling=CEILING,
+    )
+    port = AgentFakePort(search_result=canned_search_result())
+    registry = _registry(catalog, port)
+
+    asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
+    [call] = port.search_calls
+    assert call["budget"].timeout_ms == 1000

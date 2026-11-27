@@ -25,6 +25,7 @@ from conftest import (
     ScriptedLoopModel,
     canned_read_result,
     canned_search_result,
+    document_source_factory,
     fake_port,
     multihop_turns,
     orchestrator_config,
@@ -61,13 +62,16 @@ def _orchestrator(model, port, lane_dir, *, config=None, slots=1):
         port_calls.append({"context": context, "bearer": bearer})
         return used_port
 
+    def tool_source_factory(bundle):
+        return document_source_factory(port_factory)(bundle)
+
     lane = AdmissionLane(slots, str(lane_dir))
     return (
         RequestOrchestrator(
             config=config if config is not None else orchestrator_config(),
             lane=lane,
             model_client=model,
-            port_factory=port_factory,
+            tool_source_factory=tool_source_factory,
             metadata_source=FakeMetadataSource(),
             concept_source=FakeConceptSource(),
         ),
@@ -505,14 +509,14 @@ def test_a_port_factory_failure_answers_the_honest_terminal(tmp_path):
     so a started stream carries its terminal + record and never truncates."""
     events: list[AgentEvent] = []
 
-    def broken_factory(context, bearer):
+    def broken_factory(bundle):
         raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")
 
     orchestrator = RequestOrchestrator(
         config=orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
-        port_factory=broken_factory,
+        tool_source_factory=broken_factory,
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),
     )
@@ -575,7 +579,7 @@ def test_a_runtime_factory_failure_answers_the_honest_terminal(tmp_path):
         config=orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
-        port_factory=lambda context, bearer: fake_port(),
+        tool_source_factory=document_source_factory(lambda context, bearer: fake_port()),
         runtime_factory=broken_factory,
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),
@@ -617,7 +621,7 @@ def test_a_runtime_that_does_not_satisfy_the_port_is_refused_with_the_honest_ter
         config=orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
-        port_factory=lambda context, bearer: fake_port(),
+        tool_source_factory=document_source_factory(lambda context, bearer: fake_port()),
         runtime_factory=lambda: _NotARuntime(),
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),
@@ -643,7 +647,7 @@ def test_a_custom_runtime_is_driven_and_named_in_the_execution_version_record(tm
         config=orchestrator_config(),
         lane=AdmissionLane(1, str(tmp_path / "lane.lock")),
         model_client=ScriptedLoopModel((ModelTurn(content="never reached"),)),
-        port_factory=lambda context, bearer: fake_port(),
+        tool_source_factory=document_source_factory(lambda context, bearer: fake_port()),
         runtime_factory=lambda: runtime,
         metadata_source=FakeMetadataSource(),
         concept_source=FakeConceptSource(),

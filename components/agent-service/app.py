@@ -43,6 +43,7 @@ from agent.orchestrator import (
     RequestOrchestrator,
     build_preparer_factory,
 )
+from agent.sources import DocumentToolSource
 from agent.version_record import IMPLEMENTATION_VERSION
 from assembly import build_stateless_adapters
 from capabilities.adapters.httpx import HttpxTransport
@@ -50,6 +51,7 @@ from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import CallerContext
 from lane import AdmissionLane
 from noagent.config import NoAgentConfig
+from tool_catalog import DeclaredSource, budget_overrides, build_tool_source_factory, load_catalog
 from tracing import setup_tracing
 
 SERVICE_NAME = "agent-service"
@@ -114,12 +116,30 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     missing or unusable; an assembly ``ValueError`` names the knob the
     port-assembly read refused.
     """
+    # The environment mapping, normalized once: every read below (the
+    # budget knobs, the port assembly, the catalog's path) reads THIS.
+    env = os.environ if env is None else env
     # The budget knobs first: they are the fail-closed surface, read
     # before anything else is wired.
     orchestrator_config = OrchestratorConfig.load(env)
     noagent = NoAgentConfig.load(env)
     model_config = noagent.model_config()
     adapters = build_stateless_adapters(env)
+    # The tool catalog: the deployment file that decides what a run may
+    # call. Read at assembly, fail-closed: a missing file, an unreadable
+    # file or a duplicate exposed name is a ValueError, and the run
+    # surface answers the honest 503 naming it. An ENTRY this deployment
+    # cannot serve costs the ENTRY, not the service — the tool is absent,
+    # and the catalog's other tools keep working. The knob is a PATH (the
+    # deployment's file lives wherever the deployment mounts it).
+    catalog_path = str(env.get("AGENT_TOOL_CATALOG_PATH", "")).strip()
+    if not catalog_path:
+        raise ValueError("AGENT_TOOL_CATALOG_PATH is not set: the run surface declares no tool without a catalog")
+    catalog = load_catalog(
+        catalog_path,
+        served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
+        ceiling=orchestrator_config.operation_budget,
+    )
     transport = HttpxTransport(model_config.tls_verify)
     model_client = VllmModelClient(model_config, transport)
     lane = AdmissionLane.from_config(noagent)
@@ -134,20 +154,32 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         # point, and its context is the request's.
         return adapters.bind_executor(context, bearer)
 
+    # The declared sources: what this deployment runs, and how each is
+    # built. The core composes nothing — it asks this factory per
+    # request for the pairs to register.
+    declared_sources = (
+        DeclaredSource(
+            source_id=DocumentToolSource.source_id,
+            served_tool_names=DocumentToolSource.served_tool_names,
+            build=lambda bundle: DocumentToolSource(
+                port_factory,
+                bundle.operation_budget,
+                budgets=budget_overrides(catalog),
+                preparer=bundle.preparer,
+                on_preparation_status=bundle.on_preparation_status,
+                abstention_sink=bundle.abstention_sink,
+            ),
+        ),
+    )
+    tool_source_factory = build_tool_source_factory(catalog=catalog, declared_sources=declared_sources)
+
     return RequestOrchestrator(
         config=orchestrator_config,
         lane=lane,
         model_client=model_client,
-        port_factory=port_factory,
+        tool_source_factory=tool_source_factory,
         preparer_factory=preparer_factory,
-        # The document repository, through the port: the citation cards
-        # carry the documents' NAMES, resolved per answer (ADR agentic-009,
-        # F5). The adapter is the port's implementation; the core never
-        # learns the repository's surface.
         metadata_source=adapters.docrepo,
-        # The OKF server, through ITS port: the citation cards carry the
-        # concepts' names, read from the card the server served — each
-        # branch asks the platform that holds the source.
         concept_source=adapters.okf,
     )
 

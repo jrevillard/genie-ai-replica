@@ -2610,11 +2610,23 @@ readings are the SAME expression (`OPEA_SSL_SKIP_VERIFY != "1"` in both
 `docker-compose.yaml`: the agent-service env block gains
 `      - AGENT_WEB_SEARCH_ENABLED=${AGENT_WEB_SEARCH_ENABLED:-}` — the flag
 the ansible render already writes and compose already reads as the searxng
-replicas gate.
+replicas gate. AND the pii-service's replicas gate keeps the OKF deployments
+working: `replicas: ${PII_SERVICE_ENABLED:-${OKF_ENABLED:-0}}` — the new knob
+wins, and a raw-compose deployment that only sets `OKF_ENABLED=1` (the
+contract that existed before this slice) keeps its sidecar instead of parking
+it and failing every OKF publish closed. The compose file already carries the
+nested-default idiom (e.g. `${RAGAS_INTERNAL_SECRET:-${OKF_INTERNAL_SECRET:-}}`).
 
 `env` + `configs/README.md`: the enable recipe says the flag AND the pair
 (three settings, not two); the `AGENT_WEB_SEARCH_ENABLED` entry's text says it
-decides whether the deployment DECLARES the web source.
+decides whether the deployment DECLARES the web source. AND the agent section
+stops RE-documenting `PII_SERVICE_URL`: the knob is already documented at its
+own home (the okf-server section), and the env parser resolves every consumer
+with `.find()` — first match wins — so two documented copies means an operator
+editing one leaves the other stale and the gate reads the agent copy silently.
+The agent section references the knob in PROSE (never as a `# NAME=` line — the
+parser's documented-entry regex matches that shape) and the config-validator
+gate reads the knob at its own home.
 
 - [ ] **Step 4: Run the pins and the FULL suite**
 
@@ -2741,6 +2753,22 @@ git commit -m "feat(agent-service): the catalog refuses an open-web entry whose 
    `"score": item.get("score")` — the ledger's single rule
    (`agent/verification.py`) already coerces the field, so the adapter's own
    coercion is a second copy of the same rule.
+6. `agent/sources.py`: `WEB_SEARCH_DEFINITION.parameters` is a byte-for-byte
+   copy of the query schema `SEARCH_KNOWLEDGE_DEFINITION` declares — the
+   model-facing argument schema for `query` spelled twice, so a description or
+   type change applied to one tool leaves the other advertising a different
+   contract for the same argument. One shared constant, referenced by both
+   definitions.
+7. `capabilities/citations.py`: the web-marker discrimination is inlined at
+   the call site, while its sibling `is_concept_provenance` is a NAMED reader
+   whose docstring states the rule ("a reader that decides the branch in two
+   modules is a reader that can disagree with itself"). Mirror it: a named
+   web reader, called from `provenance_identity`.
+8. `agent/sources.py`: the document source's `from_bundle` docstring promises
+   "a new bundle field is a one-site edit" — the web twin breaks that promise
+   (two edits now). The promise is amended to say what is true ("a one-site
+   edit PER SOURCE"): the shared budget rule stays two lines, and a base
+   class for it would be more machinery than the drift it prevents.
 
 - [ ] **Step 2: The FULL suite** — green, with the count the re-run gates state.
 
@@ -2752,6 +2780,35 @@ git commit -m "feat(agent-service): the catalog refuses an open-web entry whose 
 git add components/agent-service/agent/sources.py components/agent-service/agent/verification.py components/agent-service/agent/taint.py components/agent-service/tool_catalog.py components/agent-service/capabilities/adapters/web_search.py
 git commit -m "refactor(agent-service): the cycle's simplifications"
 ```
+
+### Task F: the searxng secret has ONE home (runs BEFORE Task D)
+
+**Files:**
+- Modify: `configs/agent/searxng-settings.yml` (the duplicated key)
+- Modify: `docker-compose.yaml` (the searxng service's secret line)
+
+**Interfaces:**
+- Consumes: the upstream overwrite convention (`SEARXNG_SECRET` overrides
+  `server.secret_key`).
+- Produces: one home for the key.
+
+- [ ] **Step 1: The edit**
+
+The secret's default is spelled twice — in the mounted settings file and in
+the compose service's environment — and the environment copy always wins, so
+the file's copy is UNREACHABLE on every deployment path: an operator rotating
+the key in the file (the place the file's own comment presents as the editable
+home) sees no effect, and the two copies can diverge silently.
+
+One home: the compose service's `SEARXNG_SECRET` (the operator's runtime
+knob, already defaulted there). The settings file drops its duplicate value
+and says in a comment that the key comes from the environment (the compose
+service always sets it; SearXNG's upstream default applies otherwise).
+
+**Verify on the first enabled deployment** (no container runtime on the
+execution host, so it cannot be checked here): the searxng instance must
+START and answer `wget -q --spider http://127.0.0.1:8080/healthz` — a
+`secret_key` problem surfaces as an instance that refuses to serve.
 
 ### Task D: the gates, re-run
 

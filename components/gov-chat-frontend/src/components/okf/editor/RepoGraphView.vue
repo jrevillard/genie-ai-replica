@@ -248,11 +248,15 @@ export default {
           // the index's Contents list links every concept, so drawing them
           // forces a radial star that hides the real concept→concept graph.
           // Excluded by default; the toolbar toggle brings the hub back.
+          // #2189 (measured 2026-11-27): the target check was a
+          // `concepts.find` PER LINK — O(links x concepts) through reactive
+          // proxies — and this computed re-runs on every crawl commit EVEN
+          // while the pane is hidden (the template renders edges.length),
+          // which alone held the repo-open main thread for 43.8 s on the
+          // 6,352-concept repo. The byId map is the O(1) same answer.
           if (
             !this.showHub &&
-            (n.is_index ||
-              to === (this.byId.get('index') || {}).id ||
-              (this.concepts.find((c) => c.concept_id === to) || {}).is_index)
+            (n.is_index || to === (this.byId.get('index') || {}).id || (this.byId.get(to) || {}).is_index)
           ) {
             continue;
           }

@@ -16,6 +16,10 @@
 // One predicate, both call sites (the store's fetch guard and the source
 // card's badge): a guard that skipped the lookup while the card still
 // rendered a file-extension badge would be two truths about one citation.
+// The same one-definition rule covers BOTH badge pairs (`okfConceptBadge`
+// AND `webSourceBadge`) and both citation predicates (`isOkfConceptSource`,
+// `isWebSource`) — every predicate and badge lives here, once, for both
+// chat surfaces and the store.
 
 /** The marker chatqna puts on an OKF-sourced citation. */
 export const OKF_CONCEPT_SOURCE = 'okf-concept';
@@ -85,9 +89,7 @@ export function webSourceBadge() {
  * affordance — a WORKING okf-concept row with repo identity. A pre-CAP-1
  * row (no repoId) or a legacy document gets no affordance anywhere, so the
  * entry is never dead. ONE definition for BOTH chat surfaces (review r0:
- * the answer-card grid and the sidebar cannot drift) — and the same rule
- * now covers BOTH badge pairs: `okfConceptBadge` AND `webSourceBadge` each
- * live here, once, for both surfaces.
+ * the answer-card grid and the sidebar cannot drift).
  *
  * @param {Object} doc a mapped citation row
  * @returns {Boolean}

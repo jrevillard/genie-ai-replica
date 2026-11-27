@@ -268,14 +268,16 @@ def provenance_identity(provenance) -> tuple | None:
     ``(repo_id, concept_id)`` for an OKF concept, ``(None, file_id)`` for a
     legacy file, ``(source, url)`` for a web result (url-keyed, tagged by
     the marker — without the branch every web entry would dedup to the
-    legacy ``(None, None)`` and one result would swallow the rest). A web
-    provenance with NO url has no identity — ``None``, the same answer a
-    legacy source without a file id gets: a constant key would make the
-    first url-less hit swallow every other. The reader is shape-agnostic:
-    the contract's object and the ledger's dict carry the same identity in
-    two shapes, and ONE reader reads both — so the dedup key of the
-    no-agent lane and the dedup key of the governed ledger cannot drift
-    apart.
+    legacy ``(None, None)`` and one result would swallow the rest). A
+    provenance with NO stable identity — a web result without a url, a
+    legacy source without a file id — gets ``None``: a constant key would
+    make the first identity-less hit swallow every other. Every consumer
+    of this function handles the ``None`` (skip, or attribute to
+    ``(None, None)``) — this function is the ONE place the no-identity
+    decision is made. The reader is shape-agnostic: the contract's object
+    and the ledger's dict carry the same identity in two shapes, and ONE
+    reader reads both — so the dedup key of the no-agent lane and the
+    dedup key of the governed ledger cannot drift apart.
     """
 
     if is_concept_provenance(provenance):
@@ -285,25 +287,17 @@ def provenance_identity(provenance) -> tuple | None:
         if not url:
             return None
         return (WEB_SEARCH_SOURCE, url)
-    return (None, _legacy_file_id(provenance))
+    identity = (None, _legacy_file_id(provenance))
+    return None if identity == (None, None) else identity
 
 
-def hit_identity(hit) -> tuple[str, str] | None:
-    """The dedup identity of one hit's source: ``(repo_id, concept_id)`` for
-    an OKF concept, ``(None, file_id)`` for a legacy file. Deployed keys the
-    duplicate-skip on the flat ``file_id`` alone (an OKF chunk's ``file_id``
-    IS its ``concept_id``), so a legacy ``file_id`` colliding with an OKF
-    ``concept_id`` — or one ``concept_id`` in two repositories — dedups in
-    the deployed path but not here; the pair identity is the stricter,
-    namespace-safe variant, and the collision is theoretical (E01's corpus
-    is legacy-only)."""
-    identity = provenance_identity(hit.provenance)
-    if identity == (None, None):
-        # A legacy source with no file id has NO identity — the dedup key
-        # would be a constant, and every such source would collide with
-        # every other.
-        return None
-    return identity
+def readable_score(score) -> float | int | None:
+    """The ledger's one score rule: a number is a number — and a ``bool``
+    is NOT (it is an ``int`` to ``isinstance``, but ``True`` is not a
+    relevance); anything unreadable is ``None``, never guessed into a
+    number. ONE rule for the producer (the ledger's triples) and the
+    consumers (the projected rows), so the two cannot drift."""
+    return score if isinstance(score, (int, float)) and not isinstance(score, bool) else None
 
 
 def _crawled_url(record: dict) -> str:
@@ -352,15 +346,11 @@ def _web_entry(provenance, score=None) -> dict:
     corpus-retrieval scores, and a web relevance score is a different scale."""
     url = str(provenance.get("url") or "")
     title = str(provenance.get("title") or "").strip() or url
-    # bool IS an int in Python — a True/False score is not a readable number,
-    # it is a broken one; the ledger's rule (an unreadable score is None,
-    # never guessed into a number) applies.
-    readable = isinstance(score, (int, float)) and not isinstance(score, bool)
     return {
         "document_id": url,
         "document_name": title,
         "url": url,
-        "score": score if readable else None,
+        "score": readable_score(score),
         "source": WEB_SEARCH_SOURCE,
     }
 
@@ -406,7 +396,7 @@ def source_document_envelope(hits, score_calibrator=None, *, records: SourceReco
     seen: set[tuple[str, str] | None] = set()
     for hit in hits:
         provenance = hit.provenance
-        identity = hit_identity(hit)
+        identity = provenance_identity(provenance)
         if identity is None:
             # No identity, no row: the legacy source without a file id and
             # the web result without a url are both skipped BEFORE the dedup

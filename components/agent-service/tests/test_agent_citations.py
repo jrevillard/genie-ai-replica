@@ -486,7 +486,32 @@ def test_a_web_score_that_is_not_a_readable_number_carries_none():
     """The ledger's one score rule applies to the web entry too: an
     unreadable score is ``None``, never guessed into a number — and a
     ``bool`` IS an ``int`` in Python, so ``True``/``False`` are unreadable
-    here, not numbers."""
+    here, not numbers. The PRODUCER applies the same rule (the ledger's
+    triples never carry a bool score either)."""
+    ledger = RetrievalLedger()
+    ledger.record(
+        "web_search",
+        {
+            "result": {
+                "outcome": "success",
+                "hits": (
+                    {
+                        "text": "bool score",
+                        "provenance": {"source": "web", "url": "https://x/b", "title": "B"},
+                        "score": True,
+                    },
+                    {
+                        "text": "string score",
+                        "provenance": {"source": "web", "url": "https://x/s", "title": "S"},
+                        "score": "0.9",
+                    },
+                ),
+                "truncated": False,
+            }
+        },
+    )
+    assert [entry["score"] for entry in ledger.entries] == [None, None]
+
     entries = source_documents_from_citations(
         [
             {
@@ -512,6 +537,9 @@ def test_a_web_provenance_without_a_url_has_no_identity_and_projects_nothing():
     first url-less hit swallow the rest) nor projects an empty row."""
     assert provenance_identity({"source": "web", "title": "no url"}) is None
     assert provenance_identity({"source": "web", "url": "https://x", "title": "t"}) == ("web", "https://x")
+    # the legacy twin of the same decision, made in the SAME function
+    assert provenance_identity({"file_id": "f-1"}) == (None, "f-1")
+    assert provenance_identity({"title": "no id at all"}) is None
 
     envelope = source_document_envelope(
         [

@@ -84,6 +84,7 @@ from capabilities.citations import (
     SourceRecords,
     is_concept_provenance,
     provenance_identity,
+    readable_score,
     resolve_source_records,
     source_documents_from_citations,
 )
@@ -223,10 +224,10 @@ class RetrievalLedger:
     def _add(self, entry: dict) -> None:
         identity = provenance_identity(entry["provenance"])
         if identity is None:
-            # No identity, no entry — a web provenance without a url (a
-            # legacy source without a file id carries (None, file_id), never
-            # bare None): a None key would let the FIRST identity-less entry
-            # in and swallow the rest.
+            # No identity, no entry — ``provenance_identity`` decided it (a
+            # web provenance without a url, a legacy source without a file
+            # id): a None key would let the FIRST identity-less entry in and
+            # swallow the rest.
             return
         if identity in self._seen:
             return
@@ -244,8 +245,7 @@ def _hit_triples(result: dict) -> list[tuple[str, dict, float | None]]:
         provenance = hit.get("provenance") if isinstance(hit, dict) else None
         text = hit.get("text") if isinstance(hit, dict) else None
         if isinstance(provenance, dict) and isinstance(text, str):
-            score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
-            triples.append((text, provenance, score))
+            triples.append((text, provenance, readable_score(hit.get("score"))))
     return triples
 
 

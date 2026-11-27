@@ -100,7 +100,10 @@ def scan_tool_result(name: str, payload: dict) -> tuple[dict, ...]:
                     "tool": name,
                     "markers": list(markers),
                     "source": _SOURCE_BY_TOOL.get(name, "read_content"),
-                    "identity": list(provenance_identity(provenance)),
+                    # an identity-less provenance (no url / no file id) still
+                    # yields its finding — the injection is the point — and
+                    # attributes to (None, None)
+                    "identity": list(provenance_identity(provenance) or (None, None)),
                 }
             )
     return tuple(findings)

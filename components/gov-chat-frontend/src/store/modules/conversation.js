@@ -240,7 +240,7 @@ import conceptService from '../../services/conceptService';
 import { fetchOkfConcept, okfConceptTitle } from '../../utils/document-opener';
 // !791's shared predicate — the fetch guard below reads it (one predicate,
 // fetch guard and card badge alike; see utils/okfCitation.js).
-import { isOkfConceptSource } from '../../utils/okfCitation';
+import { isOkfConceptSource, isWebSource } from '../../utils/okfCitation';
 import i18n from '../../i18n';
 
 function t(key, fallback) {
@@ -312,7 +312,7 @@ export function translateSources(sourceDocuments = []) {
         // the marker rides in the `source` field below (`'okf-concept'` for
         // concept rows), which the okfCitation predicate reads; the batch's MD
         // type covers the extension fallback a concept row must not render.
-        type: isOkfConcept ? 'MD' : doc.source ? 'WEB' : doc.url?.split('.').pop().toUpperCase() || 'LINK',
+        type: isOkfConcept ? 'MD' : isWebSource(doc) ? 'WEB' : doc.url?.split('.').pop().toUpperCase() || 'LINK',
         size: 0,
         url: isOkfConcept ? '' : doc.url || (documentId ? `/api/files/${documentId}/download` : ''),
         score: doc.score,

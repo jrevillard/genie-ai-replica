@@ -1724,7 +1724,7 @@ services:
       # every format=json call.
       - ./configs/agent/searxng-settings.yml:/etc/searxng/settings.yml:ro
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3

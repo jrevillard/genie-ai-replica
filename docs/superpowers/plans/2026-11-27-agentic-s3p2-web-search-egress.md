@@ -2186,7 +2186,7 @@ shipped limitation): non-English queries are scanned best-effort.
       # every format=json call.
       - ./configs/agent/searxng-settings.yml:/etc/searxng/settings.yml:ro
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2205,7 +2205,7 @@ shipped limitation): non-English queries are scanned best-effort.
         max_attempts: 10
 ```
 
-   **Verify the healthcheck route on the first pull — it is NOT verifiable offline.** The `/health` route above is written from the pinned build's upstream docs; whether THAT image serves `/health` or `/healthz` cannot be checked without pulling it, and a wrong route means a PERMANENTLY unhealthy sidecar (every probe 404s while the search endpoint itself works — on Swarm, a task that restarts forever). On the first enabled deployment: `docker exec <searxng-container> wget -q --spider http://127.0.0.1:8080/health && echo OK` — if it fails, probe `/healthz` and fix this route BEFORE setting `AGENT_WEB_SEARCH_ENABLED=1`.
+   **The healthcheck route is `/healthz` — verified against the upstream source (2026-11-27).** SearXNG's Flask app registers `@app.route('/healthz', methods=['GET'])` (`searx/webapp.py`), and there is NO `/health` route: a probe on `/health` 404s on every attempt, which means a PERMANENTLY unhealthy sidecar (the search endpoint itself works, so the failure is invisible in the logs). The image ships GNU wget (`SEARXNG_PACKAGES="libstdc++ tzdata python3 wget"` in the base image), so `wget --spider` is available. Verify on the first enabled deployment with `docker exec <searxng-container> wget -q --spider http://127.0.0.1:8080/healthz && echo OK`.
 
 2. The pii-service block — three edits:
    - the profile line: `profiles: ["okf"]` → `profiles: ["okf", "agent"]`

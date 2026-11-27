@@ -67,7 +67,6 @@ async function expectWindowedRail(page, expectedTotal) {
   const sh = await page.locator(RAIL_LIST).evaluate((el) => el.scrollHeight);
   expect(sh, 'scrollHeight covers every concept').toBeGreaterThanOrEqual(expectedTotal * 26);
   expect(sh, 'scrollHeight claims no more than the collection').toBeLessThanOrEqual(expectedTotal * 60);
-  return rendered;
 }
 
 /** Pull the venue's largest repository (by concept_count) through the

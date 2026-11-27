@@ -60,12 +60,20 @@ const STUBS = {
   DsSelect: { template: '<select class="ds-select"><slot /></select>' }
 };
 
+const OkfConceptList = require('@/components/okf/editor/ConceptList.vue').default;
+
 function mountList(concepts, extraProps = {}) {
-  const OkfConceptList = require('@/components/okf/editor/ConceptList.vue').default;
   return mount(OkfConceptList, {
     props: { concepts, selectedId: null, ...extraProps },
     global: { stubs: STUBS }
   });
+}
+
+// jsdom has no layout: pin the exact geometry a handler reads
+function pinListGeometry(el, scrollTop, clientHeight, scrollHeight) {
+  Object.defineProperty(el, 'scrollTop', { value: scrollTop, configurable: true });
+  Object.defineProperty(el, 'clientHeight', { value: clientHeight, configurable: true });
+  Object.defineProperty(el, 'scrollHeight', { value: scrollHeight, configurable: true });
 }
 
 describe('ConceptList — #2189 virtualized rail', () => {
@@ -92,11 +100,7 @@ describe('ConceptList — #2189 virtualized rail', () => {
     const wrapper = mountList(makeConcepts(9999));
     const list = wrapper.find('.okf-cl__list');
     const before = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;
-    // jsdom has no layout: pin the geometry the handler reads
-    const el = list.element;
-    Object.defineProperty(el, 'scrollTop', { value: 5000, configurable: true });
-    Object.defineProperty(el, 'clientHeight', { value: 600, configurable: true });
-    Object.defineProperty(el, 'scrollHeight', { value: 8000, configurable: true });
+    pinListGeometry(list.element, 5000, 600, 8000);
     await list.trigger('scroll');
     await wrapper.vm.$nextTick();
     const after = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;
@@ -164,10 +168,7 @@ describe('ConceptList — #2189 virtualized rail', () => {
     await wrapper.find('.okf-cl__twist').trigger('click'); // collapse
     const before = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;
     const list = wrapper.find('[data-test-id="okf-cl-list"]');
-    const el = list.element;
-    Object.defineProperty(el, 'scrollTop', { value: 5000, configurable: true });
-    Object.defineProperty(el, 'clientHeight', { value: 600, configurable: true });
-    Object.defineProperty(el, 'scrollHeight', { value: 8000, configurable: true });
+    pinListGeometry(list.element, 5000, 600, 8000);
     await list.trigger('scroll');
     await wrapper.vm.$nextTick();
     const after = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;

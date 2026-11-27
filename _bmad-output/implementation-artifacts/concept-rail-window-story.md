@@ -108,6 +108,40 @@ Security review: empty findings list (client-side render slicing; the one
 filter-scroll reset cannot be unit-pinned (no layout, no clamp cascade) —
 verified live on the local build instead.
 
+## /simplify round (4 agents; applied, deferred, or dispositioned)
+
+APPLIED:
+- The two extension paths collapse into one `extend(trigger, chunk)`
+  skeleton (gate → grow → recheck); the chunk DOUBLES per chained hop so a
+  deep jump fills in ~7 hops instead of ~52 (each hop re-diffs every
+  rendered row). Per-chain argument, never instance state.
+- `onDocumentScroll` runs `canGrow()` (cheap reactive flags) before any
+  DOM geometry read.
+- The capture listener's lifetime is bound to `truncated` (a watcher adds/
+  removes it) — full-mode mounts, the common repo, carry nothing on the
+  document.
+- The unreachable defensive clamps in `tailHeight`/`visibleTree` dropped
+  (`renderedCount` is invariantly ≥ RENDER_CHUNK; the spacer renders only
+  under `truncated`).
+- The redundant `_railDead` re-check in the ul path's re-chain dropped
+  (`canGrow` is the single gate).
+- Test-file polish: the component import hoisted to module scope; the
+  geometry pinning deduped into `pinListGeometry`.
+
+DISPOSITIONED (kept as written):
+- `hideFailCard` on the document path: deliberate, not drift — the card is
+  viewport-FIXED, so any scroll that moves content under the pointer must
+  dismiss it (the wizard/dialog mounts previously let it linger).
+- The `totalCount` carry-over seed (the `_prevListFull` watcher): the
+  modeling alternative (full mode AS a window) would make every collection
+  growth jump the window to 300 unprompted — the seed buys the dialog's
+  Show-more UX, pinned by test.
+
+DEFERRED → issue #2204: `decorate()` WeakMap memoization (needs a
+mutation-path audit first — stale decorated rows on in-place edits), the
+`filtered()` haystack cache, the fenced host-CSS bound that would collapse
+the two extension paths into one, and the IntersectionObserver polish.
+
 ## Security workflow (standing)
 
 Focused /security-review BEFORE changes (result: no new inputs, no new sinks —

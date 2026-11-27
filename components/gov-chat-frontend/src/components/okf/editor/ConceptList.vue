@@ -488,13 +488,13 @@ export default {
       return this.virtualList !== 'full' && this.totalCount > this.renderedCount;
     },
     tailHeight() {
-      return Math.max(0, this.totalCount - this.renderedCount) * this.rowHeight;
+      return (this.totalCount - this.renderedCount) * this.rowHeight;
     },
     visibleTree() {
       if (this.virtualList === 'full') return this.tree;
       if (this.virtualList === 'top') return this.tree.slice(0, this.renderedCount);
       const index = this.tree[0];
-      return [{ ...index, children: index.children.slice(0, Math.max(0, this.renderedCount - 1)) }];
+      return [{ ...index, children: index.children.slice(0, this.renderedCount - 1) }];
     }
   },
   watch: {
@@ -523,21 +523,27 @@ export default {
         }
         this._prevListFull = this.virtualList === 'full';
       }
+    },
+    // #2189 — the capture-phase extension listener lives only while a tail
+    // spacer exists: full-mode mounts (the common repo) carry nothing on
+    // the document, and the editor's ul path needs no ancestor ear.
+    truncated: {
+      immediate: true,
+      handler(active) {
+        if (active === !!this._tailBound) return;
+        if (active) document.addEventListener('scroll', this.onDocumentScroll, { capture: true, passive: true });
+        else document.removeEventListener('scroll', this.onDocumentScroll, true);
+        this._tailBound = active;
+      }
     }
   },
   mounted() {
-    // #2189 review round — the wizard workbench and the concept browser
-    // scroll AROUND the rail (the rail's own ul never overflows there), so
-    // extension also listens on the capture phase: any ancestor scroll
-    // container revealing the spacer extends the window. The ul's own
-    // scroll (the editor mount) still drives onListScroll below.
-    document.addEventListener('scroll', this.onDocumentScroll, { capture: true, passive: true });
     this.$nextTick(this.measureRowHeight);
   },
   beforeUnmount() {
     // stops any in-flight extension chain (the $nextTick re-checks)
     this._railDead = true;
-    document.removeEventListener('scroll', this.onDocumentScroll, true);
+    if (this._tailBound) document.removeEventListener('scroll', this.onDocumentScroll, true);
   },
   methods: {
     decorate(c) {
@@ -617,7 +623,12 @@ export default {
     // The $nextTick re-check is what makes a deep jump (End key, scrollbar
     // fling) keep filling: extension swaps rendered rows for spacer height,
     // so the container's scrollHeight never changes and the browser emits
-    // no follow-up scroll event of its own.
+    // no follow-up scroll event of its own. Both mount geometries share the
+    // gate-grow-recheck skeleton; they differ only in the trigger predicate.
+    // The chunk DOUBLES per chained hop (per chain, never across chains —
+    // it is the call's argument): a deep jump fills in ~7 hops instead of
+    // ~52, and each hop re-diffs every already-rendered row, so fewer hops
+    // is the difference between a fill and a stall on a 10k repo.
     canGrow() {
       if (this._railDead) return false;
       if (!this.truncated) return false;
@@ -627,39 +638,36 @@ export default {
       if (this.virtualList === 'children' && !this.expanded) return false;
       return true;
     },
+    extend(trigger, chunk) {
+      if (!this.canGrow() || !trigger()) return;
+      this.renderedCount = Math.min(this.totalCount, this.renderedCount + chunk);
+      this.$nextTick(() => this.extend(trigger, chunk * 2));
+    },
     onListScroll(evt) {
       this.hideFailCard();
       const el = evt && evt.currentTarget;
       if (!el || !el.clientHeight) return;
-      this.extendWindow(el);
+      this.extend(
+        () => el.scrollTop + el.clientHeight >= this.renderedCount * this.rowHeight - EXTEND_LEAD,
+        RENDER_CHUNK
+      );
     },
     // The capture-phase path: some ancestor container (the wizard bench's
     // page, the concept browser's 60vh pane) is the real scroller. The ul's
     // own geometry is inert there — key on the spacer's viewport position
     // instead. Skipped when the ul itself overflows (the editor mount),
-    // where onListScroll already owns extension.
+    // where onListScroll already owns extension. canGrow (cheap reactive
+    // flags) runs before any DOM geometry read.
     onDocumentScroll() {
       this.hideFailCard();
+      if (!this.canGrow()) return;
       const el = this.$refs.listEl;
       if (el && el.scrollHeight > el.clientHeight + 1) return;
-      this.extendFromAncestor();
-    },
-    extendFromAncestor() {
-      if (!this.canGrow()) return;
-      const spacer = this.$refs.tailEl;
-      if (!spacer) return;
-      const r = spacer.getBoundingClientRect();
-      if (r.top > window.innerHeight + EXTEND_LEAD) return; // still below the fold
-      this.renderedCount = Math.min(this.totalCount, this.renderedCount + RENDER_CHUNK);
-      this.$nextTick(() => this.extendFromAncestor());
-    },
-    extendWindow(el) {
-      if (!this.canGrow()) return;
-      if (el.scrollTop + el.clientHeight < this.renderedCount * this.rowHeight - EXTEND_LEAD) return;
-      this.renderedCount = Math.min(this.totalCount, this.renderedCount + RENDER_CHUNK);
-      this.$nextTick(() => {
-        if (!this._railDead) this.extendWindow(el);
-      });
+      this.extend(() => {
+        const spacer = this.$refs.tailEl;
+        if (!spacer) return false;
+        return spacer.getBoundingClientRect().top <= window.innerHeight + EXTEND_LEAD;
+      }, RENDER_CHUNK);
     },
     // One real row read after mount: the spacer and the extension lead use
     // the ACTUAL row height instead of a hardcoded estimate, so the

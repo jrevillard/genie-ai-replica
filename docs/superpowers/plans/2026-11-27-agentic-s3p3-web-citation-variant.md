@@ -134,84 +134,78 @@ git commit -m "feat(agent-service): the web citation projects with the url as it
 
 ---
 
-### Task 2: The BFF — the fallback maps the web variant
+### Task 2: The BFF — the fallback mapping is REMOVED (amended 2026-11-27, operator decision)
+
+> **Why the amendment:** the original task added a web branch to the
+> BFF's `citationToSourceDocument` fallback. The operator ruled the
+> fallback out ("les fallbacks cachent les bugs"; "le transitoire
+> n'existe pas"). Verified before ruling: the agent service ALWAYS emits
+> `source_documents` in its verdict payload (`agent/verification.py:489`,
+> built unconditionally by `source_documents_from_citations`), so the
+> fallback fires ONLY for a payload from an older agent-service image —
+> and no such population exists anywhere: the whole agentic stack is
+> pre-release (the `prd` branch); at a release both images ship
+> together; the only skew window is seconds on a dev venue. A
+> never-firing second implementation of the projection, in another
+> language, is dead weight and a bug-hider (a service regression that
+> drops `source_documents` would be silently absorbed as degraded
+> rows). The service is the ONE owner of the projection; the BFF is a
+> FORWARDER, not a mapper.
+>
+> NOTE: the branch carries an interim commit (`e9e1d61d7`) from the
+> abandoned approach — it added a web branch to the fallback. This task
+> subsumes it: the whole function goes.
 
 **Files:**
-- Modify: `components/gov-chat-backend/services/agent-run-contract.js` (`citationToSourceDocument`'s web branch; its comment)
-- Test: `components/gov-chat-backend/__tests__/routes/agent-frame-writer.test.js` (one new pin)
+- Modify: `components/gov-chat-backend/services/agent-run-contract.js` (delete `citationToSourceDocument` — JSDoc block + function, ~L98-138; simplify the ternary at ~L249-251; update the comment above it; drop the export at ~L449)
+- Modify: `components/gov-chat-backend/__tests__/routes/agent-frame-writer.test.js` (remove every pin that exercises the fallback mapping and the `citationToSourceDocument` import; add the absence pin below)
 
 **Interfaces:**
-- Consumes: `citationToSourceDocument(citation)` (agent-run-contract.js:110-132) — the fallback for a payload that names only raw `citations`; `WEB_SEARCH_SOURCE = 'web'`.
-- Produces: for a citation whose `provenance.source === 'web'`, the fallback returns `{document_id: provenance.url, document_name: provenance.title || provenance.url, url: provenance.url, categoryLabels: [], serviceLabels: [], score: citation.score ?? null, source: 'web'}` — the SAME FIELDS the frontend mapping reads, with the two label arrays empty as the fallback always carries them (the service's own row has 5 keys and no label arrays; the fallback's shape is its own — they agree on every field the frontend reads, which is the contract). The okf-concept and legacy branches stay first (unchanged); the web branch comes after the okf branch and before the legacy fallback.
+- Consumes: the metadata assembly at `agent-run-contract.js:249-251` — today `Array.isArray(verdict.source_documents) ? verdict.source_documents : (verdict.citations||[]).map(citationToSourceDocument).filter(Boolean)`.
+- Produces: the same line reduced to `Array.isArray(verdict.source_documents) ? verdict.source_documents : []` — a verdict without `source_documents` yields `[]` (the deployed empty shape, the same value the legacy empty-stream base carries at L168). No mapping anywhere in the BFF.
 
 - [ ] **Step 1: Write the failing test**
 
-In `components/gov-chat-backend/__tests__/routes/agent-frame-writer.test.js`, beside the fallback pins (L341-412):
+In `agent-frame-writer.test.js`, beside where the fallback pins lived:
 
 ```js
-it('the fallback maps a web citation to the projection shape the service emits', () => {
-  const row = citationToSourceDocument({
-    provenance: { source: 'web', url: 'https://example.gov/policy', title: 'The policy' },
-    text: 'the policy text',
-    score: 0.5,
-  });
-  expect(row).toEqual({
-    document_id: 'https://example.gov/policy',
-    document_name: 'The policy',
-    url: 'https://example.gov/policy',
-    categoryLabels: [],
-    serviceLabels: [],
-    score: 0.5,
-    source: 'web',
-  });
+it('a verdict without source_documents carries no BFF-side mapping — the sources are empty', () => {
+  // A payload naming only raw citations (an older service) maps to
+  // NOTHING: the BFF is a forwarder, the service owns the projection.
+  const metadata = /* assemble exactly as the neighbouring pins do,
+      with a verdict that carries citations but NO source_documents */;
+  expect(metadata.source_documents).toEqual([]);
 });
 ```
 
-Import `citationToSourceDocument` the way the file's existing tests import it (read the import block first).
+Assemble the metadata the way the file's existing pins do (read the neighbouring verdict pins first and mirror their harness). Assert `toEqual([])` — NOT `toBeFalsy`: the empty ARRAY is the contract.
 
 - [ ] **Step 2: Run it and watch it fail**
 
-Run: `cd components/gov-chat-backend && npx jest __tests__/routes/agent-frame-writer.test.js -t "fallback maps a web citation"`
+Run: `cd components/gov-chat-backend && npx jest __tests__/routes/agent-frame-writer.test.js -t "carries no BFF-side mapping"`
 
-Expected: FAIL — today the fallback returns `document_id: undefined, document_name: ''` for a web citation (no `file_id`, no `concept_id`).
+Expected: FAIL — today the fallback maps the citations into rows, so `source_documents` is non-empty.
 
-- [ ] **Step 3: The implementation**
+- [ ] **Step 3: The removal**
 
-In `agent-run-contract.js`'s `citationToSourceDocument`, after the okf-concept branch and before the legacy fallback:
-
-```js
-  if (citation.provenance?.source === 'web') {
-    // The service's projection emits this exact shape for a web result
-    // (document_id IS the url — the identity rule); the fallback agrees so
-    // an older payload that names only raw citations maps to the same row.
-    const url = String(citation.provenance.url || '');
-    return {
-      document_id: url,
-      document_name: String(citation.provenance.title || url),
-      url,
-      categoryLabels: [],
-      serviceLabels: [],
-      score: typeof citation.score === 'number' ? citation.score : null,
-      source: 'web',
-    };
-  }
-```
+1. `agent-run-contract.js`: delete the `citationToSourceDocument` JSDoc + function (~L98-138) and its `module.exports` entry (~L449). Reduce the ternary (~L249-251) to `Array.isArray(verdict.source_documents) ? verdict.source_documents : []`. Update the comment above it: the BFF forwards the service's projection verbatim; a payload without it (an older service) carries empty sources — no mapping lives here.
+2. `agent-frame-writer.test.js`: delete every fallback-mapping pin (including the interim web-branch pin from `e9e1d61d7`) and the `citationToSourceDocument` import; add the absence pin from Step 1.
 
 - [ ] **Step 4: The BFF suite**
 
 Run: `cd components/gov-chat-backend && npm test`
 
-Expected: green (the new pin + the existing ones — the two fallback-derived rows at L360-382 are untouched: their fixtures are legacy/okf).
+Expected: green. The suite SHRINKS by the removed pins' count (report before/after).
 
 - [ ] **Step 5: Lint and format**
 
-`npm run lint` and the component's format check, per its package scripts (from the component dir).
+`rtk proxy npx eslint <changed paths>` and `rtk proxy npx prettier --check <changed paths>` from the component dir (rtk-wrapped npm scripts report phantom errors here).
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add components/gov-chat-backend/services/agent-run-contract.js components/gov-chat-backend/__tests__/routes/agent-frame-writer.test.js
-git commit -m "feat(bff): the citation fallback maps the web variant to the projection shape"
+git commit -m "refactor(bff): the BFF forwards the service's source_documents — the mapping fallback is removed"
 ```
 
 ---
@@ -363,5 +357,5 @@ git commit -m "feat(mobile): the web citation badges as WEB — the mirror of th
 |---|---|---|
 | The web variant renders on web and mobile (spec §4.7) | the projection + both badge pairs | the pins above; the E2E case |
 | The identity stays url-keyed (ADR agentic-009) | `provenance_identity` unchanged; `document_id` IS the url | the dedup pin (Task 1 Step 1.5) |
-| The BFF is a forwarder, not a mapper, for current payloads | the primary path unchanged; the fallback agrees with the service | Task 2's pin |
+| The BFF is a forwarder, not a mapper — no mapping lives there | the fallback mapping is REMOVED (operator decision 2026-11-27); absence = empty sources | Task 2's absence pin |
 | The no-drift rule extends to the second badge pair | okfCitation.js + okf_citation.dart, same turn | Tasks 3-4 |

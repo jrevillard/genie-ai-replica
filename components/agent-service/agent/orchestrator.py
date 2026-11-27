@@ -355,7 +355,7 @@ class RequestOrchestrator:
     """The per-request owner: admission → budget → governed run → usage record.
 
     One instance is the run surface's long-lived wiring (lane + config +
-    model client + port factory); each :meth:`run` is one request's
+    model client + tool-source factory); each :meth:`run` is one request's
     governed execution. The lane claim is the caller's to hold (see
     :meth:`admit`), because the surface must answer saturation BEFORE any
     stream byte exists.
@@ -477,7 +477,7 @@ class RequestOrchestrator:
                 )
             execution_versions = await self._execution_versions(runtime.runtime_id)
             # The per-request assembly is INSIDE the try: a build failure
-            # (a port-factory refusal, a registry defect) must reach the
+            # (a tool-source-factory refusal, a registry defect) must reach the
             # caller as the honest terminal — the RUN_ERROR event and the
             # "error" usage record — never as an exception past the stream
             # that already started. The runtime's own failures never get

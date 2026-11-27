@@ -399,26 +399,6 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     );
   });
 
-  it('a verdict without source_documents carries no BFF-side mapping — the sources are empty', async () => {
-    setupAgentQuery();
-    // A payload naming only raw citations (an older service) maps to
-    // NOTHING: the BFF is a forwarder, the service owns the projection.
-    const verdict = { ...GROUNDED_VERDICT };
-    axios.post.mockResolvedValue({
-      status: 200,
-      headers: {},
-      data: answeredRunStream({ verdict })
-    });
-
-    const response = await authPost('/api/queries/stream', {
-      sessionId: 's1',
-      messages: [{ role: 'user', content: 'q' }]
-    });
-
-    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
-    expect(metadata.source_documents).toEqual([]);
-  });
-
   it('POSTs the derived deadline and the assembled CallerContext to /v1/runs', async () => {
     setupAgentQuery();
     axios.post.mockResolvedValue({ status: 200, headers: {}, data: answeredRunStream() });

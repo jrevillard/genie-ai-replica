@@ -36,7 +36,6 @@ from capabilities.contract import LegacyFileProvenance, OkfConceptProvenance, Se
 # ``translateSources``) — the projection pin's consumer contract.
 LEGACY_FIELDS = {"document_id", "document_name", "url", "categoryLabels", "serviceLabels", "score"}
 OKF_FIELDS = LEGACY_FIELDS | {"concept_id", "source", "repo_id", "bundle_version"}
-WEB_FIELDS = {"document_id", "document_name", "url", "score", "source"}
 
 
 # The document repository's own record for one document (the shape the port
@@ -379,26 +378,10 @@ def test_every_projected_entry_carries_what_the_frontend_mapping_reads():
     assert "source" not in legacy
     assert concept["source"] == "okf-concept"
     assert concept["concept_id"] == "c-1"
-
-    entries = source_documents_from_citations(
-        [
-            {
-                "provenance": {"source": "web", "url": "https://example.gov/policy", "title": "The policy"},
-                "text": "t",
-                "score": 0.7,
-            }
-        ],
-        records=SourceRecords(),  # a web provenance resolves no record — the provenance IS the metadata
-    )
-    # The FIRST assertion is the count: a naive single-entry unpack would red
-    # on an IndexError instead of an assertion while the projection drops web.
-    assert len(entries) == 1
-    [web] = entries
-    assert set(web) == WEB_FIELDS
-    assert web["document_id"] == "https://example.gov/policy"  # the url IS the stable identity
-    assert web["document_name"] == "The policy"
-    assert web["source"] == "web"
-    assert web["url"] == "https://example.gov/policy"  # preserved verbatim — the frontend renders it clickable
+    # The web variant's field coverage lives in the delivered-journey pin
+    # below (test_a_web_citation_is_delivered_and_projects_the_web_variant):
+    # its exact-dict equality subsumes the field set — a second, weaker
+    # assertion here would be a duplicate invocation of the same contract.
 
 
 # ---------------------------------------------------------------------

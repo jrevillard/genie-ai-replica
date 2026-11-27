@@ -1,3 +1,5 @@
+import copy
+
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """The server-side tool registry — the authorization surface.
@@ -135,7 +137,9 @@ def build_registry(pairs: Iterable[tuple[ToolDefinition, ToolExecutor]]) -> Tool
     registry = ToolRegistry()
     for definition, executor in pairs:
         copied = ToolDefinition(
-            name=definition.name, description=definition.description, parameters=dict(definition.parameters)
+            name=definition.name,
+            description=definition.description,
+            parameters=copy.deepcopy(definition.parameters),
         )
         registry.register(copied, executor)
     return registry

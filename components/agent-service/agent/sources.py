@@ -99,6 +99,11 @@ READ_SOURCE_DEFINITION = ToolDefinition(
     },
 )
 
+# The read target, validated the same way on every request: the adapter is
+# stateless, so it is built ONCE beside the definitions — a per-request
+# construction buys nothing.
+_SOURCE_REF = TypeAdapter(SourceRef)
+
 
 @dataclass(frozen=True)
 class ToolSourceContext:
@@ -304,10 +309,9 @@ def _make_search_executor(
 
 
 def _make_read_executor(port: DocumentCapabilityPort, context: CallerContext, budget: OperationBudget):
-    _source_ref = TypeAdapter(SourceRef)
 
     async def execute(arguments: dict) -> dict:
-        target = _source_ref.validate_python(arguments.get("target"))
+        target = _SOURCE_REF.validate_python(arguments.get("target"))
         result = await port.read_source(context, ReadSourceInput(target=target), budget)
         return result.model_dump(mode="json")
 

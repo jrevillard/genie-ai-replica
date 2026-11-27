@@ -158,6 +158,7 @@ CORE_ALLOWED_STDLIB = (
     "asyncio",
     "collections",
     "contextlib",
+    "copy",
     "dataclasses",
     "enum",
     "hashlib",

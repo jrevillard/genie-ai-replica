@@ -297,6 +297,18 @@ def test_the_tool_definitions_move_verbatim():
     }
 ```
 
+
+The hoisted read-target adapter rides too — it is module-level in `agent/toolset.py`
+(S1's simplify pass hoisted it: a per-request construction buys nothing), and the move
+keeps it exactly there:
+
+```python
+# The read target, validated the same way on every request: the adapter is
+# stateless, so it is built ONCE beside the definitions — a per-request
+# construction buys nothing.
+_SOURCE_REF = TypeAdapter(SourceRef)
+```
+
 (The values are the ones `agent/toolset.py` carries today — copied VERBATIM from that file, not retyped. A retype is how a description drifts by a word.)
 
 
@@ -635,10 +647,8 @@ def _make_search_executor(
 
 
 def _make_read_executor(port: DocumentCapabilityPort, context: CallerContext, budget: OperationBudget):
-    _source_ref = TypeAdapter(SourceRef)
-
     async def execute(arguments: dict) -> dict:
-        target = _source_ref.validate_python(arguments.get("target"))
+        target = _SOURCE_REF.validate_python(arguments.get("target"))
         result = await port.read_source(context, ReadSourceInput(target=target), budget)
         return result.model_dump(mode="json")
 
@@ -667,7 +677,7 @@ def build_registry(pairs: Iterable[tuple[ToolDefinition, ToolExecutor]]) -> Tool
     """
     registry = ToolRegistry()
     for definition, executor in pairs:
-        copied = ToolDefinition(name=definition.name, description=definition.description, parameters=dict(definition.parameters))
+        copied = ToolDefinition(name=definition.name, description=definition.description, parameters=copy.deepcopy(definition.parameters))
         registry.register(copied, executor)
     return registry
 ```

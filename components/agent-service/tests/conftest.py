@@ -299,7 +299,7 @@ def _governed_loop(
 ):
     """The governed answer path over fakes — one home for the suites that
     drive the loop WITH the verification pipeline wired (the orchestrator's
-    own wiring shape): loop + verifier + monitor over ``document_toolset``,
+    own wiring shape): loop + verifier + monitor over the document source
     a shared caller context and the smoke operation budget.
 
     ``judge_model`` (a ``LoopModelClient`` double) defaults to the scripted

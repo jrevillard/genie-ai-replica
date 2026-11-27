@@ -257,9 +257,7 @@ def retrieved_texts(name: str, payload: dict) -> list[tuple[str, dict, float | N
     result = payload.get("result")
     if not isinstance(result, dict):
         return []
-    if name == "search_knowledge":
-        return _hit_triples(result)
-    if name == "web_search":
+    if name in ("search_knowledge", "web_search"):
         # The web results enter the SAME channel: the ledger's citation
         # candidates AND the taint scan's surface — one extraction, two
         # readers (the design's §4.5 identity: the ledger and the scan do

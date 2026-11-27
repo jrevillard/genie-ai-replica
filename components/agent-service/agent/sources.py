@@ -67,19 +67,26 @@ from .registry import ToolDefinition, ToolExecutor
 # structured tool result instead of killing the run.
 _QUERY_TEXT = TypeAdapter(Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)])
 
+# The query argument's schema, declared ONCE: the corpus search and the
+# web search take the SAME argument, and two copies of one schema are two
+# contracts the model can be told differently by — a description or a type
+# change applied to one tool would leave the other advertising a different
+# shape for the same argument.
+_QUERY_PARAMETERS = {
+    "type": "object",
+    "properties": {
+        "query": {"type": "string", "description": "The English search query."},
+    },
+    "required": ["query"],
+}
+
 SEARCH_KNOWLEDGE_DEFINITION = ToolDefinition(
     name="search_knowledge",
     description=(
         "Search the authorized knowledge corpus. Returns ranked passages with their provenance, "
         "or an explicit insufficient-evidence outcome."
     ),
-    parameters={
-        "type": "object",
-        "properties": {
-            "query": {"type": "string", "description": "The English search query."},
-        },
-        "required": ["query"],
-    },
+    parameters=_QUERY_PARAMETERS,
 )
 
 READ_SOURCE_DEFINITION = ToolDefinition(
@@ -112,13 +119,7 @@ WEB_SEARCH_DEFINITION = ToolDefinition(
         "Search the public web through the deployment's meta-search service. Returns ranked "
         "web results (title, URL, snippet) as reference material."
     ),
-    parameters={
-        "type": "object",
-        "properties": {
-            "query": {"type": "string", "description": "The English search query."},
-        },
-        "required": ["query"],
-    },
+    parameters=_QUERY_PARAMETERS,
 )
 
 
@@ -168,8 +169,7 @@ class DocumentToolSource:
     each one TIGHTENS the ceiling the source was built with (an
     override may never widen a bound); a tool without an override runs
     under ``operation_budget``. The core does not know where the map
-    comes from — the host derives it (``tool_catalog``'s
-    ``budget_overrides``) and hands it in.
+    comes from — the host derives it (the source factory) and hands it in.
     """
 
     source_id = "document"
@@ -209,7 +209,7 @@ class DocumentToolSource:
         wiring forwarded (the preparation leg, the two sinks), the catalog's
         budget map handed through. The host's ``DeclaredSource.build`` and
         the suites' factories all land HERE, so a new bundle field is a
-        one-site edit, not a sweep over forwarding lambdas."""
+        one-site edit PER SOURCE, not a sweep over forwarding lambdas."""
         return cls(
             port_factory,
             bundle.operation_budget,
@@ -298,12 +298,12 @@ class WebSearchToolSource:
         return (
             (
                 WEB_SEARCH_DEFINITION,
-                _make_web_search_executor(port, context, self._budget_for("web_search")),
+                _make_web_search_executor(port, self._budget_for("web_search")),
             ),
         )
 
 
-def _make_web_search_executor(port: WebSearchPort, context: CallerContext, budget: OperationBudget):
+def _make_web_search_executor(port: WebSearchPort, budget: OperationBudget):
 
     async def execute(arguments: dict) -> dict:
         # The SAME argument validation the document search runs (the

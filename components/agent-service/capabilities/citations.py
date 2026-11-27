@@ -115,6 +115,21 @@ def is_concept_provenance(provenance) -> bool:
     return isinstance(provenance, OkfConceptProvenance)
 
 
+def _is_web_provenance(provenance) -> bool:
+    """Is this provenance a web result's?
+
+    The marker is the port's own vocabulary (``source``/``url``), the
+    counterparty's data model — naming it in a PORT is the port's job:
+    the core CONSUMES the port's shape, it does not invent one.
+
+    Named, and not spelled inline at the call site: the discrimination
+    is a rule with a name and a reason, and a rule spelled twice is a
+    rule that can disagree with itself.
+    """
+
+    return isinstance(provenance, dict) and provenance.get("source") == WEB_SEARCH_SOURCE
+
+
 def _concept_address(provenance) -> tuple[str, str]:
     """The ``(repo_id, concept_id)`` address a concept's card is served at."""
 
@@ -257,7 +272,7 @@ def provenance_identity(provenance) -> tuple:
 
     if is_concept_provenance(provenance):
         return _concept_address(provenance)
-    if isinstance(provenance, dict) and provenance.get("source") == WEB_SEARCH_SOURCE:
+    if _is_web_provenance(provenance):
         return (WEB_SEARCH_SOURCE, str(provenance.get("url") or ""))
     return (None, _legacy_file_id(provenance))
 

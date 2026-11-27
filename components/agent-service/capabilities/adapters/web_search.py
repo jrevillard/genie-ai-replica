@@ -121,7 +121,6 @@ class WebSearchAdapter:
             encoded = text.encode("utf-8")
             if len(encoded) > budget.max_result_bytes:
                 text = encoded[: budget.max_result_bytes].decode("utf-8", "ignore")
-            score = item.get("score") if isinstance(item.get("score"), (int, float)) else None
             hits.append(
                 {
                     "text": text,
@@ -130,7 +129,7 @@ class WebSearchAdapter:
                         "url": item_url,
                         "title": str(item.get("title") or ""),
                     },
-                    "score": score,
+                    "score": item.get("score"),
                 }
             )
         return {"outcome": OutcomeCode.SUCCESS.value, "hits": tuple(hits), "truncated": False}

@@ -61,7 +61,7 @@ class CatalogError(ValueError):
 # One budget model, not two: the entry's ``budget`` field is
 # ``OperationBudget`` itself — the contract's own type, already imported
 # here — so the same three fields carry the same validation in one home,
-# and ``budget_overrides`` hands the value through without a conversion
+# and ``_budget_overrides`` hands the value through without a conversion
 # that could drift. A second model with identical fields would be the
 # "a copy that drifts" pattern this plan warns about elsewhere.
 
@@ -303,15 +303,15 @@ def _check_budget(entry: CatalogEntry, ceiling: OperationBudget) -> str | None:
     return None
 
 
-def budget_overrides(catalog: ToolCatalog) -> dict[str, OperationBudget]:
+def _budget_overrides(catalog: ToolCatalog) -> dict[str, OperationBudget]:
     """The per-tool budgets the catalog declares — each one already
     validated against the deployment's ceiling.
 
-    PUBLIC: the host declares the sources, and a declared source's
-    builder needs the budgets the catalog declares for it. One reader, so
-    the host cannot read them differently. The entry's ``budget`` IS an
-    ``OperationBudget`` (one model, no conversion), so the value hands
-    through untouched.
+    PRIVATE: the only reader is this module's own source factory, which
+    hands the map to every declared source's builder. One reader, so the
+    budgets cannot be read differently on the way to a source. The entry's
+    ``budget`` IS an ``OperationBudget`` (one model, no conversion), so
+    the value hands through untouched.
     """
     return {entry.name: entry.budget for entry in catalog.entries if entry.budget is not None}
 
@@ -333,7 +333,7 @@ def build_tool_source_factory(
     and the dispatcher refuses it by name.
 
     The MECHANICAL budget hand-off: the catalog's per-tool bounds are read
-    ONCE here (``budget_overrides``) and handed to every ``build`` with the
+    ONCE here (``_budget_overrides``) and handed to every ``build`` with the
     bundle. A declared source that ignores the argument still RECEIVES it;
     a factory path that bypasses ``DeclaredSource`` entirely (the suites'
     direct ``tool_source_factory`` helpers) never sees the map — that is
@@ -341,7 +341,7 @@ def build_tool_source_factory(
     deliberate demonstration of it.
     """
 
-    catalog_budgets = budget_overrides(catalog)
+    catalog_budgets = _budget_overrides(catalog)
 
     def factory(bundle: ToolSourceContext) -> tuple[tuple[ToolDefinition, ToolExecutor], ...]:
         offered: list[tuple[ToolDefinition, ToolExecutor]] = []

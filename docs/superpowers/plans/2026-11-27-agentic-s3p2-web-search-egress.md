@@ -2908,6 +2908,15 @@ while `tests/config-validator/__tests__/agent-service.test.js` asserts the
 same two facts through the repo's parsed-contract helper. Delete the regex
 copy — one owner, the stronger one.
 
+**AND the surviving owner must expect the NESTED literal.** Task A changed the
+compose gate to `replicas: ${PII_SERVICE_ENABLED:-${OKF_ENABLED:-0}}` (the new
+knob wins, the OKF fallback keeps the deployments that existed before the
+slice working), so the `agent-service.test.js` expectation — which still
+pinned the flat `${PII_SERVICE_ENABLED:-0}` — is RED. It must expect the
+nested form. (The amendment changed the compose value without propagating it
+to the jest gates: a gap the worker surfaced, not one it could fix — the file
+was outside Task A's list.)
+
 - [ ] **Step 7: The FULL suite** — green, with the count the re-run gates state.
 
 - [ ] **Step 8: Commit**

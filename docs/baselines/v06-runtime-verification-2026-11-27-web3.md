@@ -140,3 +140,30 @@ export AGENT_VERIFICATION_VENUE="GPU node ai.assembly.govstack.global (V03 basel
 cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m measurement.v06_harness > /tmp/harness-matrix-3tools.json 2>/tmp/harness-matrix-3tools.stderr.txt
 echo "exit=$?"
 ```
+
+## The criterion fork, resolved (2026-11-27, operator decision)
+
+The 2026-11-24 record left this fork open: "until the server streams
+auto-mode deltas or the criterion is revisited by the runtime decision". The
+investigation that followed this re-run (live SSE capture + the upstream
+parser sources) settled the FACTS, and the operator settled the criterion:
+
+- **The fact**: the blob is the `granite4` parser's DESIGNED streaming shape
+  in vLLM 0.29.0 — it buffers and emits ONE `tool_calls` delta carrying id,
+  name and the COMPLETE arguments; `content` stays clean (nothing leaks).
+  The OpenAI streaming contract sets no minimum delta count — chunking is
+  the server's discretion. The parser never streams argument fragments on
+  any release through main under the `granite4` name; the incremental engine
+  parser exists as `granite` from v0.31.0.
+- **The decision**: the judge STAYS STRICT (≥2 tool-call deltas). Incremental
+  tool-progress delivery remains a REQUIREMENT of the P3 gate; this re-run's
+  acceptance stays NOT passed for the two cells, and no harness change is
+  made to relax it.
+- **The planned remedy** (separate work, tracked in the tracker): upgrade the
+  GPU venue to vLLM ≥ 0.31.0 AND switch `--tool-call-parser granite4` →
+  `granite` (the engine parser with `stream_arg_deltas=True`), mirrored in
+  `deploy/ansible/templates/docker-compose.gpu.yaml.j2` +
+  `vllm_tool_call_parser` in `group_vars`. Hazards recorded there: the
+  engine parser's format config must be probed against granite-4.1-8b's
+  markup on a NON-PRODUCT venue first; the venue serves the product chat
+  (chatqna, translation ride the same compose file).

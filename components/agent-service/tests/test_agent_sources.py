@@ -39,8 +39,6 @@ from conftest import (
     run_budget,
 )
 
-import agent.sources
-import measurement.probe
 from agent.budget import RunBudgetMonitor
 from agent.events import AgentEvent
 from agent.orchestrator import (
@@ -103,10 +101,11 @@ def _judge_turn():
 # ---------------------------------------------------------------------
 
 
-def test_the_probe_reimports_the_moved_source():
-    assert measurement.probe.DocumentToolSource is agent.sources.DocumentToolSource
-    # The probe module keeps its own prompt; the governed default is the
-    # production one (the orchestrator's default, not the harness's).
+def test_the_probe_keeps_its_own_prompt():
+    # The probe must NOT measure under the governed default: its prompt is
+    # its own, and an accidental import of the production prompt would make
+    # every matrix cell measure the governed path. (The probe's USE of the
+    # production source is behaviourally proven by the run_probe pins.)
     assert PROBE_SYSTEM_PROMPT != PRODUCTION_SYSTEM_PROMPT
 
 
@@ -178,16 +177,10 @@ def test_a_tighter_per_tool_budget_reaches_the_executor():
     assert port.search_calls[0]["budget"] is override
 
 
-def test_the_request_bundle_carries_the_call_s_full_identity():
-    """``ToolSourceContext`` is the per-request bundle: the context, the
-    bearer and the operation budget travel together to the port."""
-    context = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
-    budget = orchestrator_config().operation_budget  # ONE call: the config is a factory
-    bundle = agent.sources.ToolSourceContext(context=context, bearer="tok-1", operation_budget=budget)
-    assert bundle.context is context
-    assert bundle.bearer == "tok-1"
-    assert bundle.operation_budget is budget
-
+# The bundle's contract is owned at the boundaries: the identity and budget
+# pins read bundle-sourced values off the recorded port calls (delivery), and
+# the governed-run suite proves preparer/status/abstention ride it (population).
+# A direct constructor pin would restate dataclass semantics.
 
 def test_the_tool_definitions_move_verbatim():
     """The model-facing contract moves byte for byte.
@@ -229,6 +222,24 @@ def test_the_tool_definitions_move_verbatim():
         },
         "required": ["target"],
     }
+
+def test_the_registry_hands_out_copies_the_constants_do_not_bleed_into():
+    """``build_registry`` deep-copies each schema at registration: the
+    definitions are module-level constants shared by every request, and a
+    mutation of the handed-out model-facing dict must not reach them."""
+    import copy as copy_module
+
+    port = AgentFakePort(search_result=canned_search_result())
+    registry = build_registry(
+        DocumentToolSource(lambda context, bearer: port, orchestrator_config().operation_budget).tools(
+            CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",)), None
+        )
+    )
+    before = copy_module.deepcopy(SEARCH_KNOWLEDGE_DEFINITION.parameters)
+    handed_out = registry.definitions()[0]["function"]["parameters"]
+    handed_out.setdefault("properties", {})["injected"] = {"type": "string"}
+    assert SEARCH_KNOWLEDGE_DEFINITION.parameters == before, "the mutation reached the constant"
+
 
 
 def test_the_declared_definitions_stay_within_their_prompt_allowance():

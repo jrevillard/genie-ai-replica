@@ -455,10 +455,12 @@ describe('the agent tool catalog is declared, mounted and seeded', () => {
     expect(task).toMatch(/union\(_deploy_files_agent \| default\(\[\]\)\)/);
   });
 
-  test('the shipped catalog carries the two document tools', () => {
-    const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'configs/agent/tool-catalog.json'), 'utf-8'));
-
-    expect(catalog.version).toBe(1);
-    expect(catalog.tools.map((entry) => entry.name).sort()).toEqual(['read_source', 'search_knowledge']);
+  test('the shipped catalog exists and parses (the mount subject)', () => {
+    // The CONTENT contract (version, names, the six fields per entry) is
+    // owned by the loader-side Python pin — this gate owns what the compose
+    // mount consumes: the file exists and is valid JSON.
+    const catalogPath = path.join(ROOT, 'configs', 'agent', 'tool-catalog.json');
+    expect(fs.existsSync(catalogPath)).toBe(true);
+    expect(() => JSON.parse(fs.readFileSync(catalogPath, 'utf-8'))).not.toThrow();
   });
 });

@@ -293,6 +293,11 @@ export function translateSources(sourceDocuments = []) {
     // repo identity arrives via the retriever enrichment (CAP-1). Legacy
     // document rows take the exact pre-existing shape (byte-identical).
     const isOkfConcept = doc.source === 'okf-concept';
+    // A marked non-okf row (today the projected web variant) is not a file:
+    // the extension derivation would read the url's path ('GOV/POLICY' for
+    // an extension-less one), so it takes WEB and carries its marker
+    // through — the badge predicate reads it. Legacy rows keep the exact
+    // pre-existing shape (source undefined, extension-derived type).
     return {
       id: documentId,
       title: documentName || fileName || `Source ${(documentId || '').slice(0, 4)}`,
@@ -302,13 +307,13 @@ export function translateSources(sourceDocuments = []) {
       // the marker rides in the `source` field below (`'okf-concept'` for
       // concept rows), which the okfCitation predicate reads; the batch's MD
       // type covers the extension fallback a concept row must not render.
-      type: isOkfConcept ? 'MD' : doc.url?.split('.').pop().toUpperCase() || 'LINK',
+      type: isOkfConcept ? 'MD' : doc.source ? 'WEB' : doc.url?.split('.').pop().toUpperCase() || 'LINK',
       size: 0,
       url: isOkfConcept ? '' : doc.url || (documentId ? `/api/files/${documentId}/download` : ''),
       score: doc.score,
       categoryLabel: doc.categoryLabel,
       serviceLabels: doc.labels || doc.serviceLabels || [],
-      source: isOkfConcept ? 'okf-concept' : undefined,
+      source: isOkfConcept ? 'okf-concept' : doc.source || undefined,
       // !791's contract (additive per the BCAP ruling): the concept slug
       // rides the citation row even though the batch's flow keys off the
       // `source` marker — main's suite pins it on the mapped citation.

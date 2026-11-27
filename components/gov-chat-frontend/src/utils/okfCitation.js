@@ -52,11 +52,42 @@ export function okfConceptBadge() {
 }
 
 /**
+ * Whether a citation is a web result rather than a repository document.
+ *
+ * A projected web row (S3-plan-3) is SELF-CONTAINED: the marker
+ * `source: 'web'` travels with the url — which is both the row's identity
+ * and its click target — so the marker alone decides. Only the marker
+ * reads: a legacy row that merely carries a `url` is never web.
+ *
+ * @param {Object} doc a raw citation or a mapped source
+ * @returns {Boolean}
+ */
+export function isWebSource(doc) {
+  return doc?.source === 'web';
+}
+
+/**
+ * The badge of a web citation.
+ *
+ * A web url has no file extension and no size, so the extension fallback
+ * (`fileTypeBadge`) would render the first four characters of the url's
+ * path — "GOV/" for "https://example.gov/policy". The badge names the
+ * VARIANT instead: the mirror of the OKF badge above.
+ *
+ * @returns {{label: String, tone: String}}
+ */
+export function webSourceBadge() {
+  return { label: 'WEB', tone: 'info' };
+}
+
+/**
  * W9 (concept tree browse): whether a citation may render the browse
  * affordance — a WORKING okf-concept row with repo identity. A pre-CAP-1
  * row (no repoId) or a legacy document gets no affordance anywhere, so the
  * entry is never dead. ONE definition for BOTH chat surfaces (review r0:
- * the answer-card grid and the sidebar cannot drift).
+ * the answer-card grid and the sidebar cannot drift) — and the same rule
+ * now covers BOTH badge pairs: `okfConceptBadge` AND `webSourceBadge` each
+ * live here, once, for both surfaces.
  *
  * @param {Object} doc a mapped citation row
  * @returns {Boolean}

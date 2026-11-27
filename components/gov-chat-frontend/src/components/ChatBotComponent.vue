@@ -665,7 +665,13 @@ import {
   openOkfSource,
   fileTypeBadge
 } from '../utils/document-opener.js';
-import { isOkfConceptSource, okfConceptBadge, canBrowseSource } from '../utils/okfCitation.js';
+import {
+  isOkfConceptSource,
+  okfConceptBadge,
+  isWebSource,
+  webSourceBadge,
+  canBrowseSource
+} from '../utils/okfCitation.js';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -1367,6 +1373,10 @@ export default {
       // its name ("HADI" for "hadith nawawi 36"). The badge names the
       // family the citation actually is.
       if (isOkfConceptSource(doc)) return okfConceptBadge();
+      // A web citation is not a file either: its url has no extension, so
+      // the fallback would render the url path's first characters. The
+      // badge names the variant — the mirror of the OKF branch above.
+      if (isWebSource(doc)) return webSourceBadge();
       return fileTypeBadge(doc.fileName || doc.title || doc._type || doc.type);
     },
 

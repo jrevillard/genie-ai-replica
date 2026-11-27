@@ -757,6 +757,22 @@ describe('CAP-3 okf concept sources', () => {
     expect(row.conceptId).toBeNull();
   });
 
+  it('a projected web row keeps its source marker and takes the WEB type', () => {
+    const [row] = translateSources([
+      {
+        document_id: 'https://example.gov/policy',
+        document_name: 'The policy',
+        url: 'https://example.gov/policy',
+        score: null,
+        source: 'web'
+      }
+    ]);
+    expect(row.source).toBe('web');
+    expect(row.type).toBe('WEB');
+    expect(row.url).toBe('https://example.gov/policy');
+    expect(row.title).toBe('The policy');
+  });
+
   it('rehydrate grafts okf identity onto persisted concept rows and clears the dead URL', () => {
     sessionStorage.setItem(
       STORAGE_KEY,

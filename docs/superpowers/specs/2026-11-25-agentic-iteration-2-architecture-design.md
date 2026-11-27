@@ -608,7 +608,7 @@ Smallest first. Each slice is one implementation plan with its own gate.
 | S0 | The records of §12 | records accepted |
 | S1 | Architecture tests; the six leaks closed; migration step 1 | architecture suite green; stream identical |
 | S2 | Migration step 2: dispatcher, orchestrator-owned lifecycle | contract suite green, violators red; stream identical |
-| S3 | `ToolSource`; `DocumentToolSource`; catalog; `web_search` in the simple run; PII egress; web citation variant on web and mobile | tool-source suites; runtime gate; end to end |
+| S3 | `ToolSource`; `DocumentToolSource`; catalog; `web_search` in the simple run; PII egress; web citation variant on web and mobile | tool-source suites; runtime gate; end to end — delivered as THREE plans (recorded like S1's split): **S3-plan-1** (the `ToolSource` port, `DocumentToolSource`, the catalog, the per-request assembly) owns the tool-source suites AND the runtime gate (its compose change is what triggers `check-runtime.sh`); **S3-plan-2** (`web_search`, the outbound PII egress) owns its own suites and re-runs the runtime gate on its compose change; **S3-plan-3** (the web citation variant) owns the end-to-end run over the finished slice |
 | S4 | `turns` in the request; BFF assembly | budget and bounds tests |
 | S5 | Pipeline core; extended research | pipeline tests; evaluation comparison |
 | S6 | Scheduler mock MCP server; `McpToolSource`; `UserCredentials`; write path with pause; client frame; decision endpoint; approval on web and mobile | pause round-trip; BFF contract tests; end to end |
@@ -658,7 +658,7 @@ A shipped second runtime; durable execution; dynamic tool management; declarativ
 
 | Risk | Response |
 |---|---|
-| More registered tools degrade tool-calling on the venue's vLLM | probe P3 before slice S3; per-step tool subsets keep each model call small |
+| More registered tools degrade tool-calling on the venue's vLLM | probe P3 before slice S3; per-step tool subsets keep each model call small — OWNER: S3-plan-1 runs the P3 matrix right after the catalog lands (two tools registered = the shipped posture), S3-plan-2 re-runs it with `web_search` registered (three tools); the matrix runs against the venue's vLLM per §10.8 |
 | Tool definitions consume the prompt budget | count them in the budget tests; bound the catalog |
 | The spike fails the tool-calling matrix on vLLM | reported as a result; D03 stays closed |
 | `pytestarch` misses a dynamic import | recorded; review item for `importlib` in the core |

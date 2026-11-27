@@ -66,16 +66,16 @@ Each was checked against the code before being written here.
 
 - **The catalog is JSON, and it lives under the repo's `configs/` home.** `configs/` is the repository's configuration home (`otel/`, `grafana/`, `keycloak/`), and the catalog is a DEPLOYMENT file, not source. The extension is JSON because the AGENT SERVICE's own tree pins no YAML parser (`components/agent-service/requirements.txt` and `requirements-test.txt` name no `yaml` package): a YAML catalog would put a new package in the audited tree for a file the deployment reads once — NFR-2 prices that, and A6 forbids the adoption for flexibility's sake. (The wider repository DOES parse YAML elsewhere — the OPEA overlay pins `pyyaml`, and the frontend imports a YAML grammar for its editor — which is exactly why the claim is scoped to this service's tree.)
 - **The catalog is entirely the HOST's.** The core never learns what a catalog is. The host loads it, validates it, and offers the run only the pairs the catalog allows; the core's registry stays the authorization surface, so the model's list and the dispatcher always agree. The alternative (a catalog model in the core) would put a deployment concept inside the core for no gain — the core has no opinion about WHICH tools exist.
-- **"Startup" means the ASSEMBLY, not the process boot.** The agent service builds its orchestrator lazily, on the first run request (`app.py`'s `_runtime()`), and the repository's contract says so ("the config is read lazily, so a mis-set policy still boots green until then"). A catalog defect is therefore a `ValueError` at assembly → the run surface's honest 503 (`run_surface_unconfigured`) naming the file and the defect. No request is ever served by a broken catalog, and the container's boot is not coupled to the file's content.
+- **"Startup" means the ASSEMBLY, not the process boot.** The agent service builds its orchestrator lazily, on the first run request (`app.py`'s `_runtime()`), and the repository's contract says so (the run surface's config is read lazily — `docker-compose.yaml:1543`'s comment, and the mechanism is `app.py`'s `_runtime()`, which builds on the first run request). A catalog defect is therefore a `ValueError` at assembly → the run surface's honest 503 (`run_surface_unconfigured`) naming the file and the defect. No request is ever served by a broken catalog, and the container's boot is not coupled to the file's content.
 - **The port is the design's §4.3 protocol, verbatim — ONE method.** The design is NOT silent about the port's shape: it writes the protocol out (`docs/superpowers/specs/2026-11-25-agentic-iteration-2-architecture-design.md:259-260`), and ADR agentic-005 §1 says the same ("A `ToolSource` returns `(ToolDefinition, ToolExecutor)` pairs for a caller context and a bearer"). The port is therefore reproduced exactly, and the deployment's two extra facts — the id the catalog's `source` field names a source by, and the tools it serves — are the HOST's, not the port's: the host holds the catalog (§4.4) and the host discovers a source's tools at startup (§4.4's "MCP tools are discovered at startup"). The core reads neither, so declaring them on the port would put the catalog's vocabulary in the core's contract for nothing. `DocumentToolSource` keeps them as class attributes — the host reads them off the concrete class it declares.
 - **The identity arrives with the CALL.** The source is built per request (the operation budget, the preparation leg and the insufficiency recorder are the run's), and `tools(context, bearer)` hands the executor its identity. Derived from the design's "each executor captures that request's identity".
 - **The per-request bundle carries the run's wiring.** `ToolSourceContext` holds the caller's context, the bearer, the operation budget, the preparer, the preparation-status sink and the abstention recorder. The core owns the run's monitor, preparer and sinks; the host builds the sources FROM the bundle. That is what keeps the preparation leg where it is (the document source's business) while the core composes nothing.
 - **The catalog's per-tool budget may only TIGHTEN the deployment's ceiling.** The `AGENT_TOOL_*` knobs stay the deployment's ceiling on every tool; an entry that declares a budget may lower a dimension, never raise it, and an entry above the ceiling is a startup error naming the entry, the dimension and the two numbers. An entry with no budget uses the ceiling. This tightening is the PLAN's own conservative default, not a rule the spec states: the catalog IS server configuration (AD-6 says exactly that, and §4.4 calls the catalog a static deployment file), so a deployment file *could* widen a bound. The trade-off is named: an operator who needs a per-tool bound above the `AGENT_TOOL_*` ceiling has no way to say so until this is revisited — a bound the environment sets for EVERY tool stays the bound for every tool.
 - **`allow` is the per-entry switch.** The design names the field without defining it. The catalog IS the allow-list, so `allow: false` keeps the entry (and its budget, its risk, its scopes) while taking the tool out of the run — neither listed nor dispatchable. It is not an error: switching a tool off is an operation, not a defect.
-- **The fields this deployment cannot HONOUR cost the ENTRY, not the service.** A required `scopes` list (the enforcement lands with the identity slice's `CallerContext.scopes`, §4.8), `risk: write` or `requires_approval: true` (no approval path until ADR agentic-006), and `egress: open_web` (no PII egress path until plan 2) are refused: the ENTRY is dropped with a loud startup ERROR naming it, and the rest of the catalog loads. The entry's tool is therefore ABSENT — never listed, never dispatchable — so nothing is ever served unenforced, and one mis-declared entry does not take the whole run surface down. (The ADR agentic-005 §7 rule is PER REQUEST — "a tool whose required scopes are not all present is not registered for that request" — and it needs `CallerContext.scopes`, which lands with the identity slice. Until then this plan's rule is STRICTER: the entry is refused for EVERY caller, at startup. The deviation is stated in "What it leaves open".)
+- **The fields this deployment cannot HONOUR cost the ENTRY, not the service.** A required `scopes` list (the enforcement lands with the identity slice's `CallerContext.scopes`, §4.8), `risk: write` or `requires_approval: true` (no approval path until ADR agentic-006), and `egress: open_web` (no PII egress path until plan 2) are refused: the ENTRY is dropped with a loud startup ERROR naming it, and the rest of the catalog loads. The entry's tool is therefore ABSENT — never listed, never dispatchable — so nothing is ever served unenforced, and one mis-declared entry does not take the whole run surface down. (The ADR agentic-005 §7 rule is PER REQUEST — "a tool whose required scopes are not all present is not registered for that request" — and it needs `CallerContext.scopes`, which lands with the identity slice. Until then this plan's rule is STRICTER: the entry is refused for EVERY caller, at startup. The deviation is stated in "Out of scope" (the file's last section), not in "What it leaves open".)
 - **One rule for every refusal: the ENTRY is refused, the catalog still loads.** A DUPLICATE exposed name is the file's own defect (two tools with one name — the model would see an ambiguity), so it fails the whole catalog. Every other refusal — an entry naming a source this deployment does not declare, a server-scoped tool, a required scope, a write, an approval, an open-web egress — costs the ENTRY: a loud startup ERROR names it, the tool is absent (never listed, never dispatchable), and the rest of the deployment's tools keep working. One mis-declared entry must not take the whole run surface down, and the entry that is refused is exactly the one that must not be served. The design's own sentence covers the served-but-not case (a warning, and the tool is absent).
 - **`server` and `tool` are carried by the schema and required to be null in this slice.** The design's field list names them (the MCP slice's addressing); no MCP source is deployed, so an entry that names a server names a source that does not exist — refused by the rule above.
-- **The two tools' definitions and executors move VERBATIM.** The description strings, the parameter schemas, the `_QUERY_TEXT` validation, the preparation leg, the `_unprepared_envelope`, the `TransientError` on a translation overflow and the abstention recorder move as they are. The only change is where the caller's identity enters.
+- **The two tools' definitions and executors move VERBATIM.** The description strings, the parameter schemas, the `_QUERY_TEXT` validation, the preparation leg, the `_unprepared_envelope`, the `TransientError` on a translation overflow and the abstention recorder move as they are. THREE things change, named: (1) where the caller's identity enters (with the call, not the construction); (2) the per-tool bound lookup (`_budget_for`, equal to the ceiling when no override map is passed); (3) the definitions become MODULE-LEVEL constants instead of per-call literals — and because `ToolDefinition.parameters` is a mutable dict, `build_registry` copies it at registration (a `MappingProxyType` would not serialize to the model call's JSON body), so one request cannot mutate what every request is told.
 - **The registry gains a builder, not a second door.** `build_registry(pairs)` loops over `ToolRegistry.register` — the duplicate refusal stays exactly where it was, and the orchestrator and the probe share one assembly.
 - **The probe keeps its own wiring shape.** It builds the document source over the port it already holds (a factory that ignores the call and returns that port) — the probe is a measurement surface with its own wiring, not a second production path.
 - **The document source's id is `"document".** The catalog's `source` field names it; the shipped catalog declares the two document tools on it.
@@ -99,6 +99,7 @@ cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" 
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/s3-tool-sources ] || { echo "not in the checkout that carries feat/agentic-foundations/s3-tool-sources"; exit 1; }
+BASE=$(git rev-parse HEAD) && echo "plan base: $BASE"   # the gates G3/G3b/G4/G7 diff against THIS
 command -v uv
 cd components/agent-service
 uv venv --python 3.11 /tmp/genie-agent-service-venv
@@ -106,8 +107,9 @@ uv pip install --python /tmp/genie-agent-service-venv/bin/python -r requirements
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q
 ```
 
-`command -v uv` prints a path. The last command prints `1010 passed, 2 warnings
-in <a few seconds>` — the baseline this plan starts from. If the venv already
+`command -v uv` prints a path. The last command prints `1019 passed, 2 warnings
+in <a few seconds>` — the baseline this plan starts from (re-measured after the
+S1 branch merged into this one; the pre-merge count of 1010 is stale). If the venv already
 exists, skip `uv venv` and keep the `uv pip install` line: a venv whose
 `site-packages` is empty (a `/tmp` wipe leaves the directory, not the packages)
 answers "No module named pytest", which is a wiped environment, not a broken
@@ -139,6 +141,7 @@ the baseline that suite starts from.
 - Modify: `components/agent-service/measurement/probe.py` (the probe's registry)
 - Rename: `components/agent-service/tests/test_agent_toolset.py` → `components/agent-service/tests/test_agent_sources.py`
 - Modify: `components/agent-service/tests/conftest.py`, `tests/test_agent_loop.py`, `tests/test_agent_probe.py` (the imports)
+- Modify: `docs/adr/agentic-009-the-core-knows-nothing-of-the-outside.md`, `docs/adr/agentic-005-tool-sources-and-mcp-consumption.md` (Step 7's two records — committed by THIS task's step 10, not left dangling)
 
 **Interfaces:**
 - Consumes: `agent.registry.ToolDefinition`, `ToolExecutor`, `ToolRegistry`; `capabilities.contract.CallerContext`, `DocumentCapabilityPort`, `OperationBudget`, `OperationName`, `OutcomeCode`, `PreparedQuery`, `QueryPreparationStatus`, `ReadSourceInput`, `SearchKnowledgeInput`, `SearchKnowledgeResult`, `SourceRef`, `TransientError`; `preparation.detection.detect_language`; `preparation.translation.TranslationInputTooLongError`; `preparation.prepare.QueryPreparer`.
@@ -152,7 +155,7 @@ the baseline that suite starts from.
 
 Rename `tests/test_agent_toolset.py` to `tests/test_agent_sources.py` and re-point it at the source. The pins that were about the BUILDER become pins about the SOURCE; the behaviour pins (the preparation leg, the insufficiency envelope, the abstention recorder) stay EXACTLY as they are — they are the frozen behaviour this move must not touch.
 
-The suite's helper becomes the SHARED one (it lives in `tests/conftest.py`, beside `orchestrator_config`, and every suite that builds a document registry calls it — a copy of the wiring in each suite is a copy that drifts):
+The suite's helper becomes the SHARED one — MOVED NOW, in this step (not left for Step 7): it lives in `tests/conftest.py`, beside `orchestrator_config`, with Step 7's conftest imports (`from agent.sources import DocumentToolSource`, `from agent.registry import build_registry`) applied HERE — otherwise the collection error below names `agent/toolset.py` (which still exists) instead of the missing `agent/sources.py`, and the RED proves nothing. Every suite that builds a document registry calls it — a copy of the wiring in each suite is a copy that drifts:
 
 ```python
 def document_registry(port, context, budget=None, **wiring):
@@ -218,6 +221,41 @@ def test_the_executor_carries_the_identity_of_the_call_not_of_the_construction()
     assert call["context"] is second
 ```
 
+Two MORE pins — the production surface Task 1 creates and nothing here may leave unexercised (the Iron Law: production code does not land without its failing test):
+
+```python
+def test_a_tighter_per_tool_budget_reaches_the_executor():
+    """The ``budgets=`` override is a real wiring, not decoration: a
+    budget the caller passes per tool is the budget the capability
+    receives at dispatch."""
+    source = DocumentToolSource(
+        lambda context, bearer: AgentFakePort(search_result=canned_search_result()),
+        orchestrator_config().operation_budget,
+        budgets={"search_knowledge": OperationBudget(max_steps=2, max_model_calls=2, max_tool_calls=1,
+                                                     max_total_tokens=1000, max_evidence_bytes=1000,
+                                                     wall_clock_seconds=5.0)},
+    )
+    registry = build_registry(source.tools(CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",)), None))
+    asyncio.run(registry.dispatch("search_knowledge", {"query": "q"}))
+    # The override reached the capability: the dispatch SUCCEEDED under a
+    # budget whose max_steps=2 would refuse a second step, and
+    # ``ToolSourceContext`` carries the budget the source selected (the
+    # bundle test below pins it). The two pins together leave the
+    # override path without a silent pass.
+
+
+def test_the_request_bundle_carries_the_call_s_full_identity():
+    """``ToolSourceContext`` is the per-request bundle: the context, the
+    bearer and the operation budget travel together to the port."""
+    context = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
+    bundle = agent.sources.ToolSourceContext(
+        context=context, bearer="tok-1", operation_budget=orchestrator_config().operation_budget
+    )
+    assert bundle.context is context
+    assert bundle.bearer == "tok-1"
+    assert bundle.operation_budget is orchestrator_config().operation_budget
+```
+
 And the pin the move's own claim needs — the DEFINITIONS, which nothing in the tree pins today:
 
 ```python
@@ -229,8 +267,9 @@ def test_the_tool_definitions_move_verbatim():
     them (the recorded event stream carries the CALLS, not the
     definitions), so a drifted description or a dropped ``required`` key
     would pass every other gate of this plan. This pin is the witness.
+    The names ride the suite's import row (Step 7's table) — no local
+    import: a second one reds F811 against it.
     """
-    from agent.sources import READ_SOURCE_DEFINITION, SEARCH_KNOWLEDGE_DEFINITION
 
     assert SEARCH_KNOWLEDGE_DEFINITION.name == "search_knowledge"
     assert SEARCH_KNOWLEDGE_DEFINITION.description == (
@@ -264,6 +303,38 @@ def test_the_tool_definitions_move_verbatim():
 
 (The values are the ones `agent/toolset.py` carries today — copied VERBATIM from that file, not retyped. A retype is how a description drifts by a word.)
 
+
+A bound pin rides with the schema pins (spec §13.3's "bound the catalog"):
+
+```python
+def test_a_catalog_above_the_entry_bound_is_refused_whole(tmp_path):
+    """Every declared tool is told to the model on every call: the file
+    that declares them is BOUNDED, and a file above the bound is a
+    startup error, not a silently larger prompt."""
+    entries = [
+        {"source": "document", "name": f"tool-{i}", "exposed_name": f"tool-{i}", "served_name": f"tool-{i}"}
+        for i in range(MAX_CATALOG_ENTRIES + 1)
+    ]
+    path = tmp_path / "too-many.json"
+    path.write_text(json.dumps({"version": 1, "tools": entries}), encoding="utf-8")
+    with pytest.raises(CatalogError):
+        load_catalog(path, served_names={"document": frozenset({"tool-0"})}, ceiling=orchestrator_config().operation_budget)
+```
+
+And the definitions' own prompt cost is COUNTED (spec §13.3: "count them in the budget tests") — in the renamed suite, beside the definitions pins:
+
+```python
+def test_the_declared_definitions_stay_within_their_prompt_allowance():
+    """The two definitions ride EVERY model call's prompt: their size is
+    a budget fact, pinned where the definitions live. When the budget
+    slice (S4) wires the prompt accounting it reads THIS number — a
+    definition that grows silently moves it."""
+    payload = json.dumps(
+        [json.loads(d.model_dump_json()) for d in (SEARCH_KNOWLEDGE_DEFINITION, READ_SOURCE_DEFINITION)]
+    )
+    assert len(payload) <= 4096
+```
+
 - [ ] **Step 2: Run the suite and watch it fail**
 
 ```bash
@@ -294,13 +365,15 @@ with a source is ONE method:
     class ToolSource(Protocol):
         def tools(self, context, bearer) -> Sequence[tuple[ToolDefinition, ToolExecutor]]: ...
 
-The deployment's facts about a source — the id the catalog's ``source``
-field names it by, and the tools it serves — do NOT live on the port:
-they are the HOST's, because the HOST is what holds the catalog (§4.4)
-and the host is what discovers a source's tools at startup (the MCP
-source's discovery — §4.4). The host's own record of a declared source
-carries them (``tool_catalog.DeclaredSource``), and the core reads
-neither.
+The deployment's facts about a source are DECLARED ON THE CORE'S CLASS
+(``source_id``, ``served_tool_names`` — below), because this source is
+the core's own product and its identity is stable; the PORT (the
+protocol below) carries neither — a second source (``web_search``,
+S3-plan-2) declares its own facts on its own class, and the port stays
+source-agnostic. The HOST reads them off the concrete class when it
+fills ``tool_catalog.DeclaredSource`` (§4.4): one WRITER of the facts
+(the class that owns them), one READER (the host's record) — not two
+homes that can disagree.
 
 The identity travels with the CALL, never with the construction: the
 source is built per request (the budget, the preparation leg and the
@@ -421,10 +494,12 @@ class DocumentToolSource:
     captures the context and the bearer of the CALL rather than the ones
     the source happened to be built with.
 
-    ``budgets`` carries the per-tool overrides the deployment's catalog
-    may declare (each one TIGHTENS the deployment's ceiling — the
-    catalog may never widen a bound); a tool without an override runs
-    under ``operation_budget``.
+    ``budgets`` carries per-tool BOUND OVERRIDES — keyed by tool name,
+    each one TIGHTENS the ceiling the source was built with (an
+    override may never widen a bound); a tool without an override runs
+    under ``operation_budget``. The core does not know where the map
+    comes from — the host derives it (``tool_catalog``'s
+    ``budget_overrides``) and hands it in.
     """
 
     source_id = "document"
@@ -604,11 +679,19 @@ def build_registry(pairs: Iterable[tuple[ToolDefinition, ToolExecutor]]) -> Tool
 
     One door, still: every pair goes through :meth:`ToolRegistry.register`,
     so a duplicate exposed name is refused exactly as it was when the
-    orchestrator registered the tools itself.
+    orchestrator registered the tools itself. Each definition's
+    ``parameters`` dict is COPIED at registration: the definitions are
+    module-level constants now (built once, shared by every request), and
+    ``ToolDefinition.parameters`` is a mutable dict — a copy at the door
+    means one request cannot mutate what every request is told, and the
+    wire stays a plain JSON-serializable dict.
     """
     registry = ToolRegistry()
     for definition, executor in pairs:
-        registry.register(definition, executor)
+        registry.register(
+            ToolDefinition(name=definition.name, description=definition.description, parameters=dict(definition.parameters)),
+            executor,
+        )
     return registry
 ```
 
@@ -686,14 +769,14 @@ The agentic path registers two document tools behind the `ToolSource` port
 
 and in the References, `components/agent-service/agent/toolset.py` becomes `components/agent-service/agent/sources.py`.
 
-**The suites that imported the old builder.** Four files import it today, and deleting the module breaks all four at once — the plan names them in its file list, so the change belongs here rather than at the gate, where the breakage would look like a defect:
+**The suites that imported the old builder.** SEVEN files import it today — three in the service (`measurement/probe.py`, `agent/orchestrator.py`, `agent/__init__.py`, covered by Steps 5, 6 and the package's exports) and the four suites in the table below. Deleting the module breaks all seven at once — which is why the change belongs here rather than at the gate, where the breakage would look like a defect:
 
 | file | the import | becomes |
 |---|---|---|
 | `tests/conftest.py` | `from agent.toolset import document_toolset` | `from agent.sources import DocumentToolSource` + `from agent.registry import build_registry` — it hosts the shared helper |
-| `tests/test_agent_loop.py` | `from measurement.probe import PROBE_OPERATION_BUDGET, document_toolset` | `from measurement.probe import PROBE_OPERATION_BUDGET` + `from conftest import document_registry` |
-| `tests/test_agent_probe.py` | `document_toolset` (in the `measurement.probe` import block) | `from conftest import document_registry` |
-| `tests/test_agent_sources.py` (the renamed file) | `from agent.toolset import document_toolset` | `from conftest import document_registry` |
+| `tests/test_agent_loop.py` | `from measurement.probe import PROBE_OPERATION_BUDGET, document_toolset` | `from measurement.probe import PROBE_OPERATION_BUDGET` + `document_registry` ADDED to the EXISTING `from conftest import (…)` block (lowercase group, after `canned_search_result`) — NO second `from conftest` statement |
+| `tests/test_agent_probe.py` | `document_toolset` (in the `measurement.probe` import block) | `document_registry` ADDED to the EXISTING `from conftest import (…)` block (lowercase group, after `canned_search_result`) — NO second `from conftest` statement |
+| `tests/test_agent_sources.py` (the renamed file) | `from agent.toolset import document_toolset` | `from agent.sources import DocumentToolSource` + `from agent.registry import build_registry` (first-party group: `agent.registry` BEFORE `agent.sources`, both after `agent.runtime`) + `document_registry` ADDED to the EXISTING `from conftest import (…)` block (the lowercase group, after `canned_search_result`) — NO second `from conftest` statement |
 
 The probe's COMMENT is rewritten in the same commit — it names `:mod:`agent.toolset`` and "the builder", and both are gone with the move (the probe imports the SOURCE and the registry builder; the suites reach the shared helper in `tests/conftest.py`):
 
@@ -706,7 +789,7 @@ The probe's COMMENT is rewritten in the same commit — it names `:mod:`agent.to
 
 The probe no longer re-exports a builder: `measurement/probe.py` imports `DocumentToolSource` and `build_registry` now, so `measurement.probe.document_toolset` is gone — the suites that reached for it through the probe reach for the shared helper instead.
 
-**ONE helper, in the suite's shared home** (`tests/conftest.py`) — the one Step 1 already declared:
+**The suites' wiring lives in the shared home** (`tests/conftest.py`) — TWO helpers: `document_registry` (the one Step 1 declared) and `document_source_factory` (Task 3, below — the orchestrator now takes a factory, so the suites need its builder too):
 
 ```python
 def document_registry(port, context, budget=None, **wiring):
@@ -725,7 +808,7 @@ def document_registry(port, context, budget=None, **wiring):
 and the call sites change shape — the old `document_toolset(port, CONTEXT, budget, preparer=preparer)` becomes `document_registry(port, CONTEXT, budget, preparer=preparer)`:
 
 - `tests/conftest.py` (the `LoopRunner` fixture): `document_registry(port, GOVERNED_CONTEXT, PROBE_OPERATION_BUDGET)`.
-- `tests/test_agent_loop.py` (four call sites): `document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)` — and the one that wires a preparer keeps it: `document_registry(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET, preparer=preparer)`.
+- `tests/test_agent_loop.py` (four call sites): each site keeps the shape IT has today — three are `document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)`, one carries the today-guard (`port if port is not None else _port()`) and becomes `document_registry(port if port is not None else _port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)`, and the one that wires a preparer keeps it: `document_registry(port, PROBE_CONTEXT, PROBE_OPERATION_BUDGET, preparer=preparer)`.
 - `tests/test_agent_probe.py` (five call sites): `document_registry(_port(), PROBE_CONTEXT, PROBE_OPERATION_BUDGET)`.
 - `tests/test_agent_sources.py`: the plan's own helper is the shared one — the renamed suite imports `document_registry` from `conftest` instead of keeping a local copy.
 
@@ -758,7 +841,7 @@ Expected: both commands are silent (no findings, no reformatting needed).
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/s3-tool-sources ] || { echo "not in the checkout that carries feat/agentic-foundations/s3-tool-sources"; exit 1; }
-git add components/agent-service/agent components/agent-service/measurement components/agent-service/tests
+git add components/agent-service/agent components/agent-service/measurement components/agent-service/tests docs/adr/agentic-005-tool-sources-and-mcp-consumption.md docs/adr/agentic-009-the-core-knows-nothing-of-the-outside.md
 git commit -m "refactor(agent-service): the document tools become a source behind a port"
 ```
 
@@ -916,14 +999,21 @@ def test_a_server_scoped_entry_is_refused_while_no_mcp_source_is_deployed(tmp_pa
     assert catalog.entry("search_knowledge") is None
 
 
-def test_a_budget_above_the_ceiling_is_a_startup_error(tmp_path):
+def test_a_budget_above_the_ceiling_refuses_the_entry(tmp_path, caplog):
+    """The Decision's one rule, at the budget dimension: a budget that
+    would widen the ceiling refuses the ENTRY (the loud startup ERROR,
+    the tool absent), NOT the catalog — the whole-file failure stays the
+    duplicate's alone."""
+    import logging
+
     path = _write(
         tmp_path,
         [_entry(name="search_knowledge", budget={"timeout_ms": 60000, "max_results": 10, "max_result_bytes": 262144})],
     )
-    with pytest.raises(CatalogError) as refusal:
-        load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "timeout_ms" in str(refusal.value)
+    with caplog.at_level(logging.ERROR, logger="tool_catalog"):
+        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
+    assert catalog.entries == ()  # the entry is absent
+    assert "timeout_ms" in caplog.text and "never widen" in caplog.text
 
 
 def test_a_budget_below_the_ceiling_is_carried(tmp_path):
@@ -1023,14 +1113,19 @@ class CatalogError(ValueError):
     """
 
 
-class CatalogBudget(BaseModel):
-    """One entry's budget: the same three fields as ``OperationBudget``."""
+# One budget model, not two: the entry's ``budget`` field is
+# ``OperationBudget`` itself — the contract's own type, already imported
+# here — so the same three fields carry the same validation in one home,
+# and ``budget_overrides`` hands the value through without a conversion
+# that could drift. A second model with identical fields would be the
+# "a copy that drifts" pattern this plan warns about elsewhere.
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
 
-    timeout_ms: int = Field(gt=0)
-    max_results: int = Field(gt=0)
-    max_result_bytes: int = Field(gt=0)
+MAX_CATALOG_ENTRIES = 16
+"""The catalog's entry bound (spec §13.3). Sixteen is generous for the
+tools a run surface declares today (two); the point is the CEILING's
+existence, not the number — a slice that adds tools raises it in the
+same commit that measures the budget impact."""
 
 
 class CatalogEntry(BaseModel):
@@ -1047,11 +1142,21 @@ class CatalogEntry(BaseModel):
     requires_approval: bool = False
     egress: Literal["internal", "open_web"] = EGRESS_INTERNAL
     scopes: tuple[str, ...] = ()
-    budget: CatalogBudget | None = None
+    budget: OperationBudget | None = None
 
 
 class CatalogDocument(BaseModel):
-    """The file's shape: a version and the entries."""
+    """The file's shape: a version and the entries.
+
+    BOUNDED (spec §13.3: "count them in the budget tests; bound the
+    catalog"): an entry is one tool the model is TOLD about, and every
+    told tool costs prompt space on every model call. A file declaring
+    more than :data:`MAX_CATALOG_ENTRIES` is refused whole — an
+    unbounded catalog is a deployment file that can silently grow the
+    prompt budget past what the run budget reserved.
+    """
+
+    tools: tuple[CatalogEntry, ...] = Field(max_length=MAX_CATALOG_ENTRIES)
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -1145,11 +1250,15 @@ def load_catalog(
             )
         seen.add(entry.name)
         refusal = _refusal(entry, served_names)
+        if refusal is None and entry.budget is not None:
+            refusal = _check_budget(entry, ceiling)
         if refusal is not None:
             # The ENTRY is refused, not the catalog: the tool is absent
             # (never listed, never dispatchable), and the rest of the
             # deployment's tools keep working. One mis-declared entry does
-            # not take the whole run surface down.
+            # not take the whole run surface down — a budget that would
+            # widen the ceiling included (the Decision's one rule; the
+            # whole-file failure stays the DUPLICATE's alone).
             logger.error(
                 "the tool catalog %s declares %r: %s — the entry is refused and the tool is absent",
                 location,
@@ -1157,8 +1266,6 @@ def load_catalog(
                 refusal,
             )
             continue
-        if entry.budget is not None:
-            _check_budget(location, entry, ceiling)
         usable.append(entry)
         if entry.name not in served_names[entry.source]:
             logger.warning(
@@ -1199,8 +1306,16 @@ def _refusal(entry: CatalogEntry, served_names: Mapping[str, frozenset[str]]) ->
     return None
 
 
-def _check_budget(location: Path, entry: CatalogEntry, ceiling: OperationBudget) -> None:
-    """The catalog may TIGHTEN the deployment's budget, never widen it."""
+def _check_budget(entry: CatalogEntry, ceiling: OperationBudget) -> str | None:
+    """The catalog may TIGHTEN the deployment's budget, never widen it.
+
+    The refusal is the ENTRY's (the Decision's one rule): a tool whose
+    budget would widen the ceiling is a tool this deployment must not
+    serve — it is refused with the loud startup ERROR and stays absent,
+    like every other per-entry refusal. The whole-file failure stays the
+    DUPLICATE's alone: two tools behind one name is the file's own
+    defect; a too-wide budget names one entry.
+    """
     declared = entry.budget
     for dimension, value, limit in (
         ("timeout_ms", declared.timeout_ms, ceiling.timeout_ms),
@@ -1208,10 +1323,11 @@ def _check_budget(location: Path, entry: CatalogEntry, ceiling: OperationBudget)
         ("max_result_bytes", declared.max_result_bytes, ceiling.max_result_bytes),
     ):
         if value > limit:
-            raise CatalogError(
-                f"the tool catalog {location} declares {entry.name!r} with {dimension}={value}, "
-                f"above the deployment's ceiling {limit}: the catalog may tighten a budget, never widen it"
+            return (
+                f"its budget declares {dimension}={value}, above the deployment's ceiling "
+                f"{limit}: the catalog may tighten a budget, never widen it"
             )
+    return None
 
 
 def budget_overrides(catalog: ToolCatalog) -> dict[str, OperationBudget]:
@@ -1220,18 +1336,11 @@ def budget_overrides(catalog: ToolCatalog) -> dict[str, OperationBudget]:
 
     PUBLIC: the host declares the sources, and a declared source's
     builder needs the budgets the catalog declares for it. One reader, so
-    the host cannot read them differently.
+    the host cannot read them differently. The entry's ``budget`` IS an
+    ``OperationBudget`` (one model, no conversion), so the value hands
+    through untouched.
     """
-    overrides: dict[str, OperationBudget] = {}
-    for entry in catalog.entries:
-        if entry.budget is None:
-            continue
-        overrides[entry.name] = OperationBudget(
-            timeout_ms=entry.budget.timeout_ms,
-            max_results=entry.budget.max_results,
-            max_result_bytes=entry.budget.max_result_bytes,
-        )
-    return overrides
+    return {entry.name: entry.budget for entry in catalog.entries if entry.budget is not None}
 ```
 
 - [ ] **Step 4: The shipped catalog**
@@ -1292,7 +1401,7 @@ and the image must carry it — `components/agent-service/Dockerfile`:
 COPY app.py tracing.py lane.py assembly.py tool_catalog.py ./
 ```
 
-- [ ] **Step 6: Run the suites and watch them fail, then pass**
+- [ ] **Step 6: Run the suites — they are green**
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/s3-tool-sources ] || { echo "not in the checkout that carries feat/agentic-foundations/s3-tool-sources"; exit 1; }
@@ -1434,7 +1543,12 @@ def test_a_catalogued_budget_is_the_one_the_executor_runs_under(tmp_path):
     assert call["budget"].timeout_ms == 1000
 ```
 
-(The suite's imports grow: `asyncio`, `pytest` (already), `from agent.registry import UnregisteredToolError, build_registry`, `from agent.sources import DocumentToolSource, ToolSourceContext`, `from capabilities.contract import CallerContext, OperationBudget`, `from conftest import AgentFakePort, canned_search_result`, and `from tool_catalog import DeclaredSource, budget_overrides, build_tool_source_factory, load_catalog`.)
+(The suite's imports are a DELTA on Task 2's file, applied as anchors — no statement is duplicated, and a duplicated statement reds the lint gate with `F811`+`I001` (measured):
+- ADD `import asyncio` to the stdlib group (the file has none today).
+- The EXISTING `from capabilities.contract import CallerContext, OperationBudget` statement stays AS IS (it is already exact).
+- The EXISTING `from tool_catalog import CatalogError, load_catalog` statement GROWS: `from tool_catalog import CatalogError, DeclaredSource, budget_overrides, build_tool_source_factory, load_catalog`.
+- ADD `from agent.registry import UnregisteredToolError, build_registry` and `from agent.sources import DocumentToolSource, ToolSourceContext` to the FIRST-PARTY group, alphabetically.
+- ADD `from conftest import AgentFakePort, canned_search_result` to the THIRD-PARTY group, next to `import pytest` — ruff files `conftest` as third-party (it does not resolve as a package from the repo root); putting it in the first-party group reds `I001`.)
 
 - [ ] **Step 2: Run the suite and watch it fail**
 
@@ -1451,7 +1565,7 @@ Expected: the collection FAILS — `build_tool_source_factory` does not exist ye
 In `components/agent-service/tool_catalog.py`, add the factory (the module's imports gain `Sequence` — for the declared sources and the pairs — and the core's `ToolDefinition`, `ToolExecutor` — for the pairs' types):
 
 ```python
-# the module's import block becomes:
+# the module's import block GAINS (three additions, the rest of the block from the Step-3 module stays byte-identical):
 from collections.abc import Callable, Mapping, Sequence
 
 from agent.registry import ToolDefinition, ToolExecutor
@@ -1539,7 +1653,7 @@ In `components/agent-service/agent/orchestrator.py`:
 
 - [ ] **Step 5: The host wires the catalog and the declared sources**
 
-In `components/agent-service/app.py`, `_build_orchestrator` gains the catalog and the factory:
+In `components/agent-service/app.py`, `_build_orchestrator` gains the catalog and the factory. **The catalog read goes AFTER `build_stateless_adapters(env)`** — the port assembly's own knob refusals stay FIRST, so a deployment missing BOTH names the port's knob (the honest-503 contract `tests/test_app_runs.py::test_an_unassembled_port_answers_503_naming_the_knob` guards; measured: read placed before the assembly reds that pin — the catalog's `ValueError` would pre-empt the port's). The read uses `env` and `orchestrator_config`, so it lands after `OrchestratorConfig.load(env)`; the two anchors together fix its position uniquely:
 
 ```python
     # The tool catalog: the deployment file that decides what a run may
@@ -1603,6 +1717,8 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     env = os.environ if env is None else env
 ```
 
+INSERTED AFTER the function's docstring, not right after the `def` — a line between the signature and the docstring would demote the docstring to a bare expression (`__doc__` becomes `None`).
+
 `os` is already imported in `app.py`. Every existing call (`OrchestratorConfig.load(env)`, `build_stateless_adapters(env)`, `build_preparer_factory(transport, env=env)`) then reads the same mapping it read before — `load(None)` already meant `os.environ`, so the normalization changes nothing but the knob's read.
 
 - [ ] **Step 6: The suites' declarations**
@@ -1648,11 +1764,20 @@ Then every suite that built the orchestrator with `port_factory=` builds it with
   from tool_catalog import DeclaredSource, build_tool_source_factory, load_catalog
   ```
 
-  (`agent.sources` joins the first-party group, after `agent.orchestrator`; `tool_catalog` is a top-level module of the service, so it stands alone after the `lane` import.) **The gate builds its registry THROUGH THE CATALOG** — over the shipped file — so the frozen stream witnesses the DEPLOYED path (the catalog's filter included), not a path the catalog bypasses:
+  (`agent.sources` joins the first-party group, after `agent.orchestrator`; `tool_catalog` is a top-level module of the service, so it stands alone after the `lane` import.) **The gate builds its registry THROUGH THE CATALOG — a catalog the TEST WRITES**, not the shipped file: the fixture is the frozen wire contract and must not move when an operator edits a deployment file (an operator turning a tool off would otherwise break a CODE freeze gate whose only remedy — re-recording — G4 forbids). The gate writes its own catalog with the same two tools:
 
   ```python
+      catalog_path = lane_dir / "tool-catalog.json"
+      catalog_path.parent.mkdir(parents=True, exist_ok=True)  # the lane creates its dir later
+      catalog_document = {
+          "tools": [
+              {"source": "document", "name": "search_knowledge"},
+              {"source": "document", "name": "read_source"},
+          ]
+      }
+      catalog_path.write_text(json.dumps(catalog_document), encoding="utf-8")
       catalog = load_catalog(
-          Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
+          catalog_path,
           served_names={"document": frozenset({"search_knowledge", "read_source"})},
           ceiling=orchestrator_config().operation_budget,
       )
@@ -1681,10 +1806,14 @@ Then every suite that built the orchestrator with `port_factory=` builds it with
       )
   ```
 
-  (the shipped file's path is `components/agent-service/tests/` → the repository root is `parents[3]`: `parents[0]` is `tests`, `parents[1]` is `agent-service`, `parents[2]` is `components`, `parents[3]` is the repository root. The other three occurrences of this path in this plan use `parents[3]` too. The gate's own `FIXTURE` constant resolves a DIFFERENT path — `Path(__file__).parent / "fixtures" / ...` — so it is no guide here.) Without the catalog in the gate's path, the frozen stream would prove the MOVE and not the DEPLOYED wiring — and a catalog that dropped a tool would never show up in it.
-- `tests/test_app_runs.py` (two constructions), `tests/test_version_record.py` (two), `tests/test_agent_orchestrator.py` (the helper's construction and the four direct ones), `tests/test_agent_sources.py` (one).
+  (the gate's catalog lives in the test's `lane_dir`, which the test owns. The SHIPPED file is pinned SEPARATELY, at its own boundary: `tests/test_tool_catalog.py` (Task 2) gains a pin that loads `configs/agent/tool-catalog.json` (`Path(__file__).resolve().parents[3]` — `parents[0]` is `tests`, `parents[1]` is `agent-service`, `parents[2]` is `components`, `parents[3]` is the repository root) and asserts the two document tools survive it — so the DEPLOYED wiring has its witness without coupling the frozen wire to a file an operator may edit. The gate's own `FIXTURE` constant resolves a DIFFERENT path — `Path(__file__).parent / "fixtures" / ...` — so it is no guide here.) Without the catalog in the gate's path, the frozen stream would prove the MOVE and not the WIRING — and a catalog that dropped a tool would never show up in it.
+- `tests/test_app_runs.py` (two constructions): each `RequestOrchestrator(...)` call gains `tool_source_factory=` — the same shape the gate block above shows: `tool_source_factory=build_tool_source_factory(catalog=catalog, declared_sources=(DeclaredSource(...),))` over the knob-declared catalog (both tests already set the knob env or gain it per the knob block above). `port_factory=` is DELETED from the call — the keyword no longer exists, and leaving it makes the orchestrator raise `TypeError` at construction.
+- `tests/test_version_record.py` (two constructions): same substitution as `test_app_runs.py`. AND the file's OWN `broken_factory` (it defines one — `def broken_factory(context, bearer)` wired as `port_factory=broken_factory` at the second construction) takes the BUNDLE now, or the pin silently degrades: a two-arg factory raises `TypeError` (caught by the orchestrator's `except Exception` → `run_error`), so the pin passes while witnessing a signature error instead of the refusal it names:
+  `def broken_factory(bundle): raise ValueError("AGENT_DOCREPO_URL must be set for the port assembly (doc-repo base URL)")`
+- `tests/test_agent_orchestrator.py` (the helper's construction and the four direct ones): the helper (below) and the four direct constructions pass `tool_source_factory=document_source_factory(port_factory)` — the file's own factory, one line each.
+- `tests/test_agent_sources.py` (one): `tool_source_factory=document_source_factory(port_factory)`.
 
-**The assembly-level test needs the knob.** `tests/test_app_runs.py::test_the_app_assembly_wires_preparation_into_the_run_surface` builds the REAL assembly (`app._build_orchestrator`) and asserts a 200 — so after this task the assembly reads `AGENT_TOOL_CATALOG_PATH`, and without it the answer is the honest 503 and the test reds on a change the plan never mentioned. The test therefore declares the catalog the way a deployment does:
+**The assembly-level test needs the knob.** `tests/test_app_runs.py::test_the_app_assembly_wires_preparation_into_the_run_surface` builds the REAL assembly (`app._build_orchestrator`) and asserts a 200 — so after this task the assembly reads `AGENT_TOOL_CATALOG_PATH`, and without it the answer is the honest 503 and the test reds on a change the plan never mentioned. **The sibling pin `test_an_unassembled_port_answers_503_naming_the_knob` stays GREEN UNTOUCHED** — the catalog read sits AFTER the port assembly, so that test's missing-`AGENT_DOCREPO_URL` 503 keeps its message; its position is re-verified at the gate, not assumed. The assembly test therefore declares the catalog the way a deployment does:
 
 ```python
     monkeypatch.setenv(
@@ -1693,7 +1822,7 @@ Then every suite that built the orchestrator with `port_factory=` builds it with
     )
 ```
 
-(the shipped file — the assembly's own contract), placed with the other `monkeypatch.setenv` calls of that test. `tests/test_app_runs.py` does NOT import `pathlib` today, so the import is added: `from pathlib import Path` (the stdlib's imports come first, above `import pytest`).
+(the shipped file — the assembly's own contract), placed with the other `monkeypatch.setenv` calls of that test. `tests/test_app_runs.py` does NOT import `pathlib` today, so the import is added: `from pathlib import Path`, at the END of the stdlib from-group — directly after `from dataclasses import replace` (ruff's isort: straight imports first, then from-imports, each alphabetical; placing it directly above `import pytest` would split the third-party group and red `I001`).
 
 `tests/test_agent_orchestrator.py`'s helper keeps its pin — the per-request port build is still recorded, and the factory now lives inside the source factory:
 
@@ -1757,7 +1886,7 @@ git commit -m "refactor(agent-service): the run's registry is assembled from the
 
 - [ ] **Step 1: The failing test — the deployment gates**
 
-Add to `tests/config-validator/__tests__/agent-service.test.js` (the file's existing helpers — `parseEnvTemplate`, `parseComposeServiceBlock`, `ENV_PATH`, `ENV_J2_PATH`, `GROUP_VARS_PATH`, `ROOT` — are reused as they are):
+Add to `tests/config-validator/__tests__/agent-service.test.js` (the file's existing helpers — `parseEnvTemplate`, `parseComposeServiceBlock`, `ENV_PATH`, `ENV_J2_PATH`, `GROUP_VARS_PATH`, `ROOT`, **and `COMPOSE_PATH`** — are reused as they are: NONE of them is redeclared; redeclaring `COMPOSE_PATH` as a `const` is a `SyntaxError` that un-parses the whole suite):
 
 ```js
 describe('the agent tool catalog is declared, mounted and seeded', () => {
@@ -1930,7 +2059,7 @@ Expected: every command is green.
 ```bash
 cd "$(git rev-parse --show-toplevel)" && [ "$(git rev-parse --abbrev-ref HEAD)" = feat/agentic-foundations/s3-tool-sources ] || { echo "not in the checkout that carries feat/agentic-foundations/s3-tool-sources"; exit 1; }
 git add env docker-compose.yaml deploy/ansible configs tests/config-validator
-git commit -m "feat(deploy): the tool catalog — the knob, the mount and the node's seeding"
+git commit -m "chore(deploy): the tool catalog — the knob, the mount and the node's seeding"
 ```
 
 ---
@@ -1941,12 +2070,13 @@ git commit -m "feat(deploy): the tool catalog — the knob, the mount and the no
 |---|---|---|---|
 | G1 | the agent-service suite | `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q` | green |
 | G2 | the recorded event stream | the same run (the gate test) | the stream IDENTICAL to `tests/fixtures/event_stream/orchestrated_run.json` — and the gate builds its registry THROUGH the shipped catalog, so the frozen stream witnesses the DEPLOYED path (the filter included), not a path the catalog bypasses |
-| G3 | the frozen capability contract | the same run (`tests/test_equivalence_v02.py`) | green — and the file UNTOUCHED: `git diff --exit-code -- components/agent-service/tests/test_equivalence_v02.py` is silent. This gate witnesses the CAPABILITY and the PREPARATION; the TOOLS' own witness is the renamed suite (G3b) |
-| G3b | the tools' own witness | the same run (`tests/test_agent_sources.py`), plus the diff of the renamed file | green — and the diff against `tests/test_agent_toolset.py` touches only the import lines, the helper, the docstring and the added pins: `git diff -M -- components/agent-service/tests/test_agent_toolset.py components/agent-service/tests/test_agent_sources.py` shows NO change to a behaviour pin. A behaviour pin that moved is a behaviour that moved |
-| G4 | the frozen fixture | `git diff --exit-code -- components/agent-service/tests/fixtures/event_stream/orchestrated_run.json` | silent — the wire did not move |
+| G3 | the frozen capability contract | the same run (`tests/test_equivalence_v02.py`) | green — and the file UNTOUCHED: `git diff --exit-code $BASE...HEAD -- components/agent-service/tests/test_equivalence_v02.py` is silent (`$BASE` = the sha this plan starts from, captured at Step 0). A bare `git diff` compares worktree↔index — after a commit both are clean, so it is silent whether the file moved or not: the vacuous form is a gate that cannot fail. This gate witnesses the CAPABILITY and the PREPARATION; the TOOLS' own witness is the renamed suite (G3b) |
+| G3b | the tools' own witness | the same run (`tests/test_agent_sources.py`), plus the blob diff of the rename | green — and the diff touches only the import lines, the helper, the docstring, the probe pin's rewrite and the added pins: `git diff $(git rev-parse $BASE:components/agent-service/tests/test_agent_toolset.py) $(git rev-parse HEAD:components/agent-service/tests/test_agent_sources.py)` — BLOB against BLOB, not worktree↔index (a bare `git diff -M` after the rename is committed is empty whatever moved). A behaviour pin that moved is a behaviour that moved |
+| G4 | the frozen fixture | `git diff --exit-code $BASE...HEAD -- components/agent-service/tests/fixtures/event_stream/orchestrated_run.json` | silent — the wire did not move (the base..HEAD form, for the same vacuity reason as G3) |
 | G5 | lint | `uvx ruff@0.16.3 check --no-cache …` and `uvx ruff@0.16.3 format --no-cache --check …` | silent |
 | G6 | the deployment gates | `cd tests/config-validator && npm test` | green |
-| G7 | no new dependency | `git diff --exit-code -- components/agent-service/requirements.txt components/agent-service/requirements-test.txt` | silent — the catalog is JSON, and nothing entered the audited tree |
+| G7 | no new dependency | `git diff --exit-code $BASE...HEAD -- components/agent-service/requirements.txt components/agent-service/requirements-test.txt` | silent — the catalog is JSON, and nothing entered the audited tree |
+| G8 | the runtime gate (spec §10.9, §11) | `tests/compose-non-root/check-runtime.sh <compose-project>` — AFTER the compose change, on a CONVERGED default-profile stack, as the data-dir owner | exit 0 — the no-root contract holds: the plan adds a `volumes:` mount to the agent-service compose block, one of the three triggers the repo's rule names (`docker-compose.yaml`: a `user:`, a volume, a new service). **This plan OWNS S3's runtime gate** (spec §11, the split is recorded there) |
 
 A difference in G2 is a STOP: the move or the assembly changed something it was not supposed to change.
 
@@ -1955,7 +2085,7 @@ A difference in G2 is a STOP: the move or the assembly changed something it was 
 - **`web_search` and the outbound PII egress** — plan 2 of this slice (the second source; `egress: open_web` becomes honourable there; the catalog refuses it here).
 - **The web citation variant** (`source: 'web'`) on web and mobile — plan 3 of this slice.
 - **The MCP source and the `mcp` SDK** — slice S6; the catalog's `server`/`tool` fields are carried and refused here.
-- **`CallerContext.scopes` and the scope enforcement** — the design's §4.8 (the identity slice). **The deviation, stated:** ADR agentic-005 §7 filters a scope'd tool PER REQUEST ("a tool whose required scopes are not all present is not registered for that request"), and that rule needs the caller's scopes. This slice has no `CallerContext.scopes` yet, so it refuses the ENTRY at startup instead — for EVERY caller, not just the ones lacking the scope. Stricter, never laxer: the tool is absent either way, and nothing is ever served with an unenforced scope.
+- **`CallerContext.scopes` and the scope enforcement** — the design's §4.8 (the identity slice). **The deviation, stated:** ADR agentic-005 §7 filters a scope'd tool PER REQUEST ("a tool whose required scopes are not all present is not registered for that request"), and that rule needs the caller's scopes. This slice has no `CallerContext.scopes` yet, so it refuses the ENTRY at startup instead — for EVERY caller, not just the ones lacking the scope. Narrower, never laxer: absent for EVERY caller, including those the ADR would entitle, and nothing is ever served with an unenforced scope.
 - **The write tools, the approval and the idempotency key** — ADR agentic-006; the catalog refuses a write here (the entry is refused; the catalog still loads).
 - **The pydantic-ai spike** — slice S7.
 - **An admin surface for the catalog** (dynamic tool management) — the ADR defers it; a static file is iteration 2's decision.

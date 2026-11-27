@@ -439,8 +439,20 @@ describe('the agent tool catalog is declared, mounted and seeded', () => {
 
     // The node must carry the file: the bind mount's source has to exist
     // there (swarmkit silently creates a missing bind source ROOT-owned).
+    // The assertion is ANCHORED, not a substring: the var must be defined
+    // INSIDE the "Define deploy files" task's vars: mapping (a definition
+    // anywhere else is swallowed by the union's | default([]) — silently,
+    // with no error), the union must name it, and the gating must be the
+    // swarm activation flag.
     const deploy = fs.readFileSync(path.join(ROOT, 'deploy/ansible/deploy.yml'), 'utf-8');
-    expect(deploy).toMatch(/configs\/agent\/tool-catalog\.json/);
+    const taskMatch = deploy.match(/- name: Define deploy files\n(?:(?!- name:)[\s\S])*/);
+    expect(taskMatch).not.toBeNull();
+    const task = taskMatch[0];
+    const varsMatch = task.match(/vars:\n(?:(?!- name:)[\s\S])*/);
+    expect(varsMatch).not.toBeNull();
+    expect(varsMatch[0]).toMatch(/_deploy_files_agent: "[^"]*configs\/agent\/tool-catalog\.json[^"]*"/);
+    expect(varsMatch[0]).toMatch(/agent_enabled \| default\('0'\) == '1'/);
+    expect(task).toMatch(/union\(_deploy_files_agent \| default\(\[\]\)\)/);
   });
 
   test('the shipped catalog carries the two document tools', () => {

@@ -14,18 +14,18 @@ refusal into a pass — or a warning into silence — turns them red.
 import asyncio
 import json
 import logging
+from functools import partial
 
 import pytest
-from conftest import SHIPPED_CATALOG, AgentFakePort, canned_search_result
+from conftest import SHIPPED_CATALOG, AgentFakePort, FakeWebSearchPort, canned_search_result, canned_web_result
 
 from agent.registry import UnregisteredToolError, build_registry
-from agent.sources import DocumentToolSource, ToolSourceContext
+from agent.sources import DocumentToolSource, ToolSourceContext, WebSearchToolSource
 from capabilities.contract import CallerContext, OperationBudget
 from tool_catalog import (
     MAX_CATALOG_ENTRIES,
     CatalogError,
     DeclaredSource,
-    budget_overrides,
     build_tool_source_factory,
     load_catalog,
 )
@@ -135,12 +135,54 @@ def test_a_write_tool_is_refused_until_the_approval_path_lands(tmp_path, caplog)
     assert catalog.entry("search_knowledge") is None
 
 
-def test_an_open_web_egress_is_refused_until_the_pii_egress_lands(tmp_path, caplog):
-    path = _write(tmp_path, [_entry(name="search_knowledge", egress="open_web")])
+def test_an_open_web_entry_whose_source_declares_no_pii_egress_path_is_refused(tmp_path, caplog):
+    """The egress guarantee is the SOURCE'S OWN DECLARATION: an open_web
+    entry is carried only when the source it names declares that it
+    implements the PII egress path (the query passes the pii-service or the
+    call fails closed). A source that declares no such path is REFUSED —
+    the tool is absent rather than served without the redaction."""
     with caplog.at_level(logging.ERROR):
-        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "egress" in caplog.text.lower()
-    assert catalog.entry("search_knowledge") is None
+        catalog = load_catalog(
+            _write(tmp_path, [_entry(name="web_search", source="web", egress="open_web")]),
+            served_names={"web": frozenset({"web_search"})},
+            ceiling=CEILING,
+        )
+    assert "PII egress path" in caplog.text
+    assert catalog.entry("web_search") is None
+
+
+def test_a_declared_open_web_tool_is_listed_and_dispatchable(tmp_path):
+    """The honouring reaches the RUN: the catalogued open_web entry on a
+    source that DECLARES the PII egress path is carried, offered by the
+    source's pair (the model sees the definition) and dispatchable (the
+    registry carries it) — the loader's refusal was the only thing between
+    the declaration and the run."""
+    port = FakeWebSearchPort(canned_web_result())
+    declared = (
+        DeclaredSource(
+            source_id=WebSearchToolSource.source_id,
+            served_tool_names=WebSearchToolSource.served_tool_names,
+            build=partial(WebSearchToolSource.from_bundle, lambda _context, _bearer: port),
+            honours_open_web_egress=True,
+        ),
+    )
+    catalog = load_catalog(
+        _write(tmp_path, [_entry(name="web_search", source="web", egress="open_web")]),
+        served_names={"web": frozenset({"web_search"})},
+        ceiling=CEILING,
+        egress_capable_sources=frozenset(source.source_id for source in declared if source.honours_open_web_egress),
+    )
+    factory = build_tool_source_factory(
+        catalog=catalog,
+        declared_sources=declared,
+    )
+    registry = build_registry(factory(_bundle()))
+
+    assert registry.names() == ("web_search",)
+    assert [definition["function"]["name"] for definition in registry.definitions()] == ["web_search"]
+    result = asyncio.run(registry.dispatch("web_search", {"query": "the model query"}))
+    assert result["outcome"] == "success"
+    assert port.calls[0]["query"] == "the model query"
 
 
 def test_a_server_scoped_entry_is_refused_while_no_mcp_source_is_deployed(tmp_path, caplog):
@@ -198,26 +240,24 @@ def _bundle(context=CONTEXT):
     )
 
 
-def _declared(catalog, port):
-    """The suite's declaration of the document source — the host's shape."""
+def _declared(port):
+    """The suite's declaration of the document source — the host's shape.
+
+    The declaration names NO budget map: ``build_tool_source_factory``
+    hands the catalog's budgets to every declared source mechanically,
+    and this site cannot forget them (the mechanical pass is the point).
+    """
     return (
         DeclaredSource(
             source_id=DocumentToolSource.source_id,
             served_tool_names=DocumentToolSource.served_tool_names,
-            build=lambda bundle: DocumentToolSource(
-                lambda _context, _bearer: port,
-                bundle.operation_budget,
-                budgets=budget_overrides(catalog),
-                preparer=bundle.preparer,
-                on_preparation_status=bundle.on_preparation_status,
-                abstention_sink=bundle.abstention_sink,
-            ),
+            build=partial(DocumentToolSource.from_bundle, lambda _context, _bearer: port),
         ),
     )
 
 
 def _registry(catalog, port):
-    factory = build_tool_source_factory(catalog=catalog, declared_sources=_declared(catalog, port))
+    factory = build_tool_source_factory(catalog=catalog, declared_sources=_declared(port))
     return build_registry(factory(_bundle()))
 
 
@@ -263,6 +303,11 @@ def test_a_tool_the_catalog_names_on_another_source_is_not_offered(tmp_path):
 
 
 def test_a_catalogued_budget_is_the_one_the_executor_runs_under(tmp_path):
+    """The MECHANICAL hand-off: the factory reads the catalog's per-tool
+    bounds ONCE and hands them to every declared source's build itself —
+    the declaration site names no budget map, and deleting the hand-off
+    reds HERE (the executor silently falling back to the ceiling), never
+    at some later request."""
     catalog = load_catalog(
         _write(
             tmp_path,

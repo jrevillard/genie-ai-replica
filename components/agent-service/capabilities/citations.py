@@ -22,6 +22,16 @@ Two consumers, one builder per provenance variant:
   (``{"provenance": dict, "text": str, "score": ...}``), already deduped first-served by
   the ledger.
 
+A THIRD source rides the ledger AND this module's projection: a web result
+enters the evidence ledger (the taint scan and the grounding judge read it)
+and its identity is the ``(source, url)`` tuple above. Its citation variant
+(``source: 'web'``, rendered on web and mobile) projects through
+:func:`_web_entry` — the web provenance is SELF-CONTAINED (url and title
+travel with it, nothing resolves; the provenance IS the metadata), so
+``record_for`` and ``resolve_source_records`` still resolve NOTHING for a
+web provenance (no platform holds a web source's record) and the projection
+reads the provenance itself, in a branch placed BEFORE the D1 check.
+
 THE NAME IS THE PLATFORM'S, NOT THE ID'S. Every source carries the name ITS
 OWN platform resolved for it: a legacy document carries the name the document
 repository resolved for it (resolved through the port, per answer, exactly as
@@ -50,7 +60,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .contract import OKF_CONCEPT_SOURCE, OkfConceptProvenance
+from .contract import OKF_CONCEPT_SOURCE, WEB_SEARCH_SOURCE, OkfConceptProvenance
 from .sources import ConceptSource, DocumentMetadataSource
 
 logger = logging.getLogger(__name__)
@@ -106,6 +116,21 @@ def is_concept_provenance(provenance) -> bool:
     if isinstance(provenance, dict):
         return provenance.get("source") == OKF_CONCEPT_SOURCE
     return isinstance(provenance, OkfConceptProvenance)
+
+
+def _is_web_provenance(provenance) -> bool:
+    """Is this provenance a web result's?
+
+    The marker is the port's own vocabulary (``source``/``url``), the
+    counterparty's data model — naming it in a PORT is the port's job:
+    the core CONSUMES the port's shape, it does not invent one.
+
+    Named, and not spelled inline at the call site: the discrimination
+    is a rule with a name and a reason, and a rule spelled twice is a
+    rule that can disagree with itself.
+    """
+
+    return isinstance(provenance, dict) and provenance.get("source") == WEB_SEARCH_SOURCE
 
 
 def _concept_address(provenance) -> tuple[str, str]:
@@ -171,6 +196,8 @@ async def resolve_source_records(
         file_id = _legacy_file_id(provenance)
         if file_id:
             file_ids.append(file_id)
+        # a web provenance resolves nothing — its projection reads the
+        # provenance itself
     documents, concepts = await asyncio.gather(
         _resolve_documents(file_ids, document_source, bearer),
         _resolve_concepts(addresses, concept_source, bearer),
@@ -235,37 +262,42 @@ async def _resolve_concepts(addresses, source: ConceptSource, bearer: str | None
     return {address: card for address, card in zip(unique, cards, strict=True) if card}
 
 
-def provenance_identity(provenance) -> tuple:
+def provenance_identity(provenance) -> tuple | None:
     """The identity tuple of one provenance — the port's own convention.
 
     ``(repo_id, concept_id)`` for an OKF concept, ``(None, file_id)`` for a
-    legacy file. The reader is shape-agnostic: the contract's object and
-    the ledger's dict carry the same identity in two shapes, and ONE reader
-    reads both — so the dedup key of the no-agent lane and the dedup key of
-    the governed ledger cannot drift apart.
+    legacy file, ``(source, url)`` for a web result (url-keyed, tagged by
+    the marker — without the branch every web entry would dedup to the
+    legacy ``(None, None)`` and one result would swallow the rest). A
+    provenance with NO stable identity — a web result without a url, a
+    legacy source without a file id — gets ``None``: a constant key would
+    make the first identity-less hit swallow every other. Every consumer
+    of this function handles the ``None`` (skip, or attribute to
+    ``(None, None)``) — this function is the ONE place the no-identity
+    decision is made. The reader is shape-agnostic: the contract's object
+    and the ledger's dict carry the same identity in two shapes, and ONE
+    reader reads both — so the dedup key of the no-agent lane and the
+    dedup key of the governed ledger cannot drift apart.
     """
 
     if is_concept_provenance(provenance):
         return _concept_address(provenance)
-    return (None, _legacy_file_id(provenance))
+    if _is_web_provenance(provenance):
+        url = str(provenance.get("url") or "")
+        if not url:
+            return None
+        return (WEB_SEARCH_SOURCE, url)
+    identity = (None, _legacy_file_id(provenance))
+    return None if identity == (None, None) else identity
 
 
-def hit_identity(hit) -> tuple[str, str] | None:
-    """The dedup identity of one hit's source: ``(repo_id, concept_id)`` for
-    an OKF concept, ``(None, file_id)`` for a legacy file. Deployed keys the
-    duplicate-skip on the flat ``file_id`` alone (an OKF chunk's ``file_id``
-    IS its ``concept_id``), so a legacy ``file_id`` colliding with an OKF
-    ``concept_id`` — or one ``concept_id`` in two repositories — dedups in
-    the deployed path but not here; the pair identity is the stricter,
-    namespace-safe variant, and the collision is theoretical (E01's corpus
-    is legacy-only)."""
-    identity = provenance_identity(hit.provenance)
-    if identity == (None, None):
-        # A legacy source with no file id has NO identity — the dedup key
-        # would be a constant, and every such source would collide with
-        # every other.
-        return None
-    return identity
+def readable_score(score) -> float | int | None:
+    """The ledger's one score rule: a number is a number — and a ``bool``
+    is NOT (it is an ``int`` to ``isinstance``, but ``True`` is not a
+    relevance); anything unreadable is ``None``, never guessed into a
+    number. ONE rule for the producer (the ledger's triples) and the
+    consumers (the projected rows), so the two cannot drift."""
+    return score if isinstance(score, (int, float)) and not isinstance(score, bool) else None
 
 
 def _crawled_url(record: dict) -> str:
@@ -301,6 +333,26 @@ def _okf_entry(concept_id, repo_id, bundle_version, score, card: dict) -> dict:
     if bundle_version is not None:
         entry["bundle_version"] = bundle_version
     return entry
+
+
+def _web_entry(provenance, score=None) -> dict:
+    """The projected row of a web result. The provenance is SELF-CONTAINED —
+    url and title travel with it, nothing resolves — so the row reads the
+    provenance directly: the url is both the click target and the stable
+    identity (``provenance_identity``'s web branch returns ``(source, url)``),
+    the title names the card, and the score follows the ledger's one rule
+    (an unreadable score is ``None``, never guessed into a number). The raw
+    engine score is carried UNCALIBRATED — the score calibrator normalises
+    corpus-retrieval scores, and a web relevance score is a different scale."""
+    url = str(provenance.get("url") or "")
+    title = str(provenance.get("title") or "").strip() or url
+    return {
+        "document_id": url,
+        "document_name": title,
+        "url": url,
+        "score": readable_score(score),
+        "source": WEB_SEARCH_SOURCE,
+    }
 
 
 def _legacy_entry(file_id, score, record: dict) -> dict:
@@ -344,10 +396,23 @@ def source_document_envelope(hits, score_calibrator=None, *, records: SourceReco
     seen: set[tuple[str, str] | None] = set()
     for hit in hits:
         provenance = hit.provenance
-        identity = hit_identity(hit)
+        identity = provenance_identity(provenance)
+        if identity is None:
+            # No identity, no row: the legacy source without a file id and
+            # the web result without a url are both skipped BEFORE the dedup
+            # key — a None key in ``seen`` would let the FIRST identity-less
+            # hit project and swallow the rest.
+            continue
         if identity in seen:
             continue
         seen.add(identity)
+        if _is_web_provenance(provenance):
+            # The web variant projects from the SELF-CONTAINED provenance,
+            # before the D1 check — no platform resolves a web record — and
+            # before the calibrator: a web relevance score is a different
+            # scale, carried raw (uncalibrated).
+            envelope.append(_web_entry(provenance, hit.score))
+            continue
         score = score_calibrator(hit.score) if score_calibrator is not None else hit.score
         record = records.record_for(provenance)
         if record is None:
@@ -387,6 +452,19 @@ def source_documents_from_citations(citations, *, records: SourceRecords) -> lis
     for citation in citations:
         provenance = citation["provenance"]
         score = citation.get("score")
+        if provenance_identity(provenance) is None:
+            # The same rule as the envelope builder: no identity, no row —
+            # the ledger refuses identity-less entries upstream, and a raw
+            # citation list that bypassed it (this builder accepts one) must
+            # not grow an anonymous empty card either.
+            continue
+        if _is_web_provenance(provenance):
+            # The web variant projects from the SELF-CONTAINED provenance,
+            # before the D1 check — no platform resolves a web record. This
+            # builder has no dedup and no calibrator: the ledger dedups
+            # first-served upstream, and a web score is carried raw.
+            envelope.append(_web_entry(provenance, score))
+            continue
         record = records.record_for(provenance)
         if record is None:
             continue

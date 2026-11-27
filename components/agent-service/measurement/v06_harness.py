@@ -78,14 +78,22 @@ logger = logging.getLogger(__name__)
 
 PRODUCER_ID = "measurement.v06_harness"
 
-TOOL_NAME = "search_knowledge"
-"""The matrix registers ONE tool under the seam's working name: every cell
-observes how the deployed endpoint handles the same definition, so a verdict
-difference between cells attributes to the varied axis, never to the tool."""
+MATRIX_TOOL_NAMES: tuple[str, ...] = ("web_search", "search_knowledge", "read_source")
+"""The three declarations the matrix registers, the TARGET first. The
+matrix measures how the endpoint behaves when SEVERAL declarations are
+registered and the model must pick one: the slice's catalog carries three
+tools, so a one-declaration matrix does not measure the deployed shape. The
+target is ``web_search`` — the tool the slice added — and the other two are
+distractors, present so the model's CHOICE is observable."""
+
+MATRIX_TARGET: str = MATRIX_TOOL_NAMES[0]
+"""The tool the prompt asks for and the judge expects. A cell is valid only
+when the endpoint called THIS one: a call to a distractor is a wrong
+answer, not a valid cell."""
 
 MATRIX_PROMPT = (
-    "Search the knowledge base for the organization's remote-work policy. "
-    "You must call the search_knowledge tool with the query; do not answer from memory."
+    "Search the public web for the organization's remote-work policy. "
+    "You must call the web_search tool with the query; do not answer from memory."
 )
 
 CANCEL_DEMO_PROMPT = "Count slowly from one to twenty, one number per line."
@@ -99,20 +107,24 @@ CONTROL_PROMPT = "Reply with the single word: ready."
 TOOL_CHOICE_MODES: tuple[str, ...] = ("auto", "named", "required")
 
 
-def tool_choice_value(mode: str) -> Any:
+def tool_choice_value(mode: str, target: str = MATRIX_TARGET) -> Any:
     """The OpenAI-compatible ``tool_choice`` wire value of a matrix mode."""
     if mode == "auto":
         return "auto"
     if mode == "required":
         return "required"
     if mode == "named":
-        return {"type": "function", "function": {"name": TOOL_NAME}}
+        return {"type": "function", "function": {"name": target}}
     raise ValueError(f"unknown tool-choice mode: {mode!r}")
 
 
 SCHEMA_STRICTNESS: tuple[str, ...] = ("strict", "permissive")
 
-TOOL_DESCRIPTION = "Search the authorized knowledge corpus; returns ranked passages with their provenance."
+TOOL_DESCRIPTIONS: dict[str, str] = {
+    "web_search": "Search the public web for reference material.",
+    "search_knowledge": "Search the authorized knowledge corpus; returns ranked passages with their provenance.",
+    "read_source": "Read one document from the corpus by its identifier; returns the document's full text.",
+}
 
 # The matrix's OWN tool contract — deliberately NOT the product's.
 #
@@ -312,6 +324,7 @@ class VerificationEvidence:
     loop_cancel: LoopCancelObservation
     plain_control: PlainControlObservation
     notes: tuple[str, ...] = field(default_factory=tuple)
+    declared_tools: tuple[str, ...] = field(default_factory=tuple)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -743,21 +756,25 @@ class HttpxSseStream:
 
 
 def _matrix_payload(mode: str, strictness: str, *, streaming: bool, model_id: str) -> dict:
-    definition = {
-        "type": "function",
-        "function": {
-            "name": TOOL_NAME,
-            "description": TOOL_DESCRIPTION,
-            "parameters": SCHEMAS[strictness],
-        },
-    }
+    definitions = []
+    for name in MATRIX_TOOL_NAMES:
+        definitions.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": TOOL_DESCRIPTIONS[name],
+                    "parameters": SCHEMAS[strictness],
+                },
+            }
+        )
     # The recorded sampling params, with ``stream`` overridden on the
     # streaming cells: one payload convention, the axis flips only what it
     # names.
     payload = {
         "model": model_id,
         "messages": [{"role": "user", "content": MATRIX_PROMPT}],
-        "tools": [definition],
+        "tools": definitions,
         "tool_choice": tool_choice_value(mode),
         **RECORDED_SAMPLING_PARAMS,
         "stream": streaming,
@@ -827,7 +844,7 @@ async def _run_nonstreaming_cell(config: VllmModelConfig, transport, payload: di
     if choice is None:
         raise VerificationTransientError("the response carries no choice")
     message = choice.get("message") or {}
-    observation = parse_nonstreaming_tool_calls(message, TOOL_NAME)
+    observation = parse_nonstreaming_tool_calls(message, MATRIX_TARGET)
     return replace(observation, finish_reason=finish_reason)
 
 
@@ -841,7 +858,7 @@ async def _run_streaming_cell(payload: dict, sse_factory) -> ToolCallObservation
         # Every consumed stream is closed by its consumer — a drained
         # stream's client would otherwise leak until GC.
         await stream.aclose()
-    return reassemble_streaming_tool_calls(events, TOOL_NAME)
+    return reassemble_streaming_tool_calls(events, MATRIX_TARGET)
 
 
 def _record_cell(
@@ -1339,6 +1356,7 @@ async def run_verification(
         loop_cancel=loop_cancel,
         plain_control=plain_control,
         notes=tuple(notes),
+        declared_tools=MATRIX_TOOL_NAMES,
     )
 
 

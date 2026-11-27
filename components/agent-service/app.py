@@ -28,6 +28,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from functools import partial
 
 import fastapi
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -43,15 +44,15 @@ from agent.orchestrator import (
     RequestOrchestrator,
     build_preparer_factory,
 )
-from agent.sources import DocumentToolSource
+from agent.sources import DocumentToolSource, WebSearchToolSource
 from agent.version_record import IMPLEMENTATION_VERSION
-from assembly import build_stateless_adapters
+from assembly import build_stateless_adapters, build_web_search_port
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import CallerContext
 from lane import AdmissionLane
 from noagent.config import NoAgentConfig
-from tool_catalog import DeclaredSource, budget_overrides, build_tool_source_factory, load_catalog
+from tool_catalog import DeclaredSource, build_tool_source_factory, load_catalog
 from tracing import setup_tracing
 
 SERVICE_NAME = "agent-service"
@@ -142,6 +143,12 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     # preparer over the run's budget monitor; the discovery caches are
     # process-wide.
     preparer_factory = build_preparer_factory(transport, env=env)
+    # The web-search port: the deployment's own INTENT
+    # (AGENT_WEB_SEARCH_ENABLED) decides whether the source is declared at
+    # all; the knob pair then supplies the ENDPOINTS, fail-closed as a PAIR
+    # (an enabled deployment holding one endpoint is the 503 naming the
+    # missing knob). ``None`` = the shipped posture, no web source declared.
+    web_port = build_web_search_port(env, transport=transport)
 
     def port_factory(context: CallerContext, bearer: str | None):
         # Per request: one executor binds ONE trusted context to the
@@ -154,34 +161,42 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
 
         The core composes nothing — it asks this factory per request for
         the pairs to register. One home: the catalog's served_names are
-        derived from THIS (the same facts, read once). The budgets close
-        over ``catalog_budgets`` below — resolved per REQUEST, long after
-        the assembly finishes, so the definition order is not a trap.
+        derived from THIS (the same facts, read once). The catalog's
+        per-tool budgets arrive MECHANICALLY — ``build_tool_source_factory``
+        hands them to every ``build`` — so this site names no budget map.
+        The web record exists only when the port does: a catalog entry
+        naming ``web`` on a host that declared no web source takes the
+        loader's undeclared-source refusal, never a half-built tool.
         """
-        return (
+        sources = (
             DeclaredSource(
                 source_id=DocumentToolSource.source_id,
                 served_tool_names=DocumentToolSource.served_tool_names,
-                build=lambda bundle: DocumentToolSource(
-                    factory,
-                    bundle.operation_budget,
-                    budgets=catalog_budgets,
-                    preparer=bundle.preparer,
-                    on_preparation_status=bundle.on_preparation_status,
-                    abstention_sink=bundle.abstention_sink,
-                ),
+                build=partial(DocumentToolSource.from_bundle, factory),
             ),
         )
+        if web_port is not None:
+            sources = sources + (
+                DeclaredSource(
+                    source_id=WebSearchToolSource.source_id,
+                    served_tool_names=WebSearchToolSource.served_tool_names,
+                    build=partial(WebSearchToolSource.from_bundle, lambda context, bearer: web_port),
+                    # The source DECLARES the PII egress path it implements
+                    # (the query passes the pii-service, or the call fails
+                    # closed) — the catalog carries an open-web entry only
+                    # for a source that declares it.
+                    honours_open_web_egress=WebSearchToolSource.honours_open_web_egress,
+                ),
+            )
+        return sources
 
     sources = declared_sources(port_factory)
     catalog = load_catalog(
         catalog_path,
         served_names={source.source_id: source.served_tool_names for source in sources},
         ceiling=orchestrator_config.operation_budget,
+        egress_capable_sources=frozenset(source.source_id for source in sources if source.honours_open_web_egress),
     )
-    # The per-tool bounds are the CATALOG's static fact: computed once at
-    # assembly, not re-derived inside every request's build call.
-    catalog_budgets = budget_overrides(catalog)
     tool_source_factory = build_tool_source_factory(catalog=catalog, declared_sources=sources)
 
     return RequestOrchestrator(

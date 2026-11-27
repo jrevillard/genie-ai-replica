@@ -21,10 +21,12 @@ from capabilities.adapters.env_config import (
     ModelEndpointConfig,
     RerankingConfig,
 )
+from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.okf import OkfAdapter
 from capabilities.adapters.tei_embedding import TeiEmbeddingAdapter
 from capabilities.adapters.tei_reranking import TeiRerankingAdapter
-from capabilities.contract import CallerContext, DocumentCapabilityPort, OperationName, TransientError
+from capabilities.adapters.web_search import WebSearchAdapter
+from capabilities.contract import CallerContext, DocumentCapabilityPort, OperationName, TransientError, WebSearchPort
 from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from capabilities.sources import ConceptSource
@@ -174,6 +176,37 @@ def build_concept_source(env=None, *, okf_enabled: bool) -> ConceptSource:
     if not okf_url:
         raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
     return OkfAdapter(okf_url)
+
+
+def build_web_search_port(env=None, transport=None) -> WebSearchPort | None:
+    """The web-search port, or ``None`` when the deployment runs none.
+
+    The PRESENCE signal is the deployment's own INTENT
+    (``AGENT_WEB_SEARCH_ENABLED``), never the shape of the knobs:
+    ``PII_SERVICE_URL`` belongs to the OKF pillar (the ansible render sets it
+    unconditionally), so inferring presence from it would make every agent
+    deployment look half-wired — and a half-wired deployment is a 503 on every
+    run. The knob PAIR supplies the ENDPOINTS: an ENABLED deployment with an
+    incomplete pair is refused with the honest ``ValueError`` naming the
+    missing knob — a web search that redacts without searching, or searches
+    without redacting, is a lie the deployment believes.
+    """
+    source = os.environ if env is None else env
+    if str(source.get("AGENT_WEB_SEARCH_ENABLED", "")).strip() != "1":
+        return None
+    pii_url = str(source.get("PII_SERVICE_URL", "")).strip()
+    searxng_url = str(source.get("AGENT_SEARXNG_URL", "")).strip()
+    missing = [knob for knob, value in (("PII_SERVICE_URL", pii_url), ("AGENT_SEARXNG_URL", searxng_url)) if not value]
+    if missing:
+        raise ValueError(
+            f"{missing[0]} must be set when web search is enabled: "
+            "the web source needs both knobs (the egress rule redacts the query before it leaves)"
+        )
+    return WebSearchAdapter(
+        pii_url,
+        searxng_url,
+        transport=transport if transport is not None else HttpxTransport(ModelEndpointConfig.load(env).tls_verify),
+    )
 
 
 def build_stateless_adapters(env=None) -> StatelessAdapters:

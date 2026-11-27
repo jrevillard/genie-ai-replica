@@ -26,6 +26,12 @@ void main() {
     'url': '/api/files/annual-report.pdf/download',
     'score': 0.9,
   };
+  final webRow = <String, dynamic>{
+    'document_id': 'https://example.gov/policy',
+    'document_name': 'The policy',
+    'url': 'https://example.gov/policy',
+    'source': 'web',
+  };
 
   String label(int n) => 'Related sources ($n)';
 
@@ -75,6 +81,13 @@ void main() {
     await tester.tap(find.text('Related sources (1)'));
     await tester.pumpAndSettle();
     expect(find.text('OKF'), findsOneWidget);
+  });
+
+  testWidgets('a web row carries the WEB badge', (tester) async {
+    await pumpBar(tester, sources: [webRow]);
+    await tester.tap(find.text('Related sources (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('WEB'), findsOneWidget);
   });
 
   testWidgets('a document row carries its extension badge', (tester) async {

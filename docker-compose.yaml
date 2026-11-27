@@ -1333,8 +1333,8 @@ services:
         max_attempts: 10
 
   pii-service:
-    # OKF feature flag: parked with the okf-server (see okf-server block).
-    profiles: ["okf"]
+    # Parked by default; its TWO consumers are the OKF pillar (the okf profile) and the agent's web search (the agent profile — the egress rule scans every outbound query).
+    profiles: ["okf", "agent"]
     logging: *fluent-logging
     # least-privilege hardening (SAST wave-8): no capabilities at all —
     # uvicorn binds a high port and writes nothing outside its mounts.
@@ -1371,7 +1371,14 @@ services:
     networks:
       - genieai_network
     deploy:
-      replicas: ${OKF_ENABLED:-0}
+      # The DERIVED flag: 1 when the OKF pillar runs OR the agent's web
+      # search does. On the ansible path env.j2 derives it (okf_enabled OR
+      # agent_web_search_enabled); a raw compose deployment SETS it in .env.
+      # The OKF pillar's own flag is the FALLBACK, so a raw-compose
+      # deployment that only sets OKF_ENABLED=1 (the contract that existed
+      # before this knob) keeps its sidecar instead of parking it and
+      # failing every OKF publish closed.
+      replicas: ${PII_SERVICE_ENABLED:-${OKF_ENABLED:-0}}
       placement:
         constraints:
           - node.labels.genieai == true
@@ -1573,6 +1580,20 @@ services:
       # required.
       - OKF_ENABLED=${OKF_ENABLED:-0}
       - AGENT_OKF_URL=${AGENT_OKF_URL:-}
+      # The web-search PRESENCE signal — the deployment's own INTENT, and
+      # the only thing that declares the web source: 1 (the default is 0)
+      # declares it, 0 declares none whatever the endpoints read (the
+      # pii-service endpoint belongs to the OKF pillar and is set on every
+      # deployment, so it can never be the signal). The knob PAIR below
+      # supplies the ENDPOINTS, read fail-closed as a pair at assembly (an
+      # ENABLED deployment holding one endpoint = the 503 naming the
+      # missing knob). The query is redacted through the pii-service BEFORE
+      # the meta-search call (fail-closed), so the raw query never leaves.
+      # The TOOL appears only when the deployment's catalog also carries
+      # the web_search entry (the enable recipe: configs/README.md).
+      - AGENT_WEB_SEARCH_ENABLED=${AGENT_WEB_SEARCH_ENABLED:-}
+      - AGENT_SEARXNG_URL=${AGENT_SEARXNG_URL:-}
+      - PII_SERVICE_URL=${PII_SERVICE_URL:-}
       # The shared corpus/model endpoints the run surface's assembly reads
       # at request time — the SAME knobs the OPEA services read, mapped
       # with the same spellings and the same compose defaults, so one
@@ -1670,6 +1691,57 @@ services:
       # (Compose v2 honors this too, so both gates must agree to run one
       # replica.)
       replicas: ${AGENT_ENABLED:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  searxng:
+    # The meta-search backend of the agent's web_search tool (ADR agentic-008:
+    # SearXNG as an unmodified upstream image, consumed over its HTTP API).
+    # INTERNAL only — genieai_network, no host port, no gateway route. DARK
+    # (the okf-server/certbot/agent-service shape): the `agent` profile keeps
+    # it out of a plain `docker compose up -d`, AGENT_WEB_SEARCH_ENABLED
+    # decides the replica count (Swarm ignores profiles — the replicas gate
+    # is the activation there). The JSON API is DISABLED upstream by
+    # default: the mounted settings file below is the shipped minimal
+    # override that adds the `json` format.
+    profiles: [agent]
+    image: searxng/searxng:2026.11.23-a7163d091
+    logging: *fluent-logging
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    environment:
+      # The instance's secret key has ONE home: here (the upstream overwrite
+      # convention — SEARXNG_SECRET replaces settings.yml's server.secret_key).
+      # The mounted settings file spells no value, so this line is the value
+      # every deployment gets and the only place an operator rotates it.
+      # The instance is internal-only and the limiter is off, so the static
+      # default is deliberate — a static default rather than a deployment
+      # secret.
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-genie-ai-internal-searxng}
+    volumes:
+      # Read-only: the deployment's settings, never a mutated one. The JSON
+      # API rides THIS file — an instance served without it answers 403 to
+      # every format=json call.
+      - ./configs/agent/searxng-settings.yml:/etc/searxng/settings.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - genieai_network
+    deploy:
+      # The activation gate (pairs with the profile): 0 parks, 1 runs.
+      replicas: ${AGENT_WEB_SEARCH_ENABLED:-0}
       placement:
         constraints:
           - node.labels.genieai == true

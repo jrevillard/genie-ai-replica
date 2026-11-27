@@ -1,0 +1,26 @@
+# GENIE.AI agent tier — SearXNG settings (mounted read-only at
+# /etc/searxng/settings.yml by the searxng compose service).
+#
+# The MINIMAL override: `use_default_settings: true` inherits every default
+# from the image's own settings, and this file changes exactly what the
+# agent's web-search adapter needs. SearXNG ships its JSON output DISABLED
+# (its own search.formats is [html]) — the adapter consumes the
+# /search?format=json API, so `json` joins the list; everything else
+# (engines, the limiter, the bind address) stays upstream.
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+
+# The instance's secret key does NOT live here: it comes from the
+# environment (SEARXNG_SECRET — the upstream overwrite convention). The
+# compose service always sets it, so this file spells no second copy of the
+# value: two copies, one of them unreachable, are a key an operator can
+# rotate here and see no effect of. With the variable unset, SearXNG's own
+# upstream default applies.
+# The instance is INTERNAL-only (genieai_network, no published port, no
+# gateway route) and the limiter is off, so the key guards no user-facing
+# surface — a static default in the compose service rather than a
+# deployment secret is deliberate.

@@ -1511,6 +1511,50 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # exactly what is missing.
 # AGENT_DOCREPO_URL=
 # AGENT_OKF_URL=
+# Web search behind the outbound PII egress (the Server-Side Tools rule):
+# the web_search tool is declared ONLY when the deployment SAYS it wants
+# web search — the activation flag below (the deployment's own INTENT) —
+# and the knob PAIR then supplies the ENDPOINTS: the query passes the
+# pii-service first and the search runs on the redacted text, failing
+# closed if the scan fails; an ENABLED deployment holding only one endpoint
+# is answered 503 at assembly naming the missing knob. The flag at 0 (the
+# default) is the shipped posture: no web source, no web tool — whatever
+# the endpoints read (the pii-service endpoint belongs to the OKF pillar
+# and is set on every deployment, so it can never be the presence signal).
+# The enable recipe is the flag AND the pair (three settings), plus the
+# catalog entry: the tool appears only when the deployment's catalog ALSO
+# carries the web_search entry — the enable recipe (the catalog entry, the
+# settings, the recreate) lives in configs/README.md. The scan's model is
+# English-only (the pii-service's shipped limitation): non-English queries
+# are scanned best-effort.
+# AGENT_SEARXNG_URL=http://searxng:8080
+#
+# The redaction endpoint — the pii-service base URL — is the knob the
+# okf-server section documents (one knob, one home: the PII_SERVICE_URL
+# entry there); the agent reads the same spelling.
+#
+# The two activation flags the compose block and the ansible render read —
+# no container code reads either:
+#   AGENT_WEB_SEARCH_ENABLED — 1 DECLARES the web source (the deployment's
+#     own intent: the run surface refuses to serve web search the operator
+#     never asked for) and runs the searxng service (on the ansible path it
+#     also drives the PII_SERVICE_ENABLED derivation below); 0 (the default)
+#     declares no web source and parks searxng. Compose mode: pair with the
+#     `agent` profile, like AGENT_ENABLED above.
+#   PII_SERVICE_ENABLED — 1 runs the pii-service, 0 (the default) parks it.
+#     On the ansible path the render derives it (okf_enabled OR
+#     agent_web_search_enabled), so an ansible deployment sets nothing here;
+#     a raw compose deployment sets it, and the OKF pillar's own flag is the
+#     FALLBACK — a plain-compose deployment that runs the OKF pillar keeps
+#     its sidecar (the contract that existed before this knob), while a
+#     deployment that runs the agent's web search WITHOUT the OKF pillar
+#     sets the variable PII_SERVICE_ENABLED=1 here. WRAPPING NOTE: the prose
+#     lines of this block must never read `# NAME=VALUE` at line start —
+#     parse-env.js's documented-entry regex matches that shape, and a
+#     prose line that fits it plants a garbage entry the gates' `.find()`
+#     would pick up. Put a lowercase word before the variable name.
+# AGENT_WEB_SEARCH_ENABLED=1
+# PII_SERVICE_ENABLED=1
 # The agent service reads the SAME OKF feature flag as the rest of the
 # stack (the OKF_ENABLED section above) — no second variable, and no second
 # copy of what the flag means stack-wide. What the flag means FOR THE AGENT:

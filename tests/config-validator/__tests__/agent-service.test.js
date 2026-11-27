@@ -464,3 +464,163 @@ describe('the agent tool catalog is declared, mounted and seeded', () => {
     expect(() => JSON.parse(fs.readFileSync(catalogPath, 'utf-8'))).not.toThrow();
   });
 });
+
+describe('the web-search egress is deployed behind the pii service', () => {
+  let composeText;
+  let searxngBlock;
+  let searxngContract;
+  let piiContract;
+  let agentBlock;
+  let envDocumented;
+
+  beforeAll(() => {
+    composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
+    searxngBlock = parseComposeServiceBlock(composeText, 'searxng');
+    const contracts = parseComposeServiceContracts(COMPOSE_PATH);
+    searxngContract = contracts.find((entry) => entry.service === 'searxng');
+    piiContract = contracts.find((entry) => entry.service === 'pii-service');
+    agentBlock = parseComposeServiceBlock(composeText, 'agent-service');
+    envDocumented = parseEnvTemplate(ENV_PATH).documented;
+  });
+
+  test('the searxng service ships unmodified, internal and parked', () => {
+    expect(searxngBlock).not.toBeNull();
+    // The unmodified upstream image, PINNED — never latest.
+    expect(searxngBlock).toMatch(/image: searxng\/searxng:2026\.11\.23-a7163d091/);
+    // Internal only: no host port, no gateway route.
+    expect(searxngBlock).not.toMatch(/^\s*ports:/m);
+    // Least privilege, the file's convention for every sidecar.
+    expect(searxngBlock).toMatch(/cap_drop:\s*\n\s*- ALL/);
+    expect(searxngBlock).toMatch(/no-new-privileges:true/);
+    expect(searxngBlock).toMatch(/logging: \*fluent-logging/);
+  });
+
+  test('the searxng activation is the DARK pair', () => {
+    // The okf-server/certbot/agent-service shape: the profile keeps it out
+    // of a plain compose up; the replicas gate is the swarm-side activation
+    // (Swarm ignores profiles).
+    expect(searxngContract.profiles).toEqual(['agent']);
+    expect(searxngContract.replicas).toBe('${AGENT_WEB_SEARCH_ENABLED:-0}');
+    // The JSON API's settings file — the mount an enabled-but-unseeded
+    // deployment would silently boot without (a bind mount never falls
+    // back to image contents).
+    expect(searxngBlock).toMatch(/\.\/configs\/agent\/searxng-settings\.yml:\/etc\/searxng\/settings\.yml:ro/);
+    expect(searxngBlock).toMatch(/healthcheck:/);
+  });
+
+  test('the shipped settings file turns the json format on', () => {
+    const settings = fs.readFileSync(path.join(ROOT, 'configs/agent/searxng-settings.yml'), 'utf-8');
+    expect(settings).toMatch(/use_default_settings: true/);
+    expect(settings).toMatch(/formats:\s*\n\s*- html\s*\n\s*- json\s*\n/);
+  });
+
+  test('the pii service leaves the park through the derived flag', () => {
+    // The profiles widen (okf keeps the OKF posture, agent adds the web-search
+    // one) and the replicas gate is the DERIVED variable — no longer OKF_ENABLED
+    // directly (the raw-compose OKF deployment contract changes with this).
+    // The gate is NESTED: the derived knob wins, and OKF_ENABLED is the
+    // fallback, so a raw-compose deployment that only sets OKF_ENABLED=1 (the
+    // contract that existed before this slice) keeps its sidecar instead of
+    // parking it and failing every OKF publish closed.
+    expect(piiContract.profiles).toEqual(['okf', 'agent']);
+    expect(piiContract.replicas).toBe('${PII_SERVICE_ENABLED:-${OKF_ENABLED:-0}}');
+  });
+
+  test('the env template documents the knob pair and the two activation flags', () => {
+    const pair = Object.fromEntries(
+      ['AGENT_SEARXNG_URL', 'PII_SERVICE_URL', 'AGENT_WEB_SEARCH_ENABLED', 'PII_SERVICE_ENABLED'].map((name) => [
+        name,
+        envDocumented.find((entry) => entry.name === name)
+      ])
+    );
+    for (const name of Object.keys(pair)) {
+      expect(pair[name]).toBeDefined();
+    }
+    expect(pair.AGENT_SEARXNG_URL.value).toBe('http://searxng:8080');
+    expect(pair.PII_SERVICE_URL.value).toBe('http://pii-service:8000');
+    expect(pair.AGENT_WEB_SEARCH_ENABLED.value).toBe('1');
+    expect(pair.PII_SERVICE_ENABLED.value).toBe('1');
+  });
+
+  test('the agent-service container receives the knob pair', () => {
+    // A variable absent from the service's environment block is unreachable
+    // by the container — the half-wired 503 would be unreachable with it.
+    expect(agentBlock).toMatch(/- AGENT_SEARXNG_URL=\$\{AGENT_SEARXNG_URL:-\}/);
+    expect(agentBlock).toMatch(/- PII_SERVICE_URL=\$\{PII_SERVICE_URL:-\}/);
+  });
+
+  test('the ansible deployment renders the knobs, derives the flag and seeds the settings file', () => {
+    const envJ2 = fs.readFileSync(ENV_J2_PATH, 'utf-8');
+    expect(envJ2).toMatch(/AGENT_SEARXNG_URL=\{\{ agent_searxng_url \| default\(''\) \}\}/);
+    // The ONE PII_SERVICE_URL render is the okf-server's line 294, UNCHANGED —
+    // the agent container drinks it through compose interpolation. A second
+    // render with default('') (or a pii_service_url group var at "") would
+    // flip this line to EMPTY (jinja's default fires on undefined only).
+    expect(envJ2).toMatch(/PII_SERVICE_URL=\{\{ pii_service_url \| default\('http:\/\/pii-service:8000'\) \}\}/);
+    expect(envJ2).toMatch(/AGENT_WEB_SEARCH_ENABLED=\{\{ agent_web_search_enabled \| default\('0'\) \}\}/);
+    // The DERIVATION, not a passthrough: the pii service runs when EITHER
+    // consumer needs it — the OKF pillar or the agent's web search.
+    expect(envJ2).toMatch(
+      /PII_SERVICE_ENABLED=\{\{ '1' if \(okf_enabled \| default\('0'\) == '1'\) or \(agent_web_search_enabled \| default\('0'\) == '1'\) else '0' \}\}/
+    );
+
+    const groupVars = fs.readFileSync(GROUP_VARS_PATH, 'utf-8');
+    expect(groupVars).toMatch(/^agent_web_search_enabled: "0"$/m);
+    expect(groupVars).toMatch(/^agent_searxng_url: ""$/m);
+    // pii_service_url is deliberately ABSENT from group_vars — a definition,
+    // even at "", would flip env.j2 line 294's default to an empty render.
+    expect(groupVars).not.toMatch(/^pii_service_url:/m);
+
+    // The seeded file, ANCHORED (the tool-catalog gate's pattern): the var
+    // must be defined INSIDE the "Define deploy files" task's vars: mapping
+    // (a definition anywhere else is swallowed by the union's | default([])
+    // — silently), the union must name it, and the gating must be the
+    // web-search flag.
+    const deploy = fs.readFileSync(path.join(ROOT, 'deploy/ansible/deploy.yml'), 'utf-8');
+    const taskMatch = deploy.match(/- name: Define deploy files\n(?:(?!- name:)[\s\S])*/);
+    expect(taskMatch).not.toBeNull();
+    const task = taskMatch[0];
+    const varsMatch = task.match(/vars:\n(?:(?!- name:)[\s\S])*/);
+    expect(varsMatch).not.toBeNull();
+    expect(varsMatch[0]).toMatch(/_deploy_files_searxng: "[^"]*configs\/agent\/searxng-settings\.yml[^"]*"/);
+    expect(varsMatch[0]).toMatch(/agent_web_search_enabled \| default\('0'\) == '1'/);
+    expect(task).toMatch(/union\(_deploy_files_searxng \| default\(\[\]\)\)/);
+  });
+
+  test('a catalog that declares web_search requires the deployed infrastructure', () => {
+    // THE CONSISTENCY GATE. The shipped catalog stays two tools, so the
+    // branch is armed but not taken today; the day the catalog (shipped or
+    // an operator's committed copy) declares a web_search entry, the
+    // searxng service and the documented knobs must exist with it — the
+    // declaration and the infrastructure move together or the deployment
+    // lies about what it serves.
+    const requireInfrastructureFor = (catalog) => {
+      const declaresWeb = catalog.tools.some((entry) => entry.name === 'web_search' || entry.source === 'web');
+      expect(searxngBlock).not.toBeNull(); // asserted either way: the service ships
+      if (!declaresWeb) {
+        return;
+      }
+      expect(searxngBlock).toMatch(/image: searxng\/searxng:/);
+      for (const name of ['AGENT_SEARXNG_URL', 'PII_SERVICE_URL']) {
+        expect(envDocumented.find((entry) => entry.name === name)).toBeDefined();
+      }
+    };
+
+    // The SHIPPED posture: two tools, no web entry — the rule's branch is
+    // not taken, and the searxng service still ships (the catalog's CONTENT
+    // contract stays owned by the loader-side Python pin).
+    const shipped = JSON.parse(fs.readFileSync(path.join(ROOT, 'configs/agent/tool-catalog.json'), 'utf-8'));
+    requireInfrastructureFor(shipped);
+
+    // The FIXTURE: a catalog that DOES declare a web entry — the rule's
+    // branch, exercised here against the real files so it is a live gate
+    // and not one that never ran.
+    requireInfrastructureFor({
+      version: 1,
+      tools: [
+        { name: 'search_knowledge', source: 'document', egress: 'internal' },
+        { name: 'web_search', source: 'web', egress: 'open_web' }
+      ]
+    });
+  });
+});

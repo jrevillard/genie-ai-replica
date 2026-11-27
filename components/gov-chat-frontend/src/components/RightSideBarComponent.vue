@@ -189,7 +189,13 @@ import {
   openOkfSource,
   fileTypeBadge
 } from '../utils/document-opener.js';
-import { isOkfConceptSource, okfConceptBadge, canBrowseSource } from '../utils/okfCitation.js';
+import {
+  isOkfConceptSource,
+  okfConceptBadge,
+  isWebSource,
+  webSourceBadge,
+  canBrowseSource
+} from '../utils/okfCitation.js';
 import notificationService from '../services/notificationService';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import { Files, FileText, HelpCircle, ChevronUp, ChevronDown, Languages, ExternalLink, Library } from '@lucide/vue';
@@ -426,12 +432,20 @@ export default {
       // sidebar lists the SAME citations as the answer card — the badge must
       // say the same thing in both places.
       if (isOkfConceptSource(doc)) return okfConceptBadge();
+      // A web citation is not a file either: its url has no extension, so
+      // the fallback would render the url path's first characters. The
+      // badge names the variant — the same helper the answer card reads,
+      // so the two surfaces cannot drift.
+      if (isWebSource(doc)) return webSourceBadge();
       return fileTypeBadge(doc.fileName || doc.title);
     },
 
     async openDocument(doc) {
       if (isExternalHref(doc.url)) {
-        window.open(doc.url, '_blank');
+        // 'noopener' — the external page must not hold a window.opener to
+        // the app tab (reverse tabnabbing; the chat card's openSourceDocument
+        // carries it too).
+        window.open(doc.url, '_blank', 'noopener');
         this.$emit('open-document', doc);
         return;
       }

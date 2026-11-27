@@ -41,6 +41,7 @@ follow the code instead of holding it.
 import asyncio
 import json
 import os
+from functools import partial
 from pathlib import Path
 
 from conftest import (
@@ -99,13 +100,7 @@ def _capture(lane_dir: Path) -> list[dict]:
                 DeclaredSource(
                     source_id=DocumentToolSource.source_id,
                     served_tool_names=DocumentToolSource.served_tool_names,
-                    build=lambda bundle: DocumentToolSource(
-                        lambda context, bearer: fake_port(),
-                        bundle.operation_budget,
-                        preparer=bundle.preparer,
-                        on_preparation_status=bundle.on_preparation_status,
-                        abstention_sink=bundle.abstention_sink,
-                    ),
+                    build=partial(DocumentToolSource.from_bundle, lambda context, bearer: fake_port()),
                 ),
             ),
         ),

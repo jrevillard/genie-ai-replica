@@ -227,32 +227,6 @@ function postQuery(extra = {}) {
   });
 }
 
-// The BFF-side envelope rows mapped from GROUNDED_VERDICT.citations — the
-// legacy variant (no source marker) and the okf-concept variant (marker +
-// identity trio), the exact deployed shapes.
-const EXPECTED_SOURCE_DOCUMENTS = [
-  {
-    document_id: 'doc_bee_knowledge',
-    document_name: 'doc bee knowledge',
-    url: '',
-    categoryLabels: [],
-    serviceLabels: [],
-    score: 0.9
-  },
-  {
-    document_id: 'kenya_tax_rules',
-    document_name: 'kenya tax rules',
-    url: '',
-    categoryLabels: [],
-    serviceLabels: [],
-    score: 0.8,
-    concept_id: 'kenya_tax_rules',
-    repo_id: 'r-kenya',
-    bundle_version: 3,
-    source: 'okf-concept'
-  }
-];
-
 // ── the I/O matrix ──────────────────────────────────────────────────────────
 
 describe('POST /api/queries — the agentic success contract', () => {
@@ -273,7 +247,10 @@ describe('POST /api/queries — the agentic success contract', () => {
       queryId: 'q1',
       response: 'Hello world.',
       metadata: {
-        source_documents: EXPECTED_SOURCE_DOCUMENTS,
+        // The service's source_documents rows forwarded verbatim — this
+        // fixture names only raw citations, so the sources are empty (the
+        // BFF is a forwarder, no mapping lives there).
+        source_documents: [],
         confidence_score: 0,
         is_grounded: true,
         retrieval_confidence_score: null,

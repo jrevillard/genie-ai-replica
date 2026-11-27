@@ -305,6 +305,13 @@ class OkfConceptProvenance(BaseModel):
 
 Provenance = LegacyFileProvenance | OkfConceptProvenance
 
+# The web-search provenance marker's ONE spelling, beside the OKF one: the
+# marker lives on the port (a marker re-spelled in a consumer is a marker
+# that can drift), and the LEDGER's web entries carry it as a plain dict —
+# the dict is the shape the ledger's web branch reads. The citation variant
+# that renders it is S3-plan-3.
+WEB_SEARCH_SOURCE = "web"
+
 
 class LegacyFileRef(BaseModel):
     """A legacy corpus target, identified by its file id."""
@@ -567,6 +574,19 @@ class DocumentCapabilityPort(Protocol):
         budget: OperationBudget,
     ) -> ReadSourceResult:
         """Read one authorized source and report it with its provenance."""
+        ...
+
+
+class WebSearchPort(Protocol):
+    """The web-search port: one method, like every source's door.
+
+    The adapter satisfies it structurally; the core's source names it and
+    drives nothing else. The budget travels with the call — the adapter
+    bounds its legs with it (the contract's per-operation timeout reading).
+    """
+
+    async def search(self, query: str, budget: OperationBudget) -> dict:
+        """Search the web for the (already redacted) query; report the hits."""
         ...
 
 

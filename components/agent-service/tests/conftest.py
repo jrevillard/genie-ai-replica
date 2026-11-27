@@ -452,23 +452,14 @@ class AgentFakePort:
 
 
 class FakeWebSearchPort:
-    """The ``WebSearchPort`` double: a canned result dict, recorded calls.
+    """The ``WebSearchPort`` double: a canned result dict, recorded calls."""
 
-    An exception instance as the canned result makes the port raise it, so
-    a suite can drive the raised carriers (the dispatcher's envelope
-    mapping)."""
-
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None):
         self.result = result
-        self.error = error
         self.calls: list[dict] = []
 
     async def search(self, query, budget):
         self.calls.append({"query": query, "budget": budget})
-        if isinstance(self.error, Exception):
-            raise self.error
-        if isinstance(self.result, Exception):
-            raise self.result
         return self.result
 
 

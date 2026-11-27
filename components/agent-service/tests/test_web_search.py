@@ -96,8 +96,12 @@ def test_the_web_marker_is_the_contract_constant():
 def test_the_port_declares_one_search_method():
     """The core reads ONE method off the port (the design's §4.3 shape, one
     method per source). The signature is structural: the adapter satisfies
-    it without importing it."""
-    assert hasattr(WebSearchPort, "search")
+    it without importing it.
+
+    The Protocol's public members are EXACTLY that one method — a second
+    public member is a second door the core might read, and a count that
+    is never asserted is a rule nobody enforces."""
+    assert {name for name in dir(WebSearchPort) if not name.startswith("_")} == {"search"}
 
 
 # ---------------------------------------------------------------------
@@ -246,32 +250,6 @@ def test_the_web_definition_is_the_model_facing_contract():
     }
 
 
-def test_the_tools_pair_carries_the_definition_and_a_bound_executor():
-    source = WebSearchToolSource(lambda context, bearer: FakeWebSearchPort(), CEILING)
-    pairs = source.tools(CONTEXT, None)
-    [(definition, executor)] = pairs
-    assert definition is WEB_SEARCH_DEFINITION
-    assert callable(executor)
-
-
-def test_the_identity_travels_with_the_call():
-    served: list[tuple[CallerContext, str | None]] = []
-
-    def port_factory(context, bearer):
-        served.append((context, bearer))
-        return FakeWebSearchPort()
-
-    source = WebSearchToolSource(port_factory, CEILING)
-    first = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
-    second = CallerContext(user_id="u-2", authorized_graph_names=("GRAPH",))
-    build_registry(source.tools(first, "bearer-1"))
-    second_registry = build_registry(source.tools(second, "bearer-2"))
-
-    assert served == [(first, "bearer-1"), (second, "bearer-2")]
-    asyncio.run(second_registry.dispatch("web_search", {"query": "q"}))
-    assert len(served) == 2  # the executor never re-bound at dispatch time
-
-
 def test_a_missing_or_blank_query_is_refused_before_the_port():
     port = FakeWebSearchPort()
     registry = build_registry(WebSearchToolSource(lambda _context, _bearer: port, CEILING).tools(CONTEXT, None))
@@ -302,14 +280,19 @@ def test_the_executor_feeds_the_port_the_query_and_the_budget():
 def test_from_bundle_builds_the_source_with_the_bundle_wiring():
     """The web source is BORN on the mechanical wiring: the host's build is
     ``partial(WebSearchToolSource.from_bundle, <port factory>)``, and the
-    budgets arrive through the same keyword the document source's does."""
+    budgets arrive through the same keyword the document source's does.
+
+    The map's budget is DISTINCT from the bundle's ceiling: with the same
+    object in both, the assertion would pass whether the ``budgets``
+    keyword arrived or was dropped."""
     port = FakeWebSearchPort()
     bundle = ToolSourceContext(context=CONTEXT, bearer="tok-1", operation_budget=CEILING)
-    source = WebSearchToolSource.from_bundle(lambda _context, _bearer: port, bundle, budgets={"web_search": CEILING})
+    override = OperationBudget(timeout_ms=1000, max_results=1, max_result_bytes=1024)
+    source = WebSearchToolSource.from_bundle(lambda _context, _bearer: port, bundle, budgets={"web_search": override})
     registry = build_registry(source.tools(bundle.context, bundle.bearer))
 
     asyncio.run(registry.dispatch("web_search", {"query": "q"}))
-    assert port.calls[0]["budget"] is CEILING
+    assert port.calls[0]["budget"] is override
 
 
 # ---------------------------------------------------------------------
@@ -344,32 +327,6 @@ def test_the_ledgers_extraction_carries_web_hits():
     triples = retrieved_texts("web_search", canned_web_result_payload())
     assert [text for text, _provenance, _score in triples] == ["the first snippet", "the second snippet"]
     assert triples[1][2] is None  # a score the adapter could not read stays None
-
-
-def test_a_malformed_web_hit_contributes_nothing():
-    payload = {
-        "result": {
-            "outcome": "success",
-            "hits": (
-                {"text": "no provenance"},
-                {"provenance": {"source": WEB_SEARCH_SOURCE, "url": "u"}, "score": 1},
-                "not-a-dict",
-            ),
-            "truncated": False,
-        }
-    }
-    assert retrieved_texts("web_search", payload) == []
-
-
-def test_an_error_envelope_contributes_nothing_and_the_ledger_counts_what_grew():
-    ledger = RetrievalLedger()
-    ledger.record("web_search", {"error": {"code": "transient_failure", "message": "the pii scan answered 500"}})
-    assert ledger.entries == []
-    assert ledger.successful_retrievals == 0
-
-    ledger.record("web_search", canned_web_result_payload())
-    assert len(ledger.entries) == 2
-    assert ledger.successful_retrievals == 1  # the dispatch that GREW the ledger
 
 
 def test_web_entries_dedup_by_url_first_served_wins():

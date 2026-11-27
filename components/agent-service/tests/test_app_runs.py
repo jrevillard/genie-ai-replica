@@ -35,6 +35,7 @@ import app as app_module
 from agent.events import BFF_FRAME_NAMES
 from agent.orchestrator import AdmissionRefused, RequestOrchestrator
 from agent.sources import DocumentToolSource
+from assembly import build_web_search_port
 from capabilities.contract import CallerContext, PreparedQuery, QueryPreparationStatus
 from lane import AdmissionLane
 from preparation.prepare import PreparationResult
@@ -615,3 +616,31 @@ def test_a_half_wired_web_pair_answers_503_naming_the_missing_knob(monkeypatch):
     body = response.json()
     assert body["error"] == "run_surface_unconfigured"
     assert "PII_SERVICE_URL" in body["message"]
+
+
+def test_the_web_search_port_follows_the_deployments_intent_and_its_knob_pair():
+    """The DIRECT owner of ``build_web_search_port``'s return value: the
+    app-level observable cannot prove the source's absence (the catalog
+    filters the tool list, so the observable is identical with or without a
+    web source), and the "no web source" half of the pair had NO owner.
+
+    The flag decides the PRESENCE; the knob PAIR supplies the ENDPOINTS;
+    an ENABLED deployment with an incomplete pair is refused with the
+    honest ``ValueError`` naming the missing knob (the SearXNG-missing
+    direction had no pin)."""
+    endpoints = {"PII_SERVICE_URL": "http://pii-service:8000", "AGENT_SEARXNG_URL": "http://searxng:8080"}
+
+    # The flag unset: NO web source, whatever the endpoints read.
+    assert build_web_search_port(env=endpoints) is None
+
+    # The flag set and the pair complete: a port.
+    port = build_web_search_port(env={**endpoints, "AGENT_WEB_SEARCH_ENABLED": "1"})
+    assert port is not None
+    assert callable(getattr(port, "search", None))
+
+    # The flag set and one endpoint missing: the honest refusal, naming the
+    # missing knob.
+    with pytest.raises(ValueError, match="PII_SERVICE_URL"):
+        build_web_search_port(env={"AGENT_WEB_SEARCH_ENABLED": "1", "AGENT_SEARXNG_URL": "http://searxng:8080"})
+    with pytest.raises(ValueError, match="AGENT_SEARXNG_URL"):
+        build_web_search_port(env={"AGENT_WEB_SEARCH_ENABLED": "1", "PII_SERVICE_URL": "http://pii-service:8000"})

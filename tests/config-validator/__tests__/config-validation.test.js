@@ -1347,18 +1347,13 @@ describe('Configuration Validation Suite', () => {
         expect(block).toMatch(/profiles: \["okf"\]/);
         expect(block).toMatch(/replicas: \$\{OKF_ENABLED:-0\}/);
       }
-      // pii-service is the EXCEPTION, asserted on its own: its profiles widen
-      // (the okf pillar AND the agent's web search) and its replicas gate is
-      // the DERIVED flag (okf_enabled OR agent_web_search_enabled, derived
-      // in env.j2) — no longer OKF_ENABLED directly. The derivation itself is
-      // asserted by the agent-service suite's ansible gate.
-      const piiStart = composeText.indexOf('  pii-service:');
-      expect(piiStart).toBeGreaterThan(-1);
-      const piiRest = composeText.slice(piiStart + 15);
-      const piiNext = piiRest.match(/\n {2}\S/);
-      const piiBlock = composeText.slice(piiStart, piiNext ? piiStart + 15 + piiNext.index : undefined);
-      expect(piiBlock).toMatch(/profiles: \["okf", "agent"\]/);
-      expect(piiBlock).toMatch(/replicas: \$\{PII_SERVICE_ENABLED:-0\}/);
+      // pii-service is the EXCEPTION: its profiles widen (the okf pillar AND
+      // the agent's web search) and its replicas gate is the DERIVED flag
+      // (okf_enabled OR agent_web_search_enabled, derived in env.j2) — no
+      // longer OKF_ENABLED directly. Those two facts are asserted on their
+      // own by the agent-service suite, through the repo's parsed-contract
+      // helper (ONE owner); here we assert only that the service ships.
+      expect(composeText.indexOf('  pii-service:')).toBeGreaterThan(-1);
     });
 
     test('frontend, kong-config and backend all receive the flag', () => {

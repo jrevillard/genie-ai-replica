@@ -518,8 +518,12 @@ describe('the web-search egress is deployed behind the pii service', () => {
     // The profiles widen (okf keeps the OKF posture, agent adds the web-search
     // one) and the replicas gate is the DERIVED variable — no longer OKF_ENABLED
     // directly (the raw-compose OKF deployment contract changes with this).
+    // The gate is NESTED: the derived knob wins, and OKF_ENABLED is the
+    // fallback, so a raw-compose deployment that only sets OKF_ENABLED=1 (the
+    // contract that existed before this slice) keeps its sidecar instead of
+    // parking it and failing every OKF publish closed.
     expect(piiContract.profiles).toEqual(['okf', 'agent']);
-    expect(piiContract.replicas).toBe('${PII_SERVICE_ENABLED:-0}');
+    expect(piiContract.replicas).toBe('${PII_SERVICE_ENABLED:-${OKF_ENABLED:-0}}');
   });
 
   test('the env template documents the knob pair and the two activation flags', () => {
@@ -590,15 +594,33 @@ describe('the web-search egress is deployed behind the pii service', () => {
     // searxng service and the documented knobs must exist with it — the
     // declaration and the infrastructure move together or the deployment
     // lies about what it serves.
-    const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'configs/agent/tool-catalog.json'), 'utf-8'));
-    const declaresWeb = catalog.tools.some((entry) => entry.name === 'web_search' || entry.source === 'web');
-    expect(searxngBlock).not.toBeNull(); // asserted either way: the service ships
-    if (!declaresWeb) {
-      return;
-    }
-    expect(searxngBlock).toMatch(/image: searxng\/searxng:/);
-    for (const name of ['AGENT_SEARXNG_URL', 'PII_SERVICE_URL']) {
-      expect(envDocumented.find((entry) => entry.name === name)).toBeDefined();
-    }
+    const requireInfrastructureFor = (catalog) => {
+      const declaresWeb = catalog.tools.some((entry) => entry.name === 'web_search' || entry.source === 'web');
+      expect(searxngBlock).not.toBeNull(); // asserted either way: the service ships
+      if (!declaresWeb) {
+        return;
+      }
+      expect(searxngBlock).toMatch(/image: searxng\/searxng:/);
+      for (const name of ['AGENT_SEARXNG_URL', 'PII_SERVICE_URL']) {
+        expect(envDocumented.find((entry) => entry.name === name)).toBeDefined();
+      }
+    };
+
+    // The SHIPPED posture: two tools, no web entry — the rule's branch is
+    // not taken, and the searxng service still ships (the catalog's CONTENT
+    // contract stays owned by the loader-side Python pin).
+    const shipped = JSON.parse(fs.readFileSync(path.join(ROOT, 'configs/agent/tool-catalog.json'), 'utf-8'));
+    requireInfrastructureFor(shipped);
+
+    // The FIXTURE: a catalog that DOES declare a web entry — the rule's
+    // branch, exercised here against the real files so it is a live gate
+    // and not one that never ran.
+    requireInfrastructureFor({
+      version: 1,
+      tools: [
+        { name: 'search_knowledge', source: 'document', egress: 'internal' },
+        { name: 'web_search', source: 'web', egress: 'open_web' }
+      ]
+    });
   });
 });

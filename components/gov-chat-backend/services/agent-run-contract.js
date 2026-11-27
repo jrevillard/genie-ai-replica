@@ -134,6 +134,21 @@ function citationToSourceDocument(citation) {
       entry.bundle_version = provenance.bundle_version;
     }
   }
+  if (citation.provenance?.source === 'web') {
+    // The service's projection emits this exact shape for a web result
+    // (document_id IS the url — the identity rule); the fallback agrees so
+    // an older payload that names only raw citations maps to the same row.
+    const url = String(citation.provenance.url || '');
+    return {
+      document_id: url,
+      document_name: String(citation.provenance.title || url),
+      url,
+      categoryLabels: [],
+      serviceLabels: [],
+      score: typeof citation.score === 'number' ? citation.score : null,
+      source: 'web'
+    };
+  }
   return entry;
 }
 

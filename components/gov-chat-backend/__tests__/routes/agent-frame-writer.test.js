@@ -164,6 +164,7 @@ const queryService = require('../../services/query-service');
 const axios = require('axios');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
 const { proxyAgentRun, _internals } = require('../../services/agent-frame-writer');
+const { citationToSourceDocument } = require('../../services/agent-run-contract');
 
 const validToken = createValidToken();
 
@@ -416,6 +417,23 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
       // branch-driven sticky-set skip as the trailing options argument.
       expect.anything()
     );
+  });
+
+  it('the fallback maps a web citation to the projection shape the service emits', () => {
+    const row = citationToSourceDocument({
+      provenance: { source: 'web', url: 'https://example.gov/policy', title: 'The policy' },
+      text: 'the policy text',
+      score: 0.5
+    });
+    expect(row).toEqual({
+      document_id: 'https://example.gov/policy',
+      document_name: 'The policy',
+      url: 'https://example.gov/policy',
+      categoryLabels: [],
+      serviceLabels: [],
+      score: 0.5,
+      source: 'web'
+    });
   });
 
   it('POSTs the derived deadline and the assembled CallerContext to /v1/runs', async () => {

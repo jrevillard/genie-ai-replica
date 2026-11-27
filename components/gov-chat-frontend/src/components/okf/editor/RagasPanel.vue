@@ -3087,10 +3087,12 @@ export default {
   gap: 8px 18px;
   margin-bottom: 10px;
   /* #2200 — the whole catalogue renders now (the silent 25 cap is gone):
-     bound the row and scroll it instead. */
+     bound the row and scroll it instead. The bound is a raw height like the
+     editor's own rail bounds (640px rail / 340px access); the padding rides
+     the spacing scale. */
   max-height: 180px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: var(--space-xs);
 }
 
 .okf-ragas__repo-row {

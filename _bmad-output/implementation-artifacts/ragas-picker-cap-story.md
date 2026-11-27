@@ -46,11 +46,46 @@ the panel.
 - The picker's existing filter (current + HEAD clones when a repo is open;
   everything when not) is the panel's design — untouched.
 - No virtualization: the issue virtualizes "past a few hundred"; the
-  scroll bound plus 1,000-repo service cap keeps this MR minimal. If a
-  venue ever approaches 1000 repos the service warns and the cap is the
-  visible place to revisit.
+  scroll bound plus the 2,000-repo service cap (20 pages x limit=100)
+  keeps this MR minimal. If a venue ever approaches the cap the service
+  warns and the cap is the visible place to revisit.
 - okf-server: untouched — the endpoint already pages and the conformance
   controller already models the bounded loop.
+
+## Review round (/code-review high — 6 findings) + security (empty)
+
+SECURITY: empty findings list (the cursor is encodeURIComponent-ed into a
+fixed-endpoint query VALUE — no host/protocol/path control; the injected
+current-repo object renders through escaped interpolation; the loop is
+bounded regardless of server output).
+
+ADOPTED (three pins added, watched red first):
+- A mid-loop page failure used to discard every page already fetched
+  (re-creating the missing-repos symptom silently): pages in hand now
+  resolve with a warn — only a FIRST-page failure throws into the
+  caller's error path.
+- Every page now sends limit=100 (the conformance controller's pattern):
+  half the round-trips, the cap ceiling 2,000 repos.
+- The cap warn fired on an exact-multiple boundary (the server sets
+  next_cursor on every FULL page): the loop now probes ONE more page —
+  a real truncation warns, a boundary does not, and the probe's page
+  rides along.
+
+DISPOSITIONED:
+- The sibling's truncated flag (getConformanceDebt returns one): the cap
+  here is a runaway guard for a state no venue approaches (2,000 repos),
+  the warn is the signal, and a flag would ripple the return shape
+  through the store and every list consumer for an unreachable state.
+- The post-load re-assert 'defends a state nothing creates': the ISSUE'S
+  OWN fix shape names the reconcile explicitly ('re-assert its selection
+  AFTER the list load resolves') — the pin proves David's acceptance.
+- The raw 180px max-height: height BOUNDS in this component family are
+  raw by precedent (640px rail, 340px access panel, 60vh dialog); the
+  padding rides the scale (var(--space-xs)).
+
+Test-infra note: setup.js installs a file-lifetime jest.fn for
+console.warn — spyOn on it leaks history across tests; the cursor
+describe asserts on the shared mock with mockClear per test.
 
 ## Ship checklist
 

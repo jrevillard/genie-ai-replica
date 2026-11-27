@@ -40,7 +40,7 @@ describe('repoOkfService', () => {
       mockGet.mockResolvedValue({ data: [] });
       await repoOkfService.list({ stage: 'all' });
       const url = mockGet.mock.calls[0][0];
-      expect(url).toBe('/okf/repos?lifecycle=all');
+      expect(url).toBe('/okf/repos?lifecycle=all&limit=100');
       expect(url.startsWith('/api/')).toBe(false);
     });
   });
@@ -246,20 +246,22 @@ describe('repoOkfService.list — cursor-following (#2200)', () => {
     // mockReset (not clearAllMocks): the mockResolvedValueOnce queues of the
     // paging tests must not leak into the sibling describes
     mockGet.mockReset();
-    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    // setup.js installs a FILE-LIFETIME jest.fn for console.warn — spyOn on
+    // it leaks call history across tests. Assert on the shared mock and
+    // clear its history per test instead.
+    console.warn.mockClear();
   });
   afterEach(() => {
-    jest.restoreAllMocks();
     mockGet.mockReset();
   });
 
-  it('follows next_cursor across pages and concatenates the items', async () => {
+  it('follows next_cursor across pages at limit=100 and concatenates the items', async () => {
     mockGet
       .mockResolvedValueOnce({ data: { items: [{ repo_id: 'a' }, { repo_id: 'b' }], next_cursor: 'c2' } })
       .mockResolvedValueOnce({ data: { items: [{ repo_id: 'c' }], next_cursor: null } });
     const repos = await repoOkfService.list({ stage: 'all' });
     expect(repos).toEqual([{ repo_id: 'a' }, { repo_id: 'b' }, { repo_id: 'c' }]);
-    expect(mockGet.mock.calls[1][0]).toBe('/okf/repos?lifecycle=all&cursor=c2');
+    expect(mockGet.mock.calls[1][0]).toBe('/okf/repos?lifecycle=all&limit=100&cursor=c2');
   });
 
   it('stops after one request when there is no cursor (single-page venue)', async () => {
@@ -268,14 +270,51 @@ describe('repoOkfService.list — cursor-following (#2200)', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
-  it('caps the page loop at 20 and warns when the catalogue is truncated', async () => {
-    for (let p = 0; p < 25; p++) {
+  it('caps the loop and warns only when the catalogue truly continues', async () => {
+    // LIST_PAGE_CAP + 1 full pages consumed by the loop, then the boundary
+    // probe answers WITH items: a real truncation — warned.
+    const pages = repoOkfService.LIST_PAGE_CAP + 2;
+    for (let p = 0; p < pages; p++) {
       mockGet.mockResolvedValueOnce({ data: { items: [{ repo_id: `r${p}` }], next_cursor: `c${p + 1}` } });
     }
     const repos = await repoOkfService.list();
-    expect(mockGet).toHaveBeenCalledTimes(20);
-    expect(repos).toHaveLength(20);
+    expect(mockGet).toHaveBeenCalledTimes(pages);
+    expect(repos).toHaveLength(pages);
     expect(console.warn).toHaveBeenCalled();
+  });
+
+  it('does not warn at an exact-multiple boundary (next_cursor on a full last page)', async () => {
+    // pages 0..CAP come back FULL with a cursor (the server sets one on
+    // every full page); the boundary probe (call CAP+2) answers EMPTY —
+    // an exact multiple, not a truncation.
+    let calls = 0;
+    mockGet.mockImplementation(() => {
+      calls += 1;
+      const isProbe = calls > repoOkfService.LIST_PAGE_CAP + 1;
+      return Promise.resolve(
+        isProbe
+          ? { data: { items: [], next_cursor: null } }
+          : { data: { items: [{ repo_id: 'r' }], next_cursor: 'next' } }
+      );
+    });
+    const repos = await repoOkfService.list();
+    expect(repos.length).toBeGreaterThan(0);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('a mid-loop failure resolves the pages already in hand (warned, never silent)', async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: { items: [{ repo_id: 'a' }], next_cursor: 'c2' } })
+      .mockRejectedValueOnce(Object.assign(new Error('503'), { status: 503 }));
+    const repos = await repoOkfService.list({ stage: 'all' });
+    expect(repos).toEqual([{ repo_id: 'a' }]);
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it('a first-page failure throws into the caller’s error path (nothing in hand)', async () => {
+    mockGet.mockRejectedValueOnce(Object.assign(new Error('503'), { status: 503 }));
+    await expect(repoOkfService.list()).rejects.toMatchObject({ status: 503 });
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('a legacy bare-array body terminates the loop in one request', async () => {

@@ -39,7 +39,7 @@ describe('repoOkfService — reads', () => {
   it('list unwraps {items}, the legacy array, and degrades to []', async () => {
     httpService.get.mockResolvedValueOnce(ok({ items: [{ id: 1 }], next_cursor: null }));
     expect(await repoOkfService.list({ stage: 'draft' })).toEqual([{ id: 1 }]);
-    expect(httpService.get).toHaveBeenCalledWith('/okf/repos?lifecycle=draft');
+    expect(httpService.get).toHaveBeenCalledWith('/okf/repos?lifecycle=draft&limit=100');
     httpService.get.mockResolvedValueOnce(ok([{ id: 2 }]));
     expect(await repoOkfService.list()).toEqual([{ id: 2 }]);
     httpService.get.mockResolvedValueOnce(ok({ unrelated: true }));

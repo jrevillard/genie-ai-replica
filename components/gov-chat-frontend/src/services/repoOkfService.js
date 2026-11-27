@@ -18,36 +18,67 @@ function notReady(reason) {
 }
 
 const repoOkfService = {
-  // #2200 — the endpoint pages (server default 50) and the RAGAS repo picker
-  // rendered only the first page: past 50 repositories the checkboxes
-  // silently lost repos. Follow next_cursor with a hard cap; hitting the
-  // cap warns (verbose logging — never a silent drop).
+  // #2200 — the endpoint pages (server default 50, max 100) and the RAGAS
+  // repo picker rendered only the first page: past 50 repositories the
+  // checkboxes silently lost repos. Follow next_cursor at limit=100 (the
+  // okf-server conformance controller's pattern) with a hard page cap.
+  // Never a silent drop: a mid-loop failure resolves the pages already in
+  // hand (warned) — only a FIRST-page failure throws into the caller's
+  // error path; hitting the cap probes one more page, because the server
+  // sets next_cursor on every FULL page and an exact-multiple boundary
+  // would otherwise warn about truncation that is not there.
   LIST_PAGE_CAP: 20,
   async list({ stage = 'all' } = {}) {
     const items = [];
     let cursor = null;
-    for (let page = 0; page < this.LIST_PAGE_CAP; page++) {
+    try {
+      for (let page = 0; page <= this.LIST_PAGE_CAP; page++) {
+        const res = await httpService.get(
+          `/okf/repos?lifecycle=${encodeURIComponent(stage)}&limit=100${
+            cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
+          }`
+        );
+        const body = res && res.data;
+        // The list endpoint returns { items: [...], next_cursor } — unwrap it.
+        // (Returning the raw body made the store call .forEach on an object,
+        // which threw inside fetchRepos' try/catch and silently left the
+        // dashboard lanes empty: "Repositories 0" no matter what existed.)
+        if (Array.isArray(body)) {
+          items.push(...body); // legacy array shape: no paging, one shot
+          return items;
+        }
+        if (body && Array.isArray(body.items)) items.push(...body.items);
+        if (!body || !body.next_cursor) return items;
+        cursor = body.next_cursor;
+      }
+    } catch (err) {
+      if (!items.length) throw err;
+      console.warn(
+        `[repoOkfService] repo list stopped early after ${items.length} repos (a page failed mid-loop); showing what loaded`
+      );
+      return items;
+    }
+    // Cap hit: probe ONE more page. Items on it mean the catalogue really
+    // continues past the cap — warn (the repos would otherwise vanish from
+    // every list consumer); an empty page was just the exact-multiple
+    // boundary. The probe's page rides along: more data beats less.
+    try {
       const res = await httpService.get(
-        `/okf/repos?lifecycle=${encodeURIComponent(stage)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+        `/okf/repos?lifecycle=${encodeURIComponent(stage)}&limit=100&cursor=${encodeURIComponent(cursor)}`
       );
       const body = res && res.data;
-      // The list endpoint returns { items: [...], next_cursor } — unwrap it.
-      // (Returning the raw body made the store call .forEach on an object,
-      // which threw inside fetchRepos' try/catch and silently left the
-      // dashboard lanes empty: "Repositories 0" no matter what existed.)
-      if (Array.isArray(body)) {
-        items.push(...body); // legacy array shape: no paging, one shot
-        return items;
+      const more = body && Array.isArray(body.items) ? body.items : [];
+      if (more.length) {
+        items.push(...more);
+        console.warn(
+          `[repoOkfService] repo list truncated at ${this.LIST_PAGE_CAP + 1} pages (cursor following hit the hard cap); the catalogue continues beyond it`
+        );
       }
-      if (body && Array.isArray(body.items)) items.push(...body.items);
-      if (!body || !body.next_cursor) return items;
-      cursor = body.next_cursor;
+    } catch (err) {
+      console.warn(
+        `[repoOkfService] repo list hit the ${this.LIST_PAGE_CAP}-page cap; the boundary probe failed (${(err && err.message) || err})`
+      );
     }
-    // Cap hit: the catalogue continues past LIST_PAGE_CAP pages. Report it —
-    // repos past the cap would otherwise vanish from every list consumer.
-    console.warn(
-      `[repoOkfService] repo list truncated at ${this.LIST_PAGE_CAP} pages (cursor following hit the hard cap); the catalogue continues beyond it`
-    );
     return items;
   },
 

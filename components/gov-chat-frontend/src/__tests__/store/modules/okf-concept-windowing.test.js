@@ -1,0 +1,377 @@
+/**
+ * #2188 — the windowed parallel concept-list crawl.
+ *
+ * Pins the #2188 rewrite of `fetchConcepts` at the store boundary:
+ *  - pages 2..N fly CONCURRENTLY in windows of 5 (the sequential loop's
+ *    "each offset needs the previous count" premise was false — only page 1's
+ *    `total` is needed);
+ *  - ONE `setConcepts` commit + ONE progress commit per WAVE (not per page —
+ *    the per-page full-accumulator commit was the O(n²) render hazard);
+ *  - a wave's rows are ordered by offset before the commit (arrival order is
+ *    nondeterministic once pages race);
+ *  - wave offsets recompute from `acc.length` at wave start (a ragged page
+ *    must never cause skipped rows);
+ *  - the stale/generation guards keep their round-11/round-20 semantics;
+ *  - the crawl registers CANCELLABLE with the operation-wait registry and the
+ *    cancel drives a REAL AbortController (the #2195 rule: no fake affordances);
+ *  - keep-last-known-list survives a wave failure.
+ */
+jest.mock('@/services/conceptService', () => ({
+  __esModule: true,
+  default: { get: jest.fn(), listForRepo: jest.fn(), update: jest.fn() }
+}));
+jest.mock('@/services/operationWaitService', () => ({
+  __esModule: true,
+  default: {
+    begin: jest.fn(() => ({
+      id: 'op-test',
+      setProgress: jest.fn(),
+      complete: jest.fn(),
+      fail: jest.fn(),
+      cancel: jest.fn()
+    }))
+  }
+}));
+
+const Vuex = require('vuex').default || require('vuex');
+
+// the wave-boundary assertions are ORDER-based (FIFO timers + microtasks) and
+// stay correct under any wall-clock slowness; the 5s jest default is what the
+// full --coverage run on a loaded box breaks, not the sequencing
+jest.setTimeout(15000);
+const conceptService = require('@/services/conceptService').default;
+const opWait = require('@/services/operationWaitService').default;
+const okfModule = require('@/store/modules/okf').default;
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function rows(from, to) {
+  const out = [];
+  for (let i = from; i < to; i++) out.push({ concept_id: `c${i}` });
+  return out;
+}
+
+function page(total, from, to) {
+  return { total, offset: from, limit: to - from, concepts: rows(from, to) };
+}
+
+// two macrotask ticks: one for the resolution microtasks, one so the
+// implementation's between-wave renderer yield (setTimeout 0) fires first
+const flush = () => new Promise((r) => setTimeout(() => setTimeout(r, 0), 0));
+
+function buildStore(seed = {}) {
+  const commitCounts = {};
+  const store = new Vuex.Store({
+    modules: {
+      okf: {
+        ...okfModule,
+        state: () => JSON.parse(JSON.stringify({ ...okfModule.state(), ...seed })),
+        mutations: Object.fromEntries(
+          Object.entries(okfModule.mutations).map(([type, fn]) => [
+            type,
+            (s, payload) => {
+              commitCounts[type] = (commitCounts[type] || 0) + 1;
+              return fn(s, payload);
+            }
+          ])
+        )
+      }
+    }
+  });
+  return { store, commitCounts };
+}
+
+function waitHandle() {
+  return opWait.begin.mock.results[0].value;
+}
+
+function beginOpts() {
+  return opWait.begin.mock.calls[0][1];
+}
+
+let pending;
+let inFlight;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  pending = 0;
+  inFlight = [];
+  conceptService.listForRepo.mockImplementation(() => {
+    pending++;
+    const d = deferred();
+    inFlight.push(d);
+    return d.promise;
+  });
+});
+
+afterEach(() => {
+  // settle any still-pending deferreds so no test leaks a floating promise
+  inFlight.forEach((d) => d.resolve({ concepts: [] }));
+});
+
+describe('#2188 windowed concept-list crawl', () => {
+  it('dispatches pages 2..N concurrently in windows of five, not sequentially', async () => {
+    const { store } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    expect(inFlight.length).toBe(1); // page 1 alone, serial
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    // the whole first window is in flight at once — the sequential loop kept
+    // this at exactly 1
+    expect(pending).toBe(6);
+    expect(inFlight.length).toBe(6);
+    inFlight.slice(1, 6).forEach((d) => d.resolve(page(2000, 0, 200)));
+    await flush();
+    // wave 2 dispatches after the renderer yield
+    expect(inFlight.length).toBe(10);
+    inFlight.slice(6).forEach((d) => d.resolve(page(2000, 0, 200)));
+    await t;
+  });
+
+  it('commits once per wave, not once per page, with per-wave progress', async () => {
+    const { store, commitCounts } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    // wave 1: five pages resolve (arrival order scrambled on purpose)
+    inFlight[5].resolve(page(2000, 400, 600));
+    inFlight[4].resolve(page(2000, 1000, 1200));
+    inFlight[3].resolve(page(2000, 800, 1000));
+    inFlight[2].resolve(page(2000, 600, 800));
+    inFlight[1].resolve(page(2000, 200, 400));
+    await flush();
+    // after wave 1 exactly: page 1 + one wave commit; progress = 1200/2000
+    expect(commitCounts.setConcepts).toBe(2);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(1200);
+    expect(store.state.okf.editor.loadProgress).toEqual({ repoId: 'r1', done: 1200, total: 2000 });
+    // wave 2: the remaining four pages
+    inFlight.slice(6).forEach((d) => d.resolve(page(2000, 0, 200)));
+    const res = await t;
+    expect(res.ok).toBe(true);
+    expect(commitCounts.setConcepts).toBe(3); // page 1 + 2 waves for 9 pages
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(2000);
+    expect(store.state.okf.editor.loadProgress).toBeNull();
+  });
+
+  it('assembles a wave in dispatch order — Promise.all preserves input order, so rows land offset-ascending', async () => {
+    const { store } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(1200, 0, 200));
+    await flush();
+    // RESOLVE the first wave out of order — this changes only WHEN each page
+    // settles, never the ORDER of Promise.all's results (input order). The
+    // pin: the assembly must not re-sort by arrival, and must not depend on
+    // resolution timing for correctness.
+    inFlight[5].resolve(page(1200, 1000, 1200));
+    inFlight[4].resolve(page(1200, 800, 1000));
+    inFlight[3].resolve(page(1200, 600, 800));
+    inFlight[2].resolve(page(1200, 400, 600));
+    inFlight[1].resolve(page(1200, 200, 400));
+    await flush();
+    const list = store.state.okf.editor.conceptsByRepo.r1;
+    expect(list).toHaveLength(1200);
+    list.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+    await t;
+  });
+
+  it('refills a ragged page hole at the exact offset — no skipped rows, no duplicates', async () => {
+    const { store } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    const wave1Offsets = [200, 400, 600, 800, 1000];
+    inFlight.slice(1, 6).forEach((d, i) => {
+      // the page at offset 400 comes back ragged: 150 rows, not 200 — the
+      // collection mutated mid-crawl (a drain or reingest during the browse)
+      d.resolve(i === 1 ? page(2000, 400, 550) : page(2000, wave1Offsets[i], wave1Offsets[i] + 200));
+    });
+    await flush();
+    // the wave has NOT committed yet: the hole [550,600) must be refilled first
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(200);
+    // the refill fetches the hole's exact width at the exact offset — never a
+    // full PAGE, so it cannot overlap the page that follows the hole
+    expect(inFlight.length).toBe(7); // page 1 + 5 wave pages + 1 refill
+    expect(conceptService.listForRepo.mock.calls[6][1]).toMatchObject({ offset: 550, limit: 50 });
+    inFlight[6].resolve(page(2000, 550, 600));
+    await flush();
+    // rows 550-599 present exactly once; the rail holds 1200 contiguous rows
+    const list = store.state.okf.editor.conceptsByRepo.r1;
+    expect(list).toHaveLength(1200);
+    list.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+    // wave 2 starts from the TRUE cursor (1200) — no overlap with page@1000
+    expect(inFlight.length).toBe(11);
+    const wave2 = conceptService.listForRepo.mock.calls.slice(7, 11).map(([, opts]) => opts.offset);
+    expect(wave2).toEqual([1200, 1400, 1600, 1800]);
+    inFlight[7].resolve(page(2000, 1200, 1400));
+    inFlight[8].resolve(page(2000, 1400, 1600));
+    inFlight[9].resolve(page(2000, 1600, 1800));
+    inFlight[10].resolve(page(2000, 1800, 2000));
+    const res = await t;
+    expect(res.ok).toBe(true);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(2000);
+    store.state.okf.editor.conceptsByRepo.r1.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+  });
+
+  it('a superseded fetch commits nothing further and leaves the flags to the newer fetch', async () => {
+    const { store, commitCounts } = buildStore();
+    const t1 = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush(); // fetch 1's wave 1 (5 pages) now in flight
+    // a NEWER fetch supersedes by generation (its page 1 returns 250 rows)
+    conceptService.listForRepo.mockImplementationOnce(async () => page(250, 0, 250));
+    const t2 = store.dispatch('okf/fetchConcepts', 'r1');
+    await t2;
+    // release fetch 1's wave — its stale check must fire BEFORE its commit
+    inFlight.slice(1, 6).forEach((d) => d.resolve(page(2000, 0, 200)));
+    const r1 = await t1;
+    expect(r1.stale).toBe(true);
+    // fetch 2's page-1 commit is the LAST setConcepts — fetch 1's wave never lands
+    expect(commitCounts.setConcepts).toBe(2);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(250);
+    expect(store.state.okf.editor.loading).toBe(false);
+  });
+
+  it('registers cancellable with the wait registry and the cancel aborts the in-flight pages for real', async () => {
+    const { store, commitCounts } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    expect(opWait.begin).toHaveBeenCalledWith(
+      'concept-list-fetch',
+      expect.objectContaining({ cancellable: true, onCancel: expect.any(Function) })
+    );
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    expect(inFlight.length).toBe(6);
+    // the overlay's Cancel -> onCancel -> real AbortController
+    beginOpts().onCancel();
+    // every in-flight page shares the controller's signal, and it is aborted
+    for (let i = 1; i < 6; i++) {
+      const opts = conceptService.listForRepo.mock.calls[i][1];
+      expect(opts.signal).toBeInstanceOf(AbortSignal);
+      expect(opts.signal.aborted).toBe(true);
+    }
+    // the aborted pages reject the way axios v1 rejects a signal abort
+    const abortErr = new Error('canceled');
+    abortErr.name = 'CanceledError';
+    abortErr.code = 'ERR_CANCELED';
+    inFlight.slice(1).forEach((d) => d.reject(abortErr));
+    const res = await t;
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('ABORTED');
+    // keep-last-known: the committed rows stay; no blanking
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(200);
+    expect(commitCounts.setConcepts).toBe(1);
+    // a deliberate cancel is not an error: the registry's cancel() already
+    // retired the entry, so nothing settles it here — and fail() must never
+    // fire (a cancel is not a failure)
+    expect(waitHandle().complete).not.toHaveBeenCalled();
+    expect(waitHandle().fail).not.toHaveBeenCalled();
+    expect(store.state.okf.editor.loading).toBe(false);
+  });
+
+  it('caps an oversized page at PAGE rows — a limit-ignoring response cannot corrupt the cursor', async () => {
+    const { store } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    // the page at offset 200 returns 300 rows — the server ignored the limit
+    // (or a fixed-response test fixture answered wide)
+    inFlight[1].resolve({ total: 2000, offset: 200, limit: 200, concepts: rows(200, 500) });
+    inFlight[2].resolve(page(2000, 400, 600));
+    inFlight[3].resolve(page(2000, 600, 800));
+    inFlight[4].resolve(page(2000, 800, 1000));
+    inFlight[5].resolve(page(2000, 1000, 1200));
+    await flush();
+    // the oversized page is trimmed to its own [200,400) range: no hole, no
+    // duplicate of [400,500), and wave 2 pins from the TRUE cursor (1200)
+    const list = store.state.okf.editor.conceptsByRepo.r1;
+    expect(list).toHaveLength(1200);
+    list.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+    const wave2 = conceptService.listForRepo.mock.calls.slice(6, 10).map(([, opts]) => opts.offset);
+    expect(wave2).toEqual([1200, 1400, 1600, 1800]);
+    inFlight[6].resolve(page(2000, 1200, 1400));
+    inFlight[7].resolve(page(2000, 1400, 1600));
+    inFlight[8].resolve(page(2000, 1600, 1800));
+    inFlight[9].resolve(page(2000, 1800, 2000));
+    const res = await t;
+    expect(res.ok).toBe(true);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(2000);
+    store.state.okf.editor.conceptsByRepo.r1.forEach((c, i) => expect(c.concept_id).toBe(`c${i}`));
+  });
+
+  it('a fully-answered-empty wave terminates the crawl WITHOUT a no-op commit (collection shrank below the offsets)', async () => {
+    const { store, commitCounts } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    // the drain emptied everything past row 200: every wave-1 page is empty,
+    // and each empty page leaves a hole before it — the refills answer empty
+    // too (the rows are gone)
+    inFlight.slice(1, 6).forEach((d) => d.resolve({ total: 2000, offset: 0, limit: 200, concepts: [] }));
+    await flush();
+    // the hole-refills run SEQUENTIALLY — each answers empty (the rows are
+    // gone), so each hole's refill loop breaks and the next hole is tried
+    expect(inFlight.length).toBe(7); // page 1 + 5 wave + the first refill
+    for (let refill = 6; refill <= 9; refill++) {
+      inFlight[refill].resolve({ total: 2000, offset: 0, limit: 200, concepts: [] });
+      await flush();
+    }
+    const res = await t;
+    expect(res.ok).toBe(true);
+    // the crawl ENDS (the old sequential loop would have spun forever), and
+    // the shutdown path does no no-op full-accumulator commit: page 1's
+    // commit is the only one
+    expect(commitCounts.setConcepts).toBe(1);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(200);
+    expect(store.state.okf.editor.loading).toBe(false);
+    expect(waitHandle().complete).toHaveBeenCalled();
+  });
+
+  it('a wave failure keeps the last known list and reports FETCH_FAILED', async () => {
+    const { store, commitCounts } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    inFlight[0].resolve(page(2000, 0, 200));
+    await flush();
+    inFlight[1].resolve(page(2000, 200, 400));
+    inFlight[2].reject(new Error('502'));
+    inFlight.slice(3, 6).forEach((d) => d.resolve(page(2000, 0, 200)));
+    const res = await t;
+    expect(res).toMatchObject({ ok: false, code: 'FETCH_FAILED' });
+    // round-20 #80803: rows already committed stay committed
+    expect(store.state.okf.editor.conceptsByRepo.r1).toHaveLength(200);
+    expect(commitCounts.setConcepts).toBe(1);
+    expect(waitHandle().fail).toHaveBeenCalled();
+    expect(store.state.okf.editor.loading).toBe(false);
+  });
+
+  it('every page — page 1 included — carries the abort signal; legacy shapes stay single-commit', async () => {
+    const { store } = buildStore();
+    const t = store.dispatch('okf/fetchConcepts', 'r1');
+    await flush();
+    expect(conceptService.listForRepo.mock.calls[0][1]).toMatchObject({ limit: 200, offset: 0 });
+    expect(conceptService.listForRepo.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    // legacy single payload: no paging at all
+    inFlight[0].resolve([{ concept_id: 'legacy' }]);
+    const res = await t;
+    expect(res.ok).toBe(true);
+    expect(store.state.okf.editor.conceptsByRepo.r1).toEqual([{ concept_id: 'legacy' }]);
+    expect(conceptService.listForRepo).toHaveBeenCalledTimes(1);
+    expect(waitHandle().complete).toHaveBeenCalled();
+  });
+});

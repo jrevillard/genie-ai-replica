@@ -27,7 +27,7 @@ const repoOkfService = {
   // error path; hitting the cap probes one more page, because the server
   // sets next_cursor on every FULL page and an exact-multiple boundary
   // would otherwise warn about truncation that is not there.
-  LIST_PAGE_CAP: 20,
+  LIST_PAGE_CAP: 20, // pages of 100 → a ~2,000-repo ceiling
   async list({ stage = 'all' } = {}) {
     const items = [];
     let cursor = null;

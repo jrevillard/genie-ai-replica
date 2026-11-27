@@ -11,7 +11,7 @@ the panel.
 ## Delivered (TDD — five pins watched RED first)
 
 - **`repoOkfService.list()` follows `next_cursor`** with a hard cap
-  (LIST_PAGE_CAP = 20 pages × 50/page = 1000 repos). Hitting the cap
+  (LIST_PAGE_CAP = 20 pages at limit=100 → a ~2,000-repo ceiling). Hitting the cap
   `console.warn`s (verbose-logging rule — never a silent drop). The legacy
   bare-array body still terminates in one request; the `{items}` unwrap
   (dashboard regression) is preserved. ONE production caller (the store's
@@ -86,6 +86,35 @@ DISPOSITIONED:
 Test-infra note: setup.js installs a file-lifetime jest.fn for
 console.warn — spyOn on it leaks history across tests; the cursor
 describe asserts on the shared mock with mockClear per test.
+
+## Live verification (local build, 2026-11-27)
+
+Playwright smoke against the rebuilt local build (the #2200 runtime files
+copied into `C:\Dev\builds\main`, frontend container rebuilt):
+
+```
+[smoke #2200] venue repos=13 picker rows=13
+[smoke #2200] current repo e057868b-b580-4e44-aac0-db2fed25187f visible, checked, disabled, badged
+  ok 1 [chromium] › smoke #2200: the picker renders the whole catalogue, current repo first (5.4s)
+```
+
+- **rows == repos (13 == 13)** — the picker renders EVERY repo the list
+  endpoint returned: the `.slice(0, 25)` cap is gone and the store's cursor
+  -following reaches the end of the catalogue.
+- **the current repo is present, checked, disabled and badged** — the
+  injection + post-load reconcile hold on a LIVE venue, not only in the
+  component test.
+- The assertion is RELATIVE (`rows === repos.length`), so it holds whatever
+  the venue's repo count is. The count itself (13 today, 33 when #2200 was
+  filed) is live data and is only a precondition — never the claim.
+
+Smoke-harness corrections made while getting this green (the spec, not the
+product): the Testing Lab button is a SIBLING of the card button inside
+the `okf-studio-card-<id>` wrapper (`okf-studio-repo-<id>` is the card
+button itself, so a locator scoped to it can never match), and the picker
+lives in the "RAGAS Benchmarks" TAB — the dialog opens on "Head", and the
+ragas pane carries no test id of its own, so the panel's own root id
+(`ragas-panel`) is the anchor.
 
 ## Ship checklist
 

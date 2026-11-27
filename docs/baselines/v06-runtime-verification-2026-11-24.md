@@ -16,8 +16,9 @@ re-run's record.
 - **Producer:** the producer STRINGS `agent.v06_harness` + `agent.probe`
   (the evidence's identity, kept verbatim — the modules themselves moved to
   `measurement/`), on the shipped pins
-  (the re-run emits the renamed producer string, as the 2026-11-21 record's
-  rename note predicted)
+  (the re-run emitted the renamed producer string, as the 2026-11-21 record's
+  rename note predicted; since the 2026-11-27 move of the module to
+  `measurement/`, a re-run emits `measurement.v06_harness` instead)
 - **Machine record:** `_bmad-output/implementation-artifacts/v06-rerun-2026-11-24/`
   (`harness-matrix.json`, `probe-as-found.json`, `probe-window-override.json`,
 `probe-window-override.stderr.txt`)

@@ -68,8 +68,8 @@
     </p>
 
     <template v-else>
-      <ul class="okf-cl__list" @scroll.passive="hideFailCard">
-        <li v-for="node in tree" :key="node.key">
+      <ul class="okf-cl__list" @scroll.passive="onListScroll">
+        <li v-for="node in visibleTree" :key="node.key">
           <div
             class="okf-cl__row"
             :class="{ 'okf-cl__row--selected': node.concept_id === selectedId }"
@@ -178,6 +178,8 @@
             class="okf-cl__children"
             @scroll.passive="hideFailCard"
           >
+            <!-- #2189: the children mounted here are the windowed slice —
+                 visibleTree pre-slices them for the index parent. -->
             <li v-for="child in node.children" :key="child.concept_id">
               <div
                 class="okf-cl__row okf-cl__row--child"
@@ -268,6 +270,16 @@
             </li>
           </ul>
         </li>
+        <!-- #2189 — the unrendered remainder as spacer height, so the
+             scrollbar reflects the whole collection while only O(viewport)
+             rows exist in the DOM. -->
+        <li
+          v-if="truncated"
+          class="okf-cl__tail"
+          data-test-id="okf-cl-tail"
+          aria-hidden="true"
+          :style="{ height: tailHeight + 'px' }"
+        ></li>
       </ul>
     </template>
 
@@ -369,6 +381,16 @@ import DsProgress from '../../ds/Progress.vue';
 import DsSelect from '../../ds/Select.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 
+// #2189 — the concept rail renders a WINDOW, not the collection. #2188 made
+// the crawl network-fast (1.1 s for 6,352 concepts) but the measured mount
+// stayed ~32-80 s: the rail v-for'd every concept, so the wave commits
+// (~7 per load) each re-diffused the full 10k-row list. Constants, module
+// scope — they are layout policy, not per-instance state.
+const RENDER_CHUNK = 120; // rows added per scroll extension
+const FULL_RENDER_LIMIT = 300; // at/below this the list renders fully, DOM unchanged
+const AVG_ROW_HEIGHT = 36; // px estimate for the spacer + extension lead
+const EXTEND_LEAD = 600; // px above the rendered bottom that triggers extension
+
 export default {
   name: 'OkfConceptList',
   components: { DsButton, DsInfoTip, DsInput, DsPill, DsProgress, DsSelect, DsSpinner },
@@ -396,6 +418,9 @@ export default {
       filter: '',
       expanded: true,
       labelEditing: null,
+      // #2189 — how many rows of a truncated collection are mounted. Full
+      // collections (≤ FULL_RENDER_LIMIT) ignore it entirely.
+      renderedCount: RENDER_CHUNK,
       // INGEST-FAILURE CARD state: the hovered FAILED row + viewport-anchored
       // placement. Fixed position (viewport coords) so the list's scroll
       // container can never clip it; hidden on leave/scroll/blur.
@@ -440,6 +465,46 @@ export default {
       const rest = list.filter((c) => c !== indexRow).map((c) => this.decorate(c));
       if (!indexRow) return rest.map((c) => ({ ...c, children: [] }));
       return [{ ...this.decorate(indexRow), children: rest, key: indexRow.concept_id }];
+    },
+    // #2189 — windowing mode. 'full' renders the tree untouched (the DOM for
+    // the common repo is byte-identical to the pre-#2189 component); above
+    // the limit, the window slices either the flat list ('top') or the index
+    // parent's children ('children') and a tail spacer stands in for the rest.
+    virtualList() {
+      if (this.tree.length === 1 && this.tree[0].children.length > FULL_RENDER_LIMIT) return 'children';
+      if (this.tree.length > FULL_RENDER_LIMIT) return 'top';
+      return 'full';
+    },
+    totalCount() {
+      if (this.virtualList === 'children') return this.tree[0].children.length + 1;
+      return this.tree.length;
+    },
+    truncated() {
+      return this.virtualList !== 'full' && this.totalCount > this.renderedCount;
+    },
+    tailHeight() {
+      return Math.max(0, this.totalCount - this.renderedCount) * AVG_ROW_HEIGHT;
+    },
+    visibleTree() {
+      if (this.virtualList === 'full') return this.tree;
+      if (this.virtualList === 'top') return this.tree.slice(0, this.renderedCount);
+      const index = this.tree[0];
+      return [{ ...index, children: index.children.slice(0, Math.max(0, this.renderedCount - 1)) }];
+    }
+  },
+  watch: {
+    // #2189 — a narrowed filter re-windows: its (small) result renders fully
+    // from the first chunk instead of inheriting a deep scroll position.
+    filter() {
+      this.renderedCount = RENDER_CHUNK;
+    },
+    totalCount: {
+      immediate: true,
+      handler(n) {
+        // the collection shrank under a wide window (new crawl, filter):
+        // clamp so the window never claims rows past the end.
+        if (this.renderedCount > n) this.renderedCount = Math.max(RENDER_CHUNK, n);
+      }
     }
   },
   methods: {
@@ -514,6 +579,26 @@ export default {
     },
     hideFailCard() {
       if (this.failCard.visible) this.failCard.visible = false;
+    },
+    // ---- #2189 — the windowed rail ----------------------------------------
+    // Extend the rendered window as the curator scrolls near its bottom.
+    // The $nextTick re-check is what makes a deep jump (End key, scrollbar
+    // fling) keep filling: extension swaps rendered rows for spacer height,
+    // so the container's scrollHeight never changes and the browser emits
+    // no follow-up scroll event of its own.
+    onListScroll(evt) {
+      this.hideFailCard();
+      const el = evt && evt.currentTarget;
+      if (!el || !el.clientHeight) return;
+      this.extendWindow(el);
+    },
+    extendWindow(el) {
+      if (!this.truncated) return;
+      if (el.scrollTop + el.clientHeight < this.renderedCount * AVG_ROW_HEIGHT - EXTEND_LEAD) return;
+      this.renderedCount = Math.min(this.totalCount, this.renderedCount + RENDER_CHUNK);
+      this.$nextTick(() => {
+        if (el.isConnected) this.extendWindow(el);
+      });
     },
     // The recovery for THIS failure kind. The reaper dead-letter is the
     // saturated-drain signature (www-gov-uk: 75 identical messages) — the

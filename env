@@ -1477,6 +1477,17 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_TOOL_TIMEOUT_MS=
 # AGENT_TOOL_MAX_RESULTS=
 # AGENT_TOOL_MAX_RESULT_BYTES=
+# The tool catalog: the deployment file that decides what a run may call
+# (the tools the model is told about and the dispatcher may run). The
+# agent service reads it at assembly, fail-closed: a missing file or a
+# duplicate exposed name is answered 503 naming the defect — never a run
+# served with the wrong tools. An entry this deployment cannot serve
+# costs the ENTRY (the tool is absent), not the service.
+# The value is the file's location INSIDE the container (compose mounts
+# it read-only from the repository's configs/agent/ home) — compose
+# DEFAULTS it to that mount's own path, so a compose deployment needs no
+# .env line; set it here only to mount the catalog somewhere else.
+# AGENT_TOOL_CATALOG_PATH=/app/config/tool-catalog.json
 # Citation verification: the grounding judge's hard bound —
 # REQUIRED, read fail-closed; a run against a deployment that has not set it
 # is answered 503 naming the knob. The judge is one auxiliary model call at

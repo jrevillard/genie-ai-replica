@@ -297,7 +297,7 @@
 
     - name: Define deploy files
       ansible.builtin.set_fact:
-        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) }}"
+        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) | union(_deploy_files_agent | default([])) }}"
       vars:
         _deploy_files_default:
           - src: "{{ compose_file }}"
@@ -305,6 +305,11 @@
         # otel-collector is always-on — config bind-mount ships in every deploy; grafana dashboards stay gated.
         _deploy_files_obs: [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': '{{ deploy_dir }}/configs/otel/otel-collector-config.yaml'}]
         _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh', 'mode': '0755'}] if certbot_replicas | default('0') != '0' else [] }}"
+        # The tool catalog — the agent's deployment file. Seeded only when
+        # the agent service is enabled: the bind mount's source has to
+        # exist on the node (swarmkit silently creates a missing bind
+        # source ROOT-owned, and the service then reads a directory).
+        _deploy_files_agent: "{{ [{'src': 'configs/agent/tool-catalog.json', 'dest': deploy_dir + '/configs/agent/tool-catalog.json'}] if agent_enabled | default('0') == '1' else [] }}"
 
     - name: Ensure deploy directory exists
       become_user: root

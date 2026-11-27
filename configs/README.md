@@ -9,6 +9,7 @@ This directory contains application configuration files.
 - `postgres/` - PostgreSQL initialization (multi-database setup)
 - `otel/` - OpenTelemetry Collector configuration (observability stack)
 - `grafana/` - Grafana provisioning (datasources, dashboards)
+- `agent/` - the agent service's tool catalog (the deployment file that decides what a run may call)
 
 ## LLM Prompts
 

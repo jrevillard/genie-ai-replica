@@ -104,6 +104,10 @@ agent_run_max_wall_clock_seconds: ""
 agent_tool_timeout_ms: ""
 agent_tool_max_results: ""
 agent_tool_max_result_bytes: ""
+# The tool catalog's path inside the container. The deployment seeds the
+# file itself (configs/agent/tool-catalog.json) on the node — the bind
+# mount's source has to exist there.
+agent_tool_catalog_path: "/app/config/tool-catalog.json"
 agent_verdict_judge_timeout_ms: ""
 agent_verdict_policy: ""
 agent_run_system_prompt: ""

@@ -409,3 +409,46 @@ describe('agentic activation wiring on the BFF container', () => {
     expect(groupVars).toMatch(/^agent_service_url: "http:\/\/agent-service:8010"$/m);
   });
 });
+
+describe('the agent tool catalog is declared, mounted and seeded', () => {
+  test('the env template documents the catalog path', () => {
+    const env = parseEnvTemplate(ENV_PATH);
+    const documented = env.documented.find((entry) => entry.name === 'AGENT_TOOL_CATALOG_PATH');
+
+    expect(documented).toBeDefined();
+    expect(documented.value).toBe('/app/config/tool-catalog.json');
+  });
+
+  test('the compose block forwards the knob and mounts the catalog read-only', () => {
+    const composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
+    const block = parseComposeServiceBlock(composeText, 'agent-service');
+
+    expect(block).toMatch(/AGENT_TOOL_CATALOG_PATH=\$\{AGENT_TOOL_CATALOG_PATH:-\/app\/config\/tool-catalog\.json\}/);
+    // Read-only: the service reads the catalog, it never writes it.
+    expect(block).toMatch(/\.\/configs\/agent\/tool-catalog\.json:\/app\/config\/tool-catalog\.json:ro/);
+  });
+
+  test('the ansible deployment renders the knob and seeds the file', () => {
+    const envJ2 = fs.readFileSync(ENV_J2_PATH, 'utf-8');
+    expect(envJ2).toMatch(
+      /AGENT_TOOL_CATALOG_PATH=\{\{ agent_tool_catalog_path \| default\('\/app\/config\/tool-catalog\.json'\) \}\}/
+    );
+
+    const groupVars = fs.readFileSync(GROUP_VARS_PATH, 'utf-8');
+    expect(groupVars).toMatch(/^agent_tool_catalog_path: "\/app\/config\/tool-catalog\.json"$/m);
+
+    // The node must carry the file: the bind mount's source has to exist
+    // there (swarmkit silently creates a missing bind source ROOT-owned).
+    const deploy = fs.readFileSync(path.join(ROOT, 'deploy/ansible/deploy.yml'), 'utf-8');
+    expect(deploy).toMatch(/configs\/agent\/tool-catalog\.json/);
+  });
+
+  test('the shipped catalog carries the two document tools', () => {
+    const catalog = JSON.parse(
+      fs.readFileSync(path.join(ROOT, 'configs/agent/tool-catalog.json'), 'utf-8')
+    );
+
+    expect(catalog.version).toBe(1);
+    expect(catalog.tools.map((entry) => entry.name).sort()).toEqual(['read_source', 'search_knowledge']);
+  });
+});

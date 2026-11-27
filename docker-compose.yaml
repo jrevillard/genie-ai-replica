@@ -1536,6 +1536,17 @@ services:
       - AGENT_TOOL_TIMEOUT_MS=${AGENT_TOOL_TIMEOUT_MS:-}
       - AGENT_TOOL_MAX_RESULTS=${AGENT_TOOL_MAX_RESULTS:-}
       - AGENT_TOOL_MAX_RESULT_BYTES=${AGENT_TOOL_MAX_RESULT_BYTES:-}
+      # The tool catalog — the deployment file that decides what a run may
+      # call. Read at assembly, fail-closed (a missing file or a defect is
+      # answered 503 naming it). The path is where the file lands inside
+      # the container; the mount below is where it comes from.
+      #
+      # DEFAULTED, unlike the budget knobs beside it: those are empty by
+      # default because an unset budget must stop the run, while this one
+      # names the mount's own path — the file the compose block ITSELF
+      # mounts. The fail-closed part is the FILE (a missing or broken
+      # catalog is a 503 naming it), not the path.
+      - AGENT_TOOL_CATALOG_PATH=${AGENT_TOOL_CATALOG_PATH:-/app/config/tool-catalog.json}
       # Citation verification: the judge timeout is REQUIRED
       # (fail-closed, empty default = unset = 503 naming the knob); the
       # policy defaults to verdict-marked in the service (iteration 1 ships
@@ -1633,6 +1644,10 @@ services:
       - OPENAI_API_KEY=${VLLM_API_KEY:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
+    volumes:
+      # The tool catalog — read-only: the service reads the deployment's
+      # file and never writes it.
+      - ./configs/agent/tool-catalog.json:/app/config/tool-catalog.json:ro
     build:
       context: components/agent-service/
       dockerfile: Dockerfile

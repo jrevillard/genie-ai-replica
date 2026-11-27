@@ -2083,10 +2083,24 @@ export default {
     async loadRepoChoices() {
       const res = await this.$store.dispatch('okf/fetchRepos', { silent: true }).catch(() => null);
       const repos = (res && res.ok && res.repos) || [];
-      this.repoChoices = repos
-        .filter((r) => !this.repo || r.repo_id === this.repo.repo_id || r.head)
-        .slice(0, 25)
+      // #2200 — the whole catalogue renders (no cap; the list is scrollable),
+      // and the CURRENT repo is always present: inject it at the top when
+      // the store list omits it (past-50 under-fetch, clone chains), badged
+      // by the template's 'current' pill. Reconcile the seeded selection
+      // AFTER the load resolves — seeding happens in mounted() before this
+      // await, so anything that cleared it mid-load gets re-asserted here;
+      // the current repo's checkbox is disabled, so nothing else can.
+      const currentId = this.repo && this.repo.repo_id;
+      const choices = repos
+        .filter((r) => !currentId || r.repo_id === currentId || r.head)
         .map((r) => ({ repo_id: r.repo_id, name: r.name }));
+      if (currentId && !choices.some((r) => r.repo_id === currentId)) {
+        choices.unshift({ repo_id: currentId, name: this.repo.name || currentId });
+      }
+      this.repoChoices = choices;
+      if (currentId && !this.selectedRepoIds.includes(currentId)) {
+        this.selectedRepoIds = [currentId, ...this.selectedRepoIds];
+      }
     },
     async loadLatest() {
       const res = await this.$store.dispatch('okf/ragasListRuns', {
@@ -3072,6 +3086,11 @@ export default {
   flex-wrap: wrap;
   gap: 8px 18px;
   margin-bottom: 10px;
+  /* #2200 — the whole catalogue renders now (the silent 25 cap is gone):
+     bound the row and scroll it instead. */
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .okf-ragas__repo-row {

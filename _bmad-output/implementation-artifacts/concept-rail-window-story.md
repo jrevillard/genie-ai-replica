@@ -179,6 +179,30 @@ the diff is client-side render slicing over already-fetched store data; no new
 deps, no new i18n strings); full-diff review after implementation paired with
 /code-review (high), then /simplify, then verification-before-completion.
 
+## Found mid-wave: the graph's edge scan (fixed in !1107, 888a34f)
+
+The re-armed warm-open e2e still measured a **37.5 s settle** with the rail
+windowed. Probes: per-request timings (every request ends by ~5.5 s),
+PerformanceObserver long tasks (ONE **43,854 ms** task), a CDP CPU
+profile (frames = Vue reactivity + the OKF chunk's edge builder), a DOM
+census (300 rows, no canvas - the graph's lazy build worked). Attribution:
+**RepoGraphView's edges() computed ran a concepts.find PER LINK**
+(O(links x concepts) through reactive proxies), and the HIDDEN pane still
+renders its own template (edges.length in the toolbar), so the computed
+re-ran on every crawl commit - the full-collection pass alone held the
+main thread from ~4 s to ~48 s. The rail's fix exposed it: first rows
+paint at ~0.4 s, then the scan ate the thread.
+
+Fix (one line): the index-target check reads the byId map it already
+builds - O(1), the same answer (under !showHub the nodes filter already
+excludes index rows, so the dangling-link guard drops every index-target
+edge before the branch can fire). Contract owned by the existing graph
+pin (hub hidden -> TOC edge suppressed; toggle -> restored). Attribution
+proven by removal: with the line changed, the warm open settles at
+**3,472 ms** (was ~52 s) and the deep jump renders through 6,352 of
+6,352. This section missed !1107's squash (written post-commit); it rides
+the next code MR per the docs-merge rule.
+
 ## Ship checklist
 
 - CHANGELOG bullet under Unreleased → Changed (perf, okf-editor).
@@ -187,3 +211,5 @@ deps, no new i18n strings); full-diff review after implementation paired with
   squash merge (hard rule).
 - Deploy to the local build + re-run concept-window e2e with the re-armed
   ≤ 5 s warm-open assertion BEFORE merge.
+- SHIPPED: !1107, squash 0039b8c22, 2026-11-27 - warm open 3,472 ms,
+  3/3 e2e, #2189 + #2204 closed.

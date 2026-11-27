@@ -237,6 +237,55 @@ describe('repoOkfService.list — {items} unwrap (dashboard regression)', () => 
   });
 });
 
+// #2200 — the picker (and the store's registry) must see the WHOLE
+// catalogue: the endpoint pages (server default 50), so repos past page 1
+// silently vanished from the RAGAS picker past 50 repositories. Follow the
+// cursor with a hard cap; hitting the cap warns (never silent).
+describe('repoOkfService.list — cursor-following (#2200)', () => {
+  beforeEach(() => {
+    // mockReset (not clearAllMocks): the mockResolvedValueOnce queues of the
+    // paging tests must not leak into the sibling describes
+    mockGet.mockReset();
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockGet.mockReset();
+  });
+
+  it('follows next_cursor across pages and concatenates the items', async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: { items: [{ repo_id: 'a' }, { repo_id: 'b' }], next_cursor: 'c2' } })
+      .mockResolvedValueOnce({ data: { items: [{ repo_id: 'c' }], next_cursor: null } });
+    const repos = await repoOkfService.list({ stage: 'all' });
+    expect(repos).toEqual([{ repo_id: 'a' }, { repo_id: 'b' }, { repo_id: 'c' }]);
+    expect(mockGet.mock.calls[1][0]).toBe('/okf/repos?lifecycle=all&cursor=c2');
+  });
+
+  it('stops after one request when there is no cursor (single-page venue)', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ repo_id: 'a' }], next_cursor: null } });
+    await repoOkfService.list();
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps the page loop at 20 and warns when the catalogue is truncated', async () => {
+    for (let p = 0; p < 25; p++) {
+      mockGet.mockResolvedValueOnce({ data: { items: [{ repo_id: `r${p}` }], next_cursor: `c${p + 1}` } });
+    }
+    const repos = await repoOkfService.list();
+    expect(mockGet).toHaveBeenCalledTimes(20);
+    expect(repos).toHaveLength(20);
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it('a legacy bare-array body terminates the loop in one request', async () => {
+    mockGet.mockResolvedValue({ data: [{ repo_id: 'a' }] });
+    const repos = await repoOkfService.list();
+    expect(repos).toEqual([{ repo_id: 'a' }]);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+});
+
 // #1577 story 2 — the split client: preview (never throws, silent) + the
 // confirm POST riding the story-1 route.
 describe('repoOkfService.splitPreview / splitConcept (#1577 story 2)', () => {

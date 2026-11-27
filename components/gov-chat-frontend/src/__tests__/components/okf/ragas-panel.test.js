@@ -1839,3 +1839,49 @@ describe('#2061 E-5: the scoped benchmark states its binding and its attribution
     expect(w.text()).not.toContain('could not be tied');
   });
 });
+
+// #2200 — the RAGAS repo picker renders the WHOLE catalogue: no 25 cap, the
+// current repo always present + selected after the load resolves
+// (reconciled after the load, not seeded before it), nothing dropped
+// silently. The venue runs 33+ repositories; the store's list may omit the
+// open repo entirely once the catalogue pages.
+describe('RagasPanel repo picker (#2200)', () => {
+  function manyRepos(n, withCurrent) {
+    const rows = Array.from({ length: n }, (_, i) => ({ repo_id: `r${i}`, name: `Repo ${i}`, head: {} }));
+    if (withCurrent) rows.push({ repo_id: 'me', name: 'Agri', head: {} });
+    return { ok: true, repos: rows };
+  }
+
+  it('renders every fetched repo as a checkbox (no 25 cap)', async () => {
+    dispatch.mockImplementation(async (action) =>
+      action === 'okf/fetchRepos' ? manyRepos(30, true) : { ok: true, runs: [] }
+    );
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    // 30 head rows + the current repo — all rendered, none sliced away
+    expect(w.findAll('.okf-ragas__repo-row')).toHaveLength(31);
+  });
+
+  it('injects the current repo at the top when the store list omits it', async () => {
+    dispatch.mockImplementation(async (action) =>
+      action === 'okf/fetchRepos' ? manyRepos(30, false) : { ok: true, runs: [] }
+    );
+    const w = mountPanel();
+    await new Promise((r) => setTimeout(r, 0));
+    const first = w.findAll('.okf-ragas__repo-row').at(0);
+    expect(first.text()).toContain('Agri');
+    expect(first.text()).toContain('current');
+    expect(w.vm.selectedRepoIds).toContain('me');
+  });
+
+  it('re-asserts the current repo selection after the load resolves', async () => {
+    dispatch.mockImplementation(async (action) =>
+      action === 'okf/fetchRepos' ? manyRepos(3, true) : { ok: true, runs: [] }
+    );
+    const w = mountPanel();
+    // simulate a clear between the mounted() seed and the load's resolution
+    w.vm.selectedRepoIds = [];
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.vm.selectedRepoIds).toContain('me');
+  });
+});

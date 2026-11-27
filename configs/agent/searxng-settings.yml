@@ -14,10 +14,13 @@ search:
     - html
     - json
 
-server:
-  # The key SearXNG expects. The instance is INTERNAL-only (genieai_network,
-  # no published port, no gateway route) and the limiter is off, so the key
-  # guards no user-facing surface — a static value documented here instead
-  # of a deployment secret is deliberate. A deployment can still override it
-  # with the SEARXNG_SECRET environment variable (the upstream overwrite).
-  secret_key: "genie-ai-internal-searxng"
+# The instance's secret key does NOT live here: it comes from the
+# environment (SEARXNG_SECRET — the upstream overwrite convention). The
+# compose service always sets it, so this file spells no second copy of the
+# value: two copies, one of them unreachable, are a key an operator can
+# rotate here and see no effect of. With the variable unset, SearXNG's own
+# upstream default applies.
+# The instance is INTERNAL-only (genieai_network, no published port, no
+# gateway route) and the limiter is off, so the key guards no user-facing
+# surface — a static default in the compose service rather than a
+# deployment secret is deliberate.

@@ -1718,10 +1718,13 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     environment:
-      # Overwrites settings.yml's server.secret_key (the upstream overwrite
-      # convention). The instance is internal-only and the limiter is off,
-      # so the static default in the settings file is deliberate — this
-      # line exists so an operator CAN override without editing the file.
+      # The instance's secret key has ONE home: here (the upstream overwrite
+      # convention — SEARXNG_SECRET replaces settings.yml's server.secret_key).
+      # The mounted settings file spells no value, so this line is the value
+      # every deployment gets and the only place an operator rotates it.
+      # The instance is internal-only and the limiter is off, so the static
+      # default is deliberate — a static default rather than a deployment
+      # secret.
       - SEARXNG_SECRET=${SEARXNG_SECRET:-genie-ai-internal-searxng}
     volumes:
       # Read-only: the deployment's settings, never a mutated one. The JSON

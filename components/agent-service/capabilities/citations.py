@@ -184,15 +184,21 @@ async def _resolve_documents(file_ids, source: DocumentMetadataSource, bearer: s
 
     A resolution that FAILED (a deleted document, a repository that is down)
     is a resolution that did not happen: it never fails the answer, and the
-    source it belonged to is not surfaced.
+    source it belonged to is not surfaced. The rule reads SYMMETRICALLY to
+    the concepts' branch: a record that carries no usable name resolved the
+    file's identity, not its NAME — and an unresolved name is as fatal as an
+    unresolved identity, here as on the concept cards.
     """
 
     async def _one(file_id: str) -> dict | None:
         try:
-            return await source.fetch_metadata(file_id, bearer)
+            record = await source.fetch_metadata(file_id, bearer)
         except Exception as failure:  # noqa: BLE001 — a failed lookup is an unresolved source
             logger.warning("source metadata did not resolve: the source is not surfaced (%s)", type(failure).__name__)
             return None
+        if not isinstance(record, dict) or not str(record.get("file_name") or "").strip():
+            return None
+        return record
 
     unique = list(dict.fromkeys(file_ids))
     records = await asyncio.gather(*(_one(file_id) for file_id in unique))

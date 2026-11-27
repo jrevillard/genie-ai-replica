@@ -13,6 +13,7 @@ cancellation propagating with its slot released, and the metadata shape.
 
 import asyncio
 import atexit
+import logging
 import math
 import os
 import shutil
@@ -208,6 +209,40 @@ def test_prepared_english_with_hits_answers_from_the_documents():
     assert result.metadata["filter_labels"] == ["L1"]
     assert "abstained" not in result.metadata
     assert len(result.source_documents) == 2
+
+
+def test_a_run_without_a_caller_token_names_the_consequence(caplog):
+    """The bearer-less run is honest about what it cannot do: without the
+    caller's token the metadata read carries no credentials, and a
+    repository that requires auth resolves nothing — the D1 rule then
+    surfaces no source and the answer looks like a quality regression.
+    The warning is what makes the two distinguishable."""
+
+    pipeline = _pipeline(
+        preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
+        capability=FakeCapability(result=_search_result()),
+        metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="noagent.pipeline"):
+        asyncio.run(pipeline.run(["USER: How does Geneva manage transport?"], _context()))
+
+    assert any("no caller token" in record.message for record in caplog.records)
+
+
+def test_a_run_with_a_caller_token_logs_no_warning(caplog):
+    pipeline = _pipeline(
+        preparer=FakePreparer(_prepared(status=QueryPreparationStatus.PASSTHROUGH_ENGLISH)),
+        capability=FakeCapability(result=_search_result()),
+        metadata_source=FakeMetadataSource(),
+        concept_source=FakeConceptSource(),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="noagent.pipeline"):
+        asyncio.run(pipeline.run(["USER: How does Geneva manage transport?"], _context(), bearer="tok-1"))
+
+    assert not [record for record in caplog.records if "no caller token" in record.message]
 
 
 def test_a_document_whose_metadata_did_not_resolve_is_not_cited_and_scores_nothing():

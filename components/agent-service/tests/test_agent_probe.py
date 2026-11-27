@@ -308,9 +308,9 @@ def test_complete_sends_the_recorded_payload_and_parses_a_tool_call_turn():
     ],
 )
 def test_complete_accepts_the_numeric_forms_proxies_serve_for_usage(served, expected):
-    # The stance and the sane cap are `_usage_field`'s (measurement/probe.py):
-    # this table pins each accepted and each rejected shape through the
-    # real complete() path.
+    # The stance and the sane cap are `_usage_field`'s
+    # (capabilities/adapters/vllm.py): this table pins each accepted and
+    # each rejected shape through the real complete() path.
     transport = _transport((200, _chat_body(content="a", usage=served)))
     client = VllmModelClient(verifier_config(), transport=transport)
     turn = asyncio.run(client.complete([{"role": "user", "content": "q"}], (), max_output_tokens=None))

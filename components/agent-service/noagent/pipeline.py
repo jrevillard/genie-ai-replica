@@ -333,8 +333,19 @@ class NoAgentPipeline:
         refuses before preparation touches anything.
 
         ``bearer`` is the caller's token: the metadata read the citations
-        need is authorized (the deployed path passes its own).
+        need is authorized (the deployed path passes its own). A run
+        without one is not refused — some deployments read a repository
+        that requires none — but it is not SILENT either: a repository
+        that does require auth resolves nothing, the D1 rule then surfaces
+        no source, and the answer would read as a quality regression. The
+        warning is what makes the two distinguishable.
         """
+        if not (bearer or "").strip():
+            logger.warning(
+                "no caller token on this run: the source-metadata reads carry "
+                "no credentials, so a repository that authenticates resolves "
+                "nothing and no source is surfaced (the D1 rule)"
+            )
         async with self._lane.acquire():
             return await self._run(history, context, source_language, target_language, user_context, bearer)
 

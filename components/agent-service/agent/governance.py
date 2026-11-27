@@ -104,7 +104,13 @@ async def governed_run(
                 # writes is the CORE's outcome, never the runtime's string.
                 message = result.error or "the run failed"
                 if result.outcome not in _CORE_OUTCOMES:
-                    message = f"{message}; the runtime reported the outcome {result.outcome!r}"
+                    # The outcome suffix is the ONLY record of the runtime's
+                    # own axis (its string is never a wire code), so the
+                    # error text yields to it: the note is reserved its
+                    # room BEFORE the message cap cuts, and the terminal
+                    # always ends with it.
+                    note = f"; the runtime reported the outcome {result.outcome!r}"
+                    message = f"{message[: MESSAGE_TRUNCATION - len(note)]}{note}"
                 return _fail(inputs, result.outcome, message)
 
             text = result.final_text

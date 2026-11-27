@@ -186,6 +186,42 @@ class _ScriptedRuntime:
 RUNTIMES = {"custom-minimal-loop": AgentLoop, "scripted": _ScriptedRuntime}
 
 
+class _NonCoreOutcomeRuntime:
+    """A runtime that reports the run's failure ITSELF, with a non-core
+    outcome and an error long enough to fill the wire cap."""
+
+    OUTCOME = "partially_answered"
+
+    async def run(self, inputs: RunInputs) -> RunResult:
+        return _result(inputs, self.OUTCOME, error="x" * 300)
+
+
+def test_a_non_core_outcome_survives_its_own_reporting():
+    """The closed-vocabulary rule: a runtime's own outcome string is never
+    a wire code, so its only record is the ``run_error`` message suffix —
+    and the message cap must never sever the very thing the rule exists to
+    keep visible. The error TEXT yields; the outcome AXIS does not."""
+
+    collected: list = []
+    emitter = EventEmitter(run_id="run-1", sink=collected.append)
+    inputs = _inputs(
+        model=_Model([_turn(content="unused")]),
+        registry=_registry(_EchoExecutor()),
+        monitor=RunBudgetMonitor(_budget()),
+        token=CancellationToken(),
+        emitter=emitter,
+    )
+    result = asyncio.run(governed_run(_NonCoreOutcomeRuntime(), inputs))
+
+    suffix = "the runtime reported the outcome 'partially_answered'"
+    terminal = [event for event in collected if event.kind is EventKind.RUN_ERROR]
+    assert terminal, "the governed run ended without its terminal"
+    assert terminal[0].payload["code"] == "error"  # the runtime's string is never a code
+    assert terminal[0].payload["message"].endswith(suffix)
+    assert result.outcome == "error"
+    assert result.error.endswith(suffix)
+
+
 def _runtime(runtime_id: str):
     """One instance of the named runtime."""
 

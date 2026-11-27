@@ -22,12 +22,15 @@ Two consumers, one builder per provenance variant:
   (``{"provenance": dict, "text": str, "score": ...}``), already deduped first-served by
   the ledger.
 
-A THIRD source rides the ledger but not this module's projection, in this
-slice: a web result enters the evidence ledger (the taint scan and the
-grounding judge read it) and its identity is the ``(source, url)`` tuple
-above — but its citation variant (``source: 'web'``, rendered on web and
-mobile) is S3-plan-3's work, so ``record_for`` resolves no record for a web
-provenance and the D1 rule keeps it out of ``source_documents``.
+A THIRD source rides the ledger AND this module's projection: a web result
+enters the evidence ledger (the taint scan and the grounding judge read it)
+and its identity is the ``(source, url)`` tuple above. Its citation variant
+(``source: 'web'``, rendered on web and mobile) projects through
+:func:`_web_entry` — the web provenance is SELF-CONTAINED (url and title
+travel with it, nothing resolves; the provenance IS the metadata), so
+``record_for`` and ``resolve_source_records`` still resolve NOTHING for a
+web provenance (no platform holds a web source's record) and the projection
+reads the provenance itself, in a branch placed BEFORE the D1 check.
 
 THE NAME IS THE PLATFORM'S, NOT THE ID'S. Every source carries the name ITS
 OWN platform resolved for it: a legacy document carries the name the document
@@ -193,6 +196,8 @@ async def resolve_source_records(
         file_id = _legacy_file_id(provenance)
         if file_id:
             file_ids.append(file_id)
+        # a web provenance resolves nothing — its projection reads the
+        # provenance itself
     documents, concepts = await asyncio.gather(
         _resolve_documents(file_ids, document_source, bearer),
         _resolve_concepts(addresses, concept_source, bearer),
@@ -330,6 +335,27 @@ def _okf_entry(concept_id, repo_id, bundle_version, score, card: dict) -> dict:
     return entry
 
 
+def _web_entry(provenance, score=None) -> dict:
+    """The projected row of a web result. The provenance is SELF-CONTAINED —
+    url and title travel with it, nothing resolves — so the row reads the
+    provenance directly: the url is both the click target and the stable
+    identity (``provenance_identity``'s web branch returns ``(source, url)``),
+    the title names the card, and the score follows the ledger's one rule
+    (an unreadable score is ``None``, never guessed into a number). The raw
+    engine score is carried UNCALIBRATED — the score calibrator normalises
+    corpus-retrieval scores, and a web relevance score is a different scale."""
+    url = str(provenance.get("url") or "")
+    title = str(provenance.get("title") or "").strip() or url
+    readable = isinstance(score, (int, float))
+    return {
+        "document_id": url,
+        "document_name": title,
+        "url": url,
+        "score": score if readable else None,
+        "source": WEB_SEARCH_SOURCE,
+    }
+
+
 def _legacy_entry(file_id, score, record: dict) -> dict:
     """One legacy-file envelope entry: the document's NAME and labels, as the
     document repository resolved them.
@@ -375,6 +401,13 @@ def source_document_envelope(hits, score_calibrator=None, *, records: SourceReco
         if identity in seen:
             continue
         seen.add(identity)
+        if _is_web_provenance(provenance):
+            # The web variant projects from the SELF-CONTAINED provenance,
+            # before the D1 check — no platform resolves a web record — and
+            # before the calibrator: a web relevance score is a different
+            # scale, carried raw (uncalibrated).
+            envelope.append(_web_entry(provenance, hit.score))
+            continue
         score = score_calibrator(hit.score) if score_calibrator is not None else hit.score
         record = records.record_for(provenance)
         if record is None:
@@ -414,6 +447,13 @@ def source_documents_from_citations(citations, *, records: SourceRecords) -> lis
     for citation in citations:
         provenance = citation["provenance"]
         score = citation.get("score")
+        if _is_web_provenance(provenance):
+            # The web variant projects from the SELF-CONTAINED provenance,
+            # before the D1 check — no platform resolves a web record. This
+            # builder has no dedup and no calibrator: the ledger dedups
+            # first-served upstream, and a web score is carried raw.
+            envelope.append(_web_entry(provenance, score))
+            continue
         record = records.record_for(provenance)
         if record is None:
             continue

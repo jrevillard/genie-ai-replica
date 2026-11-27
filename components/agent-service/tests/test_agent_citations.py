@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from conftest import FakeConceptSource, FakeMetadataSource
 
 import noagent.pipeline as noagent_pipeline
-from agent.verification import check_reference_validity
+from agent.verification import RetrievalLedger, check_reference_validity
 from capabilities.citations import (
     SourceRecords,
     provenance_identity,
@@ -36,6 +36,7 @@ from capabilities.contract import LegacyFileProvenance, OkfConceptProvenance, Se
 # ``translateSources``) — the projection pin's consumer contract.
 LEGACY_FIELDS = {"document_id", "document_name", "url", "categoryLabels", "serviceLabels", "score"}
 OKF_FIELDS = LEGACY_FIELDS | {"concept_id", "source", "repo_id", "bundle_version"}
+WEB_FIELDS = {"document_id", "document_name", "url", "score", "source"}
 
 
 # The document repository's own record for one document (the shape the port
@@ -358,7 +359,7 @@ def test_ledger_entries_project_onto_the_identical_variants():
 
 
 def test_every_projected_entry_carries_what_the_frontend_mapping_reads():
-    # The projection pin: for BOTH variants, every field translateSources
+    # The projection pin: for EVERY variant, every field translateSources
     # reads is present (its absence would silently change the rendered
     # citation), and the concept marker exists only on the concept variant.
     legacy, concept = source_documents_from_citations(
@@ -379,9 +380,29 @@ def test_every_projected_entry_carries_what_the_frontend_mapping_reads():
     assert concept["source"] == "okf-concept"
     assert concept["concept_id"] == "c-1"
 
+    entries = source_documents_from_citations(
+        [
+            {
+                "provenance": {"source": "web", "url": "https://example.gov/policy", "title": "The policy"},
+                "text": "t",
+                "score": 0.7,
+            }
+        ],
+        records=SourceRecords(),  # a web provenance resolves no record — the provenance IS the metadata
+    )
+    # The FIRST assertion is the count: a naive single-entry unpack would red
+    # on an IndexError instead of an assertion while the projection drops web.
+    assert len(entries) == 1
+    [web] = entries
+    assert set(web) == WEB_FIELDS
+    assert web["document_id"] == "https://example.gov/policy"  # the url IS the stable identity
+    assert web["document_name"] == "The policy"
+    assert web["source"] == "web"
+    assert web["url"] == "https://example.gov/policy"  # preserved verbatim — the frontend renders it clickable
+
 
 # ---------------------------------------------------------------------
-# The web identity: url-keyed, source-tagged — and NOT projected (yet)
+# The web identity: url-keyed, source-tagged — and projected (S3-plan-3)
 # ---------------------------------------------------------------------
 
 
@@ -395,13 +416,12 @@ def test_the_web_provenances_identity_is_the_url_tagged_by_the_source():
     assert provenance_identity(other) != provenance_identity(web)
 
 
-def test_a_web_citation_is_delivered_but_not_projected():
-    """The S3-plan-2 boundary, pinned: a web citation survives the
-    mechanical validity check (it carries no ``repo_id``) and rides the
-    delivered ``citations`` — the judge reads its text as evidence — but
-    the ``source_documents`` projection drops it: no platform resolves a
-    web source's record (the D1 rule), and the 'web' citation variant is
-    S3-plan-3's work."""
+def test_a_web_citation_is_delivered_and_projects_the_web_variant():
+    """A web citation survives the mechanical validity check (it carries no
+    ``repo_id``) and rides the delivered ``citations`` — the judge reads its
+    text as evidence — AND the ``source_documents`` projection carries it:
+    the boundary landed in S3-plan-3: the web entry projects with the url as
+    its identity."""
     web_citation = {
         "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
         "text": "the snippet",
@@ -412,4 +432,51 @@ def test_a_web_citation_is_delivered_but_not_projected():
     assert [entry["text"] for entry in validity.delivered] == ["the snippet"]
 
     envelope = source_documents_from_citations(validity.delivered, records=SourceRecords())
-    assert envelope == []  # the projection keeps web out, in THIS plan
+    assert envelope == [
+        {
+            "document_id": "https://example.invalid/a",
+            "document_name": "Page A",
+            "url": "https://example.invalid/a",
+            "score": 2.5,
+            "source": "web",
+        }
+    ]
+
+
+def test_the_ledger_dedup_survives_the_projection_url_keyed_first_served():
+    """The same url twice, two titles: the ledger's dedup — the
+    ``(source, url)`` identity — keeps the FIRST served hit, so the
+    delivered list already carries ONE citation and the projection yields
+    ONE entry, url-keyed. The construction goes THROUGH the ledger: the
+    ledger dedups on record, and hand-built citation lists would bypass
+    that."""
+    ledger = RetrievalLedger()
+    ledger.record(
+        "web_search",
+        {
+            "result": {
+                "outcome": "success",
+                "hits": (
+                    {
+                        "text": "the first served",
+                        "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
+                        "score": 2.5,
+                    },
+                    {
+                        "text": "the second served",
+                        "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A again"},
+                        "score": 1.5,
+                    },
+                ),
+                "truncated": False,
+            }
+        },
+    )
+    validity = check_reference_validity(ledger.entries, authorized_repos=frozenset())
+    assert len(validity.delivered) == 1
+    assert validity.delivered[0]["text"] == "the first served"
+
+    envelope = source_documents_from_citations(validity.delivered, records=SourceRecords())
+    assert len(envelope) == 1
+    assert envelope[0]["document_id"] == "https://example.invalid/a"
+    assert envelope[0]["document_name"] == "Page A"

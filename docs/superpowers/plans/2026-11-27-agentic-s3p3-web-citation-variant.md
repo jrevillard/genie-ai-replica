@@ -47,13 +47,13 @@ In `components/agent-service/tests/test_agent_citations.py`:
 WEB_FIELDS = {"document_id", "document_name", "url", "score", "source"}
 ```
 
-2. Extend the field-coverage loop (`test_every_projected_entry_carries_what_the_frontend_mapping_reads`, L360-385) with a third leg: a web provenance `{"source": "web", "url": "https://example.gov/policy", "title": "The policy"}` projected through `source_documents_from_citations` yields EXACTLY `WEB_FIELDS` keys, with `document_id == url`, `document_name == "The policy"`, `source == "web"`, and the url preserved verbatim (the frontend renders it clickable).
+2. Extend the field-coverage loop (`test_every_projected_entry_carries_what_the_frontend_mapping_reads`, L360-381) with a third leg: a web provenance `{"source": "web", "url": "https://example.gov/policy", "title": "The policy"}` projected through `source_documents_from_citations` yields EXACTLY `WEB_FIELDS` keys, with `document_id == url`, `document_name == "The policy"`, `source == "web"`, and the url preserved verbatim (the frontend renders it clickable). **The leg's FIRST assertion is `assert len(entries) == 1`** — today the projection returns `[]`, and a naive single-entry unpack would red on IndexError instead of an assertion.
 
 3. REWRITE AND RENAME `test_a_web_citation_is_delivered_but_not_projected` (L398-422) → `test_a_web_citation_is_delivered_and_projects_the_web_variant` (the old name states the behaviour the rewrite refutes — a pin must not wear a lying name): the delivery assertions stay (delivered text survives, `validity.invalid == ()`); the projection assertion REVERSES — `source_documents_from_citations(validity.delivered, records=SourceRecords())` now returns ONE entry, the web shape above — and the docstring records the landing: "the boundary landed in S3-plan-3: the web entry projects with the url as its identity". Also fix the section header above it ("and NOT projected (yet)") which goes stale.
 
 4. REWRITE the projection assertion of `test_agent_verification.py`'s `test_a_web_only_run_verifies_through_the_judge_and_projects_nothing` (L664-692): rename it `test_a_web_only_run_verifies_through_the_judge_and_projects_the_web_variant`; the judge assertions stay (the judge ran over the web text); `verdict.payload()["source_documents"]` now carries ONE web entry whose `url` is the delivered citation's url and whose `document_id` equals that url.
 
-5. Add one dedup pin, CONSTRUCTED THROUGH THE LEDGER (two hand-built delivered citations with the same url cannot exist — the ledger dedups on record): build an `EvidenceLedger`, `record` a web tool result whose hits carry the SAME url twice with different titles, run `check_reference_validity`, THEN project `validity.delivered` — the delivered list already carries ONE citation, and the projection yields ONE entry (first served wins, url-keyed). Read `EvidenceLedger.record`'s signature in `agent/verification.py` and the existing ledger-building pins for the construction recipe.
+5. Add one dedup pin, CONSTRUCTED THROUGH THE LEDGER (same-url citations cannot both ride the delivered list in the governed path — the ledger dedups on record; hand-built lists bypass that, so the construction must go through the ledger): build an `EvidenceLedger`, `record` a web tool result whose hits carry the SAME url twice with different titles, run `check_reference_validity`, THEN project `validity.delivered` — the delivered list already carries ONE citation, and the projection yields ONE entry (first served wins, url-keyed). Read `EvidenceLedger.record`'s signature in `agent/verification.py` and the existing ledger-building pins for the construction recipe.
 
 - [ ] **Step 2: Run the pins and watch them fail**
 
@@ -89,7 +89,7 @@ def _web_entry(provenance, score=None) -> dict:
     }
 ```
 
-2. In `source_document_envelope` (L352-393): the branch goes INSIDE the provenance loop, AFTER the dedup lines (`hit_identity`/`seen`, L373-377) and BEFORE the D1 `record_for` check (L379-383). The no-agent builder iterates OBJECTS and appends to `envelope`:
+2. In `source_document_envelope` (L352-393): the branch goes INSIDE the provenance loop, AFTER the dedup lines (`hit_identity`/`seen`, L374-377) and BEFORE the `score_calibrator` line (L378) and the D1 `record_for` check (L379-383). The no-agent builder iterates OBJECTS and appends to `envelope`:
 
 ```python
         if _is_web_provenance(hit.provenance):
@@ -97,15 +97,15 @@ def _web_entry(provenance, score=None) -> dict:
             continue
 ```
 
-3. In `source_documents_from_citations` (L396-432): the branch goes at the TOP of the loop, BEFORE the D1 `record_for` check (L417-419) — this builder has no builder-level dedup (the ledger dedups upstream). It iterates dict entries and appends to its entries list:
+3. In `source_documents_from_citations` (L396-432): the branch goes at the TOP of the loop, BEFORE the D1 `record_for` check (L417-419) — this builder has no builder-level dedup and no calibrator (the ledger dedups upstream). It iterates dict entries named `citation` and appends to `envelope` — **both builders' list is named `envelope`; they differ in the ITERATION ACCESS, not the list name**:
 
 ```python
-        if _is_web_provenance(entry["provenance"]):
-            projected.append(_web_entry(entry["provenance"], entry.get("score")))
+        if _is_web_provenance(citation["provenance"]):
+            envelope.append(_web_entry(citation["provenance"], citation.get("score")))
             continue
 ```
 
-(match each loop's REAL variable names — read both builders before pasting; the two snippets above differ on purpose: object vs dict access, `envelope` vs the governed list.)
+(match each loop's REAL variable names — read both builders before pasting; the two snippets above differ on purpose: object access vs dict access.)
 
 3. Update the module docstring's D1 paragraph (L25-30): the paragraph that says "``record_for`` resolves no record for a web provenance and the D1 rule keeps it out of ``source_documents``" becomes the landing statement — the web variant projects through `_web_entry` (self-contained provenance), while `record_for` and `resolve_source_records` still resolve NOTHING for web (there is no metadata source behind a web result; the provenance is the metadata).
 
@@ -296,6 +296,7 @@ git commit -m "feat(frontend): the web citation badges as WEB and opens its url"
 **Files:**
 - Modify: `mobile/genie_ai_mobile/lib/okf/okf_citation.dart` (`isWebSource`; the badge branch in `sourceBadge`)
 - Test: `mobile/genie_ai_mobile/test/okf/answer_sources_bar_test.dart` (a badge pin: a web row shows 'WEB')
+- Test: `mobile/genie_ai_mobile/test/okf/okf_citation_test.dart` (the DIRECT pins: the `sourceBadge` group at L103-130 gains the web row; `isWebSource` gains its true/false pair — the file's own convention pins the badge function directly, not only through the widget)
 
 **Interfaces:**
 - Consumes: `sourceBadge` (`mobile/genie_ai_mobile/lib/okf/okf_citation.dart:72` — the OKF/'extension' pair the web fileBadge mirrors); the bar's row rendering (`mobile/genie_ai_mobile/lib/components/chat/answer_sources_bar.dart`, badge call L101).
@@ -312,7 +313,7 @@ git commit -m "feat(frontend): the web citation badges as WEB and opens its url"
 - [ ] **Step 5: Commit**
 
 ```bash
-git add mobile/genie_ai_mobile/lib/okf/okf_citation.dart mobile/genie_ai_mobile/test/okf/answer_sources_bar_test.dart
+git add mobile/genie_ai_mobile/lib/okf/okf_citation.dart mobile/genie_ai_mobile/test/okf/answer_sources_bar_test.dart mobile/genie_ai_mobile/test/okf/okf_citation_test.dart
 git commit -m "feat(mobile): the web citation badges as WEB — the mirror of the web badge"
 ```
 
@@ -325,8 +326,8 @@ git commit -m "feat(mobile): the web citation badges as WEB — the mirror of th
 - Files: none for the gates (read-only; a red gate is fixed in the task that owns it)
 
 **Interfaces:**
-- Consumes: `tests/e2e/helpers/stream-route.js`'s `mockChatStream(chunks, metadata, {verdict})` dialect (the `agent_verdict` frame after the last chunk, before metadata — the BFF's pinned order).
-- Produces: one spec case asserting a projected web row renders: `[data-testid="answer-sources"]` visible, one `[data-testid^="answer-source-card-"]`, the badge text `WEB`, and the card's title. The metadata frame carries `source_documents: [{document_id: 'https://example.gov/policy', document_name: 'The policy', url: 'https://example.gov/policy', score: null, source: 'web'}]`.
+- Consumes: `mockChatStream` from `tests/e2e/helpers/chatbot.js` (L502 — it wraps `sseBody`, whose metadata spreads VERBATIM to the wire: stream-route.js:78) with the `{verdict}` option emitting the `agent_verdict` frame after the last chunk, before metadata (stream-route.js:68-76 — the BFF's pinned order). `sse-contract.spec.js` imports it from `../helpers/chatbot` (L10) and already carries the `GROUNDED_VERDICT`/`GROUNDED_METADATA` recipes (L25-69) to mirror.
+- Produces: one spec case asserting a projected web row renders: `[data-testid="answer-sources"]` visible, one `[data-testid^="answer-source-card-"]`, the badge text `WEB`, and the card's title. The metadata frame carries `source_documents: [{document_id: 'https://example.gov/policy', document_name: 'The policy', url: 'https://example.gov/policy', score: null, source: 'web'}]`. The badge-text assertion mirrors real-rag's accepted locator pattern (handle + `.filter({ hasText })`, real-rag-citation.spec.js:163 — `getByText` is forbidden in scanned files).
 
 - [ ] **Step 1: The spec case** — mirror the existing citation assertions (`real-rag-citation.spec.js:160-163` uses the same handles). Deterministic: exact waits with bounds, no fallback paths.
 
@@ -338,10 +339,11 @@ git commit -m "feat(mobile): the web citation badges as WEB — the mirror of th
 | G2 the frozen event stream | the same run (`test_event_stream_gate.py`) + `git diff --exit-code 8f08c84c4...HEAD -- components/agent-service/tests/fixtures/event_stream/` | green + SILENT |
 | G3 the frozen capability contract | the same run (`test_equivalence_v02.py`) + the file's diff | green + UNTOUCHED |
 | G4 lint | `uvx ruff@0.16.3 check --no-cache …` + `format --no-cache --check …` | silent |
-| G5 the BFF suite | `cd components/gov-chat-backend && npm test` | green |
-| G6 the frontend suite | `cd components/gov-chat-frontend && npm test` | green |
+| G5 the BFF suite + lint | `cd components/gov-chat-backend && npm test` + the component's lint/format scripts | green |
+| G6 the frontend suite + lint/format | `cd components/gov-chat-frontend && npm test` + `npm run lint` + `npm run format:check` | green |
 | G7 the mobile suite | `cd mobile/genie_ai_mobile && flutter test` | green |
 | G8 the config-validator | `cd tests/config-validator && npm test` | green |
+| G9 the e2e suite's eslint | `cd tests/e2e && npm run lint` (the new spec case must pass the scanned-file locator gate) | green |
 
 - [ ] **Step 3: Report the gate table.**
 

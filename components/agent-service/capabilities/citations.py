@@ -37,10 +37,11 @@ confidence poison") — the deployed rule, kept here: a deleted document, a
 document repository that is down, a concept the repository's fence refuses,
 must not become a citation card. The rule is SYMMETRIC: each branch asks its
 own platform, and an unresolved name is as fatal as an unresolved identity.
-:meth:`SourceRecords.record_for` is the ONE place that rule lives — it
-returns the record a source's own platform resolved, and ``None`` when it
-resolved none — so the projection and the aggregate can never disagree about
-it.
+:meth:`SourceRecords.record_for` is the one place the rule's TEST lives —
+it returns the record a source's own platform resolved, and ``None`` when it
+resolved none — and :func:`surfaced_hits` is the one place the rule's
+FILTER lives: the aggregate consumes exactly the list that helper selected,
+so the projection and the aggregate can never disagree about it.
 """
 
 import asyncio
@@ -130,6 +131,19 @@ def _concept_version(provenance) -> int | None:
     if isinstance(provenance, dict):
         return provenance.get("bundle_version")
     return getattr(provenance, "bundle_version", None)
+
+
+def surfaced_hits(hits, records: SourceRecords) -> tuple:
+    """The hits whose source's own platform resolved a record — the D1
+    rule's filter, in ONE place.
+
+    The confidence aggregate and the citation projection must select the
+    SAME sources: a filter spelled twice is two filters that can drift, and
+    the drift is the confidence poison the rule exists to keep out. Both
+    consumers call this.
+    """
+
+    return tuple(hit for hit in hits if records.record_for(hit.provenance) is not None)
 
 
 async def resolve_source_records(

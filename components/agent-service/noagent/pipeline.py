@@ -61,6 +61,7 @@ from capabilities.citations import (
     SourceRecords,
     resolve_source_records,
     source_document_envelope,
+    surfaced_hits,
 )
 from capabilities.contract import (
     CallerContext,
@@ -479,10 +480,11 @@ class NoAgentPipeline:
     ) -> NoAgentResult:
         hits = tuple(search_result.hits) if search_result else ()
         # The SURFACED hits: a source whose record did not resolve is not
-        # cited and contributes no score (the D1 rule). One rule, in
-        # the citations module — the projection and the aggregate cannot
-        # disagree about it.
-        surfaced = tuple(hit for hit in hits if source_records.record_for(hit.provenance) is not None)
+        # cited and contributes no score (the D1 rule). The filter is the
+        # citations module's own (surfaced_hits) — the projection and the
+        # aggregate consume the same selection, not two filters that must
+        # agree by convention.
+        surfaced = surfaced_hits(hits, source_records)
         calibrate = self._score_calibrator
         envelope = source_document_envelope(surfaced, calibrate, records=source_records)
         # The confidence aggregate runs over the SURFACED hits — duplicates

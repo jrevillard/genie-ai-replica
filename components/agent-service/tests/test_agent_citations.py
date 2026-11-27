@@ -21,8 +21,10 @@ from types import SimpleNamespace
 from conftest import FakeConceptSource, FakeMetadataSource
 
 import noagent.pipeline as noagent_pipeline
+from agent.verification import RetrievalLedger, check_reference_validity
 from capabilities.citations import (
     SourceRecords,
+    provenance_identity,
     resolve_source_records,
     source_document_envelope,
     source_documents_from_citations,
@@ -356,7 +358,7 @@ def test_ledger_entries_project_onto_the_identical_variants():
 
 
 def test_every_projected_entry_carries_what_the_frontend_mapping_reads():
-    # The projection pin: for BOTH variants, every field translateSources
+    # The projection pin: for EVERY variant, every field translateSources
     # reads is present (its absence would silently change the rendered
     # citation), and the concept marker exists only on the concept variant.
     legacy, concept = source_documents_from_citations(
@@ -376,3 +378,192 @@ def test_every_projected_entry_carries_what_the_frontend_mapping_reads():
     assert "source" not in legacy
     assert concept["source"] == "okf-concept"
     assert concept["concept_id"] == "c-1"
+    # The web variant's field coverage lives in the delivered-journey pin
+    # below (test_a_web_citation_is_delivered_and_projects_the_web_variant):
+    # its exact-dict equality subsumes the field set — a second, weaker
+    # assertion here would be a duplicate invocation of the same contract.
+
+
+# ---------------------------------------------------------------------
+# The web identity: url-keyed, source-tagged — and projected (S3-plan-3)
+# ---------------------------------------------------------------------
+
+
+def test_the_web_provenances_identity_is_the_url_tagged_by_the_source():
+    """A web entry without this branch would dedup to the legacy
+    ``(None, None)`` — one web result would silently swallow every other.
+    The identity is the URL, tagged by the source marker."""
+    web = {"source": "web", "url": "https://example.invalid/a", "title": "Page A"}
+    assert provenance_identity(web) == ("web", "https://example.invalid/a")
+    other = {"source": "web", "url": "https://example.invalid/b", "title": "Page B"}
+    assert provenance_identity(other) != provenance_identity(web)
+
+
+def test_a_web_citation_is_delivered_and_projects_the_web_variant():
+    """A web citation survives the mechanical validity check (it carries no
+    ``repo_id``) and rides the delivered ``citations`` — the judge reads its
+    text as evidence — AND the ``source_documents`` projection carries it:
+    the boundary landed in S3-plan-3: the web entry projects with the url as
+    its identity."""
+    web_citation = {
+        "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
+        "text": "the snippet",
+        "score": 2.5,
+    }
+    validity = check_reference_validity([web_citation], authorized_repos=frozenset())
+    assert validity.invalid == ()
+    assert [entry["text"] for entry in validity.delivered] == ["the snippet"]
+
+    envelope = source_documents_from_citations(validity.delivered, records=SourceRecords())
+    assert envelope == [
+        {
+            "document_id": "https://example.invalid/a",
+            "document_name": "Page A",
+            "url": "https://example.invalid/a",
+            "score": 2.5,
+            "source": "web",
+        }
+    ]
+
+
+def test_the_ledger_dedup_survives_the_projection_url_keyed_first_served():
+    """The same url twice, two titles: the ledger's dedup — the
+    ``(source, url)`` identity — keeps the FIRST served hit, so the
+    delivered list already carries ONE citation and the projection yields
+    ONE entry, url-keyed. The construction goes THROUGH the ledger: the
+    ledger dedups on record, and hand-built citation lists would bypass
+    that."""
+    ledger = RetrievalLedger()
+    ledger.record(
+        "web_search",
+        {
+            "result": {
+                "outcome": "success",
+                "hits": (
+                    {
+                        "text": "the first served",
+                        "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
+                        "score": 2.5,
+                    },
+                    {
+                        "text": "the second served",
+                        "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A again"},
+                        "score": 1.5,
+                    },
+                ),
+                "truncated": False,
+            }
+        },
+    )
+    validity = check_reference_validity(ledger.entries, authorized_repos=frozenset())
+    assert len(validity.delivered) == 1
+    assert validity.delivered[0]["text"] == "the first served"
+
+    envelope = source_documents_from_citations(validity.delivered, records=SourceRecords())
+    assert len(envelope) == 1
+    assert envelope[0]["document_id"] == "https://example.invalid/a"
+    assert envelope[0]["document_name"] == "Page A"
+
+
+def test_a_web_score_that_is_not_a_readable_number_carries_none():
+    """The ledger's one score rule applies to the web entry too: an
+    unreadable score is ``None``, never guessed into a number — and a
+    ``bool`` IS an ``int`` in Python, so ``True``/``False`` are unreadable
+    here, not numbers. The PRODUCER applies the same rule (the ledger's
+    triples never carry a bool score either)."""
+    ledger = RetrievalLedger()
+    ledger.record(
+        "web_search",
+        {
+            "result": {
+                "outcome": "success",
+                "hits": (
+                    {
+                        "text": "bool score",
+                        "provenance": {"source": "web", "url": "https://x/b", "title": "B"},
+                        "score": True,
+                    },
+                    {
+                        "text": "string score",
+                        "provenance": {"source": "web", "url": "https://x/s", "title": "S"},
+                        "score": "0.9",
+                    },
+                ),
+                "truncated": False,
+            }
+        },
+    )
+    assert [entry["score"] for entry in ledger.entries] == [None, None]
+
+    entries = source_documents_from_citations(
+        [
+            {
+                "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
+                "text": "t",
+                "score": True,
+            },
+            {
+                "provenance": {"source": "web", "url": "https://example.invalid/b", "title": "Page B"},
+                "text": "t",
+                "score": "0.9",
+            },
+        ],
+        records=SourceRecords(),
+    )
+    assert [entry["score"] for entry in entries] == [None, None]
+
+
+def test_a_web_provenance_without_a_url_has_no_identity_and_projects_nothing():
+    """The url IS the web identity (ADR agentic-009): a provenance without
+    one has NO identity — ``None``, like a legacy source without a file id —
+    so it neither dedups against anything (a constant key would let the
+    first url-less hit swallow the rest) nor projects an empty row."""
+    assert provenance_identity({"source": "web", "title": "no url"}) is None
+    assert provenance_identity({"source": "web", "url": "https://x", "title": "t"}) == ("web", "https://x")
+    # the legacy twin of the same decision, made in the SAME function
+    assert provenance_identity({"file_id": "f-1"}) == (None, "f-1")
+    assert provenance_identity({"title": "no id at all"}) is None
+
+    envelope = source_document_envelope(
+        [
+            SimpleNamespace(
+                provenance={"source": "web", "title": "no url"},
+                text="t",
+                score=1.0,
+            ),
+            SimpleNamespace(
+                provenance={"source": "web", "url": "https://example.invalid/real", "title": "The real one"},
+                text="t",
+                score=2.0,
+            ),
+            SimpleNamespace(
+                provenance={"source": "web", "title": "also no url"},
+                text="t",
+                score=3.0,
+            ),
+        ],
+        records=SourceRecords(),
+    )
+    # the url-less rows are skipped outright — no empty-titled card, no
+    # swallowed neighbour.
+    assert [(e["document_id"], e["document_name"]) for e in envelope] == [
+        ("https://example.invalid/real", "The real one")
+    ]
+
+    # the citations builder applies the same rule: a RAW citation list that
+    # bypassed the ledger (this builder accepts one) projects nothing for an
+    # identity-less provenance — no anonymous empty card.
+    from_citations = source_documents_from_citations(
+        [
+            {"provenance": {"source": "web", "title": "no url"}, "text": "t", "score": 1.0},
+            {
+                "provenance": {"source": "web", "url": "https://example.invalid/real", "title": "The real one"},
+                "text": "t",
+                "score": 2.0,
+            },
+        ],
+        records=SourceRecords(),
+    )
+    assert [(e["document_id"], e["document_name"]) for e in from_citations] == [
+        ("https://example.invalid/real", "The real one")
+    ]

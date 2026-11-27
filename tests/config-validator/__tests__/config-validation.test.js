@@ -1336,7 +1336,7 @@ describe('Configuration Validation Suite', () => {
     const allVarsYml = fs.readFileSync(path.resolve(__dirname, '../../../deploy/ansible/group_vars/all.yml'), 'utf8');
 
     test('every OKF container scales on OKF_ENABLED with default 0', () => {
-      for (const svc of ['okf-server:', 'pii-service:', 'ragas-service:']) {
+      for (const svc of ['okf-server:', 'ragas-service:']) {
         const start = composeText.indexOf('  ' + svc);
         expect(start).toBeGreaterThan(-1);
         // Block ends at the next line indented exactly 2 spaces (the next
@@ -1347,6 +1347,13 @@ describe('Configuration Validation Suite', () => {
         expect(block).toMatch(/profiles: \["okf"\]/);
         expect(block).toMatch(/replicas: \$\{OKF_ENABLED:-0\}/);
       }
+      // pii-service is the EXCEPTION: its profiles widen (the okf pillar AND
+      // the agent's web search) and its replicas gate is the DERIVED flag
+      // (okf_enabled OR agent_web_search_enabled, derived in env.j2) — no
+      // longer OKF_ENABLED directly. Those two facts are asserted on their
+      // own by the agent-service suite, through the repo's parsed-contract
+      // helper (ONE owner); here we assert only that the service ships.
+      expect(composeText.indexOf('  pii-service:')).toBeGreaterThan(-1);
     });
 
     test('frontend, kong-config and backend all receive the flag', () => {

@@ -258,6 +258,17 @@ describe('CAP-3 okf-concept sidebar branch', () => {
     expect(wrapper.emitted('open-document')).toBeUndefined();
   });
 
+  it('openDocument opens an external url with noopener — the opener must not leak to it', async () => {
+    // A projected web row's url is untrusted: the new tab must not hold a
+    // window.opener to the app tab (reverse tabnabbing).
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const wrapper = mountSidebar();
+    await wrapper.vm.openDocument({ id: 'web-1', url: 'https://attacker.example/page' });
+    expect(openSpy).toHaveBeenCalledWith('https://attacker.example/page', '_blank', 'noopener');
+    expect(wrapper.emitted('open-document')).toHaveLength(1);
+    openSpy.mockRestore();
+  });
+
   it('getDisplayUrl shows no doc-repo URL for concept rows', () => {
     const wrapper = mountSidebar();
     expect(wrapper.vm.getDisplayUrl({ id: 'alpha_concept', source: 'okf-concept', url: '' })).toBe('');

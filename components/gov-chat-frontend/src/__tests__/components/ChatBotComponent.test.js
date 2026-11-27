@@ -5276,6 +5276,37 @@ describe('ChatBotComponent', () => {
       );
     });
 
+    // A projected web citation is not a file: its url has no extension, so
+    // the extension fallback renders the first four characters of the url's
+    // path ("GOV/" class garbage — here the badge would read "THE"). The
+    // badge names the variant, the mirror of the OKF branch above.
+    it('badges a web citation as WEB, not as a file extension', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Web citation test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          {
+            document_id: 'https://example.gov/policy',
+            document_name: 'The policy',
+            url: 'https://example.gov/policy',
+            score: null,
+            source: 'web'
+          }
+        ]
+      });
+      await wrapper.vm.$nextTick();
+
+      const badge = wrapper.find('[data-testid="answer-source-card-0"] .file-type-badge');
+      expect(badge.exists()).toBe(true);
+      expect(badge.text()).toBe('WEB');
+      expect(wrapper.find('[data-testid="answer-source-card-0"] .answer-source-card__title').text()).toBe('The policy');
+    });
+
     it('filters duplicate source documents', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

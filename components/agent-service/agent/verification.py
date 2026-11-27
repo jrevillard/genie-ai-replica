@@ -84,6 +84,7 @@ from capabilities.citations import (
     SourceRecords,
     is_concept_provenance,
     provenance_identity,
+    readable_score,
     resolve_source_records,
     source_documents_from_citations,
 )
@@ -222,10 +223,30 @@ class RetrievalLedger:
 
     def _add(self, entry: dict) -> None:
         identity = provenance_identity(entry["provenance"])
+        if identity is None:
+            # No identity, no entry — ``provenance_identity`` decided it (a
+            # web provenance without a url, a legacy source without a file
+            # id): a None key would let the FIRST identity-less entry in and
+            # swallow the rest.
+            return
         if identity in self._seen:
             return
         self._seen.add(identity)
         self._entries.append(entry)
+
+
+def _hit_triples(result: dict) -> list[tuple[str, dict, float | None]]:
+    """The ``(text, provenance, score)`` triples of one hits-shaped result —
+    the shape BOTH retrieval sources serve (the document search's hits and
+    the web search's hits): a hit without a provenance dict or with a
+    non-string text contributes nothing."""
+    triples = []
+    for hit in result.get("hits") or []:
+        provenance = hit.get("provenance") if isinstance(hit, dict) else None
+        text = hit.get("text") if isinstance(hit, dict) else None
+        if isinstance(provenance, dict) and isinstance(text, str):
+            triples.append((text, provenance, readable_score(hit.get("score"))))
+    return triples
 
 
 def retrieved_texts(name: str, payload: dict) -> list[tuple[str, dict, float | None]]:
@@ -242,15 +263,12 @@ def retrieved_texts(name: str, payload: dict) -> list[tuple[str, dict, float | N
     result = payload.get("result")
     if not isinstance(result, dict):
         return []
-    if name == "search_knowledge":
-        triples = []
-        for hit in result.get("hits") or []:
-            provenance = hit.get("provenance") if isinstance(hit, dict) else None
-            text = hit.get("text") if isinstance(hit, dict) else None
-            if isinstance(provenance, dict) and isinstance(text, str):
-                score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
-                triples.append((text, provenance, score))
-        return triples
+    if name in ("search_knowledge", "web_search"):
+        # The web results enter the SAME channel: the ledger's citation
+        # candidates AND the taint scan's surface — one extraction, two
+        # readers (the design's §4.5 identity: the ledger and the scan do
+        # not drift).
+        return _hit_triples(result)
     if name == "read_source":
         provenance = result.get("provenance")
         content = result.get("content")

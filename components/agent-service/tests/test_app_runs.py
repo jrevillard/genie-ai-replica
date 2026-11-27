@@ -14,6 +14,7 @@ event and releases the lane slot.
 import asyncio
 import json
 from dataclasses import replace
+from functools import partial
 
 import pytest
 from conftest import (
@@ -34,6 +35,7 @@ import app as app_module
 from agent.events import BFF_FRAME_NAMES
 from agent.orchestrator import AdmissionRefused, RequestOrchestrator
 from agent.sources import DocumentToolSource
+from assembly import build_web_search_port
 from capabilities.contract import CallerContext, PreparedQuery, QueryPreparationStatus
 from lane import AdmissionLane
 from preparation.prepare import PreparationResult
@@ -62,13 +64,7 @@ def _runtime(model, tmp_path):
                 DeclaredSource(
                     source_id=DocumentToolSource.source_id,
                     served_tool_names=DocumentToolSource.served_tool_names,
-                    build=lambda bundle: DocumentToolSource(
-                        lambda context, bearer: fake_port(),
-                        bundle.operation_budget,
-                        preparer=bundle.preparer,
-                        on_preparation_status=bundle.on_preparation_status,
-                        abstention_sink=bundle.abstention_sink,
-                    ),
+                    build=partial(DocumentToolSource.from_bundle, lambda context, bearer: fake_port()),
                 ),
             ),
         ),
@@ -385,13 +381,7 @@ def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, mon
                     DeclaredSource(
                         source_id=DocumentToolSource.source_id,
                         served_tool_names=DocumentToolSource.served_tool_names,
-                        build=lambda bundle: DocumentToolSource(
-                            lambda context, bearer: fake_port(),
-                            bundle.operation_budget,
-                            preparer=bundle.preparer,
-                            on_preparation_status=bundle.on_preparation_status,
-                            abstention_sink=bundle.abstention_sink,
-                        ),
+                        build=partial(DocumentToolSource.from_bundle, lambda context, bearer: fake_port()),
                     ),
                 ),
             ),
@@ -486,3 +476,171 @@ def test_the_slot_stays_held_while_the_cancelled_run_unwinds(tmp_path):
             pass
 
     asyncio.run(scenario())
+
+
+# ---------------------------------------------------------------------
+# The web-search knob pair: the second declared source, the shipped
+# posture, and the half-wired deployment's honest 503
+# ---------------------------------------------------------------------
+
+
+def _catalog_entry(name, source, egress):
+    """One catalog entry of the shipped shape — the tmp catalog's builder."""
+    return {
+        "name": name,
+        "source": source,
+        "server": None,
+        "tool": None,
+        "allow": True,
+        "risk": "read",
+        "requires_approval": False,
+        "egress": egress,
+        "scopes": [],
+    }
+
+
+def _assembled_app(monkeypatch, tmp_path, *, web_pair=False):
+    """The real `_build_orchestrator` over fakes, with (or without) the
+    web-search knob pair set. Returns the ScriptedLoopModel so the test can
+    read the tool definitions the model was told."""
+    for knob in REQUIRED_KNOBS:
+        monkeypatch.setenv(knob, "5000")
+    if web_pair:
+        # The THREE-entry catalog is the test's OWN tmp file — NEVER the
+        # shipped one (it is frozen at two tools; D4/G4): the knob points
+        # at the copy this test wrote.
+        catalog_path = tmp_path / "tool-catalog-web.json"
+        catalog_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "tools": [
+                        _catalog_entry("search_knowledge", "document", "internal"),
+                        _catalog_entry("read_source", "document", "internal"),
+                        _catalog_entry("web_search", "web", "open_web"),
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(catalog_path))
+        monkeypatch.setenv("AGENT_SEARXNG_URL", "http://searxng:8080")
+        monkeypatch.setenv("PII_SERVICE_URL", "http://pii-service:8000")
+    else:
+        monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
+    model = ScriptedLoopModel(multihop_turns(answer="the answer", judge_reply='{"verdict": "grounded"}'))
+    monkeypatch.setattr(
+        app_module,
+        "build_stateless_adapters",
+        lambda config, env=None: type(
+            "Adapters",
+            (),
+            {
+                "bind_executor": staticmethod(lambda context, bearer: fake_port()),
+                "docrepo": FakeMetadataSource(),
+                "okf": FakeConceptSource(),
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "VllmModelClient",
+        lambda config, transport=None: model,
+    )
+    monkeypatch.setattr(app_module, "_RUNTIME", None)
+    return model
+
+
+def test_the_assembly_declares_the_web_source_when_the_flag_and_the_pair_are_set(tmp_path, monkeypatch):
+    """The host's SECOND declared source: with the deployment's INTENT
+    (``AGENT_WEB_SEARCH_ENABLED``) and the knob pair set, the run's toolset
+    carries web_search beside the two document tools. The build is the
+    mechanical shape (``partial(WebSearchToolSource.from_bundle, ...)``)
+    — the catalog's budgets arrive through the factory, not this site."""
+    model = _assembled_app(monkeypatch, tmp_path, web_pair=True)
+    monkeypatch.setenv("AGENT_WEB_SEARCH_ENABLED", "1")
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 200
+    names = [definition["function"]["name"] for definition in model.requests[0]["tool_definitions"]]
+    assert names == ["search_knowledge", "read_source", "web_search"]
+
+
+def test_the_shipped_posture_declares_no_web_source(tmp_path, monkeypatch):
+    """The flag unset — the deployment declares NO web source, whatever the
+    endpoints read. The ansible path renders the pii endpoint
+    UNCONDITIONALLY, so a deployment holding one endpoint is not
+    half-wired: it simply never asked for web search."""
+    model = _assembled_app(monkeypatch, tmp_path, web_pair=False)
+    monkeypatch.setenv("PII_SERVICE_URL", "http://pii-service:8000")
+    monkeypatch.delenv("AGENT_SEARXNG_URL", raising=False)
+    monkeypatch.delenv("AGENT_WEB_SEARCH_ENABLED", raising=False)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 200
+    names = [definition["function"]["name"] for definition in model.requests[0]["tool_definitions"]]
+    assert names == ["search_knowledge", "read_source"]
+
+
+def test_a_half_wired_web_pair_answers_503_naming_the_missing_knob(monkeypatch):
+    """The pair is fail-closed as a PAIR: an ENABLED deployment holding
+    exactly one endpoint is a deployment that believes a lie (redacting
+    without searching, or searching without redacting) — the honest 503
+    names the missing one, before any run."""
+    for knob in REQUIRED_KNOBS:
+        monkeypatch.setenv(knob, "5000")
+    monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
+    monkeypatch.setenv("AGENT_SEARXNG_URL", "http://searxng:8080")
+    monkeypatch.setenv("AGENT_WEB_SEARCH_ENABLED", "1")
+    monkeypatch.delenv("PII_SERVICE_URL", raising=False)
+    monkeypatch.setattr(
+        app_module,
+        "build_stateless_adapters",
+        lambda config, env=None: type(
+            "Adapters",
+            (),
+            {
+                "bind_executor": staticmethod(lambda context, bearer: fake_port()),
+                "docrepo": FakeMetadataSource(),
+                "okf": FakeConceptSource(),
+            },
+        )(),
+    )
+    monkeypatch.setattr(app_module, "_RUNTIME", None)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"] == "run_surface_unconfigured"
+    assert "PII_SERVICE_URL" in body["message"]
+
+
+def test_the_web_search_port_follows_the_deployments_intent_and_its_knob_pair():
+    """The DIRECT owner of ``build_web_search_port``'s return value: the
+    app-level observable cannot prove the source's absence (the catalog
+    filters the tool list, so the observable is identical with or without a
+    web source), and the "no web source" half of the pair had NO owner.
+
+    The flag decides the PRESENCE; the knob PAIR supplies the ENDPOINTS;
+    an ENABLED deployment with an incomplete pair is refused with the
+    honest ``ValueError`` naming the missing knob (the SearXNG-missing
+    direction had no pin)."""
+    endpoints = {"PII_SERVICE_URL": "http://pii-service:8000", "AGENT_SEARXNG_URL": "http://searxng:8080"}
+
+    # The flag unset: NO web source, whatever the endpoints read.
+    assert build_web_search_port(env=endpoints) is None
+
+    # The flag set and the pair complete: a port.
+    port = build_web_search_port(env={**endpoints, "AGENT_WEB_SEARCH_ENABLED": "1"})
+    assert port is not None
+    assert callable(getattr(port, "search", None))
+
+    # The flag set and one endpoint missing: the honest refusal, naming the
+    # missing knob.
+    with pytest.raises(ValueError, match="PII_SERVICE_URL"):
+        build_web_search_port(env={"AGENT_WEB_SEARCH_ENABLED": "1", "AGENT_SEARXNG_URL": "http://searxng:8080"})
+    with pytest.raises(ValueError, match="AGENT_SEARXNG_URL"):
+        build_web_search_port(env={"AGENT_WEB_SEARCH_ENABLED": "1", "PII_SERVICE_URL": "http://pii-service:8000"})

@@ -276,3 +276,50 @@ test.describe('SSE contract — the agent activity line', () => {
     });
   });
 });
+
+test.describe('SSE contract — the projected web citation', () => {
+  // The projected web row is SELF-CONTAINED: document_id IS the url, the
+  // marker source: 'web' rides the entry, and score carries no repository
+  // rank (null). The frame mirrors the BFF's assembled agent metadata; the
+  // entry mirrors the agent service's projection shape.
+  const WEB_SOURCE_METADATA = {
+    confidence_score: 0.9,
+    is_grounded: true,
+    grounding_status: 'grounded',
+    translation_mode: 'none',
+    source_documents: [
+      {
+        document_id: 'https://example.gov/policy',
+        document_name: 'The policy',
+        url: 'https://example.gov/policy',
+        score: null,
+        source: 'web'
+      }
+    ]
+  };
+
+  test('a metadata frame carrying a web source renders one card under the WEB badge', async ({ browser }) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
+      await mockChatStream(page, ['GENIE.AI answers from the published policy.'], WEB_SOURCE_METADATA, {
+        verdict: GROUNDED_VERDICT
+      });
+      await page.locator('[data-testid="welcome-composer"] textarea').fill('Where is the policy published?');
+      await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
+      await waitForBotResponse(page, { timeout: 45000 });
+      await expect(page.locator('[data-testid="answer-sources"]')).toBeVisible({ timeout: 45000 });
+      const cards = page.locator('[data-testid^="answer-source-card-"]');
+      await expect(cards, 'exactly one projected source card renders').toHaveCount(1);
+      const card = page.locator('[data-testid="answer-source-card-0"]');
+      await expect(card.filter({ hasText: 'WEB' }), 'the badge names the variant').toBeVisible({
+        timeout: 15000
+      });
+      // The exact rendered texts, asserted separately: the badge label and
+      // the page title are sibling spans with no whitespace between them
+      // (Vue 3 condenses the newline away), so the card's textContent reads
+      // 'WEBThe policy' — a single combined toHaveText can never match.
+      // The extension fallback would have spelled the url ('GOV/POLICY').
+      await expect(card, 'the badge labels the variant WEB').toContainText('WEB');
+      await expect(card, 'the card names the web page').toContainText('The policy');
+    });
+  });
+});

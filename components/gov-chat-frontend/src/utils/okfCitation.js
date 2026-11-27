@@ -16,6 +16,10 @@
 // One predicate, both call sites (the store's fetch guard and the source
 // card's badge): a guard that skipped the lookup while the card still
 // rendered a file-extension badge would be two truths about one citation.
+// The same one-definition rule covers BOTH badge pairs (`okfConceptBadge`
+// AND `webSourceBadge`) and both citation predicates (`isOkfConceptSource`,
+// `isWebSource`) — every predicate and badge lives here, once, for both
+// chat surfaces and the store.
 
 /** The marker chatqna puts on an OKF-sourced citation. */
 export const OKF_CONCEPT_SOURCE = 'okf-concept';
@@ -49,6 +53,35 @@ export function isOkfConceptSource(doc) {
  */
 export function okfConceptBadge() {
   return { label: 'OKF', tone: 'accent' };
+}
+
+/**
+ * Whether a citation is a web result rather than a repository document.
+ *
+ * A projected web row (S3-plan-3) is SELF-CONTAINED: the marker
+ * `source: 'web'` travels with the url — which is both the row's identity
+ * and its click target — so the marker alone decides. Only the marker
+ * reads: a legacy row that merely carries a `url` is never web.
+ *
+ * @param {Object} doc a raw citation or a mapped source
+ * @returns {Boolean}
+ */
+export function isWebSource(doc) {
+  return doc?.source === 'web';
+}
+
+/**
+ * The badge of a web citation.
+ *
+ * A web url has no file extension and no size, so the extension fallback
+ * (`fileTypeBadge`) would render the first four characters of the url's
+ * path — "GOV/" for "https://example.gov/policy". The badge names the
+ * VARIANT instead: the mirror of the OKF badge above.
+ *
+ * @returns {{label: String, tone: String}}
+ */
+export function webSourceBadge() {
+  return { label: 'WEB', tone: 'info' };
 }
 
 /**

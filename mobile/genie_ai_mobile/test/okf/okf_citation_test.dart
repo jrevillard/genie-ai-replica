@@ -100,6 +100,32 @@ void main() {
     });
   });
 
+  group('isWebSource', () {
+    test('a row carrying the web marker is a web source', () {
+      expect(
+        isWebSource(<String, dynamic>{
+          'document_id': 'https://example.gov/policy',
+          'document_name': 'The policy',
+          'url': 'https://example.gov/policy',
+          'source': 'web',
+        }),
+        isTrue,
+      );
+    });
+
+    test('a plain document row is not a web source', () {
+      expect(
+        isWebSource(<String, dynamic>{
+          'document_id': 'report.pdf',
+          'document_name': 'report.pdf',
+          'url': '/api/files/report.pdf/download',
+          'score': 0.9,
+        }),
+        isFalse,
+      );
+    });
+  });
+
   group('sourceBadge', () {
     test(
       'an okf concept badges as OKF/accent (never an extension fallback)',
@@ -113,6 +139,17 @@ void main() {
         expect(badge.tone, 'accent');
       },
     );
+
+    test('a web citation badges as WEB, mirroring the web fileBadge', () {
+      final badge = sourceBadge(<String, dynamic>{
+        'document_id': 'https://example.gov/policy',
+        'document_name': 'The policy',
+        'url': 'https://example.gov/policy',
+        'source': 'web',
+      });
+      expect(badge.label, 'WEB');
+      expect(badge.tone, 'info');
+    });
 
     test('a document with an extension badges by extension', () {
       final badge = sourceBadge(<String, dynamic>{

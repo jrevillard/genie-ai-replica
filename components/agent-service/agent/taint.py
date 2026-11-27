@@ -62,6 +62,15 @@ INSTRUCTION_MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("fake_role_tag", re.compile(r"<\s*/?\s*(system|assistant|developer)\s*>", re.IGNORECASE)),
 )
 
+# The label a finding is attributed to, by the tool that served the text:
+# the corpus search's hit, the web search's result, the read path's
+# content. One map, built once — a map rebuilt per finding is a map that
+# can differ from itself between two findings.
+_SOURCE_BY_TOOL = {
+    "search_knowledge": "search_hit",
+    "web_search": "web_result",
+}
+
 
 def scan_text(text: str) -> tuple[str, ...]:
     """The marker names one text matches, in the declared order."""
@@ -90,8 +99,11 @@ def scan_tool_result(name: str, payload: dict) -> tuple[dict, ...]:
                 {
                     "tool": name,
                     "markers": list(markers),
-                    "source": "search_hit" if name == "search_knowledge" else "read_content",
-                    "identity": list(provenance_identity(provenance)),
+                    "source": _SOURCE_BY_TOOL.get(name, "read_content"),
+                    # an identity-less provenance (no url / no file id) still
+                    # yields its finding — the injection is the point — and
+                    # attributes to (None, None)
+                    "identity": list(provenance_identity(provenance) or (None, None)),
                 }
             )
     return tuple(findings)

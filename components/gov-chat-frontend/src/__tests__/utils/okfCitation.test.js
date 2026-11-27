@@ -1,6 +1,12 @@
 'use strict';
 
-const { isOkfConceptSource, okfConceptBadge, OKF_CONCEPT_SOURCE } = require('../../utils/okfCitation');
+const {
+  isOkfConceptSource,
+  okfConceptBadge,
+  OKF_CONCEPT_SOURCE,
+  isWebSource,
+  webSourceBadge
+} = require('../../utils/okfCitation');
 
 describe('okfCitation', () => {
   it('names the marker chatqna puts on an OKF-sourced citation', () => {
@@ -29,5 +35,11 @@ describe('okfCitation', () => {
 
   it('badges the family, not a file extension', () => {
     expect(okfConceptBadge()).toEqual({ label: 'OKF', tone: 'accent' });
+  });
+
+  it('badges a web citation as WEB, like the OKF badge, from the one definition', () => {
+    expect(isWebSource({ source: 'web', url: 'https://x' })).toBe(true);
+    expect(isWebSource({ source: 'okf-concept' })).toBe(false);
+    expect(webSourceBadge()).toEqual({ label: 'WEB', tone: 'info' });
   });
 });

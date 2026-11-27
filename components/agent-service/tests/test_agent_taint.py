@@ -83,6 +83,18 @@ def test_the_scan_attributes_findings_to_the_serving_tool_and_identity():
     assert findings[0]["identity"] == ["r-2", "c-2"]
 
 
+def test_an_identity_less_web_hit_still_yields_its_finding():
+    """A url-less web provenance has NO identity (``provenance_identity``
+    returns ``None``) — the finding SURVIVES (the injection is the point)
+    and attributes to ``(None, None)``; the scan must not crash on it."""
+    hit = {"provenance": {"source": "web", "title": "no url"}, "text": HOSTILE, "score": 0.5}
+    findings = scan_tool_result("web_search", {"result": {"outcome": "success", "hits": [hit]}})
+    assert len(findings) == 1
+    assert findings[0]["source"] == "web_result"
+    assert findings[0]["identity"] == [None, None]
+    assert findings[0]["markers"]
+
+
 def test_clean_results_and_error_envelopes_yield_no_finding():
     assert (
         scan_tool_result(

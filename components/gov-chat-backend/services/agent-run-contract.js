@@ -4,10 +4,9 @@ const http = require('http');
 const https = require('https');
 const { logger, parsePositiveInt } = require('../shared-lib');
 
-// The shared agent-run vocabulary. The deadline pair, the
-// citation→source_documents mapping, the metadata assembly and the upstream
-// body reader live HERE (one home each) so the two consumers of the
-// agent-service seam — the streaming frame writer and the
+// The shared agent-run vocabulary. The deadline pair, the metadata assembly
+// and the upstream body reader live HERE (one home each) so the two
+// consumers of the agent-service seam — the streaming frame writer and the
 // non-streaming JSON consumer — cannot drift apart. The frame
 // writer re-exports the pieces its test pins read; production code imports
 // from this module directly.
@@ -92,50 +91,7 @@ function deriveDeadlineMs(timeoutMs) {
 // frame carries it verbatim; the METADATA keeps its existing shape and takes
 // only the additive fields the client metadata contract names:
 // `grounding_status` (tri-state) + the derived `is_grounded`, plus the
-// source_documents mapped from the citations into the deployed envelope
-// variants.
-
-/**
- * Map one verdict citation (`{provenance, text, score}`) to the deployed
- * source_documents row shape — the mapping noagent/pipeline.py's
- * `source_document_envelope` performs server-side for the no-agent path:
- * a legacy corpus source carries `document_id` and no source marker; an OKF
- * concept carries the `concept_id`/`repo_id`/`bundle_version` trio and
- * `source: 'okf-concept'`. Identity-derived names, empty url/labels — the
- * deployed shape, no per-answer metadata round-trip.
- * @param {Object} citation
- * @returns {Object|null} The source_documents row, or null for a citation
- *   whose provenance is not an object (nothing invented for it).
- */
-function citationToSourceDocument(citation) {
-  const provenance = citation && citation.provenance;
-  if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance)) {
-    return null;
-  }
-  // The row fields both variants share; the variant adds its identity keys.
-  const identity = provenance.source === 'okf-concept' ? provenance.concept_id : provenance.file_id;
-  const entry = {
-    document_id: identity,
-    document_name: String(identity ?? '')
-      .replace(/_/g, ' ')
-      .trim(),
-    url: '',
-    categoryLabels: [],
-    serviceLabels: [],
-    score: typeof citation.score === 'number' ? citation.score : null
-  };
-  if (provenance.source === 'okf-concept') {
-    entry.concept_id = provenance.concept_id;
-    entry.source = 'okf-concept';
-    if (provenance.repo_id) {
-      entry.repo_id = provenance.repo_id;
-    }
-    if (provenance.bundle_version !== undefined && provenance.bundle_version !== null) {
-      entry.bundle_version = provenance.bundle_version;
-    }
-  }
-  return entry;
-}
+// service's `source_documents` rows forwarded verbatim.
 
 /**
  * The legacy empty-stream metadata shape — "chatqna (or the agent) never
@@ -241,14 +197,12 @@ function assembleAgentMetadata({
   if (verdict) {
     metadata.grounding_status = verdict.grounding_status;
     metadata.is_grounded = verdict.is_grounded === true;
-    // The envelope rows are the AGENT SERVICE's projection when the payload
-    // carries them (capabilities/citations.py source_documents_from_citations
-    // — the one owner of the mapping, shared with the no-agent lane). The
-    // BFF-side derivation below is the fallback for an older payload that
-    // names only the raw citations.
-    metadata.source_documents = Array.isArray(verdict.source_documents)
-      ? verdict.source_documents
-      : (Array.isArray(verdict.citations) ? verdict.citations : []).map(citationToSourceDocument).filter(Boolean);
+    // The envelope rows are the AGENT SERVICE's projection (capabilities/
+    // citations.py source_documents_from_citations — the one owner of the
+    // mapping, shared with the no-agent lane). The BFF forwards it verbatim;
+    // a payload without it (an older service) carries empty sources — no
+    // mapping lives here.
+    metadata.source_documents = Array.isArray(verdict.source_documents) ? verdict.source_documents : [];
   } else {
     metadata.grounding_status = 'unverified';
     metadata.is_grounded = false;
@@ -446,7 +400,6 @@ module.exports = {
   DEADLINE_FLOOR_MS,
   resolveUpstreamTimeoutMs,
   deriveDeadlineMs,
-  citationToSourceDocument,
   emptyStreamMetadata,
   assembleAgentMetadata,
   captureRunStart,

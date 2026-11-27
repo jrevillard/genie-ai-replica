@@ -20,10 +20,13 @@ import pytest
 from conftest import ENDPOINT, PreparationFakeTransport, hang_until_cancelled, verifier_config
 
 from measurement.v06_harness import (
+    MATRIX_PROMPT,
+    MATRIX_TARGET,
+    MATRIX_TOOL_NAMES,
+    PRODUCER_ID,
     SCHEMA_STRICTNESS,
     SCHEMAS,
     TOOL_CHOICE_MODES,
-    TOOL_NAME,
     CellRecord,
     EndpointIdentity,
     HttpxSseStream,
@@ -33,6 +36,7 @@ from measurement.v06_harness import (
     ToolCallObservation,
     VerificationEvidence,
     VerificationTransientError,
+    _matrix_payload,
     acceptance_verdict,
     demo_loop_cancel,
     demo_streaming_cancel,
@@ -53,6 +57,76 @@ from measurement.v06_harness import (
 
 STRICT = SCHEMAS["strict"]
 PERMISSIVE = SCHEMAS["permissive"]
+
+
+# ---------------------------------------------------------------------
+# The matrix declares three tools (the target first)
+# ---------------------------------------------------------------------
+
+
+def test_the_matrix_declares_three_tools_with_the_target_first():
+    assert MATRIX_TOOL_NAMES == ("web_search", "search_knowledge", "read_source")
+    assert MATRIX_TARGET == "web_search"
+
+
+def test_the_payload_carries_the_three_declarations():
+    payload = _matrix_payload("auto", "strict", streaming=False, model_id="m")
+    names = [d["function"]["name"] for d in payload["tools"]]
+    assert names == list(MATRIX_TOOL_NAMES)
+    # the target's declaration carries the matrix's own schema axis
+    target = next(d for d in payload["tools"] if d["function"]["name"] == MATRIX_TARGET)
+    assert target["function"]["parameters"] == SCHEMAS["strict"]
+
+
+def test_the_named_tool_choice_names_the_target():
+    assert tool_choice_value("named") == {"type": "function", "function": {"name": MATRIX_TARGET}}
+
+
+def test_the_prompt_asks_for_the_target_tool():
+    assert MATRIX_TARGET in MATRIX_PROMPT
+
+
+def test_the_record_names_the_declared_tools():
+    evidence = VerificationEvidence(
+        producer=PRODUCER_ID,
+        venue="v",
+        captured_at_utc="2026-11-27T00:00:00+00:00",
+        identity=EndpointIdentity(
+            generation_endpoint="https://venue/llm/v1/chat/completions",
+            version_raw="{}",
+            version_note="",
+            model_id="m",
+            max_model_len=1,
+            served_at_utc="2026-11-27T00:00:00+00:00",
+            venue="v",
+        ),
+        cells=(),
+        first_call_latency_ms={},
+        first_call_cell={},
+        streaming_cancel=StreamingCancelObservation(
+            deltas_received=3,
+            cancelled_error_raised=True,
+            connection_aborted=True,
+            completion_delivered=False,
+            wait_seconds=1.0,
+        ),
+        loop_cancel=LoopCancelObservation(
+            cancelled_error_propagated=True,
+            in_flight_model_call_cancelled=True,
+            model_post_dispatched=True,
+            terminal_events_emitted=(),
+            steps=1,
+            model_calls=1,
+            tool_calls=0,
+            wall_clock_seconds=1.0,
+        ),
+        plain_control=PlainControlObservation(status_ok=True, content_present=True),
+        declared_tools=MATRIX_TOOL_NAMES,
+    )
+    # The as_dict value keeps the tuple; the JSON-visible shape is the list
+    # the machine record carries — asserted on the serialized record.
+    record = json.loads(json.dumps(evidence.as_dict()))
+    assert record["declared_tools"] == list(MATRIX_TOOL_NAMES)
 
 
 # ---------------------------------------------------------------------
@@ -121,17 +195,17 @@ def test_a_wellformed_tool_call_parses_clean():
                 {
                     "id": "tc-1",
                     "type": "function",
-                    "function": {"name": TOOL_NAME, "arguments": '{"query": "q", "max_results": 3}'},
+                    "function": {"name": MATRIX_TARGET, "arguments": '{"query": "q", "max_results": 3}'},
                 }
             ],
             content="",
         ),
-        TOOL_NAME,
+        MATRIX_TARGET,
     )
     assert len(observation.calls) == 1
     call = observation.calls[0]
     assert call.id == "tc-1"
-    assert call.name == TOOL_NAME
+    assert call.name == MATRIX_TARGET
     assert call.arguments == {"query": "q", "max_results": 3}
     assert call.issues == ()
 
@@ -144,7 +218,7 @@ def test_the_parse_records_issues_instead_of_raising():
                 "not-even-a-dict",
             ],
         ),
-        TOOL_NAME,
+        MATRIX_TARGET,
     )
     assert len(observation.calls) == 2
     assert any("carries no id" in issue for issue in observation.calls[0].issues)
@@ -155,14 +229,14 @@ def test_the_parse_records_issues_instead_of_raising():
 
 
 def test_a_non_list_tool_calls_field_is_an_issue_not_a_crash():
-    observation = parse_nonstreaming_tool_calls(_message(tool_calls={"id": "tc-1"}), TOOL_NAME)
+    observation = parse_nonstreaming_tool_calls(_message(tool_calls={"id": "tc-1"}), MATRIX_TARGET)
     assert observation.calls[0].issues == ("malformed tool_calls field",)
 
 
 def test_a_non_object_arguments_payload_is_an_issue():
     observation = parse_nonstreaming_tool_calls(
-        _message(tool_calls=[{"id": "tc-1", "function": {"name": TOOL_NAME, "arguments": "[1, 2]"}}]),
-        TOOL_NAME,
+        _message(tool_calls=[{"id": "tc-1", "function": {"name": MATRIX_TARGET, "arguments": "[1, 2]"}}]),
+        MATRIX_TARGET,
     )
     assert observation.calls[0].arguments is None
     assert any("not a JSON object" in issue for issue in observation.calls[0].issues)
@@ -173,7 +247,7 @@ def test_a_non_object_arguments_payload_is_an_issue():
 # ---------------------------------------------------------------------
 
 
-def _sse_events(*, with_id=True, name=TOOL_NAME, arg_parts=('{"query": "remote work", ', '"max_results": 3}')):
+def _sse_events(*, with_id=True, name=MATRIX_TARGET, arg_parts=('{"query": "remote work", ', '"max_results": 3}')):
     first_delta = {"index": 0, "type": "function", "function": {"name": name, "arguments": arg_parts[0]}}
     if with_id:
         first_delta["id"] = "tc-1"
@@ -185,13 +259,13 @@ def _sse_events(*, with_id=True, name=TOOL_NAME, arg_parts=('{"query": "remote w
 
 
 def test_split_argument_deltas_reassemble_into_a_complete_call():
-    observation = reassemble_streaming_tool_calls(_sse_events(), TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(_sse_events(), MATRIX_TARGET)
     assert observation.delta_count == 3
     assert observation.finish_reason == "tool_calls"
     assert len(observation.calls) == 1
     call = observation.calls[0]
     assert call.id == "tc-1"
-    assert call.name == TOOL_NAME
+    assert call.name == MATRIX_TARGET
     assert call.arguments == {"query": "remote work", "max_results": 3}
     assert call.issues == ()
 
@@ -202,24 +276,24 @@ def test_streamed_content_accumulates_and_finish_reason_is_taken():
         {"choices": [{"delta": {"content": "answer"}}]},
         {"choices": [{"delta": {}, "finish_reason": "stop"}]},
     ]
-    observation = reassemble_streaming_tool_calls(events, TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(events, MATRIX_TARGET)
     assert observation.content == "partial answer"
     assert observation.finish_reason == "stop"
     assert observation.calls == ()
 
 
 def test_a_stream_missing_the_call_id_is_an_issue():
-    observation = reassemble_streaming_tool_calls(_sse_events(with_id=False), TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(_sse_events(with_id=False), MATRIX_TARGET)
     assert any("no streamed delta carried the call id" in issue for issue in observation.calls[0].issues)
 
 
 def test_a_wrong_streamed_name_is_an_issue():
-    observation = reassemble_streaming_tool_calls(_sse_events(name="other_tool"), TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(_sse_events(name="other_tool"), MATRIX_TARGET)
     assert any("names 'other_tool'" in issue for issue in observation.calls[0].issues)
 
 
 def test_unparseable_reassembled_arguments_are_an_issue():
-    observation = reassemble_streaming_tool_calls(_sse_events(arg_parts=("{bad", " json}")), TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(_sse_events(arg_parts=("{bad", " json}")), MATRIX_TARGET)
     assert observation.calls[0].arguments is None
     assert any("not valid JSON" in issue for issue in observation.calls[0].issues)
 
@@ -229,7 +303,7 @@ def test_a_malformed_tool_call_delta_is_recorded_not_raised():
         {"choices": [{"delta": {"tool_calls": ["not-a-dict"]}}]},
         {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]},
     ]
-    observation = reassemble_streaming_tool_calls(events, TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(events, MATRIX_TARGET)
     assert observation.error == "a streamed tool-call delta is not an object"
 
 
@@ -242,7 +316,7 @@ def test_a_tool_call_delta_without_an_index_is_recorded_not_merged():
         {"choices": [{"delta": {"tool_calls": [{"id": "tc-x", "function": {"name": "other", "arguments": "{}"}}]}}]},
         *_sse_events()[1:],
     ]
-    observation = reassemble_streaming_tool_calls(events, TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(events, MATRIX_TARGET)
     assert observation.error == "a streamed tool-call delta carries no index"
     assert len(observation.calls) == 1  # slot 0 is untouched by the indexless delta
     assert observation.calls[0].id == "tc-1"
@@ -253,7 +327,7 @@ def test_a_tool_call_delta_without_an_index_is_recorded_not_merged():
 
 
 def test_events_without_choices_are_ignored():
-    observation = reassemble_streaming_tool_calls([{"choices": []}, "not-a-dict", *_sse_events()], TOOL_NAME)
+    observation = reassemble_streaming_tool_calls([{"choices": []}, "not-a-dict", *_sse_events()], MATRIX_TARGET)
     assert observation.delta_count == 3
 
 
@@ -266,10 +340,10 @@ def test_a_valid_tool_call_cell_is_valid():
     observation = parse_nonstreaming_tool_calls(
         _message(
             tool_calls=[
-                {"id": "tc-1", "function": {"name": TOOL_NAME, "arguments": '{"query": "q", "max_results": 3}'}}
+                {"id": "tc-1", "function": {"name": MATRIX_TARGET, "arguments": '{"query": "q", "max_results": 3}'}}
             ]
         ),
-        TOOL_NAME,
+        MATRIX_TARGET,
     )
     valid, reasons = judge_cell(observation, STRICT)
     assert valid is True
@@ -285,8 +359,8 @@ def test_a_text_only_answer_fails_the_cell_with_its_reason():
 
 def test_malformed_arguments_make_the_cell_invalid():
     observation = parse_nonstreaming_tool_calls(
-        _message(tool_calls=[{"id": "tc-1", "function": {"name": TOOL_NAME, "arguments": '{"query": "q"}'}}]),
-        TOOL_NAME,
+        _message(tool_calls=[{"id": "tc-1", "function": {"name": MATRIX_TARGET, "arguments": '{"query": "q"}'}}]),
+        MATRIX_TARGET,
     )
     valid, reasons = judge_cell(observation, STRICT)
     assert valid is False
@@ -312,7 +386,7 @@ def test_the_streaming_judge_demands_real_tool_call_deltas():
     assert valid is False
     assert any("did not stream as tool-call deltas" in reason for reason in reasons)
     valid, _ = judge_streaming_reassembly(
-        reassemble_streaming_tool_calls(_sse_events(), TOOL_NAME),
+        reassemble_streaming_tool_calls(_sse_events(), MATRIX_TARGET),
         SCHEMAS["strict"],
     )
     assert valid is True
@@ -335,7 +409,7 @@ def test_a_blob_call_amid_content_deltas_is_judged_invalid():
                                 "id": "tc-1",
                                 "type": "function",
                                 "function": {
-                                    "name": TOOL_NAME,
+                                    "name": MATRIX_TARGET,
                                     "arguments": '{"query": "remote work", "max_results": 3}',
                                 },
                             }
@@ -346,7 +420,7 @@ def test_a_blob_call_amid_content_deltas_is_judged_invalid():
         },
         {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]},
     ]
-    observation = reassemble_streaming_tool_calls(events, TOOL_NAME)
+    observation = reassemble_streaming_tool_calls(events, MATRIX_TARGET)
     assert observation.delta_count == 4
     assert observation.tool_delta_count == 1
     assert observation.calls[0].arguments == {"query": "remote work", "max_results": 3}
@@ -532,7 +606,7 @@ def _valid_call_body():
             {
                 "id": "tc-1",
                 "type": "function",
-                "function": {"name": TOOL_NAME, "arguments": '{"query": "remote work", "max_results": 3}'},
+                "function": {"name": MATRIX_TARGET, "arguments": '{"query": "remote work", "max_results": 3}'},
             }
         ],
     )
@@ -540,7 +614,7 @@ def _valid_call_body():
 
 @pytest.mark.parametrize(
     "mode,wire",
-    [("auto", "auto"), ("required", "required"), ("named", {"type": "function", "function": {"name": TOOL_NAME}})],
+    [("auto", "auto"), ("required", "required"), ("named", {"type": "function", "function": {"name": MATRIX_TARGET}})],
 )
 def test_a_nonstreaming_cell_sends_the_recorded_payload_conventions(mode, wire):
     transport = _transport((200, _valid_call_body()))
@@ -553,7 +627,7 @@ def test_a_nonstreaming_cell_sends_the_recorded_payload_conventions(mode, wire):
     assert payload["temperature"] == 0.01
     assert payload["top_p"] == 0.95
     assert payload["frequency_penalty"] == 0.0
-    assert payload["tools"][0]["function"]["name"] == TOOL_NAME
+    assert payload["tools"][0]["function"]["name"] == MATRIX_TARGET
     assert payload["tools"][0]["function"]["parameters"] == SCHEMAS["strict"]
     assert record.valid is True
     assert record.reasons == ()
@@ -981,7 +1055,7 @@ def _passing_evidence() -> VerificationEvidence:
             latency_ms=10.0,
             finish_reason="tool_calls",
             content_preview=None,
-            tool_calls=({"id": "tc-1", "name": TOOL_NAME, "arguments": {"query": "q", "max_results": 3}},),
+            tool_calls=({"id": "tc-1", "name": MATRIX_TARGET, "arguments": {"query": "q", "max_results": 3}},),
             delta_count=3,
         )
         for mode in TOOL_CHOICE_MODES

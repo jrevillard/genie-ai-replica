@@ -49,7 +49,7 @@ from agent.orchestrator import (
 )
 from agent.prompt import PRODUCTION_SYSTEM_PROMPT
 from agent.registry import build_registry
-from agent.sources import READ_SOURCE_DEFINITION, SEARCH_KNOWLEDGE_DEFINITION, DocumentToolSource
+from agent.sources import READ_SOURCE_DEFINITION, SEARCH_KNOWLEDGE_DEFINITION, WEB_SEARCH_DEFINITION, DocumentToolSource
 from agent.verification import INSUFFICIENCY_RESPONSE
 from capabilities.contract import (
     CallerContext,
@@ -244,13 +244,18 @@ def test_the_registry_hands_out_copies_the_constants_do_not_bleed_into():
 
 
 def test_the_declared_definitions_stay_within_their_prompt_allowance():
-    """The two definitions ride EVERY model call's prompt: their size is
-    a budget fact, pinned where the definitions live. When the budget
-    slice (S4) wires the prompt accounting it reads THIS number — a
-    definition that grows silently moves it."""
+    """The declared definitions ride EVERY model call's prompt: their size is
+    a budget fact, pinned where the definitions live (spec §13.3: count them
+    in the budget tests). The bound is the plan's stated 4096 for ALL THREE
+    definitions — the shipped two plus web_search, the third a deployment
+    may declare (today the trio is ≈1.0 KB; the number is the ceiling, not
+    the size). When the budget slice (S4) wires the prompt accounting it
+    reads THIS number — a definition that grows silently moves it."""
     import dataclasses
 
-    payload = json.dumps([dataclasses.asdict(d) for d in (SEARCH_KNOWLEDGE_DEFINITION, READ_SOURCE_DEFINITION)])
+    payload = json.dumps(
+        [dataclasses.asdict(d) for d in (SEARCH_KNOWLEDGE_DEFINITION, READ_SOURCE_DEFINITION, WEB_SEARCH_DEFINITION)]
+    )
     assert len(payload) <= 4096
 
 

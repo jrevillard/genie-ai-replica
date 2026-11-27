@@ -22,6 +22,13 @@ Two consumers, one builder per provenance variant:
   (``{"provenance": dict, "text": str, "score": ...}``), already deduped first-served by
   the ledger.
 
+A THIRD source rides the ledger but not this module's projection, in this
+slice: a web result enters the evidence ledger (the taint scan and the
+grounding judge read it) and its identity is the ``(source, url)`` tuple
+above — but its citation variant (``source: 'web'``, rendered on web and
+mobile) is S3-plan-3's work, so ``record_for`` resolves no record for a web
+provenance and the D1 rule keeps it out of ``source_documents``.
+
 THE NAME IS THE PLATFORM'S, NOT THE ID'S. Every source carries the name ITS
 OWN platform resolved for it: a legacy document carries the name the document
 repository resolved for it (resolved through the port, per answer, exactly as
@@ -50,7 +57,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .contract import OKF_CONCEPT_SOURCE, OkfConceptProvenance
+from .contract import OKF_CONCEPT_SOURCE, WEB_SEARCH_SOURCE, OkfConceptProvenance
 from .sources import ConceptSource, DocumentMetadataSource
 
 logger = logging.getLogger(__name__)
@@ -239,14 +246,19 @@ def provenance_identity(provenance) -> tuple:
     """The identity tuple of one provenance — the port's own convention.
 
     ``(repo_id, concept_id)`` for an OKF concept, ``(None, file_id)`` for a
-    legacy file. The reader is shape-agnostic: the contract's object and
-    the ledger's dict carry the same identity in two shapes, and ONE reader
-    reads both — so the dedup key of the no-agent lane and the dedup key of
-    the governed ledger cannot drift apart.
+    legacy file, ``(source, url)`` for a web result (url-keyed, tagged by
+    the marker — without the branch every web entry would dedup to the
+    legacy ``(None, None)`` and one result would swallow the rest). The
+    reader is shape-agnostic: the contract's object and the ledger's dict
+    carry the same identity in two shapes, and ONE reader reads both — so
+    the dedup key of the no-agent lane and the dedup key of the governed
+    ledger cannot drift apart.
     """
 
     if is_concept_provenance(provenance):
         return _concept_address(provenance)
+    if isinstance(provenance, dict) and provenance.get("source") == WEB_SEARCH_SOURCE:
+        return (WEB_SEARCH_SOURCE, str(provenance.get("url") or ""))
     return (None, _legacy_file_id(provenance))
 
 

@@ -228,6 +228,21 @@ class RetrievalLedger:
         self._entries.append(entry)
 
 
+def _hit_triples(result: dict) -> list[tuple[str, dict, float | None]]:
+    """The ``(text, provenance, score)`` triples of one hits-shaped result —
+    the shape BOTH retrieval sources serve (the document search's hits and
+    the web search's hits): a hit without a provenance dict or with a
+    non-string text contributes nothing."""
+    triples = []
+    for hit in result.get("hits") or []:
+        provenance = hit.get("provenance") if isinstance(hit, dict) else None
+        text = hit.get("text") if isinstance(hit, dict) else None
+        if isinstance(provenance, dict) and isinstance(text, str):
+            score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
+            triples.append((text, provenance, score))
+    return triples
+
+
 def retrieved_texts(name: str, payload: dict) -> list[tuple[str, dict, float | None]]:
     """The retrieved-content channel of one dispatched tool result: the
     ``(text, provenance, score)`` triples its served texts carry.
@@ -243,14 +258,13 @@ def retrieved_texts(name: str, payload: dict) -> list[tuple[str, dict, float | N
     if not isinstance(result, dict):
         return []
     if name == "search_knowledge":
-        triples = []
-        for hit in result.get("hits") or []:
-            provenance = hit.get("provenance") if isinstance(hit, dict) else None
-            text = hit.get("text") if isinstance(hit, dict) else None
-            if isinstance(provenance, dict) and isinstance(text, str):
-                score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
-                triples.append((text, provenance, score))
-        return triples
+        return _hit_triples(result)
+    if name == "web_search":
+        # The web results enter the SAME channel: the ledger's citation
+        # candidates AND the taint scan's surface — one extraction, two
+        # readers (the design's §4.5 identity: the ledger and the scan do
+        # not drift).
+        return _hit_triples(result)
     if name == "read_source":
         provenance = result.get("provenance")
         content = result.get("content")

@@ -90,7 +90,7 @@ def scan_tool_result(name: str, payload: dict) -> tuple[dict, ...]:
                 {
                     "tool": name,
                     "markers": list(markers),
-                    "source": "search_hit" if name == "search_knowledge" else "read_content",
+                    "source": {"search_knowledge": "search_hit", "web_search": "web_result"}.get(name, "read_content"),
                     "identity": list(provenance_identity(provenance)),
                 }
             )

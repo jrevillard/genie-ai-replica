@@ -659,3 +659,34 @@ def test_a_pipeline_defect_keeps_the_mechanical_decision_and_the_findings(monkey
             "identity": [None, "f-1"],
         }
     ]
+
+
+def test_a_web_only_run_verifies_through_the_judge_and_projects_nothing():
+    """The D5 boundary at the pipeline level: web results enter the ledger
+    (a web dispatch counts as a successful retrieval, so no insufficiency
+    fires), survive the mechanical validity check (no ``repo_id``), and the
+    judge reads their text as evidence. The projection stays empty — the
+    'web' citation variant is S3-plan-3's work — while the delivered
+    ``citations`` still carry the entry."""
+    web_payload = {
+        "result": {
+            "outcome": "success",
+            "hits": (
+                {
+                    "text": "the web snippet with the answer",
+                    "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
+                    "score": 2.5,
+                },
+            ),
+            "truncated": False,
+        }
+    }
+    pipeline, _monitor = _pipeline(judge_turns=(ModelTurn(content='{"verdict": "grounded"}'),))
+    pipeline.record_tool_result("web_search", web_payload)
+
+    verdict = asyncio.run(pipeline.finalize("the drafted answer"))
+
+    assert verdict.status == VERDICT_GROUNDED  # the judge ran, over the web text
+    assert verdict.insufficient_required is False
+    assert [entry["provenance"]["url"] for entry in verdict.delivered_citations] == ["https://example.invalid/a"]
+    assert verdict.payload()["source_documents"] == []  # the projection keeps web out, in THIS plan

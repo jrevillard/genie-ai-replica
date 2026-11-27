@@ -30,7 +30,13 @@ from agent.sources import DocumentToolSource
 from agent.verification import VerificationPipeline
 from capabilities.adapters.http import TransportError
 from capabilities.adapters.vllm import VllmModelConfig
-from capabilities.contract import CallerContext, OperationBudget, ReadSourceResult, SearchKnowledgeResult
+from capabilities.contract import (
+    WEB_SEARCH_SOURCE,
+    CallerContext,
+    OperationBudget,
+    ReadSourceResult,
+    SearchKnowledgeResult,
+)
 from capabilities.model import ModelTurn, ToolCallRequest
 from measurement.probe import PROBE_OPERATION_BUDGET
 from noagent.config import NoAgentConfig
@@ -443,6 +449,42 @@ class AgentFakePort:
         if isinstance(self.read_result, Exception):
             raise self.read_result
         return self.read_result
+
+
+class FakeWebSearchPort:
+    """The ``WebSearchPort`` double: a canned result dict, recorded calls.
+
+    An exception instance as the canned result makes the port raise it, so
+    a suite can drive the raised carriers (the dispatcher's envelope
+    mapping)."""
+
+    def __init__(self, result=None, error=None):
+        self.result = result
+        self.error = error
+        self.calls: list[dict] = []
+
+    async def search(self, query, budget):
+        self.calls.append({"query": query, "budget": budget})
+        if isinstance(self.error, Exception):
+            raise self.error
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
+def canned_web_result():
+    """One canned web-search result: the adapter's success shape, two hits."""
+    return {
+        "outcome": "success",
+        "hits": (
+            {
+                "text": "the snippet the meta-search served",
+                "provenance": {"source": WEB_SEARCH_SOURCE, "url": "https://example.invalid/page", "title": "The Page"},
+                "score": 1.2,
+            },
+        ),
+        "truncated": False,
+    }
 
 
 class ScriptedLoopModel:

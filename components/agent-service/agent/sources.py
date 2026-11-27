@@ -39,6 +39,7 @@ from typing import Annotated, Protocol
 from pydantic import StringConstraints, TypeAdapter
 
 from capabilities.contract import (
+    WEB_SEARCH_SOURCE,
     CallerContext,
     DocumentCapabilityPort,
     OperationBudget,
@@ -51,6 +52,7 @@ from capabilities.contract import (
     SearchKnowledgeResult,
     SourceRef,
     TransientError,
+    WebSearchPort,
 )
 from preparation.detection import detect_language
 from preparation.prepare import QueryPreparer
@@ -103,6 +105,21 @@ READ_SOURCE_DEFINITION = ToolDefinition(
 # stateless, so it is built ONCE beside the definitions — a per-request
 # construction buys nothing.
 _SOURCE_REF = TypeAdapter(SourceRef)
+
+WEB_SEARCH_DEFINITION = ToolDefinition(
+    name="web_search",
+    description=(
+        "Search the public web through the deployment's meta-search service. Returns ranked "
+        "web results (title, URL, snippet) as reference material."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "The English search query."},
+        },
+        "required": ["query"],
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -222,6 +239,76 @@ class DocumentToolSource:
                 _make_read_executor(port, context, self._budget_for("read_source")),
             ),
         )
+
+
+class WebSearchToolSource:
+    """The web-search source: the query redacted before anything leaves.
+
+    The ``DocumentToolSource`` shape: the deployment's facts ON THE CLASS
+    (the id the catalog names it by, the one tool it serves), the port
+    built per request by the injected factory, the per-tool budget
+    override map. What differs is what the port does — the LEAF adapter
+    (``capabilities/adapters/web_search.py``) runs the outbound pass and
+    the search, and this source does no I/O of its own (R1: the core
+    names the port, the adapter reaches). There is no preparation leg
+    here: the schema asks the model for an English query, and the text
+    that leaves is the outbound pass's redacted one — never the model's
+    raw query.
+    """
+
+    source_id = WEB_SEARCH_SOURCE
+    served_tool_names = frozenset({"web_search"})
+
+    def __init__(
+        self,
+        port_factory: Callable[[CallerContext, str | None], WebSearchPort],
+        operation_budget: OperationBudget,
+        *,
+        budgets: dict[str, OperationBudget] | None = None,
+    ) -> None:
+        self._port_factory = port_factory
+        self._operation_budget = operation_budget
+        self._budgets = budgets or {}
+
+    def _budget_for(self, name: str) -> OperationBudget:
+        """One tool's bound: the catalog's override when it declares one,
+        the deployment's ceiling otherwise (the document source's rule)."""
+        return self._budgets.get(name, self._operation_budget)
+
+    @classmethod
+    def from_bundle(
+        cls,
+        port_factory: Callable[[CallerContext, str | None], WebSearchPort],
+        bundle: ToolSourceContext,
+        *,
+        budgets: dict[str, OperationBudget] | None = None,
+    ) -> "WebSearchToolSource":
+        """The same one construction home, for this source's wiring: the
+        bundle carries no preparation leg here — the web query is searched
+        as the model wrote it, redacted."""
+        return cls(port_factory, bundle.operation_budget, budgets=budgets)
+
+    def tools(self, context: CallerContext, bearer: str | None) -> Sequence[tuple[ToolDefinition, ToolExecutor]]:
+        """The one web tool, bound to THIS request's identity."""
+        port = self._port_factory(context, bearer)
+        return (
+            (
+                WEB_SEARCH_DEFINITION,
+                _make_web_search_executor(port, context, self._budget_for("web_search")),
+            ),
+        )
+
+
+def _make_web_search_executor(port: WebSearchPort, context: CallerContext, budget: OperationBudget):
+
+    async def execute(arguments: dict) -> dict:
+        # The SAME argument validation the document search runs (the
+        # structured ``ValidationError`` the loop feeds back as tool data —
+        # never a TypeError that would kill the run, never a port call).
+        query_text = _QUERY_TEXT.validate_python(arguments.get("query"))
+        return await port.search(query_text, budget)
+
+    return execute
 
 
 def _make_search_executor(

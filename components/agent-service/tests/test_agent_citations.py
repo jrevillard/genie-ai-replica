@@ -21,8 +21,10 @@ from types import SimpleNamespace
 from conftest import FakeConceptSource, FakeMetadataSource
 
 import noagent.pipeline as noagent_pipeline
+from agent.verification import check_reference_validity
 from capabilities.citations import (
     SourceRecords,
+    provenance_identity,
     resolve_source_records,
     source_document_envelope,
     source_documents_from_citations,
@@ -376,3 +378,38 @@ def test_every_projected_entry_carries_what_the_frontend_mapping_reads():
     assert "source" not in legacy
     assert concept["source"] == "okf-concept"
     assert concept["concept_id"] == "c-1"
+
+
+# ---------------------------------------------------------------------
+# The web identity: url-keyed, source-tagged — and NOT projected (yet)
+# ---------------------------------------------------------------------
+
+
+def test_the_web_provenances_identity_is_the_url_tagged_by_the_source():
+    """A web entry without this branch would dedup to the legacy
+    ``(None, None)`` — one web result would silently swallow every other.
+    The identity is the URL, tagged by the source marker."""
+    web = {"source": "web", "url": "https://example.invalid/a", "title": "Page A"}
+    assert provenance_identity(web) == ("web", "https://example.invalid/a")
+    other = {"source": "web", "url": "https://example.invalid/b", "title": "Page B"}
+    assert provenance_identity(other) != provenance_identity(web)
+
+
+def test_a_web_citation_is_delivered_but_not_projected():
+    """The S3-plan-2 boundary, pinned: a web citation survives the
+    mechanical validity check (it carries no ``repo_id``) and rides the
+    delivered ``citations`` — the judge reads its text as evidence — but
+    the ``source_documents`` projection drops it: no platform resolves a
+    web source's record (the D1 rule), and the 'web' citation variant is
+    S3-plan-3's work."""
+    web_citation = {
+        "provenance": {"source": "web", "url": "https://example.invalid/a", "title": "Page A"},
+        "text": "the snippet",
+        "score": 2.5,
+    }
+    validity = check_reference_validity([web_citation], authorized_repos=frozenset())
+    assert validity.invalid == ()
+    assert [entry["text"] for entry in validity.delivered] == ["the snippet"]
+
+    envelope = source_documents_from_citations(validity.delivered, records=SourceRecords())
+    assert envelope == []  # the projection keeps web out, in THIS plan

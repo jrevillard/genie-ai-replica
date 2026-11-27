@@ -164,7 +164,6 @@ const queryService = require('../../services/query-service');
 const axios = require('axios');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
 const { proxyAgentRun, _internals } = require('../../services/agent-frame-writer');
-const { citationToSourceDocument } = require('../../services/agent-run-contract');
 
 const validToken = createValidToken();
 
@@ -339,7 +338,7 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(chunkB).toEqual({ type: 'chunk', content: 'world.' });
     // The verdict frame carries the projection payload + the version — but
     // NOT the heavy fields: the citations carry the full passage text and
-    // the client receives the citation rows as source_documents on the
+    // the client receives the service's source_documents rows on the
     // metadata frame.
     expect(verdictFrame).toEqual({
       type: 'agent_verdict',
@@ -354,32 +353,13 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     });
 
     // The metadata frame keeps the legacy shape; grounding + agent_run ride
-    // additively, the citations are mapped into the deployed envelope rows.
+    // additively, the service's source_documents rows forwarded verbatim —
+    // this fixture names only raw citations, so the sources are empty (the
+    // BFF is a forwarder, no mapping lives there).
     expect(metadata.type).toBe('metadata');
     expect(metadata.grounding_status).toBe('grounded');
     expect(metadata.is_grounded).toBe(true);
-    expect(metadata.source_documents).toEqual([
-      {
-        document_id: 'doc_bee_knowledge',
-        document_name: 'doc bee knowledge',
-        url: '',
-        categoryLabels: [],
-        serviceLabels: [],
-        score: 0.9
-      },
-      {
-        document_id: 'kenya_tax_rules',
-        document_name: 'kenya tax rules',
-        url: '',
-        categoryLabels: [],
-        serviceLabels: [],
-        score: 0.8,
-        concept_id: 'kenya_tax_rules',
-        repo_id: 'r-kenya',
-        bundle_version: 3,
-        source: 'okf-concept'
-      }
-    ]);
+    expect(metadata.source_documents).toEqual([]);
     // The assembled block carries the run-start handshake
     // (started_at) and the honest outcome (answered + finished_at) —
     // execution_versions is absent, this fixture's run_started payload
@@ -419,21 +399,24 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     );
   });
 
-  it('the fallback maps a web citation to the projection shape the service emits', () => {
-    const row = citationToSourceDocument({
-      provenance: { source: 'web', url: 'https://example.gov/policy', title: 'The policy' },
-      text: 'the policy text',
-      score: 0.5
+  it('a verdict without source_documents carries no BFF-side mapping — the sources are empty', async () => {
+    setupAgentQuery();
+    // A payload naming only raw citations (an older service) maps to
+    // NOTHING: the BFF is a forwarder, the service owns the projection.
+    const verdict = { ...GROUNDED_VERDICT };
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {},
+      data: answeredRunStream({ verdict })
     });
-    expect(row).toEqual({
-      document_id: 'https://example.gov/policy',
-      document_name: 'The policy',
-      url: 'https://example.gov/policy',
-      categoryLabels: [],
-      serviceLabels: [],
-      score: 0.5,
-      source: 'web'
+
+    const response = await authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'q' }]
     });
+
+    const metadata = parseSSEEvents(response.text).find((f) => f.type === 'metadata');
+    expect(metadata.source_documents).toEqual([]);
   });
 
   it('POSTs the derived deadline and the assembled CallerContext to /v1/runs', async () => {

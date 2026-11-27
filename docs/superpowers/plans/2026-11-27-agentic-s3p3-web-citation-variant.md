@@ -34,7 +34,8 @@
 
 **Interfaces:**
 - Consumes: `_is_web_provenance(provenance) -> bool` (citations.py:118-130, module-private, existing); `WEB_SEARCH_SOURCE = "web"` (contract.py:313); the ledger entries `{"provenance": dict, "text": str, "score": float|None}`; the no-agent hits `{"text", "provenance", "score"}`.
-- Produces: `_web_entry(provenance, score=None) -> dict` returning `{"document_id": url, "document_name": title, "url": url, "score": score-or-None, "source": WEB_SEARCH_SOURCE}` — `title` falls back to the url when the provenance's `title` is absent or blank; `document_id` IS the url (the identity rule); the score coerces through the SAME rule as the ledger's (`int`/`float` → carried, anything else → `None`). Both builders gain, as their FIRST branch: `if _is_web_provenance(provenance): entries.append(_web_entry(provenance, score-or-None)); continue` — dedup (by `hit_identity` in the no-agent builder, by the ledger's first-served in the governed one) inherits and stays url-keyed.
+- Produces: `_web_entry(provenance, score=None) -> dict` returning `{"document_id": url, "document_name": title, "url": url, "score": score-or-None, "source": WEB_SEARCH_SOURCE}` — `title` falls back to the url when the provenance's `title` is absent or blank; `document_id` IS the url (the identity rule); the score coerces through the SAME rule as the ledger's (`int`/`float` → carried, anything else → `None`); **the score is NOT score-calibrated** — the calibrator normalises corpus-retrieval scores for the confidence display, and a SearXNG relevance score is a different scale; a web row carries the raw engine score.
+- **The branch PLACEMENT (load-bearing — both builders differ):** the web branch goes **BEFORE the D1 `record_for` check** in BOTH builders (`record_for` returns `None` for any web provenance — if the D1 `continue` fires first, NO web entry ever projects and every pin stays red), and **AFTER the dedup lines** in `source_document_envelope` only (a literal first-branch there would bypass `hit_identity` dedup for web). In `source_documents_from_citations` there is no builder-level dedup (the ledger dedups upstream), so the branch sits at the loop top. Dedup therefore inherits: url-keyed via `hit_identity` in the no-agent builder, ledger-first-served in the governed one.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -48,17 +49,17 @@ WEB_FIELDS = {"document_id", "document_name", "url", "score", "source"}
 
 2. Extend the field-coverage loop (`test_every_projected_entry_carries_what_the_frontend_mapping_reads`, L360-385) with a third leg: a web provenance `{"source": "web", "url": "https://example.gov/policy", "title": "The policy"}` projected through `source_documents_from_citations` yields EXACTLY `WEB_FIELDS` keys, with `document_id == url`, `document_name == "The policy"`, `source == "web"`, and the url preserved verbatim (the frontend renders it clickable).
 
-3. REWRITE `test_a_web_citation_is_delivered_but_not_projected` (L398-422): the delivery assertions stay (delivered text survives, `validity.invalid == ()`); the projection assertion REVERSES — `source_documents_from_citations(validity.delivered, records=SourceRecords())` now returns ONE entry, the web shape above — and the docstring records the landing: "the boundary landed in S3-plan-3: the web entry projects with the url as its identity".
+3. REWRITE AND RENAME `test_a_web_citation_is_delivered_but_not_projected` (L398-422) → `test_a_web_citation_is_delivered_and_projects_the_web_variant` (the old name states the behaviour the rewrite refutes — a pin must not wear a lying name): the delivery assertions stay (delivered text survives, `validity.invalid == ()`); the projection assertion REVERSES — `source_documents_from_citations(validity.delivered, records=SourceRecords())` now returns ONE entry, the web shape above — and the docstring records the landing: "the boundary landed in S3-plan-3: the web entry projects with the url as its identity". Also fix the section header above it ("and NOT projected (yet)") which goes stale.
 
 4. REWRITE the projection assertion of `test_agent_verification.py`'s `test_a_web_only_run_verifies_through_the_judge_and_projects_nothing` (L664-692): rename it `test_a_web_only_run_verifies_through_the_judge_and_projects_the_web_variant`; the judge assertions stay (the judge ran over the web text); `verdict.payload()["source_documents"]` now carries ONE web entry whose `url` is the delivered citation's url and whose `document_id` equals that url.
 
-5. Add one dedup pin: two delivered citations with the SAME url (different titles) yield ONE projected entry — first served wins (the ledger's dedup rule, url-keyed).
+5. Add one dedup pin, CONSTRUCTED THROUGH THE LEDGER (two hand-built delivered citations with the same url cannot exist — the ledger dedups on record): build an `EvidenceLedger`, `record` a web tool result whose hits carry the SAME url twice with different titles, run `check_reference_validity`, THEN project `validity.delivered` — the delivered list already carries ONE citation, and the projection yields ONE entry (first served wins, url-keyed). Read `EvidenceLedger.record`'s signature in `agent/verification.py` and the existing ledger-building pins for the construction recipe.
 
 - [ ] **Step 2: Run the pins and watch them fail**
 
 Run: `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_agent_citations.py tests/test_agent_verification.py -q`
 
-Expected: FAIL — the projections still return `[]` for web (the D1 drop), and `WEB_FIELDS` does not exist yet (ImportError on the first run, then assertion failures).
+Expected: FAIL on ASSERTIONS — the projections still return `[]` for web (the D1 drop stands until Step 3); `WEB_FIELDS` lives in this test file itself, so there is no import error.
 
 - [ ] **Step 3: The implementation**
 
@@ -73,7 +74,9 @@ def _web_entry(provenance, score=None) -> dict:
     provenance directly: the url is both the click target and the stable
     identity (``provenance_identity``'s web branch returns ``(source, url)``),
     the title names the card, and the score follows the ledger's one rule
-    (an unreadable score is ``None``, never guessed into a number)."""
+    (an unreadable score is ``None``, never guessed into a number). The raw
+    engine score is carried UNCALIBRATED — the score calibrator normalises
+    corpus-retrieval scores, and a web relevance score is a different scale."""
     url = str(provenance.get("url") or "")
     title = str(provenance.get("title") or "").strip() or url
     readable = isinstance(score, (int, float))
@@ -86,15 +89,23 @@ def _web_entry(provenance, score=None) -> dict:
     }
 ```
 
-2. In `source_document_envelope` (L352-393) and `source_documents_from_citations` (L396-432): add, as the FIRST branch inside each provenance loop, before the concept/legacy discrimination:
+2. In `source_document_envelope` (L352-393): the branch goes INSIDE the provenance loop, AFTER the dedup lines (`hit_identity`/`seen`, L373-377) and BEFORE the D1 `record_for` check (L379-383). The no-agent builder iterates OBJECTS and appends to `envelope`:
 
 ```python
-        if _is_web_provenance(hit["provenance"]):
-            entries.append(_web_entry(hit["provenance"], hit.get("score")))
+        if _is_web_provenance(hit.provenance):
+            envelope.append(_web_entry(hit.provenance, hit.score))
             continue
 ```
 
-(matching each loop's actual iteration variable and score field — the no-agent builder reads hits' `score`, the governed builder reads the ledger entry's `score`; the existing dedup by `hit_identity` / first-served stays downstream and unchanged).
+3. In `source_documents_from_citations` (L396-432): the branch goes at the TOP of the loop, BEFORE the D1 `record_for` check (L417-419) — this builder has no builder-level dedup (the ledger dedups upstream). It iterates dict entries and appends to its entries list:
+
+```python
+        if _is_web_provenance(entry["provenance"]):
+            projected.append(_web_entry(entry["provenance"], entry.get("score")))
+            continue
+```
+
+(match each loop's REAL variable names — read both builders before pasting; the two snippets above differ on purpose: object vs dict access, `envelope` vs the governed list.)
 
 3. Update the module docstring's D1 paragraph (L25-30): the paragraph that says "``record_for`` resolves no record for a web provenance and the D1 rule keeps it out of ``source_documents``" becomes the landing statement — the web variant projects through `_web_entry` (self-contained provenance), while `record_for` and `resolve_source_records` still resolve NOTHING for web (there is no metadata source behind a web result; the provenance is the metadata).
 
@@ -104,7 +115,7 @@ def _web_entry(provenance, score=None) -> dict:
 
 Run: `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q`
 
-Expected: green, `1078 passed` MINUS the rewritten pins' delta PLUS the new pin — the count the re-run gates state. If `test_event_stream_gate.py` reds: STOP and report — the fixture moved, which the plan forbids.
+Expected: green at exactly **`1079 passed`** (1078 baseline: the two boundary-pin rewrites keep one test each, the field-coverage leg extends its existing function in place, the dedup pin and the Task-1 web projection pins add — net +1). If `test_event_stream_gate.py` reds: STOP and report — the fixture moved, which the plan forbids.
 
 - [ ] **Step 5: Lint**
 
@@ -131,7 +142,7 @@ git commit -m "feat(agent-service): the web citation projects with the url as it
 
 **Interfaces:**
 - Consumes: `citationToSourceDocument(citation)` (agent-run-contract.js:110-132) — the fallback for a payload that names only raw `citations`; `WEB_SEARCH_SOURCE = 'web'`.
-- Produces: for a citation whose `provenance.source === 'web'`, the fallback returns `{document_id: provenance.url, document_name: provenance.title || provenance.url, url: provenance.url, categoryLabels: [], serviceLabels: [], score: citation.score ?? null, source: 'web'}` — the same shape the service's projection emits, so both paths agree. The okf-concept and legacy branches stay first (unchanged); the web branch comes after the okf branch and before the legacy fallback.
+- Produces: for a citation whose `provenance.source === 'web'`, the fallback returns `{document_id: provenance.url, document_name: provenance.title || provenance.url, url: provenance.url, categoryLabels: [], serviceLabels: [], score: citation.score ?? null, source: 'web'}` — the SAME FIELDS the frontend mapping reads, with the two label arrays empty as the fallback always carries them (the service's own row has 5 keys and no label arrays; the fallback's shape is its own — they agree on every field the frontend reads, which is the contract). The okf-concept and legacy branches stay first (unchanged); the web branch comes after the okf branch and before the legacy fallback.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -209,13 +220,14 @@ git commit -m "feat(bff): the citation fallback maps the web variant to the proj
 
 **Files:**
 - Modify: `components/gov-chat-frontend/src/utils/okfCitation.js` (`isWebSource`; `webSourceBadge`; the no-drift comment)
+- Modify: `components/gov-chat-frontend/src/store/modules/conversation.js` (`translateSources` — the mapped shape must CARRY the web marker)
 - Modify: `components/gov-chat-frontend/src/components/ChatBotComponent.vue` (`fileBadge`'s web branch)
-- Modify: `components/gov-chat-frontend/src/components/RightSideBarComponent.vue` (the same badge branch, if the sidebar renders badges through its own call site — read it; the ONE-definition rule means the sidebar imports from okfCitation.js)
-- Test: `components/gov-chat-frontend/src/__tests__/utils/okfCitation.test.js` (create if absent — read the directory first) and `src/__tests__/components/ChatBotComponent.test.js` (a badge pin)
+- Modify: `components/gov-chat-frontend/src/components/RightSideBarComponent.vue` (the same badge branch — its own badge method imports from okfCitation.js, RightSideBarComponent.vue:428-429)
+- Test: `components/gov-chat-frontend/src/__tests__/utils/okfCitation.test.js` (EXISTS — append) and `src/__tests__/store/conversation.test.js` (the passthrough pin) and `src/__tests__/components/ChatBotComponent.test.js` (a badge pin)
 
 **Interfaces:**
-- Consumes: `fileBadge(d)` (ChatBotComponent.vue:1364-1371: okf → `okfConceptBadge()`, else `fileTypeBadge(...)`); `translateSources`' output shape (`{source, url, type, ...}` — conversation.js:284-325, which passes a web row through unchanged); the card's external-URL branch (ChatBotComponent.vue:1382 — ALREADY opens `doc.url` in a new tab; NO change there).
-- Produces: `isWebSource(row)` → `row?.source === 'web'`; `webSourceBadge()` → `{ label: 'WEB', tone: 'info' }` (match the shape `okfConceptBadge()` returns — read it first); `fileBadge` returns `webSourceBadge()` for a web row BEFORE the file-extension fallback; the sidebar's badge call site gains the same branch through the shared helper.
+- Consumes: `fileBadge(d)` (ChatBotComponent.vue:1364-1371: okf → `okfConceptBadge()`, else `fileTypeBadge(...)`); `translateSources` (conversation.js:284-325) — **it does NOT pass a web row through unchanged**: `type` derives from the url's extension (`'GOV/POLICY'` for an extension-less path → garbage) and `source: isOkfConcept ? 'okf-concept' : undefined` DROPS the web marker; the card's external-URL branch (ChatBotComponent.vue:1382 — ALREADY opens `doc.url` in a new tab; NO change there).
+- Produces: `isWebSource(row)` → `row?.source === 'web'`; `webSourceBadge()` → `{ label: 'WEB', tone: 'info' }` (match the shape `okfConceptBadge()` returns — read it first); `translateSources` for a non-okf row with `doc.source` truthy carries `source: doc.source` and sets `type: 'WEB'` (an extension-less url must not derive a garbage type); `fileBadge` returns `webSourceBadge()` for a web row BEFORE the file-extension fallback; the sidebar's badge call site gains the same branch through the shared helper.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -229,26 +241,39 @@ it('badges a web citation as WEB, like the OKF badge, from the one definition', 
 ```
 
 ```js
-// ChatBotComponent pin — beside the OKF badge pin (L5249)
+// conversation.test.js pin — beside the translateSources pins (L692-754)
+it('a projected web row keeps its source marker and takes the WEB type', () => {
+  const [row] = translateSources([{
+    document_id: 'https://example.gov/policy', document_name: 'The policy',
+    url: 'https://example.gov/policy', score: null, source: 'web',
+  }]);
+  expect(row.source).toBe('web');
+  expect(row.type).toBe('WEB');
+  expect(row.url).toBe('https://example.gov/policy');
+  expect(row.title).toBe('The policy');
+});
+```
+
+```js
+// ChatBotComponent pin — beside the OKF badge pin (L5241-5259; mirror its recipe:
+// the same mount, the metadata frame's source_documents carrying the projected
+// web row, delivered through capturedCallbacks.onMetadata)
 it('badges a web citation as WEB, not as a file extension', async () => {
-  // mount with a message whose sources carry a projected web row:
-  // { document_id: 'https://example.gov/policy', document_name: 'The policy',
-  //   url: 'https://example.gov/policy', score: null, source: 'web' }
   // assert the rendered badge text is 'WEB' and the card's title is 'The policy'.
 });
 ```
 
-Read the OKF badge pin's mounting recipe (L5249) and mirror it exactly.
+Read the OKF badge pin's mounting recipe (L5241-5259) and mirror it exactly.
 
 - [ ] **Step 2: Run them and watch them fail**
 
-Run: `cd components/gov-chat-frontend && npm test -- okfCitation` and `npm test -- ChatBotComponent -t "WEB"`
+Run: `cd components/gov-chat-frontend && npm test -- okfCitation` and `npm test -- conversation` and `npm test -- ChatBotComponent -t "WEB"`
 
-Expected: FAIL — `isWebSource`/`webSourceBadge` do not exist; the badge renders the file-extension fallback.
+Expected: FAIL — `isWebSource`/`webSourceBadge` do not exist; `translateSources` drops `source` and derives a garbage `type`; the badge renders the file-extension fallback.
 
 - [ ] **Step 3: The implementation**
 
-`okfCitation.js`: add `isWebSource` and `webSourceBadge` beside the OKF pair (same export style), and extend the no-drift comment (L58-60) to name BOTH badge pairs. `ChatBotComponent.vue`'s `fileBadge`: the web check BEFORE the fileTypeBadge fallback (after the OKF branch). `RightSideBarComponent.vue`: the same branch through the shared helper (read its badge call site; if it calls `fileBadge` from the component, extract nothing — mirror the one-line branch).
+`okfCitation.js`: add `isWebSource` and `webSourceBadge` beside the OKF pair (same export style), and extend the no-drift comment (L58-60) to name BOTH badge pairs. `conversation.js`'s `translateSources`: for a non-okf row, carry `source: doc.source` through the mapped shape (it is `undefined` today) and set `type: doc.source ? 'WEB' : (the existing derivation)` — the garbage extension type disappears for marked rows only; legacy rows keep the EXACT pre-existing shape (the byte-shape pin at L713-724 must stay green). `ChatBotComponent.vue`'s `fileBadge`: the web check BEFORE the fileTypeBadge fallback (after the OKF branch). `RightSideBarComponent.vue`: the same branch through its own badge method (it imports the helpers from okfCitation.js — RightSideBarComponent.vue:428-429).
 
 - [ ] **Step 4: The frontend suite**
 
@@ -260,7 +285,7 @@ Expected: green.
 
 ```bash
 cd components/gov-chat-frontend && npm run lint && npm run format:check
-git add components/gov-chat-frontend/src/utils/okfCitation.js components/gov-chat-frontend/src/components/ChatBotComponent.vue components/gov-chat-frontend/src/components/RightSideBarComponent.vue components/gov-chat-frontend/src/__tests__/
+git add components/gov-chat-frontend/src/utils/okfCitation.js components/gov-chat-frontend/src/store/modules/conversation.js components/gov-chat-frontend/src/components/ChatBotComponent.vue components/gov-chat-frontend/src/components/RightSideBarComponent.vue components/gov-chat-frontend/src/__tests__/
 git commit -m "feat(frontend): the web citation badges as WEB and opens its url"
 ```
 
@@ -273,8 +298,8 @@ git commit -m "feat(frontend): the web citation badges as WEB and opens its url"
 - Test: `mobile/genie_ai_mobile/test/okf/answer_sources_bar_test.dart` (a badge pin: a web row shows 'WEB')
 
 **Interfaces:**
-- Consumes: `sourceBadge` (lib/okf/okf_citation.dart:72 — the OKF/'extension' pair the web fileBadge mirrors); the bar's row rendering (answer_sources_bar.dart:103-108).
-- Produces: `isWebSource(Map row)` → `row['source'] == 'web'`; `sourceBadge` returns the WEB badge for such a row before the extension fallback. The open path needs NO change (`_openCitation`'s external rung already launches a plain https `url`).
+- Consumes: `sourceBadge` (`mobile/genie_ai_mobile/lib/okf/okf_citation.dart:72` — the OKF/'extension' pair the web fileBadge mirrors); the bar's row rendering (`mobile/genie_ai_mobile/lib/components/chat/answer_sources_bar.dart`, badge call L101).
+- Produces: `isWebSource(Map row)` → `row['source'] == 'web'`; `sourceBadge` returns the WEB badge for such a row before the extension fallback. The open path needs NO change (`_openCitation`'s external rung already launches a plain https `url`). **Tone note:** the bar renders only `tone == 'accent'` specially (L124, L133); the web badge's `'info'` tone renders neutral on mobile — the mirror is in the LABEL and the predicate, not the tone styling.
 
 - [ ] **Step 1: The failing test** — mirror the OKF badge pin (test/okf/answer_sources_bar_test.dart:73-77): a row `{'document_id': 'https://example.gov/policy', 'document_name': 'The policy', 'url': 'https://example.gov/policy', 'source': 'web'}` renders the badge text `'WEB'`.
 

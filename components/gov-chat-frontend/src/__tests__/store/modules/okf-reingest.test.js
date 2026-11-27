@@ -100,7 +100,7 @@ describe('okf store — reingestFailed (David 2026-10-14)', () => {
     mockReingestFailed.mockResolvedValue({ ok: true, requeued: 1, concept_ids: ['sec99'] });
     const store = buildStore();
     await store.dispatch('okf/reingestFailed', { repoId: 'r-1', conceptId: 'sec99' });
-    expect(mockListForRepo).toHaveBeenCalledWith('r-1', { limit: 200, offset: 0 });
+    expect(mockListForRepo).toHaveBeenCalledWith('r-1', { limit: 200, offset: 0, signal: expect.any(AbortSignal) });
   });
 
   it('refetches the repo so the card reflects the freshly armed drain', async () => {

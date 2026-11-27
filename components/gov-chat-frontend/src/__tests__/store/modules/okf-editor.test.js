@@ -101,8 +101,9 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(store.state.okf.editor.selectedConceptId).toBeNull();
       expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2);
       // NON-BLOCKING LOAD: the fetch pages the server (legacy array response
-      // is still accepted and committed in one piece).
-      expect(mockListForRepo).toHaveBeenCalledWith('r-1', { limit: 200, offset: 0 });
+      // is still accepted and committed in one piece). #2188: every page rides
+      // the crawl's AbortSignal.
+      expect(mockListForRepo).toHaveBeenCalledWith('r-1', { limit: 200, offset: 0, signal: expect.any(AbortSignal) });
     });
 
     it('stores an empty list on fetch failure (never throws)', async () => {
@@ -171,7 +172,11 @@ describe('okf store — editor actions (Story #978)', () => {
       const result = await store.dispatch('okf/fetchConcepts', 'r-1');
       expect(result.ok).toBe(true);
       expect(mockListForRepo).toHaveBeenCalledTimes(2); // offsets 0 and 200
-      expect(mockListForRepo).toHaveBeenNthCalledWith(2, 'r-1', { limit: 200, offset: 200 });
+      expect(mockListForRepo).toHaveBeenNthCalledWith(2, 'r-1', {
+        limit: 200,
+        offset: 200,
+        signal: expect.any(AbortSignal)
+      });
       expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(350);
       // Mid-flight the bar carried REAL counts (done=200 of 350 after page 1).
       expect(midProgress).toEqual({ repoId: 'r-1', done: 200, total: 350 });

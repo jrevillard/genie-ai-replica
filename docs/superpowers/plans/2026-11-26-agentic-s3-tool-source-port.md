@@ -225,35 +225,31 @@ Two MORE pins — the production surface Task 1 creates and nothing here may lea
 
 ```python
 def test_a_tighter_per_tool_budget_reaches_the_executor():
-    """The ``budgets=`` override is a real wiring, not decoration: a
-    budget the caller passes per tool is the budget the capability
-    receives at dispatch."""
+    """The ``budgets=`` override is a real wiring, not decoration: the
+    budget the source hands the executor for a NAMED tool is the
+    OVERRIDE — the ceiling stays for every tool the map does not name."""
+    override = OperationBudget(timeout_ms=1000, max_results=1, max_result_bytes=1024)
+    port = AgentFakePort(search_result=canned_search_result())
     source = DocumentToolSource(
-        lambda context, bearer: AgentFakePort(search_result=canned_search_result()),
+        lambda context, bearer: port,
         orchestrator_config().operation_budget,
-        budgets={"search_knowledge": OperationBudget(max_steps=2, max_model_calls=2, max_tool_calls=1,
-                                                     max_total_tokens=1000, max_evidence_bytes=1000,
-                                                     wall_clock_seconds=5.0)},
+        budgets={"search_knowledge": override},
     )
     registry = build_registry(source.tools(CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",)), None))
     asyncio.run(registry.dispatch("search_knowledge", {"query": "q"}))
-    # The override reached the capability: the dispatch SUCCEEDED under a
-    # budget whose max_steps=2 would refuse a second step, and
-    # ``ToolSourceContext`` carries the budget the source selected (the
-    # bundle test below pins it). The two pins together leave the
-    # override path without a silent pass.
+    # The fake records the budget every call carries: the override rode.
+    assert port.search_calls[0]["budget"] is override
 
 
 def test_the_request_bundle_carries_the_call_s_full_identity():
     """``ToolSourceContext`` is the per-request bundle: the context, the
     bearer and the operation budget travel together to the port."""
     context = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
-    bundle = agent.sources.ToolSourceContext(
-        context=context, bearer="tok-1", operation_budget=orchestrator_config().operation_budget
-    )
+    budget = orchestrator_config().operation_budget  # ONE call: the config is a factory
+    bundle = agent.sources.ToolSourceContext(context=context, bearer="tok-1", operation_budget=budget)
     assert bundle.context is context
     assert bundle.bearer == "tok-1"
-    assert bundle.operation_budget is orchestrator_config().operation_budget
+    assert bundle.operation_budget is budget
 ```
 
 And the pin the move's own claim needs — the DEFINITIONS, which nothing in the tree pins today:
@@ -304,23 +300,6 @@ def test_the_tool_definitions_move_verbatim():
 (The values are the ones `agent/toolset.py` carries today — copied VERBATIM from that file, not retyped. A retype is how a description drifts by a word.)
 
 
-A bound pin rides with the schema pins (spec §13.3's "bound the catalog"):
-
-```python
-def test_a_catalog_above_the_entry_bound_is_refused_whole(tmp_path):
-    """Every declared tool is told to the model on every call: the file
-    that declares them is BOUNDED, and a file above the bound is a
-    startup error, not a silently larger prompt."""
-    entries = [
-        {"source": "document", "name": f"tool-{i}", "exposed_name": f"tool-{i}", "served_name": f"tool-{i}"}
-        for i in range(MAX_CATALOG_ENTRIES + 1)
-    ]
-    path = tmp_path / "too-many.json"
-    path.write_text(json.dumps({"version": 1, "tools": entries}), encoding="utf-8")
-    with pytest.raises(CatalogError):
-        load_catalog(path, served_names={"document": frozenset({"tool-0"})}, ceiling=orchestrator_config().operation_budget)
-```
-
 And the definitions' own prompt cost is COUNTED (spec §13.3: "count them in the budget tests") — in the renamed suite, beside the definitions pins:
 
 ```python
@@ -329,9 +308,9 @@ def test_the_declared_definitions_stay_within_their_prompt_allowance():
     a budget fact, pinned where the definitions live. When the budget
     slice (S4) wires the prompt accounting it reads THIS number — a
     definition that grows silently moves it."""
-    payload = json.dumps(
-        [json.loads(d.model_dump_json()) for d in (SEARCH_KNOWLEDGE_DEFINITION, READ_SOURCE_DEFINITION)]
-    )
+    import dataclasses
+
+    payload = json.dumps([dataclasses.asdict(d) for d in (SEARCH_KNOWLEDGE_DEFINITION, READ_SOURCE_DEFINITION)])
     assert len(payload) <= 4096
 ```
 
@@ -343,7 +322,7 @@ cd components/agent-service
 /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_agent_sources.py -q
 ```
 
-Expected: the collection FAILS — `agent.sources` does not exist yet (the import error names `agent/sources.py`). A failure at the import is the right red: the module the test names is not there.
+Expected: the collection FAILS because the source's module does not exist yet. The import error names whichever of the two new imports the canonical order executes first — with conftest's imports in ruff-canonical order (`agent.registry` before `agent.sources`) that is `agent/registry.py` (`cannot import name 'build_registry'`); after the registry exists, the same red surfaces as `agent/sources.py`. Either name is the right red: the module the suite needs is not there.
 
 - [ ] **Step 3: The port module**
 
@@ -688,10 +667,8 @@ def build_registry(pairs: Iterable[tuple[ToolDefinition, ToolExecutor]]) -> Tool
     """
     registry = ToolRegistry()
     for definition, executor in pairs:
-        registry.register(
-            ToolDefinition(name=definition.name, description=definition.description, parameters=dict(definition.parameters)),
-            executor,
-        )
+        copied = ToolDefinition(name=definition.name, description=definition.description, parameters=dict(definition.parameters))
+        registry.register(copied, executor)
     return registry
 ```
 
@@ -965,6 +942,21 @@ def test_a_catalogued_tool_the_source_does_not_serve_is_a_warning(tmp_path, capl
     # never offers it, so it can never reach a run.
     assert catalog.entry("other_tool") is not None
     assert catalog.entry("other_tool").source == "document"
+
+
+def test_a_catalog_above_the_entry_bound_is_refused_whole(tmp_path):
+    """Every declared tool is told to the model on every call: the file
+    that declares them is BOUNDED (spec §13.3), and a file above the
+    bound is a startup error, not a silently larger prompt."""
+    entries = [{"source": "document", "name": f"tool-{i}"} for i in range(MAX_CATALOG_ENTRIES + 1)]
+    path = tmp_path / "too-many.json"
+    path.write_text(json.dumps({"version": 1, "tools": entries}), encoding="utf-8")
+    with pytest.raises(CatalogError):
+        load_catalog(
+            path,
+            served_names={"document": frozenset({"tool-0"})},
+            ceiling=CEILING,
+        )
 
 
 def test_a_required_scope_is_refused_until_the_identity_slice_lands(tmp_path, caplog):

@@ -1,20 +1,26 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// E2E: the #2188 WINDOWED PARALLEL CONCEPT-LIST CRAWL in the Studio.
+// E2E: the #2188 WINDOWED PARALLEL CONCEPT-LIST CRAWL + the #2189 WINDOWED
+// CONCEPT RAIL in the Studio.
 //
 // WHY THIS SPEC EXISTS: #2188 replaced the editor rail's sequential page
 // crawl (~50 round trips at 400–700 ms apiece on a 10k-concept repo, every
 // one a 304 cache hit) with windows of five concurrent requests committed
 // once per wave, and made the crawl's operation-wait entry CANCELLABLE with
-// a real AbortController. The unit suite pins the mechanics; this spec
-// proves the acceptance on the real stack, in a real browser, against the
-// real okf-server:
+// a real AbortController. #2189 then made the RAIL itself render a window —
+// the measured wall was never the network (1.1 s) but the unvirtualized
+// list re-rendering every row per wave commit. The unit suites pin the
+// mechanics; this spec proves the acceptance on the real stack, in a real
+// browser, against the real okf-server:
 //
-//   1. the rail holds every row and the wait panel clears — the crawl
-//      terminates (first open; also warms the browser HTTP cache);
+//   1. the rail settles O(viewport) with the full collection behind a tail
+//      spacer, and the wait panel clears — the crawl terminates (first
+//      open; also warms the browser HTTP cache);
 //   2. a SECOND open (cache warm — the exact condition the issue measured,
-//      every response a 304) completes within the issue's 5 s acceptance,
-//      with the first rows painting early;
+//      every response a 304) settles within the ORIGINAL 5 s acceptance
+//      (re-armed here per David's 2026-11-26 ruling — this story owns the
+//      wall), with the first rows painting early, the scrollbar reflecting
+//      the whole collection, and scrolling reaching the rest of it;
 //   3. Cancel is REAL: clicking it mid-crawl stops the request stream (no
 //      new wave dispatches), keeps the already-committed rows, and raises
 //      no error (the ABORTED contract — the PII panel's fail-closed
@@ -39,6 +45,8 @@ const { pinEnglish } = require('../helpers/locale');
 const { BASE_URL } = require('../helpers/base-url');
 
 const ROW = '[data-test-id^="okf-concept-row-"]';
+const TAIL = '[data-test-id="okf-cl-tail"]';
+const RAIL_LIST = '[data-test-id="okf-cl-list"]';
 // Declared handles (the e2e-handle-locators contract: no class, no text
 // locators). The overlay exposes panel/row/cancel/failure handles; the row
 // carries data-op with the registry's op name.
@@ -46,6 +54,21 @@ const OP_PANEL = '[data-test-id="op-wait-panel"]';
 const OP_CANCEL = '[data-test-id="op-wait-cancel"]';
 const OP_CONCEPT_ROW = '[data-test-id="op-wait-row"][data-op="concept-list-fetch"]';
 const CARD = (repoId) => `[data-test-id="okf-studio-repo-${repoId}"]`;
+
+/** The #2189 windowed-rail contract: the rail mounts O(viewport) rows and
+ *  the unrendered remainder stands as tail-spacer height (the scrollbar
+ *  reflects the whole collection). */
+async function expectWindowedRail(page, expectedTotal) {
+  const rendered = await page.locator(ROW).count();
+  expect(rendered, 'the rail mounts O(viewport), not the collection').toBeLessThan(400);
+  const spacer = page.locator(TAIL);
+  await spacer.waitFor({ state: 'attached', timeout: 5000 });
+  // the scrollbar stays honest: rendered rows + spacer cover the collection
+  const sh = await page.locator(RAIL_LIST).evaluate((el) => el.scrollHeight);
+  expect(sh, 'scrollHeight covers every concept').toBeGreaterThanOrEqual(expectedTotal * 26);
+  expect(sh, 'scrollHeight claims no more than the collection').toBeLessThanOrEqual(expectedTotal * 60);
+  return rendered;
+}
 
 /** Pull the venue's largest repository (by concept_count) through the
  *  session's own token — the crawl needs a repo with more than one page
@@ -129,22 +152,22 @@ test.describe('#2188 windowed concept-list crawl', () => {
     await context.close();
   });
 
-  test('the crawl terminates: every row lands and the wait panel clears (first open warms the cache)', async ({
+  test('the crawl terminates: the rail settles O(viewport) with the collection behind the spacer (first open warms the cache)', async ({
     page
   }) => {
     test.setTimeout(180000);
     await loginViaUI(page, okfAdminUser());
     const m = await measureOpen(page, repoId);
-    // the crawl delivered the whole collection
-    expect(m.finalCount).toBeGreaterThanOrEqual(expectedTotal - 5);
+    // the full collection is represented: a windowed rail + the tail spacer
+    await expectWindowedRail(page, expectedTotal);
     // report the cold-open numbers (cache was cold; no timing assertion —
     // the acceptance is judged on the warm 304 path in the next test)
     console.log(
-      `[#2188 cold open] repo=${repoId} total=${expectedTotal} firstRow=${m.firstRow - m.clicked}ms settled=${m.settledAt - m.clicked}ms`
+      `[#2188 cold open] repo=${repoId} total=${expectedTotal} firstRow=${m.firstRow - m.clicked}ms settled=${m.settledAt - m.clicked}ms rendered=${m.finalCount}`
     );
   });
 
-  test('a warm open: the crawl is network-fast, the first rows paint early — the wall is the render (#2189 owns it)', async ({
+  test('a warm open settles within the original 5 s acceptance, and the rail reaches the rest of the collection on scroll', async ({
     page
   }) => {
     test.setTimeout(120000);
@@ -152,17 +175,31 @@ test.describe('#2188 windowed concept-list crawl', () => {
     const m = await measureOpen(page, repoId);
     const toSettled = m.settledAt - m.clicked;
     const toFirst = m.firstRow - m.clicked;
-    console.log(`[#2188 warm open] repo=${repoId} total=${expectedTotal} firstRow=${toFirst}ms settled=${toSettled}ms`);
-    // ACCEPTANCE AMENDED (David, 2026-11-26, live measurements): the crawl's
-    // network leg measured 1.1 s for all pages at windowed concurrency (the
-    // sequential loop's ~18-35 s of round-trips is gone), and page 1 paints
-    // in a few hundred ms. The remainder of the wall is the UNVIRTUALIZED
-    // rail rendering every row per wave commit — #2189's territory, where
-    // the original ≤5 s wall-clock acceptance now lives. This MR asserts
-    // what it owns: the crawl terminates, page 1 paints early, and the
-    // measured wall is REPORTED (not asserted).
+    console.log(
+      `[#2189 warm open] repo=${repoId} total=${expectedTotal} firstRow=${toFirst}ms settled=${toSettled}ms rendered=${m.finalCount}`
+    );
+    // ACCEPTANCE RE-ARMED (David, 2026-11-26, live ruling): #2188 measured
+    // its network leg at 1.1 s and moved the <=5 s wall-clock acceptance to
+    // the rail story. With the rail windowed, the settle time IS the wall:
+    // a warm open must settle within the original 5 s.
+    expect(toSettled).toBeLessThanOrEqual(5000);
     expect(toFirst).toBeLessThanOrEqual(2500);
-    expect(m.finalCount).toBeGreaterThanOrEqual(expectedTotal - 5);
+    await expectWindowedRail(page, expectedTotal);
+
+    // scrolling to the bottom extends the window — a deep jump renders the
+    // prefix up to the viewport, so the far end of the collection arrives
+    const before = await page.locator(ROW).count();
+    await page.locator(RAIL_LIST).evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await page.waitForFunction(
+      (total) => document.querySelectorAll('[data-test-id^="okf-concept-row-"]').length >= total - 5,
+      expectedTotal,
+      { timeout: 20000 }
+    );
+    const after = await page.locator(ROW).count();
+    expect(after, 'the deep jump rendered through to the end of the collection').toBeGreaterThan(before);
+    console.log(`[#2189 deep jump] rendered ${before} -> ${after} of ${expectedTotal}`);
   });
 
   test('Cancel is real: the request stream stops, the rows stay, no error is raised', async ({ page }) => {
@@ -212,7 +249,8 @@ test.describe('#2188 windowed concept-list crawl', () => {
     expect(rowsAfter).toBeGreaterThanOrEqual(rowsAtCancel);
     expect(rowsAfter).toBeGreaterThan(0);
     // and the rail still works afterwards: a re-open completes the crawl
-    const m = await measureOpen(page, repoId);
-    expect(m.finalCount).toBeGreaterThanOrEqual(expectedTotal - 5);
+    // (windowed: the settle + the spacer carrying the rest IS completion)
+    await measureOpen(page, repoId);
+    await expectWindowedRail(page, expectedTotal);
   });
 });

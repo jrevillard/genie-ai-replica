@@ -67,6 +67,47 @@ preservation anchors. The DsInput stub carries the real v-model contract
 (`props: ['modelValue']` + emits `update:modelValue`) — a bare input stub
 swallows `setValue` and the component never sees the filter.
 
+## Review round 1 (code-review high — 6 findings, all dispositioned)
+
+1. **e2e spec breaks + the ≤ 5 s assertion missing** — FIXED. The spec's
+   row-count contract moved to the windowed one (`expectWindowedRail`:
+   O(viewport) rendered + the spacer covering the collection via
+   `scrollHeight` bounds), the ≤ 5 s warm-open acceptance is ASSERTED, and
+   the deep-jump-fill is proven live (scroll to the bottom → the prefix
+   renders through).
+2. **Extension dead in 2 of 3 mounts** — VERIFIED true and FIXED. The wizard
+   bench and the concept browser scroll AROUND the rail (their own panes
+   scroll; the rail's ul never overflows), so a capture-phase document
+   scroll listener keys on the spacer's viewport position
+   (`extendFromAncestor`, re-check-chained like the ul path). It stands
+   down when the ul itself overflows (the editor mount owns extension) and
+   is covered by two jsdom pins (pinned rects, as with pinned scrollTop).
+3. **Filter watcher kept the deep scroll position** — FIXED: the watcher
+   resets `scrollTop = 0`; the stale offset would otherwise clamp against
+   the shrunken content and cascade the window back open per keystroke.
+   (jsdom cannot reproduce the clamp cascade honestly — live-verified.)
+4. **Collapsed rail churns hidden rows** — FIXED: `canGrow()` refuses
+   extension while the children are collapsed (each extension would shrink
+   the spacer and render nothing visible). Pinned.
+5. **Hardcoded 36 px row estimate** — FIXED: one real row read after mount
+   (`measureRowHeight`) drives the spacer and the extension lead; the
+   constant is only the no-layout fallback, so the scrollbar stays honest
+   when the DS spacing tokens move.
+6. **Repo-size contradiction in the shipped claims** — FIXED: the bullet
+   says 6,352 (the live-measured repo), matching the component/test
+   comments and the #2188 story amendment.
+
+Plus one transition bug found while pinning finding 2: a FULLY-rendered
+collection growing past the limit (the browser dialog's Show-more page, a
+re-crawl on a small repo) previously snapped the window to 120 and made
+rows vanish mid-session — the window now carries over, bounded at the
+limit. Pinned.
+
+Security review: empty findings list (client-side render slicing; the one
+`:style` binding is structurally numeric). jsdom limitation recorded: the
+filter-scroll reset cannot be unit-pinned (no layout, no clamp cascade) —
+verified live on the local build instead.
+
 ## Security workflow (standing)
 
 Focused /security-review BEFORE changes (result: no new inputs, no new sinks —

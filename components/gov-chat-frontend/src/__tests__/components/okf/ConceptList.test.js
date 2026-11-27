@@ -137,4 +137,75 @@ describe('ConceptList — #2189 virtualized rail', () => {
     expect(wrapper.emitted('select')[0]).toEqual(['c3']);
     wrapper.unmount();
   });
+
+  // ---- review-round pins (the #2189 code-review findings) ----------------
+
+  // The dialog's "Show more" and a re-crawl on a small repo both grow a
+  // FULLY-rendered collection past the limit: the window must carry over,
+  // or rendered rows VANISH mid-session (review round 1, finding 2b).
+  test('a full collection growing past the limit keeps its rows (Show more)', async () => {
+    const wrapper = mountList(makeConcepts(149));
+    expect(wrapper.findAll('[data-test-id^="okf-concept-row-"]').length).toBe(150);
+    // the dialog's next page arrives: 150 -> 400, now over the limit
+    await wrapper.setProps({ concepts: makeConcepts(399) });
+    const rows = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;
+    // the window seeded from the full count (bounded at the limit), not the
+    // bare initial chunk — nothing the curator was looking at disappears
+    expect(rows).toBe(300);
+    expect(wrapper.find('[data-test-id="okf-cl-tail"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  // Collapsed children render nothing, yet each extension shrinks the spacer
+  // (rows swap for spacer height) — scrolling a collapsed 10k rail would
+  // lurch the scrollbar and render thousands of hidden rows (finding 4).
+  test('the collapsed rail does not extend while its children are hidden', async () => {
+    const wrapper = mountList(makeConcepts(9999));
+    await wrapper.find('.okf-cl__twist').trigger('click'); // collapse
+    const before = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;
+    const list = wrapper.find('[data-test-id="okf-cl-list"]');
+    const el = list.element;
+    Object.defineProperty(el, 'scrollTop', { value: 5000, configurable: true });
+    Object.defineProperty(el, 'clientHeight', { value: 600, configurable: true });
+    Object.defineProperty(el, 'scrollHeight', { value: 8000, configurable: true });
+    await list.trigger('scroll');
+    await wrapper.vm.$nextTick();
+    const after = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;
+    expect(after).toBe(before); // no hidden-row churn while collapsed
+    wrapper.unmount();
+  });
+
+  // The wizard workbench and the concept browser scroll AROUND the rail —
+  // the rail's own ul never scrolls, so extension must also key on the
+  // spacer entering the viewport through ANY ancestor scroll container
+  // (finding 2). Pinned rects stand in for layout, as with scrollTop above.
+  test('an ancestor scroll that reveals the spacer fills the window (outer-scroller mounts)', async () => {
+    const wrapper = mountList(makeConcepts(2999));
+    const spacer = wrapper.find('[data-test-id="okf-cl-tail"]');
+    expect(spacer.exists()).toBe(true);
+    Object.defineProperty(spacer.element, 'getBoundingClientRect', {
+      value: () => ({ top: 100, bottom: 100000, left: 0, right: 300, width: 300, height: 99900 }),
+      configurable: true
+    });
+    document.dispatchEvent(new Event('scroll'));
+    // the re-check chain fills chunk by chunk across nextTicks
+    for (let i = 0; i < 40; i++) await wrapper.vm.$nextTick();
+    const rows = wrapper.findAll('[data-test-id^="okf-concept-row-"]').length;
+    expect(rows).toBe(3000); // filled completely: a deep jump renders the prefix
+    expect(wrapper.find('[data-test-id="okf-cl-tail"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  test('the ancestor extension stays parked while the spacer is below the fold', async () => {
+    const wrapper = mountList(makeConcepts(2999));
+    const spacer = wrapper.find('[data-test-id="okf-cl-tail"]');
+    Object.defineProperty(spacer.element, 'getBoundingClientRect', {
+      value: () => ({ top: window.innerHeight + 700, bottom: 999999, left: 0, right: 300, width: 300, height: 999999 }),
+      configurable: true
+    });
+    document.dispatchEvent(new Event('scroll'));
+    for (let i = 0; i < 5; i++) await wrapper.vm.$nextTick();
+    expect(wrapper.findAll('[data-test-id^="okf-concept-row-"]').length).toBeLessThan(200);
+    wrapper.unmount();
+  });
 });

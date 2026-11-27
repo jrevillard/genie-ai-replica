@@ -68,7 +68,7 @@
     </p>
 
     <template v-else>
-      <ul class="okf-cl__list" @scroll.passive="onListScroll">
+      <ul ref="listEl" class="okf-cl__list" data-test-id="okf-cl-list" @scroll.passive="onListScroll">
         <li v-for="node in visibleTree" :key="node.key">
           <div
             class="okf-cl__row"
@@ -275,6 +275,7 @@
              rows exist in the DOM. -->
         <li
           v-if="truncated"
+          ref="tailEl"
           class="okf-cl__tail"
           data-test-id="okf-cl-tail"
           aria-hidden="true"
@@ -388,7 +389,7 @@ import DsSpinner from '../../ds/Spinner.vue';
 // scope — they are layout policy, not per-instance state.
 const RENDER_CHUNK = 120; // rows added per scroll extension
 const FULL_RENDER_LIMIT = 300; // at/below this the list renders fully, DOM unchanged
-const AVG_ROW_HEIGHT = 36; // px estimate for the spacer + extension lead
+const DEFAULT_ROW_HEIGHT = 36; // px fallback until a real row is measured
 const EXTEND_LEAD = 600; // px above the rendered bottom that triggers extension
 
 export default {
@@ -421,6 +422,10 @@ export default {
       // #2189 — how many rows of a truncated collection are mounted. Full
       // collections (≤ FULL_RENDER_LIMIT) ignore it entirely.
       renderedCount: RENDER_CHUNK,
+      // #2189 — the spacer and the extension lead are laid out from the
+      // MEASURED row height (one row read after mount); this default only
+      // covers the jsdom/no-layout case and the first paint.
+      rowHeight: DEFAULT_ROW_HEIGHT,
       // INGEST-FAILURE CARD state: the hovered FAILED row + viewport-anchored
       // placement. Fixed position (viewport coords) so the list's scroll
       // container can never clip it; hidden on leave/scroll/blur.
@@ -483,7 +488,7 @@ export default {
       return this.virtualList !== 'full' && this.totalCount > this.renderedCount;
     },
     tailHeight() {
-      return Math.max(0, this.totalCount - this.renderedCount) * AVG_ROW_HEIGHT;
+      return Math.max(0, this.totalCount - this.renderedCount) * this.rowHeight;
     },
     visibleTree() {
       if (this.virtualList === 'full') return this.tree;
@@ -494,18 +499,45 @@ export default {
   },
   watch: {
     // #2189 — a narrowed filter re-windows: its (small) result renders fully
-    // from the first chunk instead of inheriting a deep scroll position.
+    // from the first chunk, and the stale deep scroll position goes with it
+    // (a kept scroll offset would clamp against the shrunken content and
+    // cascade the window back open on the browser's own scroll event).
     filter() {
       this.renderedCount = RENDER_CHUNK;
+      const el = this.$refs.listEl;
+      if (el) el.scrollTop = 0;
     },
     totalCount: {
       immediate: true,
       handler(n) {
-        // the collection shrank under a wide window (new crawl, filter):
-        // clamp so the window never claims rows past the end.
-        if (this.renderedCount > n) this.renderedCount = Math.max(RENDER_CHUNK, n);
+        if (this.virtualList !== 'full' && this._prevListFull && n > this.renderedCount) {
+          // #2189 review round — a FULLY-rendered collection grew past the
+          // limit (the browser dialog's Show-more page, a re-crawl on a
+          // small repo): carry the window over so no row the curator was
+          // looking at vanishes, bounded at the limit.
+          this.renderedCount = Math.min(n, FULL_RENDER_LIMIT);
+        } else if (this.renderedCount > n) {
+          // the collection shrank under a wide window (new crawl, filter):
+          // clamp so the window never claims rows past the end.
+          this.renderedCount = Math.max(RENDER_CHUNK, n);
+        }
+        this._prevListFull = this.virtualList === 'full';
       }
     }
+  },
+  mounted() {
+    // #2189 review round — the wizard workbench and the concept browser
+    // scroll AROUND the rail (the rail's own ul never overflows there), so
+    // extension also listens on the capture phase: any ancestor scroll
+    // container revealing the spacer extends the window. The ul's own
+    // scroll (the editor mount) still drives onListScroll below.
+    document.addEventListener('scroll', this.onDocumentScroll, { capture: true, passive: true });
+    this.$nextTick(this.measureRowHeight);
+  },
+  beforeUnmount() {
+    // stops any in-flight extension chain (the $nextTick re-checks)
+    this._railDead = true;
+    document.removeEventListener('scroll', this.onDocumentScroll, true);
   },
   methods: {
     decorate(c) {
@@ -586,19 +618,58 @@ export default {
     // fling) keep filling: extension swaps rendered rows for spacer height,
     // so the container's scrollHeight never changes and the browser emits
     // no follow-up scroll event of its own.
+    canGrow() {
+      if (this._railDead) return false;
+      if (!this.truncated) return false;
+      // collapsed children render nothing while every extension shrinks the
+      // spacer — extending a collapsed rail churns hidden rows and lurches
+      // the scrollbar (review round 1, finding 4). Expansion resumes it.
+      if (this.virtualList === 'children' && !this.expanded) return false;
+      return true;
+    },
     onListScroll(evt) {
       this.hideFailCard();
       const el = evt && evt.currentTarget;
       if (!el || !el.clientHeight) return;
       this.extendWindow(el);
     },
+    // The capture-phase path: some ancestor container (the wizard bench's
+    // page, the concept browser's 60vh pane) is the real scroller. The ul's
+    // own geometry is inert there — key on the spacer's viewport position
+    // instead. Skipped when the ul itself overflows (the editor mount),
+    // where onListScroll already owns extension.
+    onDocumentScroll() {
+      this.hideFailCard();
+      const el = this.$refs.listEl;
+      if (el && el.scrollHeight > el.clientHeight + 1) return;
+      this.extendFromAncestor();
+    },
+    extendFromAncestor() {
+      if (!this.canGrow()) return;
+      const spacer = this.$refs.tailEl;
+      if (!spacer) return;
+      const r = spacer.getBoundingClientRect();
+      if (r.top > window.innerHeight + EXTEND_LEAD) return; // still below the fold
+      this.renderedCount = Math.min(this.totalCount, this.renderedCount + RENDER_CHUNK);
+      this.$nextTick(() => this.extendFromAncestor());
+    },
     extendWindow(el) {
-      if (!this.truncated) return;
-      if (el.scrollTop + el.clientHeight < this.renderedCount * AVG_ROW_HEIGHT - EXTEND_LEAD) return;
+      if (!this.canGrow()) return;
+      if (el.scrollTop + el.clientHeight < this.renderedCount * this.rowHeight - EXTEND_LEAD) return;
       this.renderedCount = Math.min(this.totalCount, this.renderedCount + RENDER_CHUNK);
       this.$nextTick(() => {
-        if (el.isConnected) this.extendWindow(el);
+        if (!this._railDead) this.extendWindow(el);
       });
+    },
+    // One real row read after mount: the spacer and the extension lead use
+    // the ACTUAL row height instead of a hardcoded estimate, so the
+    // scrollbar stays honest when the DS spacing tokens move. No layout in
+    // jsdom — the default stands there.
+    measureRowHeight() {
+      const row = this.$el && this.$el.querySelector('.okf-cl__row');
+      if (row && row.offsetHeight > 0) {
+        this.rowHeight = Math.max(24, Math.ceil(row.offsetHeight + 2));
+      }
     },
     // The recovery for THIS failure kind. The reaper dead-letter is the
     // saturated-drain signature (www-gov-uk: 75 identical messages) — the

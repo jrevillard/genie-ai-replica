@@ -209,4 +209,22 @@ describe('ConceptList — #2189 virtualized rail', () => {
     expect(wrapper.findAll('[data-test-id^="okf-concept-row-"]').length).toBeLessThan(200);
     wrapper.unmount();
   });
+
+  // ---- #2204 — the JS-side per-commit costs (the windowing's other half) -
+
+  // A #2188 wave commit reuses the SAME row objects (the store concats the
+  // fetched pages onto the accumulator): re-decorating every already-loaded
+  // row per commit was ~70k spreads per 10k open. The decorated rows must be
+  // reference-stable across commits — that stability is what Vue's keyed
+  // diff exploits to skip vnode re-allocation.
+  test('a wave commit does not re-decorate the rows already on the rail', async () => {
+    const rows = makeConcepts(199);
+    const wrapper = mountList(rows);
+    const first = wrapper.vm.tree[0].children.find((c) => c.concept_id === 'c0');
+    // the store's wave-commit shape: a NEW array holding the SAME row objects
+    await wrapper.setProps({ concepts: rows.concat([]) });
+    const second = wrapper.vm.tree[0].children.find((c) => c.concept_id === 'c0');
+    expect(second).toBe(first);
+    wrapper.unmount();
+  });
 });

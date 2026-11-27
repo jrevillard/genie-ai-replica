@@ -392,6 +392,18 @@ const FULL_RENDER_LIMIT = 300; // at/below this the list renders fully, DOM unch
 const DEFAULT_ROW_HEIGHT = 36; // px fallback until a real row is measured
 const EXTEND_LEAD = 600; // px above the rendered bottom that triggers extension
 
+// #2204 — the rail's per-row work caches against ROW IDENTITY: #2188's wave
+// commits reuse the same row objects (~7 commits per load), so an
+// already-loaded row never pays the spread or the haystack build twice, and
+// Vue's keyed diff gets a reference-stable v-for. Audited 2026-11-27: every
+// okf mutation path replaces rows immutably (patchConcept spreads a new
+// row) or refetches the whole list (labels, reingest, PII rescan, add/
+// delete/split) — nothing mutates a stored row in place, so identity
+// implies freshness. The maps die with their keys (WeakMap).
+const DECORATED = new WeakMap(); // raw row -> decorated row
+const FLAT_WRAPPERS = new WeakMap(); // decorated row -> flat-list wrapper
+const HAYSTACKS = new WeakMap(); // raw row -> lowercase filter haystack
+
 export default {
   name: 'OkfConceptList',
   components: { DsButton, DsInfoTip, DsInput, DsPill, DsProgress, DsSelect, DsSpinner },
@@ -460,7 +472,11 @@ export default {
       const s = (this.filter || '').toLowerCase().trim();
       if (!s) return this.concepts;
       return this.concepts.filter((c) => {
-        const hay = [c.title, c.concept_id, c.path, this.sourceOf(c)].filter(Boolean).join(' ').toLowerCase();
+        let hay = HAYSTACKS.get(c);
+        if (hay === undefined) {
+          hay = [c.title, c.concept_id, c.path, this.sourceOf(c)].filter(Boolean).join(' ').toLowerCase();
+          HAYSTACKS.set(c, hay);
+        }
         return hay.includes(s);
       });
     },
@@ -468,7 +484,16 @@ export default {
       const list = this.filtered;
       const indexRow = list.find((c) => c.is_index);
       const rest = list.filter((c) => c !== indexRow).map((c) => this.decorate(c));
-      if (!indexRow) return rest.map((c) => ({ ...c, children: [] }));
+      if (!indexRow) {
+        return rest.map((c) => {
+          let w = FLAT_WRAPPERS.get(c);
+          if (!w) {
+            w = { ...c, children: [] };
+            FLAT_WRAPPERS.set(c, w);
+          }
+          return w;
+        });
+      }
       return [{ ...this.decorate(indexRow), children: rest, key: indexRow.concept_id }];
     },
     // #2189 — windowing mode. 'full' renders the tree untouched (the DOM for
@@ -547,7 +572,12 @@ export default {
   },
   methods: {
     decorate(c) {
-      return { ...c, sourceUrl: this.sourceOf(c), key: c.concept_id };
+      let d = DECORATED.get(c);
+      if (!d) {
+        d = { ...c, sourceUrl: this.sourceOf(c), key: c.concept_id };
+        DECORATED.set(c, d);
+      }
+      return d;
     },
     // D-G: the concept's curation origin as a compact tag. Guarded — old
     // meta rows carry no curation payload and render nothing.

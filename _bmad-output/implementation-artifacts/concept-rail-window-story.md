@@ -142,6 +142,36 @@ mutation-path audit first — stale decorated rows on in-place edits), the
 `filtered()` haystack cache, the fenced host-CSS bound that would collapse
 the two extension paths into one, and the IntersectionObserver polish.
 
+## Issue #2204 — addressed IN this work plan (David's hard rule, 2026-11-27:
+an issue filed mid-plan gets added to the plan and completed, not parked)
+
+DELIVERED IN THIS MR (TDD: the reference-stability pin watched RED first):
+
+- **`decorate()` memoized in a `DECORATED` WeakMap** keyed on row identity —
+  #2188's wave commits reuse the same row objects, so an already-loaded row
+  never pays the spread + `sources.find` twice (~70k redundant spreads per
+  10k open), and Vue's keyed diff gets a reference-stable v-for. The flat
+  branch's wrapper spread is cached the same way (`FLAT_WRAPPERS`).
+  **Mutation-path audit (the safety gate), 2026-11-27:** every okf concept
+  mutation either refetches the whole list (`applyLabel`+`fetchConcepts`,
+  `reingestFailed`+`fetchConcepts`, PII rescan paths, RepoEditor's
+  add/delete/split flows) or replaces the row immutably (`patchConcept`
+  spreads a new row at okf.js:1122). A repo-wide grep for in-place row
+  field writes (`row.title =` & co) hits ONLY conversation.js — a different
+  domain. No in-place mutation of okf concept rows exists in src, so row
+  identity implies freshness; the maps are WeakMaps and die with their keys.
+  jsdom confirms the win: the 10k mount test dropped ~590 ms → ~280 ms.
+- **`filtered()` haystack cached in a `HAYSTACKS` WeakMap** — a keystroke
+  no longer rebuilds 10k lowercase haystacks; it runs `includes` over the
+  cached strings.
+
+DISPOSITIONED (design decisions recorded here, not open work): the
+component-owned height bound (would change the wizard's scroll UX; host
+CSS is fenced and the change is David's to sanction), and the
+IntersectionObserver sentinel (jsdom-opaque — the scroll+rect shape is
+what makes the extension unit-testable). Issue #2204 is scoped to this
+resolution and closes with this MR.
+
 ## Security workflow (standing)
 
 Focused /security-review BEFORE changes (result: no new inputs, no new sinks —

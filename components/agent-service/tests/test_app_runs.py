@@ -550,12 +550,14 @@ def _assembled_app(monkeypatch, tmp_path, *, web_pair=False):
     return model
 
 
-def test_the_assembly_declares_the_web_source_when_both_knobs_exist(tmp_path, monkeypatch):
-    """The host's SECOND declared source: with the knob pair set, the run's
-    toolset carries web_search beside the two document tools. The build is
-    the mechanical shape (``partial(WebSearchToolSource.from_bundle, ...)``)
+def test_the_assembly_declares_the_web_source_when_the_flag_and_the_pair_are_set(tmp_path, monkeypatch):
+    """The host's SECOND declared source: with the deployment's INTENT
+    (``AGENT_WEB_SEARCH_ENABLED``) and the knob pair set, the run's toolset
+    carries web_search beside the two document tools. The build is the
+    mechanical shape (``partial(WebSearchToolSource.from_bundle, ...)``)
     — the catalog's budgets arrive through the factory, not this site."""
     model = _assembled_app(monkeypatch, tmp_path, web_pair=True)
+    monkeypatch.setenv("AGENT_WEB_SEARCH_ENABLED", "1")
     with TestClient(app_module.app) as client:
         response = client.post("/v1/runs", json=BODY)
 
@@ -565,11 +567,14 @@ def test_the_assembly_declares_the_web_source_when_both_knobs_exist(tmp_path, mo
 
 
 def test_the_shipped_posture_declares_no_web_source(tmp_path, monkeypatch):
-    """No knobs, no web source — the deployment that never asked for web
-    search serves exactly the two document tools it always served."""
+    """The flag unset — the deployment declares NO web source, whatever the
+    endpoints read. The ansible path renders the pii endpoint
+    UNCONDITIONALLY, so a deployment holding one endpoint is not
+    half-wired: it simply never asked for web search."""
     model = _assembled_app(monkeypatch, tmp_path, web_pair=False)
+    monkeypatch.setenv("PII_SERVICE_URL", "http://pii-service:8000")
     monkeypatch.delenv("AGENT_SEARXNG_URL", raising=False)
-    monkeypatch.delenv("PII_SERVICE_URL", raising=False)
+    monkeypatch.delenv("AGENT_WEB_SEARCH_ENABLED", raising=False)
     with TestClient(app_module.app) as client:
         response = client.post("/v1/runs", json=BODY)
 
@@ -579,13 +584,15 @@ def test_the_shipped_posture_declares_no_web_source(tmp_path, monkeypatch):
 
 
 def test_a_half_wired_web_pair_answers_503_naming_the_missing_knob(monkeypatch):
-    """The pair is fail-closed as a PAIR: exactly one knob is a deployment
-    that believes a lie (redacting without searching, or searching without
-    redacting) — the honest 503 names the missing one, before any run."""
+    """The pair is fail-closed as a PAIR: an ENABLED deployment holding
+    exactly one endpoint is a deployment that believes a lie (redacting
+    without searching, or searching without redacting) — the honest 503
+    names the missing one, before any run."""
     for knob in REQUIRED_KNOBS:
         monkeypatch.setenv(knob, "5000")
     monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
     monkeypatch.setenv("AGENT_SEARXNG_URL", "http://searxng:8080")
+    monkeypatch.setenv("AGENT_WEB_SEARCH_ENABLED", "1")
     monkeypatch.delenv("PII_SERVICE_URL", raising=False)
     monkeypatch.setattr(
         app_module,

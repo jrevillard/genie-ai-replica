@@ -62,22 +62,27 @@ deployment:
    }
    ```
 
-2. **Set BOTH knobs in `.env`** (the pair is read fail-closed at assembly:
-   the source is declared only when both exist, and a half-wired pair is
-   answered 503 naming the missing one):
+2. **Set the flag AND the pair in `.env`** — three settings, and the flag
+   comes FIRST: `AGENT_WEB_SEARCH_ENABLED=1` is the deployment's own INTENT
+   (the run surface declares no web source without it — the pii-service
+   endpoint alone can never be the presence signal, because it belongs to the
+   OKF pillar and is set on every deployment), and the pair then supplies
+   the ENDPOINTS (read fail-closed at assembly: an enabled deployment
+   holding one endpoint is answered 503 naming the missing one):
 
    ```
+   AGENT_WEB_SEARCH_ENABLED=1
    AGENT_SEARXNG_URL=http://searxng:8080
    PII_SERVICE_URL=http://pii-service:8000
    ```
 
-3. **Start the services**: `AGENT_WEB_SEARCH_ENABLED=1` (the searxng
-   replica gate) and `PII_SERVICE_ENABLED=1` (the pii-service replica gate —
-   derived for you on the ansible path), plus the `agent` compose profile
+3. **Start the services**: `PII_SERVICE_ENABLED=1` (the pii-service replica
+   gate — derived for you on the ansible path, and the OKF pillar's own flag
+   is the compose fallback), plus the `agent` compose profile
    (`docker compose --profile agent up -d`, or `COMPOSE_PROFILES=agent`).
 
-4. **Recreate the agent service** — the knob pair is read once at assembly
-   (`docker compose up -d --force-recreate agent-service`).
+4. **Recreate the agent service** — the flag and the knob pair are read once
+   at assembly (`docker compose up -d --force-recreate agent-service`).
 
 The egress rule is the tool's contract, not an option: the query passes the
 pii-service first and the call fails closed if the scan fails — the raw

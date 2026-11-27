@@ -1373,12 +1373,12 @@ services:
     deploy:
       # The DERIVED flag: 1 when the OKF pillar runs OR the agent's web
       # search does. On the ansible path env.j2 derives it (okf_enabled OR
-      # agent_web_search_enabled); a raw compose deployment SETS it in .env —
-      # the pre-2026-11 contract (replicas tracking OKF_ENABLED directly)
-      # is replaced by this knob, and a raw-compose OKF deployment that
-      # skips the line parks the sidecar (every OKF publish then fails
-      # closed). The CHANGELOG entry at merge time names the change.
-      replicas: ${PII_SERVICE_ENABLED:-0}
+      # agent_web_search_enabled); a raw compose deployment SETS it in .env.
+      # The OKF pillar's own flag is the FALLBACK, so a raw-compose
+      # deployment that only sets OKF_ENABLED=1 (the contract that existed
+      # before this knob) keeps its sidecar instead of parking it and
+      # failing every OKF publish closed.
+      replicas: ${PII_SERVICE_ENABLED:-${OKF_ENABLED:-0}}
       placement:
         constraints:
           - node.labels.genieai == true
@@ -1580,13 +1580,18 @@ services:
       # required.
       - OKF_ENABLED=${OKF_ENABLED:-0}
       - AGENT_OKF_URL=${AGENT_OKF_URL:-}
-      # The web-search knob PAIR — read fail-closed as a pair at assembly:
-      # the web source is declared only when BOTH are set (neither = the
-      # shipped posture, no web tool; exactly one = the 503 naming the
+      # The web-search PRESENCE signal — the deployment's own INTENT, and
+      # the only thing that declares the web source: 1 (the default is 0)
+      # declares it, 0 declares none whatever the endpoints read (the
+      # pii-service endpoint belongs to the OKF pillar and is set on every
+      # deployment, so it can never be the signal). The knob PAIR below
+      # supplies the ENDPOINTS, read fail-closed as a pair at assembly (an
+      # ENABLED deployment holding one endpoint = the 503 naming the
       # missing knob). The query is redacted through the pii-service BEFORE
       # the meta-search call (fail-closed), so the raw query never leaves.
       # The TOOL appears only when the deployment's catalog also carries
       # the web_search entry (the enable recipe: configs/README.md).
+      - AGENT_WEB_SEARCH_ENABLED=${AGENT_WEB_SEARCH_ENABLED:-}
       - AGENT_SEARXNG_URL=${AGENT_SEARXNG_URL:-}
       - PII_SERVICE_URL=${PII_SERVICE_URL:-}
       # The shared corpus/model endpoints the run surface's assembly reads

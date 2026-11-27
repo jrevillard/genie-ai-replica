@@ -143,10 +143,12 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     # preparer over the run's budget monitor; the discovery caches are
     # process-wide.
     preparer_factory = build_preparer_factory(transport, env=env)
-    # The web-search port: the knob pair read at assembly, fail-closed as a
-    # PAIR (a half-wired deployment is the 503 naming the missing knob);
-    # ``None`` = the shipped posture, no web source declared at all.
-    web_port = build_web_search_port(env)
+    # The web-search port: the deployment's own INTENT
+    # (AGENT_WEB_SEARCH_ENABLED) decides whether the source is declared at
+    # all; the knob pair then supplies the ENDPOINTS, fail-closed as a PAIR
+    # (an enabled deployment holding one endpoint is the 503 naming the
+    # missing knob). ``None`` = the shipped posture, no web source declared.
+    web_port = build_web_search_port(env, transport=transport)
 
     def port_factory(context: CallerContext, bearer: str | None):
         # Per request: one executor binds ONE trusted context to the

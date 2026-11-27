@@ -408,10 +408,12 @@ const actions = {
         sources.forEach((doc) => {
           // An OKF concept is NOT a repository document (the concept's
           // markdown never becomes a doc-repo files doc) — the lookup can
-          // only 404. The guard reads the SHARED predicate (okfCitation.js —
-          // one predicate, fetch guard and card badge alike), covering both
+          // only 404. A projected web row is not one either: its id IS its
+          // url, so the lookup would request the url as a file path. The
+          // guards read the SHARED predicates (okfCitation.js — one
+          // predicate, fetch guard and card badge alike), covering both
           // the mapped shape and a raw citation slipping through.
-          if (!doc.id || isOkfConceptSource(doc)) return;
+          if (!doc.id || isOkfConceptSource(doc) || isWebSource(doc)) return;
           documentFileService
             .getFileMetadata(doc.id)
             .then((file) => {

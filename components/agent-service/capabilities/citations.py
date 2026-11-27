@@ -452,6 +452,12 @@ def source_documents_from_citations(citations, *, records: SourceRecords) -> lis
     for citation in citations:
         provenance = citation["provenance"]
         score = citation.get("score")
+        if provenance_identity(provenance) is None:
+            # The same rule as the envelope builder: no identity, no row —
+            # the ledger refuses identity-less entries upstream, and a raw
+            # citation list that bypassed it (this builder accepts one) must
+            # not grow an anonymous empty card either.
+            continue
         if _is_web_provenance(provenance):
             # The web variant projects from the SELF-CONTAINED provenance,
             # before the D1 check — no platform resolves a web record. This

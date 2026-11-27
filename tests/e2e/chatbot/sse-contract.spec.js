@@ -313,9 +313,13 @@ test.describe('SSE contract — the projected web citation', () => {
       await expect(card.filter({ hasText: 'WEB' }), 'the badge names the variant').toBeVisible({
         timeout: 15000
       });
-      // The exact rendered text: the badge label and the page title, and
-      // nothing else — the extension fallback would have spelled the url.
-      await expect(card, 'the card names the web page under the WEB badge').toHaveText('WEB The policy');
+      // The exact rendered texts, asserted separately: the badge label and
+      // the page title are sibling spans with no whitespace between them
+      // (Vue 3 condenses the newline away), so the card's textContent reads
+      // 'WEBThe policy' — a single combined toHaveText can never match.
+      // The extension fallback would have spelled the url ('GOV/POLICY').
+      await expect(card, 'the badge labels the variant WEB').toContainText('WEB');
+      await expect(card, 'the card names the web page').toContainText('The policy');
     });
   });
 });

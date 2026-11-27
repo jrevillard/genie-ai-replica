@@ -549,3 +549,21 @@ def test_a_web_provenance_without_a_url_has_no_identity_and_projects_nothing():
     assert [(e["document_id"], e["document_name"]) for e in envelope] == [
         ("https://example.invalid/real", "The real one")
     ]
+
+    # the citations builder applies the same rule: a RAW citation list that
+    # bypassed the ledger (this builder accepts one) projects nothing for an
+    # identity-less provenance — no anonymous empty card.
+    from_citations = source_documents_from_citations(
+        [
+            {"provenance": {"source": "web", "title": "no url"}, "text": "t", "score": 1.0},
+            {
+                "provenance": {"source": "web", "url": "https://example.invalid/real", "title": "The real one"},
+                "text": "t",
+                "score": 2.0,
+            },
+        ],
+        records=SourceRecords(),
+    )
+    assert [(e["document_id"], e["document_name"]) for e in from_citations] == [
+        ("https://example.invalid/real", "The real one")
+    ]

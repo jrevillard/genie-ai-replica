@@ -103,7 +103,6 @@ class CatalogDocument(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     version: Literal[1] = 1
-    tools: tuple[CatalogEntry, ...]
 
 
 @dataclass(frozen=True)
@@ -155,15 +154,15 @@ def load_catalog(
     budget ceiling: an entry's budget may TIGHTEN it, never widen it.
 
     Raises :class:`CatalogError` for the defects that fail the whole
-    file: a duplicate exposed name (the model would see an ambiguity), a
-    budget above the ceiling, a file that is missing, unreadable or not
-    the declared shape.
+    file: a duplicate exposed name (the model would see an ambiguity)
+    and a file that is missing, unreadable or not the declared shape.
 
-    An entry THIS DEPLOYMENT cannot serve — an undeclared source, a
-    server-scoped tool, a required scope, a write, an approval, an
-    open-web egress — costs the ENTRY, not the catalog: a loud startup
-    ERROR names it and the tool is absent. The catalog still loads, and
-    the deployment's other tools keep working.
+    EVERY per-entry defect costs the ENTRY, not the catalog: an
+    undeclared source, a server-scoped tool, a required scope, a write,
+    an approval, an open-web egress, and a budget that would WIDEN the
+    ceiling — a loud startup ERROR names each and the tool is absent.
+    The catalog still loads, and the deployment's other tools keep
+    working.
 
     A catalogued tool a declared source does not serve is a WARNING and
     an absent tool.

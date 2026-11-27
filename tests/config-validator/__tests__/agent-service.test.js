@@ -456,9 +456,7 @@ describe('the agent tool catalog is declared, mounted and seeded', () => {
   });
 
   test('the shipped catalog carries the two document tools', () => {
-    const catalog = JSON.parse(
-      fs.readFileSync(path.join(ROOT, 'configs/agent/tool-catalog.json'), 'utf-8')
-    );
+    const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'configs/agent/tool-catalog.json'), 'utf-8'));
 
     expect(catalog.version).toBe(1);
     expect(catalog.tools.map((entry) => entry.name).sort()).toEqual(['read_source', 'search_knowledge']);

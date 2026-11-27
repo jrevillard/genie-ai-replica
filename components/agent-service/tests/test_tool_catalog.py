@@ -14,10 +14,9 @@ refusal into a pass — or a warning into silence — turns them red.
 import asyncio
 import json
 import logging
-from pathlib import Path
 
 import pytest
-from conftest import AgentFakePort, canned_search_result
+from conftest import SHIPPED_CATALOG, AgentFakePort, canned_search_result
 
 from agent.registry import UnregisteredToolError, build_registry
 from agent.sources import DocumentToolSource, ToolSourceContext
@@ -61,7 +60,7 @@ def _write(tmp_path, tools, version=1):
 
 
 def test_the_shipped_catalog_carries_the_two_document_tools():
-    shipped = json.loads((Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json").read_text())
+    shipped = json.loads(SHIPPED_CATALOG.read_text())
     assert shipped["version"] == 1
     assert sorted(entry["name"] for entry in shipped["tools"]) == ["read_source", "search_knowledge"]
     for entry in shipped["tools"]:
@@ -157,7 +156,6 @@ def test_a_budget_above_the_ceiling_refuses_the_entry(tmp_path, caplog):
     would widen the ceiling refuses the ENTRY (the loud startup ERROR,
     the tool absent), NOT the catalog — the whole-file failure stays the
     duplicate's alone."""
-    import logging
 
     path = _write(
         tmp_path,

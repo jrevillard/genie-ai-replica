@@ -664,6 +664,11 @@ def orchestrator_config(**overrides) -> OrchestratorConfig:
     return OrchestratorConfig(**{**values, **overrides})
 
 
+# The shipped deployment file, resolved from THIS directory (parents: tests,
+# agent-service, components, the repository root).
+SHIPPED_CATALOG = Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json"
+
+
 def document_registry(port, context, budget=None, **wiring):
     """The registry the document source offers, over one port.
 

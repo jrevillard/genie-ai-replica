@@ -14,11 +14,11 @@ event and releases the lane slot.
 import asyncio
 import json
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 from conftest import (
     REQUIRED_KNOBS,
+    SHIPPED_CATALOG,
     FakeConceptSource,
     FakeMetadataSource,
     HangingLoopModel,
@@ -48,7 +48,7 @@ def _runtime(model, tmp_path):
     orchestrator itself (the module-level lazy singleton)."""
     lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
     catalog = load_catalog(
-        Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
+        SHIPPED_CATALOG,
         served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
         ceiling=orchestrator_config().operation_budget,
     )
@@ -295,7 +295,7 @@ def test_the_app_assembly_wires_preparation_into_the_run_surface(tmp_path, monke
         monkeypatch.setenv(knob, "5000")
     monkeypatch.setenv(
         "AGENT_TOOL_CATALOG_PATH",
-        str(Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json"),
+        str(SHIPPED_CATALOG),
     )
 
     class ScriptedPreparer:
@@ -368,7 +368,7 @@ def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, mon
     exhausted = replace(orchestrator_config(), max_model_calls=1)
     lane = AdmissionLane(1, str(tmp_path / "lane.lock"))
     catalog = load_catalog(
-        Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
+        SHIPPED_CATALOG,
         served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
         ceiling=exhausted.operation_budget,
     )

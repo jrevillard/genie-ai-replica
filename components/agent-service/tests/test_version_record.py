@@ -9,9 +9,9 @@ pre-loop failure path alike."""
 import asyncio
 import json
 import re
-from pathlib import Path
 
 from conftest import (
+    SHIPPED_CATALOG,
     FakeConceptSource,
     FakeMetadataSource,
     ScriptedLoopModel,
@@ -211,7 +211,7 @@ class _IdentityModel(ScriptedLoopModel):
 
 def _orchestrator_with(model, port, tmp_path):
     catalog = load_catalog(
-        Path(__file__).resolve().parents[3] / "configs" / "agent" / "tool-catalog.json",
+        SHIPPED_CATALOG,
         served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
         ceiling=orchestrator_config().operation_budget,
     )

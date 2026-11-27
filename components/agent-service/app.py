@@ -135,11 +135,6 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     catalog_path = str(env.get("AGENT_TOOL_CATALOG_PATH", "")).strip()
     if not catalog_path:
         raise ValueError("AGENT_TOOL_CATALOG_PATH is not set: the run surface declares no tool without a catalog")
-    catalog = load_catalog(
-        catalog_path,
-        served_names={DocumentToolSource.source_id: DocumentToolSource.served_tool_names},
-        ceiling=orchestrator_config.operation_budget,
-    )
     transport = HttpxTransport(model_config.tls_verify)
     model_client = VllmModelClient(model_config, transport)
     lane = AdmissionLane.from_config(noagent)
@@ -154,24 +149,40 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         # point, and its context is the request's.
         return adapters.bind_executor(context, bearer)
 
-    # The declared sources: what this deployment runs, and how each is
-    # built. The core composes nothing — it asks this factory per
-    # request for the pairs to register.
-    declared_sources = (
-        DeclaredSource(
-            source_id=DocumentToolSource.source_id,
-            served_tool_names=DocumentToolSource.served_tool_names,
-            build=lambda bundle: DocumentToolSource(
-                port_factory,
-                bundle.operation_budget,
-                budgets=budget_overrides(catalog),
-                preparer=bundle.preparer,
-                on_preparation_status=bundle.on_preparation_status,
-                abstention_sink=bundle.abstention_sink,
+    def declared_sources(factory):
+        """What this deployment runs, and how each source is built.
+
+        The core composes nothing — it asks this factory per request for
+        the pairs to register. One home: the catalog's served_names are
+        derived from THIS (the same facts, read once). The budgets close
+        over ``catalog_budgets`` below — resolved per REQUEST, long after
+        the assembly finishes, so the definition order is not a trap.
+        """
+        return (
+            DeclaredSource(
+                source_id=DocumentToolSource.source_id,
+                served_tool_names=DocumentToolSource.served_tool_names,
+                build=lambda bundle: DocumentToolSource(
+                    factory,
+                    bundle.operation_budget,
+                    budgets=catalog_budgets,
+                    preparer=bundle.preparer,
+                    on_preparation_status=bundle.on_preparation_status,
+                    abstention_sink=bundle.abstention_sink,
+                ),
             ),
-        ),
+        )
+
+    sources = declared_sources(port_factory)
+    catalog = load_catalog(
+        catalog_path,
+        served_names={source.source_id: source.served_tool_names for source in sources},
+        ceiling=orchestrator_config.operation_budget,
     )
-    tool_source_factory = build_tool_source_factory(catalog=catalog, declared_sources=declared_sources)
+    # The per-tool bounds are the CATALOG's static fact: computed once at
+    # assembly, not re-derived inside every request's build call.
+    catalog_budgets = budget_overrides(catalog)
+    tool_source_factory = build_tool_source_factory(catalog=catalog, declared_sources=sources)
 
     return RequestOrchestrator(
         config=orchestrator_config,

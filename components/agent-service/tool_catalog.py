@@ -127,7 +127,11 @@ class DeclaredSource:
 
     source_id: str
     served_tool_names: frozenset[str]
-    build: Callable[[ToolSourceContext, dict[str, OperationBudget]], ToolSource]
+    # The callable's SHAPE is in the docstring above, not in this
+    # annotation: the budgets ride a KEYWORD (``budgets=``), and a
+    # positional annotation would describe a call the source's keyword-only
+    # signature refuses.
+    build: Callable[..., ToolSource]
 
 
 class ToolCatalog:

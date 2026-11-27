@@ -2471,3 +2471,391 @@ A difference in G2 is a STOP: something moved that was not supposed to move.
 - Whether a deployment wants `max_results`/`max_result_bytes` tighter than the `AGENT_TOOL_*` ceiling for web specifically — the catalog's per-entry `budget` already tightens; the ceiling itself stays global.
 - The searxng engines/list configuration — the shipped settings inherit every upstream default; a deployment curating engines edits its own copy of `searxng-settings.yml` (the mount's source), never the image.
 - The admin surface for the catalog (dynamic tool management) — deferred by ADR agentic-005.
+
+---
+
+## Amendment (2026-11-27) — the slice's simplify + test-audit cycle
+
+The slice's per-task reviews were green, and the slice's gates passed (G1-G6; G7
+UNRUN — no container runtime on the execution host). The slice-level
+`/simplify` + `/test-audit` cycle then ran on the WHOLE diff
+(`e58c5ae03...HEAD`) and found two things a per-task review cannot see.
+
+**A1 — a deployment-wide outage on the ansible path (BLOCKER).**
+`build_web_search_port` read the web source's PRESENCE from the knob PAIR (both
+knobs set ⇒ present; exactly one ⇒ `ValueError` ⇒ a 503 on every run). But
+`PII_SERVICE_URL` belongs to the OKF pillar: `env.j2:294` renders it
+UNCONDITIONALLY (`| default('http://pii-service:8000')`), the ansible playbook
+writes that render as `<deploy_dir>/.env` (`deploy.yml:718-719`), and compose
+carries it into the agent-service container (`docker-compose.yaml:1591`). So on
+EVERY ansible deployment with the agent tier, the container holds a non-empty
+`PII_SERVICE_URL` and an empty `AGENT_SEARXNG_URL` — the half-wired case — and
+the run surface answered **503 `run_surface_unconfigured` on every run**, web
+search or not. (The compose-raw path was healthy: both knobs unset.)
+
+The deeper truth it exposed: **feature presence is a fact about the feature,
+not about which shared endpoints happen to be set.** A knob another pillar owns
+cannot be the presence signal. `AGENT_WEB_SEARCH_ENABLED` is the deployment's
+declared intent, and it already exists — the ansible render writes it
+(`env.j2`), and compose already reads it as the searxng replicas gate. The
+knob pair keeps supplying the ENDPOINTS, and an ENABLED deployment with an
+incomplete pair keeps the honest 503 naming the missing knob.
+
+**A2 — the catalog stopped seeing the egress guarantee.**
+This slice retired the catalog's open-web refusal and moved the guarantee into
+the leaf adapter. But the catalog is the only place that sees EVERY entry: a
+future source (the MCP source lands in S6) carrying `egress: open_web` would
+pass unreviewed. The refusal returns — in a MORE GENERAL form: an open-web
+entry is refused unless the source it names DECLARES that it implements the
+PII egress path. The web source declares it; the document source does not; an
+undeclared-source entry is still refused by the existing check.
+
+### Task A: the presence signal is the deployment's intent
+
+**Files:**
+- Modify: `components/agent-service/assembly.py` (`build_web_search_port`)
+- Modify: `components/agent-service/app.py` (the call site)
+- Modify: `docker-compose.yaml` (the agent-service env block)
+- Modify: `env` (the documented recipe)
+- Modify: `configs/README.md` (the enable recipe)
+- Test: `components/agent-service/tests/test_app_runs.py` (the three host pins)
+
+**Interfaces:**
+- Consumes: `AGENT_WEB_SEARCH_ENABLED` (the deployment's intent, `0`/unset = off);
+  the knob pair (`PII_SERVICE_URL`, `AGENT_SEARXNG_URL`) as the ENDPOINTS.
+- Produces: `build_web_search_port(env=None, transport=None) -> WebSearchPort | None` —
+  `None` when the flag is not `1`; the port when the flag is `1` AND the pair is
+  complete; `ValueError` naming the FIRST missing knob when the flag is `1` and
+  the pair is incomplete.
+
+- [ ] **Step 1: Write the failing test — the flag decides the presence**
+
+In `components/agent-service/tests/test_app_runs.py`, the three host pins of
+Task 3 change shape:
+
+```python
+def test_the_assembly_declares_the_web_source_when_the_flag_and_the_pair_are_set():
+    env = {**_budget_env(), "AGENT_WEB_SEARCH_ENABLED": "1", "PII_SERVICE_URL": "http://pii:8000", "AGENT_SEARXNG_URL": "http://searxng:8080"}
+    ...
+
+def test_the_shipped_posture_declares_no_web_source():
+    # the flag unset — the deployment declares no web search, whatever the knobs say
+    env = {**_budget_env(), "PII_SERVICE_URL": "http://pii:8000"}
+    ...
+
+
+def test_a_half_wired_web_pair_answers_503_naming_the_missing_knob():
+    env = {**_budget_env(), "AGENT_WEB_SEARCH_ENABLED": "1", "PII_SERVICE_URL": "http://pii:8000"}
+    ...
+```
+
+Read the file's ACTUAL fixture names (`_budget_env` and the three pins' real
+names) and keep their existing assertions — only the ENV each pin sets
+changes. The RED: the second pin (the shipped posture with a non-empty
+`PII_SERVICE_URL`) must fail today (the current code raises the half-wired
+`ValueError` instead of declaring no web source).
+
+- [ ] **Step 2: Run the pins and watch them fail**
+
+Run: `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_app_runs.py -q -k "web"`
+
+Expected: the shipped-posture pin FAILs (today the half-wired pair refuses the
+whole surface).
+
+- [ ] **Step 3: The implementation**
+
+`components/agent-service/assembly.py`:
+
+```python
+def build_web_search_port(env=None, transport=None) -> WebSearchPort | None:
+    """The web-search port, or ``None`` when the deployment runs none.
+
+    The PRESENCE signal is the deployment's own INTENT
+    (``AGENT_WEB_SEARCH_ENABLED``), never the shape of the knobs:
+    ``PII_SERVICE_URL`` belongs to the OKF pillar (the ansible render sets it
+    unconditionally), so inferring presence from it would make every agent
+    deployment look half-wired — and a half-wired deployment is a 503 on every
+    run. The knob PAIR supplies the ENDPOINTS: an ENABLED deployment with an
+    incomplete pair is refused with the honest ``ValueError`` naming the
+    missing knob — a web search that redacts without searching, or searches
+    without redacting, is a lie the deployment believes.
+    """
+    source = os.environ if env is None else env
+    if str(source.get("AGENT_WEB_SEARCH_ENABLED", "")).strip() != "1":
+        return None
+    pii_url = str(source.get("PII_SERVICE_URL", "")).strip()
+    searxng_url = str(source.get("AGENT_SEARXNG_URL", "")).strip()
+    missing = [
+        knob
+        for knob, value in (("PII_SERVICE_URL", pii_url), ("AGENT_SEARXNG_URL", searxng_url))
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            f"{missing[0]} must be set when web search is enabled: "
+            "the web source needs both knobs (the egress rule redacts the query before it leaves)"
+        )
+    return WebSearchAdapter(
+        pii_url,
+        searxng_url,
+        transport=transport if transport is not None else HttpxTransport(ModelEndpointConfig.load(env).tls_verify),
+    )
+```
+
+`components/agent-service/app.py`: the call site passes the transport the host
+already built (`build_web_search_port(env, transport=transport)`) — the two TLS
+readings are the SAME expression (`OPEA_SSL_SKIP_VERIFY != "1"` in both
+`env_config.py` and `noagent/config.py`), so one transport serves both.
+
+`docker-compose.yaml`: the agent-service env block gains
+`      - AGENT_WEB_SEARCH_ENABLED=${AGENT_WEB_SEARCH_ENABLED:-}` — the flag
+the ansible render already writes and compose already reads as the searxng
+replicas gate.
+
+`env` + `configs/README.md`: the enable recipe says the flag AND the pair
+(three settings, not two); the `AGENT_WEB_SEARCH_ENABLED` entry's text says it
+decides whether the deployment DECLARES the web source.
+
+- [ ] **Step 4: Run the pins and the FULL suite**
+
+Run: `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/ -q`
+
+Expected: green, with the count the re-run gates state.
+
+- [ ] **Step 5: Lint**
+
+```bash
+cd components/agent-service
+uvx ruff@0.16.3 check --no-cache app.py assembly.py agent/ capabilities/ tests/
+uvx ruff@0.16.3 format --no-cache --check app.py assembly.py agent/ capabilities/ tests/
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add components/agent-service/assembly.py components/agent-service/app.py components/agent-service/tests/test_app_runs.py docker-compose.yaml env configs/README.md
+git commit -m "fix(agent-service): the deployment's intent decides the web source's presence"
+```
+
+### Task B: the catalog sees the egress guarantee again
+
+**Files:**
+- Modify: `components/agent-service/tool_catalog.py` (`EGRESS_OPEN_WEB` restored; `DeclaredSource.honours_open_web_egress`; `load_catalog`'s new parameter; `_refusal`'s clause; the docstrings)
+- Modify: `components/agent-service/app.py` (the `DeclaredSource` for the web source declares the capability; `load_catalog`'s new argument)
+- Modify: `components/agent-service/agent/sources.py` (`WebSearchToolSource.honours_open_web_egress`)
+- Test: `components/agent-service/tests/test_tool_catalog.py` (the replaced pin + the carried pin)
+
+**Interfaces:**
+- Consumes: `CatalogEntry.egress` (the schema keeps `internal` / `open_web`).
+- Produces: `DeclaredSource.honours_open_web_egress: bool = False`;
+  `load_catalog(path, served_names=..., ceiling=..., egress_capable_sources=frozenset())`;
+  the refusal text "it has an open-web egress and its source declares no PII egress path".
+
+- [ ] **Step 1: Write the failing tests — the catalog pins**
+
+In `components/agent-service/tests/test_tool_catalog.py`, the egress pin of
+Task 3 changes shape: the declaration that names `web` must DECLARE the
+capability for its entry to be carried, and a source that does not declare it
+is refused. Keep the undeclared-source pin as it is.
+
+- [ ] **Step 2: Run the pins and watch them fail**
+
+Run: `cd components/agent-service && /tmp/genie-agent-service-venv/bin/python -m pytest tests/test_tool_catalog.py -q -k "web or egress"`
+
+Expected: FAIL — the declaration has no capability field yet.
+
+- [ ] **Step 3: The implementation**
+
+`tool_catalog.py`:
+
+```python
+EGRESS_OPEN_WEB = "open_web"
+```
+
+`DeclaredSource` gains `honours_open_web_egress: bool = False` with a docstring
+line naming the rule: an open-web entry is carried only when the source it
+names declares that it implements the PII egress path.
+
+`load_catalog` gains `egress_capable_sources: frozenset[str] = frozenset()` and
+`_refusal` gains, after the write/approval clause:
+
+```python
+    if entry.egress == EGRESS_OPEN_WEB and entry.source not in egress_capable_sources:
+        return (
+            "it has an open-web egress and its source declares no PII egress path: "
+            "the deployment cannot honour the Server-Side Tools rule for it"
+        )
+```
+
+`app.py` passes `egress_capable_sources=frozenset(s.source_id for s in sources if s.honours_open_web_egress)`
+and the web `DeclaredSource` declares `honours_open_web_egress=True`.
+
+`agent/sources.py`: `WebSearchToolSource.honours_open_web_egress = True` (the
+class fact, beside its other facts).
+
+- [ ] **Step 4: Run the pins and the FULL suite**
+
+- [ ] **Step 5: Lint**
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add components/agent-service/tool_catalog.py components/agent-service/app.py components/agent-service/agent/sources.py components/agent-service/tests/test_tool_catalog.py
+git commit -m "feat(agent-service): the catalog refuses an open-web entry whose source declares no PII path"
+```
+
+### Task C: the simplifications the cycle found
+
+**Files:**
+- Modify: `components/agent-service/agent/sources.py` (the executor's unused
+  `context`; the stale `budget_overrides` mention)
+- Modify: `components/agent-service/agent/verification.py` (the two identical branches)
+- Modify: `components/agent-service/agent/taint.py` (the label map hoisted)
+- Modify: `components/agent-service/tool_catalog.py` (`budget_overrides` becomes private)
+- Modify: `components/agent-service/capabilities/adapters/web_search.py` (the score coercion)
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: `tool_catalog._budget_overrides` (private), `_SOURCE_BY_TOOL` in
+  `agent/taint.py`.
+
+- [ ] **Step 1: The edits** (each is a pure simplification — the behaviour is
+  identical, and the suite is the proof)
+
+1. `agent/sources.py`: `_make_web_search_executor(port, context, budget)` →
+   `_make_web_search_executor(port, budget)` — the executor never read
+   `context` (the web port forwards no identity by design); the call site
+   drops the argument.
+2. `agent/verification.py`: the two identical branches
+   (`search_knowledge` and `web_search`) → one
+   `if name in ("search_knowledge", "web_search"):` — the comment above them
+   (the web results enter the SAME channel) stays.
+3. `tool_catalog.py`: `budget_overrides` → `_budget_overrides` (its only
+   caller is in its own module; the docstring's "PUBLIC: the host declares
+   the sources" claim is now false) and the stale mention in
+   `agent/sources.py` ("the host derives it (`tool_catalog`'s
+   `budget_overrides`)") names the factory instead.
+4. `agent/taint.py`: the tool→label map becomes a module constant
+   `_SOURCE_BY_TOOL` beside `INSTRUCTION_MARKERS` (it was rebuilt per finding).
+5. `capabilities/adapters/web_search.py`: the adapter writes
+   `"score": item.get("score")` — the ledger's single rule
+   (`agent/verification.py`) already coerces the field, so the adapter's own
+   coercion is a second copy of the same rule.
+
+- [ ] **Step 2: The FULL suite** — green, with the count the re-run gates state.
+
+- [ ] **Step 3: Lint**
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add components/agent-service/agent/sources.py components/agent-service/agent/verification.py components/agent-service/agent/taint.py components/agent-service/tool_catalog.py components/agent-service/capabilities/adapters/web_search.py
+git commit -m "refactor(agent-service): the cycle's simplifications"
+```
+
+### Task D: the gates, re-run
+
+The gate table of Task 5, re-run on the amended slice with `$BASE=e58c5ae03`
+and the updated expected count. G7 stays **UNRUN** (no container runtime on the
+execution host; the executor is the venue-validation session).
+
+### Task E: the test-audit's findings
+
+**Files:**
+- Modify: `components/agent-service/tests/test_web_search.py` (the pins below)
+- Modify: `components/agent-service/tests/test_app_runs.py` (the direct port owner)
+- Modify: `components/agent-service/tests/conftest.py` (the dead test-support branch)
+- Modify: `tests/config-validator/__tests__/config-validation.test.js` (the weaker duplicate)
+- Modify: `tests/config-validator/__tests__/agent-service.test.js` (the live gate)
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: the pins listed below; nothing else changes.
+
+- [ ] **Step 1: The pins to ADD**
+
+1. `test_app_runs.py` — the DIRECT owner of `build_web_search_port`'s return
+   value. The app-level observable cannot prove the source's absence (the
+   catalog filters the tool list, so the observable is identical with or
+   without a web source), and the "no web source" half of the pair had NO
+   owner. Pin the function itself: the flag unset ⇒ `None`; the flag `1` and
+   the pair complete ⇒ a port; the flag `1` and `PII_SERVICE_URL` missing ⇒ a
+   `ValueError` naming it; the flag `1` and `AGENT_SEARXNG_URL` missing ⇒ a
+   `ValueError` naming it (the SearXNG-missing direction had no pin).
+2. `tests/config-validator/__tests__/agent-service.test.js` — make the gate
+   LIVE: the shipped catalog declares no `web_search`, so the
+   "a catalog that declares web_search requires the deployed infrastructure"
+   branch never ran. Add a FIXTURE catalog that declares `web_search` and
+   assert the rule against it, keeping the shipped-posture assertion too.
+
+- [ ] **Step 2: The pin to FIX (it could not fail for the reason it claims)**
+
+`test_from_bundle_builds_the_source_with_the_bundle_wiring`: the fixture sets
+the bundle's `operation_budget` AND the `budgets` map to the SAME object, so
+the assertion passes whether the `budgets` keyword arrived or was dropped.
+Use a DISTINCT budget in the map (e.g. `timeout_ms=1000`) and assert the port
+received THAT one.
+
+- [ ] **Step 3: The pins to STRENGTHEN**
+
+`test_the_port_declares_one_search_method`: it asserts `hasattr` on a
+Protocol that is never runtime-checked, and it does not enforce its own name
+(the count is never asserted). Assert the Protocol's public members are
+exactly `{"search"}` — the one-method-per-source rule (the design's §4.3).
+
+- [ ] **Step 4: The pins to REMOVE (name-independent duplicates, owned elsewhere)**
+
+- `test_a_malformed_web_hit_contributes_nothing` — the malformed-hit contract
+  is owned by `tests/test_agent_verification.py`; the web branch shares the
+  extractor, so this pin passes for a name-independent reason.
+- `test_an_error_envelope_contributes_nothing_and_the_ledger_counts_what_grew`
+  — both halves are name-independent (the ledger reads `payload["result"]`);
+  owned by `tests/test_agent_verification.py`; the web-specific end-to-end
+  proof is `test_a_web_only_run_verifies_through_the_judge_and_projects_nothing`.
+- `test_the_tools_pair_carries_the_definition_and_a_bound_executor` —
+  `definition is WEB_SEARCH_DEFINITION` compares the constant the source just
+  returned, and `callable(executor)` cannot fail on a meaningful regression;
+  the definition's bytes are owned by
+  `test_the_web_definition_is_the_model_facing_contract` and the registry
+  boundary by the catalog suite.
+- `test_the_identity_travels_with_the_call` — it pins a FACT THE DEPLOYMENT
+  DOES NOT HAVE: the deployed wiring shares ONE adapter across requests
+  (`partial(WebSearchToolSource.from_bundle, lambda context, bearer: web_port)`)
+  and the lambda discards both arguments, and the adapter sends empty headers
+  on both legs. No identity travels anywhere in production, by design. The
+  truth it should own — "no identity leaves the process" — is already owned by
+  `test_no_identity_leaves_the_process`.
+
+**Two pins the audit flagged that are KEPT, with the reason:**
+- `test_the_web_marker_is_the_contract_constant` — the marker's literal IS a
+  wire contract (the join key between the adapter's provenance dict, the
+  ledger's identity reader and the taint label). A constant's value is the
+  cheapest independent guard of that contract.
+- `test_the_source_declares_its_facts_on_the_class` — both facts are live:
+  `source_id` is the join the loader filters on, and `served_tool_names` is
+  what makes a catalog entry naming an UNSERVED tool a refusal
+  (`tool_catalog.py:223`).
+
+- [ ] **Step 5: The dead test-support code to prune**
+
+`components/agent-service/tests/conftest.py`: `FakeWebSearchPort`'s `error=`
+parameter and its "an `Exception` result raises" branch are never exercised by
+any test (every construction site uses the no-argument or the canned-result
+form). Remove the parameter and the branch — dead code, not a test.
+
+- [ ] **Step 6: The weaker duplicate to remove**
+
+`tests/config-validator/__tests__/config-validation.test.js` re-asserts the
+compose `pii-service`'s `profiles` and `replicas` with a hand-rolled regex,
+while `tests/config-validator/__tests__/agent-service.test.js` asserts the
+same two facts through the repo's parsed-contract helper. Delete the regex
+copy — one owner, the stronger one.
+
+- [ ] **Step 7: The FULL suite** — green, with the count the re-run gates state.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add components/agent-service/tests/test_web_search.py components/agent-service/tests/test_app_runs.py components/agent-service/tests/conftest.py tests/config-validator/__tests__/config-validation.test.js tests/config-validator/__tests__/agent-service.test.js
+git commit -m "test(agent-service): the audit's findings — the pins that could not fail, and the ones that pin a fiction"
+```

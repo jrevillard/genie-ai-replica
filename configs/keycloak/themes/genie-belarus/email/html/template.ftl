@@ -15,7 +15,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${subject!"GENIE.AI"}</title>
+    <title>${subject!"Кветка"}</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f7fd;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.6;color:#344049;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -25,9 +25,9 @@
                 <tr>
                     <td style="background-color:#ddecff;padding:28px 24px;text-align:center;">
                         <#if url??>
-                            <img src="${url.resourcesUrl}/img/logo.png" alt="GENIE.AI" width="62" height="72" style="display:block;width:62px;height:72px;max-width:72px;max-height:72px;margin:0 auto;border-radius:12px;">
+                            <img src="${url.resourcesUrl}/img/logo.png" alt="Кветка" width="62" height="72" style="display:block;width:62px;height:72px;max-width:72px;max-height:72px;margin:0 auto;border-radius:12px;">
                         </#if>
-                        <div style="color:#000d64;font-size:22px;font-weight:700;letter-spacing:0.08em;margin-top:12px;">GENIE.AI</div>
+                        <div style="color:#000d64;font-size:22px;font-weight:700;letter-spacing:0.08em;margin-top:12px;">Кветка</div>
                     </td>
                 </tr>
                 <tr>

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework with dual-prompt mechanism for quick help buttons",
+  "title": "Кветка Framework Configuration",
+  "description": "Configuration file for customizing the Кветка chatbot framework with dual-prompt mechanism for quick help buttons",
   "type": "object",
   "properties": {
     "app": {
@@ -11,7 +11,7 @@
         "title": {
           "type": "string",
           "description": "Main application title displayed in the UI",
-          "default": "GENIE.AI"
+          "default": "Кветка"
         },
         "icon": {
           "type": "object",
@@ -287,7 +287,7 @@
   },
   "required": ["app", "theme"],
   "app": {
-    "title": "GENIE.AI",
+    "title": "Кветка",
     "icon": {
       "type": "file",
       "value": "/config/belarus/logo.png"
@@ -327,7 +327,7 @@
         "th": "ยินดีต้อนรับ! วันนี้ฉันสามารถช่วยคุณเรื่องบริการสาธารณะอะไรได้บ้าง?",
         "zh": "欢迎！今天我可以如何帮助您使用公共服务？"
       },
-      "botName": "GENIE.AI",
+      "botName": "Кветка",
       "quickHelp": {
         "buttons": [
           {

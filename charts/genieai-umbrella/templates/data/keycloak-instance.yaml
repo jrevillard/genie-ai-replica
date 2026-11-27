@@ -142,13 +142,16 @@ spec:
               - sh
               - -c
               # tarball root is themes/<theme>/ (one member per shipped
-              # theme): extract ONLY the configured theme and strip 2 so its
-              # tree lands directly at the emptyDir root
-              # (= /opt/keycloak/themes/<theme>). The emptyDir must stay a
-              # SUBDIR of /opt/keycloak/themes — mounting the themes root
-              # itself would shadow the image's stock parent themes
-              # (keycloak.v2/keycloak.v3) and break every parent= resolution.
-              - tar -xzf /src/keycloak-themes.tgz -C /theme --strip-components=2 themes/{{ $kc.theme | default "genie" }}
+              # theme): extract the base `genie` theme AND the configured
+              # one, strip 1 so each keeps its own directory inside the
+              # emptyDir (genie/, genie-belarus/, ...). A child theme's
+              # parent=genie must RESOLVE — extracting the active theme
+              # alone leaves the parent missing and Keycloak silently falls
+              # back to the built-in theme (seen live, 2026-11-27). The
+              # mounts below then expose each directory under its own name
+              # via subPath; mounting the themes root itself would shadow
+              # the image's stock parent themes (keycloak.v2/keycloak.v3).
+              - tar -xzf /src/keycloak-themes.tgz -C /theme --strip-components=1 themes/genie themes/{{ $kc.theme | default "genie" }}
             volumeMounts:
               - name: keycloak-themes-src
                 mountPath: /src
@@ -160,9 +163,20 @@ spec:
         containers:
           - name: keycloak
             volumeMounts:
+              # The base genie theme is always mounted (every child declares
+              # parent=genie). The active theme is mounted only when it is
+              # NOT genie itself — a second mount of the same mountPath is
+              # invalid.
               - name: keycloak-theme
-                mountPath: {{ printf "/opt/keycloak/themes/%s" ($kc.theme | default "genie") }}
+                mountPath: /opt/keycloak/themes/genie
+                subPath: genie
                 readOnly: true
+              {{- if ne ($kc.theme | default "genie") "genie" }}
+              - name: keycloak-theme
+                mountPath: {{ printf "/opt/keycloak/themes/%s" $kc.theme }}
+                subPath: {{ $kc.theme }}
+                readOnly: true
+              {{- end }}
   # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;
   # spec.proxy.headers is the only path. Misconfiguration manifests as
   # `Invalid parameter: redirect_uri` loops on login.

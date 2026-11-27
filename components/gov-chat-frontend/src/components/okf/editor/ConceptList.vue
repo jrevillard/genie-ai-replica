@@ -68,8 +68,8 @@
     </p>
 
     <template v-else>
-      <ul class="okf-cl__list" @scroll.passive="hideFailCard">
-        <li v-for="node in tree" :key="node.key">
+      <ul ref="listEl" class="okf-cl__list" data-test-id="okf-cl-list" @scroll.passive="onListScroll">
+        <li v-for="node in visibleTree" :key="node.key">
           <div
             class="okf-cl__row"
             :class="{ 'okf-cl__row--selected': node.concept_id === selectedId }"
@@ -178,6 +178,8 @@
             class="okf-cl__children"
             @scroll.passive="hideFailCard"
           >
+            <!-- #2189: the children mounted here are the windowed slice —
+                 visibleTree pre-slices them for the index parent. -->
             <li v-for="child in node.children" :key="child.concept_id">
               <div
                 class="okf-cl__row okf-cl__row--child"
@@ -268,6 +270,17 @@
             </li>
           </ul>
         </li>
+        <!-- #2189 — the unrendered remainder as spacer height, so the
+             scrollbar reflects the whole collection while only O(viewport)
+             rows exist in the DOM. -->
+        <li
+          v-if="truncated"
+          ref="tailEl"
+          class="okf-cl__tail"
+          data-test-id="okf-cl-tail"
+          aria-hidden="true"
+          :style="{ height: tailHeight + 'px' }"
+        ></li>
       </ul>
     </template>
 
@@ -369,6 +382,28 @@ import DsProgress from '../../ds/Progress.vue';
 import DsSelect from '../../ds/Select.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 
+// #2189 — the concept rail renders a WINDOW, not the collection. #2188 made
+// the crawl network-fast (1.1 s for 6,352 concepts) but the measured mount
+// stayed ~32-80 s: the rail v-for'd every concept, so the wave commits
+// (~7 per load) each re-diffused the full 10k-row list. Constants, module
+// scope — they are layout policy, not per-instance state.
+const RENDER_CHUNK = 120; // rows added per scroll extension
+const FULL_RENDER_LIMIT = 300; // at/below this the list renders fully, DOM unchanged
+const DEFAULT_ROW_HEIGHT = 36; // px fallback until a real row is measured
+const EXTEND_LEAD = 600; // px above the rendered bottom that triggers extension
+
+// #2204 — the rail's per-row work caches against ROW IDENTITY: #2188's wave
+// commits reuse the same row objects (~7 commits per load), so an
+// already-loaded row never pays the spread or the haystack build twice, and
+// Vue's keyed diff gets a reference-stable v-for. Audited 2026-11-27: every
+// okf mutation path replaces rows immutably (patchConcept spreads a new
+// row) or refetches the whole list (labels, reingest, PII rescan, add/
+// delete/split) — nothing mutates a stored row in place, so identity
+// implies freshness. The maps die with their keys (WeakMap).
+const DECORATED = new WeakMap(); // raw row -> decorated row
+const FLAT_WRAPPERS = new WeakMap(); // decorated row -> flat-list wrapper
+const HAYSTACKS = new WeakMap(); // raw row -> lowercase filter haystack
+
 export default {
   name: 'OkfConceptList',
   components: { DsButton, DsInfoTip, DsInput, DsPill, DsProgress, DsSelect, DsSpinner },
@@ -396,6 +431,13 @@ export default {
       filter: '',
       expanded: true,
       labelEditing: null,
+      // #2189 — how many rows of a truncated collection are mounted. Full
+      // collections (≤ FULL_RENDER_LIMIT) ignore it entirely.
+      renderedCount: RENDER_CHUNK,
+      // #2189 — the spacer and the extension lead are laid out from the
+      // MEASURED row height (one row read after mount); this default only
+      // covers the jsdom/no-layout case and the first paint.
+      rowHeight: DEFAULT_ROW_HEIGHT,
       // INGEST-FAILURE CARD state: the hovered FAILED row + viewport-anchored
       // placement. Fixed position (viewport coords) so the list's scroll
       // container can never clip it; hidden on leave/scroll/blur.
@@ -430,7 +472,11 @@ export default {
       const s = (this.filter || '').toLowerCase().trim();
       if (!s) return this.concepts;
       return this.concepts.filter((c) => {
-        const hay = [c.title, c.concept_id, c.path, this.sourceOf(c)].filter(Boolean).join(' ').toLowerCase();
+        let hay = HAYSTACKS.get(c);
+        if (hay === undefined) {
+          hay = [c.title, c.concept_id, c.path, this.sourceOf(c)].filter(Boolean).join(' ').toLowerCase();
+          HAYSTACKS.set(c, hay);
+        }
         return hay.includes(s);
       });
     },
@@ -438,13 +484,100 @@ export default {
       const list = this.filtered;
       const indexRow = list.find((c) => c.is_index);
       const rest = list.filter((c) => c !== indexRow).map((c) => this.decorate(c));
-      if (!indexRow) return rest.map((c) => ({ ...c, children: [] }));
+      if (!indexRow) {
+        return rest.map((c) => {
+          let w = FLAT_WRAPPERS.get(c);
+          if (!w) {
+            w = { ...c, children: [] };
+            FLAT_WRAPPERS.set(c, w);
+          }
+          return w;
+        });
+      }
       return [{ ...this.decorate(indexRow), children: rest, key: indexRow.concept_id }];
+    },
+    // #2189 — windowing mode. 'full' renders the tree untouched (the DOM for
+    // the common repo is byte-identical to the pre-#2189 component); above
+    // the limit, the window slices either the flat list ('top') or the index
+    // parent's children ('children') and a tail spacer stands in for the rest.
+    virtualList() {
+      if (this.tree.length === 1 && this.tree[0].children.length > FULL_RENDER_LIMIT) return 'children';
+      if (this.tree.length > FULL_RENDER_LIMIT) return 'top';
+      return 'full';
+    },
+    totalCount() {
+      if (this.virtualList === 'children') return this.tree[0].children.length + 1;
+      return this.tree.length;
+    },
+    truncated() {
+      return this.virtualList !== 'full' && this.totalCount > this.renderedCount;
+    },
+    tailHeight() {
+      return (this.totalCount - this.renderedCount) * this.rowHeight;
+    },
+    visibleTree() {
+      if (this.virtualList === 'full') return this.tree;
+      if (this.virtualList === 'top') return this.tree.slice(0, this.renderedCount);
+      const index = this.tree[0];
+      return [{ ...index, children: index.children.slice(0, this.renderedCount - 1) }];
     }
+  },
+  watch: {
+    // #2189 — a narrowed filter re-windows: its (small) result renders fully
+    // from the first chunk, and the stale deep scroll position goes with it
+    // (a kept scroll offset would clamp against the shrunken content and
+    // cascade the window back open on the browser's own scroll event).
+    filter() {
+      this.renderedCount = RENDER_CHUNK;
+      const el = this.$refs.listEl;
+      if (el) el.scrollTop = 0;
+    },
+    totalCount: {
+      immediate: true,
+      handler(n) {
+        if (this.virtualList !== 'full' && this._prevListFull && n > this.renderedCount) {
+          // #2189 review round — a FULLY-rendered collection grew past the
+          // limit (the browser dialog's Show-more page, a re-crawl on a
+          // small repo): carry the window over so no row the curator was
+          // looking at vanishes, bounded at the limit.
+          this.renderedCount = Math.min(n, FULL_RENDER_LIMIT);
+        } else if (this.renderedCount > n) {
+          // the collection shrank under a wide window (new crawl, filter):
+          // clamp so the window never claims rows past the end.
+          this.renderedCount = Math.max(RENDER_CHUNK, n);
+        }
+        this._prevListFull = this.virtualList === 'full';
+      }
+    },
+    // #2189 — the capture-phase extension listener lives only while a tail
+    // spacer exists: full-mode mounts (the common repo) carry nothing on
+    // the document, and the editor's ul path needs no ancestor ear.
+    truncated: {
+      immediate: true,
+      handler(active) {
+        if (active === !!this._tailBound) return;
+        if (active) document.addEventListener('scroll', this.onDocumentScroll, { capture: true, passive: true });
+        else document.removeEventListener('scroll', this.onDocumentScroll, true);
+        this._tailBound = active;
+      }
+    }
+  },
+  mounted() {
+    this.$nextTick(this.measureRowHeight);
+  },
+  beforeUnmount() {
+    // stops any in-flight extension chain (the $nextTick re-checks)
+    this._railDead = true;
+    if (this._tailBound) document.removeEventListener('scroll', this.onDocumentScroll, true);
   },
   methods: {
     decorate(c) {
-      return { ...c, sourceUrl: this.sourceOf(c), key: c.concept_id };
+      let d = DECORATED.get(c);
+      if (!d) {
+        d = { ...c, sourceUrl: this.sourceOf(c), key: c.concept_id };
+        DECORATED.set(c, d);
+      }
+      return d;
     },
     // D-G: the concept's curation origin as a compact tag. Guarded — old
     // meta rows carry no curation payload and render nothing.
@@ -514,6 +647,67 @@ export default {
     },
     hideFailCard() {
       if (this.failCard.visible) this.failCard.visible = false;
+    },
+    // ---- #2189 — the windowed rail ----------------------------------------
+    // Extend the rendered window as the curator scrolls near its bottom.
+    // The $nextTick re-check is what makes a deep jump (End key, scrollbar
+    // fling) keep filling: extension swaps rendered rows for spacer height,
+    // so the container's scrollHeight never changes and the browser emits
+    // no follow-up scroll event of its own. Both mount geometries share the
+    // gate-grow-recheck skeleton; they differ only in the trigger predicate.
+    // The chunk DOUBLES per chained hop (per chain, never across chains —
+    // it is the call's argument): a deep jump fills in ~7 hops instead of
+    // ~52, and each hop re-diffs every already-rendered row, so fewer hops
+    // is the difference between a fill and a stall on a 10k repo.
+    canGrow() {
+      if (this._railDead) return false;
+      if (!this.truncated) return false;
+      // collapsed children render nothing while every extension shrinks the
+      // spacer — extending a collapsed rail churns hidden rows and lurches
+      // the scrollbar (review round 1, finding 4). Expansion resumes it.
+      if (this.virtualList === 'children' && !this.expanded) return false;
+      return true;
+    },
+    extend(trigger, chunk) {
+      if (!this.canGrow() || !trigger()) return;
+      this.renderedCount = Math.min(this.totalCount, this.renderedCount + chunk);
+      this.$nextTick(() => this.extend(trigger, chunk * 2));
+    },
+    onListScroll(evt) {
+      this.hideFailCard();
+      const el = evt && evt.currentTarget;
+      if (!el || !el.clientHeight) return;
+      this.extend(
+        () => el.scrollTop + el.clientHeight >= this.renderedCount * this.rowHeight - EXTEND_LEAD,
+        RENDER_CHUNK
+      );
+    },
+    // The capture-phase path: some ancestor container (the wizard bench's
+    // page, the concept browser's 60vh pane) is the real scroller. The ul's
+    // own geometry is inert there — key on the spacer's viewport position
+    // instead. Skipped when the ul itself overflows (the editor mount),
+    // where onListScroll already owns extension. canGrow (cheap reactive
+    // flags) runs before any DOM geometry read.
+    onDocumentScroll() {
+      this.hideFailCard();
+      if (!this.canGrow()) return;
+      const el = this.$refs.listEl;
+      if (el && el.scrollHeight > el.clientHeight + 1) return;
+      this.extend(() => {
+        const spacer = this.$refs.tailEl;
+        if (!spacer) return false;
+        return spacer.getBoundingClientRect().top <= window.innerHeight + EXTEND_LEAD;
+      }, RENDER_CHUNK);
+    },
+    // One real row read after mount: the spacer and the extension lead use
+    // the ACTUAL row height instead of a hardcoded estimate, so the
+    // scrollbar stays honest when the DS spacing tokens move. No layout in
+    // jsdom — the default stands there.
+    measureRowHeight() {
+      const row = this.$el && this.$el.querySelector('.okf-cl__row');
+      if (row && row.offsetHeight > 0) {
+        this.rowHeight = Math.max(24, Math.ceil(row.offsetHeight + 2));
+      }
     },
     // The recovery for THIS failure kind. The reaper dead-letter is the
     // saturated-drain signature (www-gov-uk: 75 identical messages) — the

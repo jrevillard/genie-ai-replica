@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "name": "search_knowledge",
+      "source": "document",
+      "server": null,
+      "tool": null,
+      "allow": true,
+      "risk": "read",
+      "requires_approval": false,
+      "egress": "internal",
+      "scopes": []
+    },
+    {
+      "name": "read_source",
+      "source": "document",
+      "server": null,
+      "tool": null,
+      "allow": true,
+      "risk": "read",
+      "requires_approval": false,
+      "egress": "internal",
+      "scopes": []
+    }
+  ]
+}

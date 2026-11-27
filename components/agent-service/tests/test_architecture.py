@@ -77,7 +77,7 @@ class Layout(NamedTuple):
 
 
 SERVICE_LAYOUT = Layout(
-    host=("app", "tracing", "lane", "assembly"),
+    host=("app", "tracing", "lane", "assembly", "tool_catalog"),
     core_packages=("agent", "noagent", "preparation"),
     core_modules=(
         "capabilities",

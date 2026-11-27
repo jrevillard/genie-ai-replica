@@ -116,6 +116,17 @@ agent_okf_url: ""
 agent_authorized_graphs: ""
 agent_authorized_repos: ""
 agent_probe_bearer: ""
+# The web-search knob pair: the agent declares the web source only when
+# BOTH are set (the query is redacted through the pii-service before the
+# meta-search call, failing closed). Empty = no web source (the shipped
+# posture). pii_service_url is deliberately ABSENT here: env.j2 line 294
+# renders it with | default('http://pii-service:8000') — a group-var
+# definition, even at "", would flip that render to EMPTY (jinja's
+# default fires on undefined only).
+agent_searxng_url: ""
+# The searxng activation flag: 1 runs it (and drives the PII_SERVICE_ENABLED
+# derivation in env.j2 — the pii-service runs when okf_enabled OR this is 1).
+agent_web_search_enabled: "0"
 grafana_admin_user: "admin"
 victoriametrics_retention: "30d"
 victorialogs_retention: "30d"

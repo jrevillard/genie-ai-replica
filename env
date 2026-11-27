@@ -1511,6 +1511,41 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # exactly what is missing.
 # AGENT_DOCREPO_URL=
 # AGENT_OKF_URL=
+# Web search behind the outbound PII egress (the Server-Side Tools rule):
+# the web_search tool is declared ONLY when BOTH knobs below are set — the
+# query passes the pii-service first and the search runs on the redacted
+# text, failing closed if the scan fails; setting exactly one is answered
+# 503 at assembly naming the missing knob. The UNSET pair (the default) is
+# the shipped posture: no web source, no web tool. The pair declares the
+# SOURCE; the tool appears only when the deployment's catalog ALSO carries
+# the web_search entry — the enable recipe (the catalog entry, the flags,
+# the recreate) lives in configs/README.md. The scan's model is English-only
+# (the pii-service's shipped limitation): non-English queries are scanned
+# best-effort.
+# AGENT_SEARXNG_URL=http://searxng:8080
+# PII_SERVICE_URL=http://pii-service:8000
+#
+# The two activation flags the compose block and the ansible render read —
+# no container code reads either:
+#   AGENT_WEB_SEARCH_ENABLED — 1 runs the searxng service (and, on the
+#     ansible path, drives the PII_SERVICE_ENABLED derivation below);
+#     0 (the default) parks it. Compose mode: pair with the `agent`
+#     profile, like AGENT_ENABLED above.
+#   PII_SERVICE_ENABLED — 1 runs the pii-service, 0 (the default) parks it.
+#     DEPLOYMENT CONTRACT (changed 2026-11): the compose default is 0 — a
+#     plain-compose deployment that runs the OKF pillar must set the
+#     variable PII_SERVICE_ENABLED=1 here (the ansible path derives it
+#     from okf_enabled OR agent_web_search_enabled, so ansible deployments
+#     set nothing). Until this knob existed the pii-service tracked
+#     OKF_ENABLED directly; a raw-compose OKF deployment that skips the
+#     line parks the sidecar and every OKF publish fails closed
+#     (pii_state='error' → publish blocked). WRAPPING NOTE: the prose
+#     lines of this block must never read `# NAME=VALUE` at line start —
+#     parse-env.js's documented-entry regex matches that shape, and a
+#     prose line that fits it plants a garbage entry the gates' `.find()`
+#     would pick up. Put a lowercase word before the variable name.
+# AGENT_WEB_SEARCH_ENABLED=1
+# PII_SERVICE_ENABLED=1
 # The agent service reads the SAME OKF feature flag as the rest of the
 # stack (the OKF_ENABLED section above) — no second variable, and no second
 # copy of what the flag means stack-wide. What the flag means FOR THE AGENT:

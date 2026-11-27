@@ -14,6 +14,7 @@ event and releases the lane slot.
 import asyncio
 import json
 from dataclasses import replace
+from functools import partial
 
 import pytest
 from conftest import (
@@ -62,13 +63,7 @@ def _runtime(model, tmp_path):
                 DeclaredSource(
                     source_id=DocumentToolSource.source_id,
                     served_tool_names=DocumentToolSource.served_tool_names,
-                    build=lambda bundle: DocumentToolSource(
-                        lambda context, bearer: fake_port(),
-                        bundle.operation_budget,
-                        preparer=bundle.preparer,
-                        on_preparation_status=bundle.on_preparation_status,
-                        abstention_sink=bundle.abstention_sink,
-                    ),
+                    build=partial(DocumentToolSource.from_bundle, lambda context, bearer: fake_port()),
                 ),
             ),
         ),
@@ -385,13 +380,7 @@ def test_a_budget_hit_ends_the_stream_honestly_with_no_answer_text(tmp_path, mon
                     DeclaredSource(
                         source_id=DocumentToolSource.source_id,
                         served_tool_names=DocumentToolSource.served_tool_names,
-                        build=lambda bundle: DocumentToolSource(
-                            lambda context, bearer: fake_port(),
-                            bundle.operation_budget,
-                            preparer=bundle.preparer,
-                            on_preparation_status=bundle.on_preparation_status,
-                            abstention_sink=bundle.abstention_sink,
-                        ),
+                        build=partial(DocumentToolSource.from_bundle, lambda context, bearer: fake_port()),
                     ),
                 ),
             ),

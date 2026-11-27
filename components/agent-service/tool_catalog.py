@@ -117,13 +117,17 @@ class DeclaredSource:
     a DISCOVERED one (the MCP source's startup discovery — §4.4) reach
     the catalog the same way.
 
-    ``build`` is the per-request builder: the source is built per request
-    because the budget, the preparation leg and the sinks are the run's.
+    ``build`` is the per-request builder, called ``build(bundle,
+    budgets=<the catalog's map>)`` — the map rides the KEYWORD. The
+    factory hands it to EVERY declared source MECHANICALLY — a source
+    cannot forget the override map, because the signature carries it.
+    The source is built per request because the budget, the preparation
+    leg and the sinks are the run's.
     """
 
     source_id: str
     served_tool_names: frozenset[str]
-    build: Callable[[ToolSourceContext], ToolSource]
+    build: Callable[[ToolSourceContext, dict[str, OperationBudget]], ToolSource]
 
 
 class ToolCatalog:
@@ -300,12 +304,22 @@ def build_tool_source_factory(
     not name, does not allow, or names on another source is not offered
     at all — so the registry never carries it, the model never sees it,
     and the dispatcher refuses it by name.
+
+    The MECHANICAL budget hand-off: the catalog's per-tool bounds are read
+    ONCE here (``budget_overrides``) and handed to every ``build`` with the
+    bundle. A declared source that ignores the argument still RECEIVES it;
+    a factory path that bypasses ``DeclaredSource`` entirely (the suites'
+    direct ``tool_source_factory`` helpers) never sees the map — that is
+    the forgetting path this signature closed, and the suites keep one
+    deliberate demonstration of it.
     """
+
+    catalog_budgets = budget_overrides(catalog)
 
     def factory(bundle: ToolSourceContext) -> tuple[tuple[ToolDefinition, ToolExecutor], ...]:
         offered: list[tuple[ToolDefinition, ToolExecutor]] = []
         for declared in declared_sources:
-            source = declared.build(bundle)
+            source = declared.build(bundle, budgets=catalog_budgets)
             for definition, executor in source.tools(bundle.context, bundle.bearer):
                 entry = catalog.entry(definition.name)
                 if entry is None or not entry.allow:

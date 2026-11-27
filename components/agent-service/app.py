@@ -28,6 +28,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from functools import partial
 
 import fastapi
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -51,7 +52,7 @@ from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import CallerContext
 from lane import AdmissionLane
 from noagent.config import NoAgentConfig
-from tool_catalog import DeclaredSource, budget_overrides, build_tool_source_factory, load_catalog
+from tool_catalog import DeclaredSource, build_tool_source_factory, load_catalog
 from tracing import setup_tracing
 
 SERVICE_NAME = "agent-service"
@@ -154,22 +155,15 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
 
         The core composes nothing — it asks this factory per request for
         the pairs to register. One home: the catalog's served_names are
-        derived from THIS (the same facts, read once). The budgets close
-        over ``catalog_budgets`` below — resolved per REQUEST, long after
-        the assembly finishes, so the definition order is not a trap.
+        derived from THIS (the same facts, read once). The catalog's
+        per-tool budgets arrive MECHANICALLY — ``build_tool_source_factory``
+        hands them to every ``build`` — so this site names no budget map.
         """
         return (
             DeclaredSource(
                 source_id=DocumentToolSource.source_id,
                 served_tool_names=DocumentToolSource.served_tool_names,
-                build=lambda bundle: DocumentToolSource(
-                    factory,
-                    bundle.operation_budget,
-                    budgets=catalog_budgets,
-                    preparer=bundle.preparer,
-                    on_preparation_status=bundle.on_preparation_status,
-                    abstention_sink=bundle.abstention_sink,
-                ),
+                build=partial(DocumentToolSource.from_bundle, factory),
             ),
         )
 
@@ -179,9 +173,6 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         served_names={source.source_id: source.served_tool_names for source in sources},
         ceiling=orchestrator_config.operation_budget,
     )
-    # The per-tool bounds are the CATALOG's static fact: computed once at
-    # assembly, not re-derived inside every request's build call.
-    catalog_budgets = budget_overrides(catalog)
     tool_source_factory = build_tool_source_factory(catalog=catalog, declared_sources=sources)
 
     return RequestOrchestrator(

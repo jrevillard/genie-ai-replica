@@ -9,6 +9,7 @@ pre-loop failure path alike."""
 import asyncio
 import json
 import re
+from functools import partial
 
 from conftest import (
     SHIPPED_CATALOG,
@@ -225,13 +226,7 @@ def _orchestrator_with(model, port, tmp_path):
                 DeclaredSource(
                     source_id=DocumentToolSource.source_id,
                     served_tool_names=DocumentToolSource.served_tool_names,
-                    build=lambda bundle: DocumentToolSource(
-                        lambda context, bearer: port,
-                        bundle.operation_budget,
-                        preparer=bundle.preparer,
-                        on_preparation_status=bundle.on_preparation_status,
-                        abstention_sink=bundle.abstention_sink,
-                    ),
+                    build=partial(DocumentToolSource.from_bundle, lambda context, bearer: port),
                 ),
             ),
         ),

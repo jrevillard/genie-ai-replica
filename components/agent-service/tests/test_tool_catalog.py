@@ -14,6 +14,7 @@ refusal into a pass — or a warning into silence — turns them red.
 import asyncio
 import json
 import logging
+from functools import partial
 
 import pytest
 from conftest import SHIPPED_CATALOG, AgentFakePort, canned_search_result
@@ -25,7 +26,6 @@ from tool_catalog import (
     MAX_CATALOG_ENTRIES,
     CatalogError,
     DeclaredSource,
-    budget_overrides,
     build_tool_source_factory,
     load_catalog,
 )
@@ -198,26 +198,24 @@ def _bundle(context=CONTEXT):
     )
 
 
-def _declared(catalog, port):
-    """The suite's declaration of the document source — the host's shape."""
+def _declared(port):
+    """The suite's declaration of the document source — the host's shape.
+
+    The declaration names NO budget map: ``build_tool_source_factory``
+    hands the catalog's budgets to every declared source mechanically,
+    and this site cannot forget them (the mechanical pass is the point).
+    """
     return (
         DeclaredSource(
             source_id=DocumentToolSource.source_id,
             served_tool_names=DocumentToolSource.served_tool_names,
-            build=lambda bundle: DocumentToolSource(
-                lambda _context, _bearer: port,
-                bundle.operation_budget,
-                budgets=budget_overrides(catalog),
-                preparer=bundle.preparer,
-                on_preparation_status=bundle.on_preparation_status,
-                abstention_sink=bundle.abstention_sink,
-            ),
+            build=partial(DocumentToolSource.from_bundle, lambda _context, _bearer: port),
         ),
     )
 
 
 def _registry(catalog, port):
-    factory = build_tool_source_factory(catalog=catalog, declared_sources=_declared(catalog, port))
+    factory = build_tool_source_factory(catalog=catalog, declared_sources=_declared(port))
     return build_registry(factory(_bundle()))
 
 
@@ -263,6 +261,11 @@ def test_a_tool_the_catalog_names_on_another_source_is_not_offered(tmp_path):
 
 
 def test_a_catalogued_budget_is_the_one_the_executor_runs_under(tmp_path):
+    """The MECHANICAL hand-off: the factory reads the catalog's per-tool
+    bounds ONCE and hands them to every declared source's build itself —
+    the declaration site names no budget map, and deleting the hand-off
+    reds HERE (the executor silently falling back to the ceiling), never
+    at some later request."""
     catalog = load_catalog(
         _write(
             tmp_path,

@@ -180,6 +180,28 @@ class DocumentToolSource:
         the deployment's ceiling otherwise."""
         return self._budgets.get(name, self._operation_budget)
 
+    @classmethod
+    def from_bundle(
+        cls,
+        port_factory: Callable[[CallerContext, str | None], DocumentCapabilityPort],
+        bundle: ToolSourceContext,
+        *,
+        budgets: dict[str, OperationBudget] | None = None,
+    ) -> "DocumentToolSource":
+        """One construction home for a per-request build: the bundle's run
+        wiring forwarded (the preparation leg, the two sinks), the catalog's
+        budget map handed through. The host's ``DeclaredSource.build`` and
+        the suites' factories all land HERE, so a new bundle field is a
+        one-site edit, not a sweep over forwarding lambdas."""
+        return cls(
+            port_factory,
+            bundle.operation_budget,
+            budgets=budgets,
+            preparer=bundle.preparer,
+            on_preparation_status=bundle.on_preparation_status,
+            abstention_sink=bundle.abstention_sink,
+        )
+
     def tools(self, context: CallerContext, bearer: str | None) -> Sequence[tuple[ToolDefinition, ToolExecutor]]:
         """The two document tools, bound to THIS request's identity."""
         port = self._port_factory(context, bearer)

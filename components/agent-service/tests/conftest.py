@@ -686,22 +686,19 @@ def document_source_factory(port_factory):
 
     The core asks the declared sources for their tools per request; this
     is the suite's declaration. It is the host's factory's SHAPE, not its
-    wiring: the host's `DeclaredSource.build` forwards the catalog's
-    per-tool budgets, and this helper forwards none — a suite-built
-    orchestrator therefore runs under the ceiling. The catalog's per-tool
-    budget is exercised by the catalog's own pins, which build their own
-    `DeclaredSource`.
+    wiring — and it is deliberately NOT a ``DeclaredSource``: the host's
+    ``build_tool_source_factory`` hands the catalog's per-tool budgets to
+    every declared source MECHANICALLY (``build(bundle, budgets=...)``), so a
+    declared source cannot forget the override map. This helper bypasses
+    that hand-off — it forwards none, so a suite-built orchestrator runs
+    under the ceiling — which is the FORGETTING path the mechanical
+    signature closed, kept alive here as the suite's demonstration of it.
+    The catalog's per-tool budget is exercised by the catalog's own pins,
+    which declare their source and let the factory hand the budgets.
     """
 
     def factory(bundle):
-        source = DocumentToolSource(
-            port_factory,
-            bundle.operation_budget,
-            preparer=bundle.preparer,
-            on_preparation_status=bundle.on_preparation_status,
-            abstention_sink=bundle.abstention_sink,
-        )
-        return source.tools(bundle.context, bundle.bearer)
+        return DocumentToolSource.from_bundle(port_factory, bundle).tools(bundle.context, bundle.bearer)
 
     return factory
 

@@ -17,10 +17,10 @@ import logging
 from functools import partial
 
 import pytest
-from conftest import SHIPPED_CATALOG, AgentFakePort, canned_search_result
+from conftest import SHIPPED_CATALOG, AgentFakePort, FakeWebSearchPort, canned_search_result, canned_web_result
 
 from agent.registry import UnregisteredToolError, build_registry
-from agent.sources import DocumentToolSource, ToolSourceContext
+from agent.sources import DocumentToolSource, ToolSourceContext, WebSearchToolSource
 from capabilities.contract import CallerContext, OperationBudget
 from tool_catalog import (
     MAX_CATALOG_ENTRIES,
@@ -135,12 +135,50 @@ def test_a_write_tool_is_refused_until_the_approval_path_lands(tmp_path, caplog)
     assert catalog.entry("search_knowledge") is None
 
 
-def test_an_open_web_egress_is_refused_until_the_pii_egress_lands(tmp_path, caplog):
-    path = _write(tmp_path, [_entry(name="search_knowledge", egress="open_web")])
-    with caplog.at_level(logging.ERROR):
-        catalog = load_catalog(path, served_names=SERVED, ceiling=CEILING)
-    assert "egress" in caplog.text.lower()
-    assert catalog.entry("search_knowledge") is None
+def test_an_open_web_entry_on_a_declared_source_is_carried(tmp_path):
+    """The egress refusal is RETIRED: the Server-Side Tools rule lives in
+    the leaf adapter now (the query passes the pii-service or the call
+    fails closed), so an open_web entry whose source the deployment
+    declares is HONOURED — carried into the catalog. The entry whose source
+    is NOT declared takes the undeclared-source refusal above (pinned there
+    with ``source="web"`` exactly for this case)."""
+    catalog = load_catalog(
+        _write(tmp_path, [_entry(name="web_search", source="web", egress="open_web")]),
+        served_names={"web": frozenset({"web_search"})},
+        ceiling=CEILING,
+    )
+    assert catalog.entry("web_search") is not None
+    assert catalog.entry("web_search").egress == "open_web"
+
+
+def test_a_declared_open_web_tool_is_listed_and_dispatchable(tmp_path):
+    """The honouring reaches the RUN: the catalogued open_web entry on the
+    declared web source is offered by the source's pair (the model sees the
+    definition) and dispatchable (the registry carries it) — the loader's
+    refusal was the only thing between the declaration and the run."""
+    catalog = load_catalog(
+        _write(tmp_path, [_entry(name="web_search", source="web", egress="open_web")]),
+        served_names={"web": frozenset({"web_search"})},
+        ceiling=CEILING,
+    )
+    port = FakeWebSearchPort(canned_web_result())
+    factory = build_tool_source_factory(
+        catalog=catalog,
+        declared_sources=(
+            DeclaredSource(
+                source_id=WebSearchToolSource.source_id,
+                served_tool_names=WebSearchToolSource.served_tool_names,
+                build=partial(WebSearchToolSource.from_bundle, lambda _context, _bearer: port),
+            ),
+        ),
+    )
+    registry = build_registry(factory(_bundle()))
+
+    assert registry.names() == ("web_search",)
+    assert [definition["function"]["name"] for definition in registry.definitions()] == ["web_search"]
+    result = asyncio.run(registry.dispatch("web_search", {"query": "the model query"}))
+    assert result["outcome"] == "success"
+    assert port.calls[0]["query"] == "the model query"
 
 
 def test_a_server_scoped_entry_is_refused_while_no_mcp_source_is_deployed(tmp_path, caplog):

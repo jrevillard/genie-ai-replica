@@ -475,3 +475,136 @@ def test_the_slot_stays_held_while_the_cancelled_run_unwinds(tmp_path):
             pass
 
     asyncio.run(scenario())
+
+
+# ---------------------------------------------------------------------
+# The web-search knob pair: the second declared source, the shipped
+# posture, and the half-wired deployment's honest 503
+# ---------------------------------------------------------------------
+
+
+def _catalog_entry(name, source, egress):
+    """One catalog entry of the shipped shape — the tmp catalog's builder."""
+    return {
+        "name": name,
+        "source": source,
+        "server": None,
+        "tool": None,
+        "allow": True,
+        "risk": "read",
+        "requires_approval": False,
+        "egress": egress,
+        "scopes": [],
+    }
+
+
+def _assembled_app(monkeypatch, tmp_path, *, web_pair=False):
+    """The real `_build_orchestrator` over fakes, with (or without) the
+    web-search knob pair set. Returns the ScriptedLoopModel so the test can
+    read the tool definitions the model was told."""
+    for knob in REQUIRED_KNOBS:
+        monkeypatch.setenv(knob, "5000")
+    if web_pair:
+        # The THREE-entry catalog is the test's OWN tmp file — NEVER the
+        # shipped one (it is frozen at two tools; D4/G4): the knob points
+        # at the copy this test wrote.
+        catalog_path = tmp_path / "tool-catalog-web.json"
+        catalog_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "tools": [
+                        _catalog_entry("search_knowledge", "document", "internal"),
+                        _catalog_entry("read_source", "document", "internal"),
+                        _catalog_entry("web_search", "web", "open_web"),
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(catalog_path))
+        monkeypatch.setenv("AGENT_SEARXNG_URL", "http://searxng:8080")
+        monkeypatch.setenv("PII_SERVICE_URL", "http://pii-service:8000")
+    else:
+        monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
+    model = ScriptedLoopModel(multihop_turns(answer="the answer", judge_reply='{"verdict": "grounded"}'))
+    monkeypatch.setattr(
+        app_module,
+        "build_stateless_adapters",
+        lambda config, env=None: type(
+            "Adapters",
+            (),
+            {
+                "bind_executor": staticmethod(lambda context, bearer: fake_port()),
+                "docrepo": FakeMetadataSource(),
+                "okf": FakeConceptSource(),
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "VllmModelClient",
+        lambda config, transport=None: model,
+    )
+    monkeypatch.setattr(app_module, "_RUNTIME", None)
+    return model
+
+
+def test_the_assembly_declares_the_web_source_when_both_knobs_exist(tmp_path, monkeypatch):
+    """The host's SECOND declared source: with the knob pair set, the run's
+    toolset carries web_search beside the two document tools. The build is
+    the mechanical shape (``partial(WebSearchToolSource.from_bundle, ...)``)
+    — the catalog's budgets arrive through the factory, not this site."""
+    model = _assembled_app(monkeypatch, tmp_path, web_pair=True)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 200
+    names = [definition["function"]["name"] for definition in model.requests[0]["tool_definitions"]]
+    assert names == ["search_knowledge", "read_source", "web_search"]
+
+
+def test_the_shipped_posture_declares_no_web_source(tmp_path, monkeypatch):
+    """No knobs, no web source — the deployment that never asked for web
+    search serves exactly the two document tools it always served."""
+    model = _assembled_app(monkeypatch, tmp_path, web_pair=False)
+    monkeypatch.delenv("AGENT_SEARXNG_URL", raising=False)
+    monkeypatch.delenv("PII_SERVICE_URL", raising=False)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 200
+    names = [definition["function"]["name"] for definition in model.requests[0]["tool_definitions"]]
+    assert names == ["search_knowledge", "read_source"]
+
+
+def test_a_half_wired_web_pair_answers_503_naming_the_missing_knob(monkeypatch):
+    """The pair is fail-closed as a PAIR: exactly one knob is a deployment
+    that believes a lie (redacting without searching, or searching without
+    redacting) — the honest 503 names the missing one, before any run."""
+    for knob in REQUIRED_KNOBS:
+        monkeypatch.setenv(knob, "5000")
+    monkeypatch.setenv("AGENT_TOOL_CATALOG_PATH", str(SHIPPED_CATALOG))
+    monkeypatch.setenv("AGENT_SEARXNG_URL", "http://searxng:8080")
+    monkeypatch.delenv("PII_SERVICE_URL", raising=False)
+    monkeypatch.setattr(
+        app_module,
+        "build_stateless_adapters",
+        lambda config, env=None: type(
+            "Adapters",
+            (),
+            {
+                "bind_executor": staticmethod(lambda context, bearer: fake_port()),
+                "docrepo": FakeMetadataSource(),
+                "okf": FakeConceptSource(),
+            },
+        )(),
+    )
+    monkeypatch.setattr(app_module, "_RUNTIME", None)
+    with TestClient(app_module.app) as client:
+        response = client.post("/v1/runs", json=BODY)
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"] == "run_surface_unconfigured"
+    assert "PII_SERVICE_URL" in body["message"]

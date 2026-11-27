@@ -24,7 +24,8 @@ from capabilities.adapters.env_config import (
 from capabilities.adapters.okf import OkfAdapter
 from capabilities.adapters.tei_embedding import TeiEmbeddingAdapter
 from capabilities.adapters.tei_reranking import TeiRerankingAdapter
-from capabilities.contract import CallerContext, DocumentCapabilityPort, OperationName, TransientError
+from capabilities.adapters.web_search import WebSearchAdapter
+from capabilities.contract import CallerContext, DocumentCapabilityPort, OperationName, TransientError, WebSearchPort
 from capabilities.executor import AuthorizedExecutor
 from capabilities.search_knowledge import SearchKnowledgeCapability
 from capabilities.sources import ConceptSource
@@ -174,6 +175,37 @@ def build_concept_source(env=None, *, okf_enabled: bool) -> ConceptSource:
     if not okf_url:
         raise ValueError("AGENT_OKF_URL must be set for the port assembly (okf-server base URL)")
     return OkfAdapter(okf_url)
+
+
+def build_web_search_port(env=None) -> WebSearchPort | None:
+    """The web-search port, or ``None`` when the deployment runs none.
+
+    The knob PAIR — the redaction endpoint and the meta-search endpoint
+    (the Server-Side Tools rule needs both). BOTH set: the port is built.
+    NEITHER: the deployment declares no web source — the shipped posture,
+    no knobs, no web tool, no error (a deployment without web search must
+    keep serving runs, so the doc-repo read's unconditional fail does not
+    transfer here). EXACTLY ONE: the half-wired deployment is REFUSED with
+    the honest ``ValueError`` naming the missing knob — a web search that
+    redacts without searching, or searches without redacting, is a lie the
+    deployment believes.
+    """
+    source = os.environ if env is None else env
+    pii_url = str(source.get("PII_SERVICE_URL", "")).strip()
+    searxng_url = str(source.get("AGENT_SEARXNG_URL", "")).strip()
+    if not pii_url and not searxng_url:
+        return None
+    if not pii_url:
+        raise ValueError(
+            "PII_SERVICE_URL must be set when AGENT_SEARXNG_URL is: "
+            "the web source needs both knobs (the egress rule redacts the query before it leaves)"
+        )
+    if not searxng_url:
+        raise ValueError(
+            "AGENT_SEARXNG_URL must be set when PII_SERVICE_URL is: "
+            "the web source needs both knobs (the egress rule redacts the query before it leaves)"
+        )
+    return WebSearchAdapter(pii_url, searxng_url, tls_verify=ModelEndpointConfig.load(env).tls_verify)
 
 
 def build_stateless_adapters(env=None) -> StatelessAdapters:

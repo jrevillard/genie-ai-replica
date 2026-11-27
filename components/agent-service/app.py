@@ -44,9 +44,9 @@ from agent.orchestrator import (
     RequestOrchestrator,
     build_preparer_factory,
 )
-from agent.sources import DocumentToolSource
+from agent.sources import DocumentToolSource, WebSearchToolSource
 from agent.version_record import IMPLEMENTATION_VERSION
-from assembly import build_stateless_adapters
+from assembly import build_stateless_adapters, build_web_search_port
 from capabilities.adapters.httpx import HttpxTransport
 from capabilities.adapters.vllm import VllmModelClient
 from capabilities.contract import CallerContext
@@ -143,6 +143,10 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     # preparer over the run's budget monitor; the discovery caches are
     # process-wide.
     preparer_factory = build_preparer_factory(transport, env=env)
+    # The web-search port: the knob pair read at assembly, fail-closed as a
+    # PAIR (a half-wired deployment is the 503 naming the missing knob);
+    # ``None`` = the shipped posture, no web source declared at all.
+    web_port = build_web_search_port(env)
 
     def port_factory(context: CallerContext, bearer: str | None):
         # Per request: one executor binds ONE trusted context to the
@@ -158,14 +162,26 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
         derived from THIS (the same facts, read once). The catalog's
         per-tool budgets arrive MECHANICALLY — ``build_tool_source_factory``
         hands them to every ``build`` — so this site names no budget map.
+        The web record exists only when the port does: a catalog entry
+        naming ``web`` on a host that declared no web source takes the
+        loader's undeclared-source refusal, never a half-built tool.
         """
-        return (
+        sources = (
             DeclaredSource(
                 source_id=DocumentToolSource.source_id,
                 served_tool_names=DocumentToolSource.served_tool_names,
                 build=partial(DocumentToolSource.from_bundle, factory),
             ),
         )
+        if web_port is not None:
+            sources = sources + (
+                DeclaredSource(
+                    source_id=WebSearchToolSource.source_id,
+                    served_tool_names=WebSearchToolSource.served_tool_names,
+                    build=partial(WebSearchToolSource.from_bundle, lambda context, bearer: web_port),
+                ),
+            )
+        return sources
 
     sources = declared_sources(port_factory)
     catalog = load_catalog(
